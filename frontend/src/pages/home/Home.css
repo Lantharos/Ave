@@ -97,7 +97,7 @@ body {
 .heading {
     color: #D8D7D7;
     font-family: Poppins, serif;
-    font-size: 115px;
+    font-size: 110px;
     font-style: normal;
     font-weight: 600;
     line-height: 1;
@@ -160,7 +160,7 @@ body {
 
 .main {
     position: absolute;
-    top: 50%;
+    top: 55%;
     left: 50%;
     transform: translate(-50%, -50%);
     display: inline-flex;

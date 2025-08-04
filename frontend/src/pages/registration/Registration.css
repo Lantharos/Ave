@@ -1,0 +1,40 @@
+.topbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    width: 100%;
+    position: relative;
+}
+
+.logo {
+    margin: 15px;
+    cursor: pointer;
+}
+
+.progress-bar {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    margin-top: 10px;
+    display: flex;
+    width: 1000px;
+    height: 10px;
+    align-items: center;
+    gap: 5px;
+    flex-shrink: 0;
+}
+
+.footer {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    width: 100vw;
+    height: 250px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background: linear-gradient(180deg, #090909 9.5%, rgba(41, 37, 41, 0.83) 100%);
+    font-family: Poppins, serif;
+    font-size: 14px;
+}
