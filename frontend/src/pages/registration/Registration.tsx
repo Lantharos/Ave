@@ -4,6 +4,7 @@ import {useState} from "react";
 import Start from "./steps/start/start.tsx";
 import PasswordChoice from "./steps/passwordchoice/passwordchoice.tsx";
 import Password from "./steps/password/password.tsx";
+import Methods from "./steps/methods/methods.tsx";
 
 export default function Registration() {
     const [step, setStep] = useState(0);
@@ -19,6 +20,8 @@ export default function Registration() {
                 return <PasswordChoice handler={setStep} setData={setData} />
             case 2:
                 return <Password handler={setStep} setData={setData} />
+            case 3:
+                return <Methods handler={setStep} setData={setData} />
             default:
                 return <Start handler={setStep} setData={setData} />
         }
