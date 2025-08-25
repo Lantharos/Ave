@@ -1,4 +1,3 @@
-import "./password.css"
 import {useState, useRef, useEffect} from "react";
 
 type Props = {
@@ -27,20 +26,22 @@ function Password({handler,setData}: Props) {
     }, []);
 
     return (
-        <div className={"starterp"}>
-            <h1 className={"ph2"}> Enter your password </h1>
-            <p className={"pph1"}>
+        <div className="mt-[13%] flex flex-col items-center">
+            <h1 className="text-light text-center font-poppins text-[48px] font-normal"> Enter your password </h1>
+            <p className="w-[615px] text-[#878787] text-justify font-poppins text-[22px] font-normal leading-[26px]">
                 Please enter a strong password to secure your account. This password will be used for logging in and should be kept confidential. Make sure it is not easily guessable.
             </p>
 
-            <div className={"row"}>
-                <input ref={inputRef} className={"name"} type={show ? "text" : "password"} autoComplete={"new-password"} placeholder={"•••••••••••••••••••••"} onSubmit={() => {
-                    setData({password: password})
-                    handler(3)
+            <div className="flex items-end gap-5 justify-center self-stretch mt-4">
+                <input ref={inputRef} className="flex h-[50px] w-[420px] px-[15px] items-center gap-[10px] rounded-[16px] bg-[rgba(32,32,32,0.70)] outline-none border-none text-light placeholder:text-muted font-poppins text-[18px] font-normal" type={show ? "text" : "password"} autoComplete="new-password" placeholder="•••••••••••••••••••••" onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                        setData({password: password})
+                        handler(3)
+                    }
                 }} onInput={(input) => {
                     setPassword(input.currentTarget.value)
                 }} />
-                <button className={"continue"} onClick={() => {
+                <button className="flex h-[50px] py-2 pr-[37px] pl-[13px] justify-center items-center gap-[23px] rounded-[16px] bg-accent text-light font-poppins text-[18px] font-medium leading-[22px] outline-none border-none cursor-pointer transition-colors duration-200 hover:bg-[#a190a1] active:bg-[#635963]" onClick={() => {
                     setData({password: password})
                     handler(3)
                 }}>
@@ -51,7 +52,7 @@ function Password({handler,setData}: Props) {
                 </button>
             </div>
 
-            <p className={"pph2"}>
+            <p className="w-[615px] text-[#4a4a4a] text-justify font-poppins text-[18px] font-normal leading-[22px] mt-6">
                 Hold ALT to reveal your password.
             </p>
         </div>

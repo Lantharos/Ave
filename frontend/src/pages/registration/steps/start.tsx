@@ -1,4 +1,3 @@
-import "./start.css"
 import {useState} from "react";
 
 type Props = {
@@ -10,15 +9,15 @@ function Start({handler,setData}: Props) {
     const [name, setName] = useState("")
 
     return (
-        <div className={"starter"}>
-            <h1> hello! </h1>
+        <div className="mt-[13%]">
+            <h1 className="text-[#D8D7D7] text-center font-montserratAlt text-[96px] font-[500] leading-none">hello!</h1>
 
-            <div className={"row"}>
-                <input className={"name"} placeholder={"What's your full name?"} onSubmit={() => {
+            <div className="flex items-end gap-[20px] justify-center mt-6">
+                <input className="h-[50px] px-[15px] w-[390px] flex items-center gap-[10px] rounded-[16px] bg-[rgba(32,32,32,0.70)] outline-none border-none text-[#5A5A5A] font-poppins text-[18px] font-normal leading-none placeholder:text-[#5A5A5A] focus:text-[#d3d3d3]" placeholder="What's your full name?" onSubmit={() => {
                     setData({name: name})
                     handler(1)
                 }} onInput={(input) => setName(input.currentTarget.value)} />
-                <button className={"continue"} onClick={() => {
+                <button className="flex h-[50px] px-[13px] pr-[37px] justify-center items-center gap-[23px] rounded-[16px] bg-[#8A7B8A] text-[#D8D7D7] font-poppins text-[18px] font-medium leading-[22px] cursor-pointer transition-colors hover:bg-[#a190a1] active:bg-[#635963] duration-300 border-none" onClick={() => {
                     setData({name: name})
                     handler(1)
                 }}>
