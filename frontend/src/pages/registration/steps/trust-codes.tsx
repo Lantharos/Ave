@@ -1,4 +1,6 @@
 import {useEffect, useState} from "react";
+import {Button} from "../../../components/Basic/PrimaryButton.tsx";
+import FancyInput from "../../../components/Basic/FancyInput.tsx";
 
 type Props = {
     handler: React.Dispatch<React.SetStateAction<number>>;
@@ -66,28 +68,32 @@ function TrustCodes({handler,setData}: Props) {
 
                 <div className={"flex flex-col items-start gap-5 w-100"}>
                     <span className={"text-[24px] text-[#878787]"}>Custom Trust Code</span>
-                    <input className="flex h-[50px] w-full px-[15px] items-center gap-[10px] rounded-[16px] bg-[rgba(32,32,32,0.70)] outline-none border-none text-light placeholder:text-muted font-poppins text-[18px] font-normal" placeholder="Enter your custom trust code" onInput={(e) => {
-                        const value = e.currentTarget.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 16);
-                        let formattedValue = '';
-                        for (let i = 0; i < value.length; i++) {
-                            if (i > 0 && i % 4 === 0) formattedValue += '-';
-                            formattedValue += value[i];
-                        }
 
-                        e.currentTarget.value = formattedValue;
-                        setCustomCode(e.currentTarget.value);
-                    }} />
+                    <FancyInput placeholder={"Enter your custom trust code"}
+                       onInput={(e) => {
+                           const value = e.currentTarget.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 16);
+                           let formattedValue = '';
+                           for (let i = 0; i < value.length; i++) {
+                               if (i > 0 && i % 4 === 0) formattedValue += '-';
+                               formattedValue += value[i];
+                           }
 
-                    <button className="mt-5 flex h-[60px] cursor-pointer w-full py-2 pr-12 pl-[34px] justify-center items-center gap-7 rounded-[24px] bg-accent text-light font-poppins text-[24px] font-medium leading-[22px] outline-none border-none transition-colors duration-200 hover:bg-[#a190a1] active:bg-[#635963]" onClick={async() => {
-                        setData((prevData) => ({ ...prevData, trustCodes: { randomCode, customCode } }));
-                        handler(5);
-                    }}>
+                           e.currentTarget.value = formattedValue;
+                           setCustomCode(e.currentTarget.value);
+                       }}
+                    />
+
+                    <Button icon={
                         <svg width="10" height="18" viewBox="0 0 10 18" fill="none" xmlns="http://www.w3.org/2000/svg">
-                            <path d="M9.63386 8.36719C10.122 8.85547 10.122 9.64844 9.63386 10.1367L2.13533 17.6367C1.64714 18.125 0.854325 18.125 0.366139 17.6367C-0.122046 17.1484 -0.122046 16.3555 0.366139 15.8672L6.98203 9.25L0.370045 2.63281C-0.118141 2.14453 -0.118141 1.35156 0.370045 0.863281C0.858231 0.375 1.65104 0.375 2.13923 0.863281L9.63777 8.36328L9.63386 8.36719Z"
-                                  fill="#D8D7D7"/>
+                            <path d="M9.63386 8.36719C10.122 8.85547 10.122 9.64844 9.63386 10.1367L2.13533 17.6367C1.64714 18.125 0.854325 18.125 0.366139 17.6367C-0.122046 17.1484 -0.122046 16.3555 0.366139 15.8672L6.98203 9.25L0.370045 2.63281C-0.118141 2.14453 -0.118141 1.35156 0.370045 0.863281C0.858231 0.375 1.65104 0.375 2.13923 0.863281L9.63777 8.36328L9.63386 8.36719Z" fill="#D8D7D7"/>
                         </svg>
+                    } justify={"between"} size={"md"} children={
                         <p>Continue</p>
-                    </button>
+                    } onClick={async() => {
+                        await new Promise(r => setTimeout(r, 1100));
+                        setData((prevData) => ({ ...prevData, trustCodes: { randomCode, customCode } }));
+                        handler(5)
+                    }} />
                 </div>
             </div>
         </div>

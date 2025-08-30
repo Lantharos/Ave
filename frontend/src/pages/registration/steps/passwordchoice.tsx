@@ -1,3 +1,5 @@
+import {Button} from "../../../components/Basic/PrimaryButton.tsx";
+
 type Props = {
     handler: React.Dispatch<React.SetStateAction<number>>;
     setData: React.Dispatch<React.SetStateAction<object>>;
@@ -17,11 +19,8 @@ function PasswordChoice({handler,setData}: Props) {
                         </p>
                     </div>
 
-                    <button className="flex h-[70px] py-2 pr-12 pl-[34px] justify-center items-center gap-7 rounded-[24px] bg-accent text-light font-poppins text-[24px] font-medium leading-[22px] outline-none border-none cursor-pointer transition-colors duration-200 hover:bg-[#a190a1] active:bg-[#635963] ml-20" onClick={() => {
-                        setData((prevData) => ({ ...prevData, passwordless: true }));
-                        handler(3);
-                    }}>
-                        <svg width="30" height="31" viewBox="0 0 30 31" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <div className={"w-auto h-[85px] ml-[10%] self-center"}>
+                        <Button icon={<svg width="30" height="31" viewBox="0 0 30 31" fill="none" xmlns="http://www.w3.org/2000/svg">
                             <g clipPath="url(#clip0_3200_39)">
                                 <path d="M15 30.2319C18.9782 30.2319 22.7936 28.6515 25.6066 25.8385C28.4196 23.0254 30 19.2101 30 15.2319C30 11.2536 28.4196 7.43832 25.6066 4.62527C22.7936 1.81223 18.9782 0.231873 15 0.231873C11.0218 0.231873 7.20644 1.81223 4.3934 4.62527C1.58035 7.43832 0 11.2536 0 15.2319C0 19.2101 1.58035 23.0254 4.3934 25.8385C7.20644 28.6515 11.0218 30.2319 15 30.2319ZM21.6211 12.478L14.1211 19.978C13.5703 20.5287 12.6797 20.5287 12.1348 19.978L8.38477 16.228C7.83398 15.6772 7.83398 14.7866 8.38477 14.2416C8.93555 13.6967 9.82617 13.6909 10.3711 14.2416L13.125 16.9955L19.6289 10.4858C20.1797 9.935 21.0703 9.935 21.6152 10.4858C22.1602 11.0366 22.166 11.9272 21.6152 12.4721L21.6211 12.478Z" fill="#D8D7D7"/>
                             </g>
@@ -30,9 +29,14 @@ function PasswordChoice({handler,setData}: Props) {
                                     <rect width="30" height="30" fill="white" transform="translate(0 0.231873)"/>
                                 </clipPath>
                             </defs>
-                        </svg>
-                        <p>Select</p>
-                    </button>
+                        </svg>} justify={"center"} size={"lg"} customMiddleGap={30} children={
+                            <p>Select</p>
+                        } onClick={async() => {
+                            await new Promise(r => setTimeout(r, 1100));
+                            setData((prevData) => ({ ...prevData, passwordless: true }));
+                            handler(3)
+                        }} />
+                    </div>
                 </div>
 
                 <div className="flex p-[45px] justify-between items-center rounded-b-[32px] border border-[#8A7B8A] bg-[rgba(23,23,23,0.80)] w-full">
@@ -43,11 +47,8 @@ function PasswordChoice({handler,setData}: Props) {
                         </p>
                     </div>
 
-                    <button className="flex h-[70px] py-2 pr-12 pl-[34px] justify-center items-center gap-7 rounded-[24px] bg-accent text-light font-poppins text-[24px] font-medium leading-[22px] outline-none border-none cursor-pointer transition-colors duration-200 hover:bg-[#a190a1] active:bg-[#635963] ml-20" onClick={() => {
-                        setData((prevData) => ({ ...prevData, passwordless: false }));
-                        handler(2);
-                    }}>
-                        <svg width="30" height="31" viewBox="0 0 30 31" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <div className={"w-auto h-[85px] ml-[10%] self-center"}>
+                        <Button icon={<svg width="30" height="31" viewBox="0 0 30 31" fill="none" xmlns="http://www.w3.org/2000/svg">
                             <g clipPath="url(#clip0_3200_39)">
                                 <path d="M15 30.2319C18.9782 30.2319 22.7936 28.6515 25.6066 25.8385C28.4196 23.0254 30 19.2101 30 15.2319C30 11.2536 28.4196 7.43832 25.6066 4.62527C22.7936 1.81223 18.9782 0.231873 15 0.231873C11.0218 0.231873 7.20644 1.81223 4.3934 4.62527C1.58035 7.43832 0 11.2536 0 15.2319C0 19.2101 1.58035 23.0254 4.3934 25.8385C7.20644 28.6515 11.0218 30.2319 15 30.2319ZM21.6211 12.478L14.1211 19.978C13.5703 20.5287 12.6797 20.5287 12.1348 19.978L8.38477 16.228C7.83398 15.6772 7.83398 14.7866 8.38477 14.2416C8.93555 13.6967 9.82617 13.6909 10.3711 14.2416L13.125 16.9955L19.6289 10.4858C20.1797 9.935 21.0703 9.935 21.6152 10.4858C22.1602 11.0366 22.166 11.9272 21.6152 12.4721L21.6211 12.478Z" fill="#D8D7D7"/>
                             </g>
@@ -56,9 +57,14 @@ function PasswordChoice({handler,setData}: Props) {
                                     <rect width="30" height="30" fill="white" transform="translate(0 0.231873)"/>
                                 </clipPath>
                             </defs>
-                        </svg>
-                        <p>Select</p>
-                    </button>
+                        </svg>} justify={"center"} size={"lg"} customMiddleGap={30} children={
+                            <p>Select</p>
+                        } onClick={async() => {
+                            await new Promise(r => setTimeout(r, 1100));
+                            setData((prevData) => ({ ...prevData, passwordless: false }));
+                            handler(2)
+                        }} />
+                    </div>
                 </div>
             </div>
         </div>

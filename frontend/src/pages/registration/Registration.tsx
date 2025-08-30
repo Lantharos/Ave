@@ -1,4 +1,3 @@
-import logo from "../../assets/raven logo.svg"
 import {useState, useRef, useEffect} from "react";
 import Start from "./steps/start.tsx";
 import PasswordChoice from "./steps/passwordchoice.tsx";
@@ -10,6 +9,8 @@ import TrustCodes from "./steps/trust-codes.tsx";
 import Profile from "./steps/profile.tsx";
 import PrivacyPolicy from "./steps/privacy.tsx";
 import TermsOfUse from "./steps/terms.tsx";
+import RavenLogoMotion from "../../components/RavenLogo.tsx";
+import Aurora from "../../components/Backgrounds/Aurora.tsx";
 
 export default function Registration() {
     const [step, setStep] = useState(0);
@@ -75,7 +76,9 @@ export default function Registration() {
     return (
         <div ref={containerRef} className="min-h-screen flex flex-col w-full relative">
             <div className="flex justify-between items-start w-full relative top-0 left-0 right-0">
-                <img src={logo} alt="raven logo" className="m-[15px] cursor-pointer" onClick={() => {window.location.href = "/"}}/>
+                <div className="m-[15px]">
+                    <RavenLogoMotion onClick={() => window.location.href = "/"} size={60} />
+                </div>
                 <div className="absolute left-1/2 -translate-x-1/2 mt-[10px] flex w-[1000px] h-[10px] items-center gap-[5px] shrink-0">
                     <svg xmlns="http://www.w3.org/2000/svg" width="198" height="4" viewBox="0 0 198 4" fill="none">
                         <path d="M2 0C0.89543 0 0 0.89543 0 2C0 3.10457 0.89543 4 2 4V0ZM2 4H198V0H2V4Z" fill={step == 0 ? "#8A7B8A" : "#2E2D2D"}/>
@@ -97,7 +100,10 @@ export default function Registration() {
             <div className="flex flex-col justify-center items-center text-center z-10 h-auto relative px-4 w-screen">
                 {returnStepComponent()}
             </div>
-            <div className={(contentOverflowing ? "mt-[100px]" : "mt-auto") + " w-screen h-[250px] font-poppins shrink-0"} style={{background: "linear-gradient(180deg, #090909 10%, rgba(41,37,41,0.83) 100%)"}}></div>
+            {/*<div className={(contentOverflowing ? "mt-[100px]" : "mt-auto") + " w-screen h-[250px] font-poppins shrink-0"} style={{background: "linear-gradient(180deg, #090909 10%, rgba(41,37,41,0.83) 100%)"}}></div>*/}
+            <div className={(contentOverflowing ? "mt-[100px]" : "mt-auto") + " w-screen h-[300px] font-poppins shrink-0 rotate-180"}>
+                <Aurora amplitude={0.3} blend={1} speed={0.7} colorStops={["#4a424a", "#4a424a", "#4a424a"]} />
+            </div>
         </div>
     )
 }

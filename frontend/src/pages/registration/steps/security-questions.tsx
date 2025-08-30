@@ -1,5 +1,6 @@
-import FancySelect from "../../../components/FancySelect.tsx";
+import FancySelect from "../../../components/Basic/FancySelect.tsx";
 import {useState} from "react";
+import {Button} from "../../../components/Basic/PrimaryButton.tsx";
 
 type Props = {
     handler: React.Dispatch<React.SetStateAction<number>>;
@@ -54,15 +55,19 @@ function SecurityQuestions({handler,setData}: Props) {
                 <FancySelect options={questions} placeholder={"Select a question"} value={q3} onChange={setQ3}/>
                 <input onInput={(event) => {setSecurityQuestions({q1: securityQuestions.q1, q2: securityQuestions.q2, q3: event.currentTarget.value})}} className="flex h-[50px] w-full px-[15px] items-center gap-[10px] rounded-[16px] bg-[rgba(32,32,32,0.70)] outline-none border-none text-light placeholder:text-muted font-poppins text-[18px] font-normal" />
 
-                <button className="mt-10 flex h-[60px] w-full py-2 pr-12 pl-[34px] justify-center items-center gap-7 rounded-[24px] bg-accent text-light font-poppins text-[24px] font-medium leading-[22px] outline-none border-none cursor-pointer transition-colors duration-200 hover:bg-[#a190a1] active:bg-[#635963]" onClick={async() => {
-                    setData((prevData) => ({ ...prevData, securityQuestions: { q1: {q: q1, value: securityQuestions.q1}, q2: {q: q2, value: securityQuestions.q2}, q3: {q: q3, value: securityQuestions.q3} } }));
-                    handler(5);
-                }}>
-                    <svg width="10" height="18" viewBox="0 0 10 18" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M9.63386 8.36719C10.122 8.85547 10.122 9.64844 9.63386 10.1367L2.13533 17.6367C1.64714 18.125 0.854325 18.125 0.366139 17.6367C-0.122046 17.1484 -0.122046 16.3555 0.366139 15.8672L6.98203 9.25L0.370045 2.63281C-0.118141 2.14453 -0.118141 1.35156 0.370045 0.863281C0.858231 0.375 1.65104 0.375 2.13923 0.863281L9.63777 8.36328L9.63386 8.36719Z" fill="#D8D7D7"/>
-                    </svg>
-                    <p>Continue</p>
-                </button>
+                <div className={"rounded-[64px] w-full"}>
+                    <Button icon={
+                        <svg width="10" height="18" viewBox="0 0 10 18" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M9.63386 8.36719C10.122 8.85547 10.122 9.64844 9.63386 10.1367L2.13533 17.6367C1.64714 18.125 0.854325 18.125 0.366139 17.6367C-0.122046 17.1484 -0.122046 16.3555 0.366139 15.8672L6.98203 9.25L0.370045 2.63281C-0.118141 2.14453 -0.118141 1.35156 0.370045 0.863281C0.858231 0.375 1.65104 0.375 2.13923 0.863281L9.63777 8.36328L9.63386 8.36719Z" fill="#D8D7D7"/>
+                        </svg>
+                    } justify={"between"} size={"md"} children={
+                        <p>Continue</p>
+                    } onClick={async() => {
+                        await new Promise(r => setTimeout(r, 1100));
+                        setData((prevData) => ({ ...prevData, securityQuestions: { q1: {q: q1, value: securityQuestions.q1}, q2: {q: q2, value: securityQuestions.q2}, q3: {q: q3, value: securityQuestions.q3} } }));
+                        handler(5)
+                    }} />
+                </div>
             </div>
         </div>
     )

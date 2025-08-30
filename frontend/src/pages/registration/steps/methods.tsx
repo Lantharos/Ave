@@ -1,5 +1,6 @@
 import GooeyCheckbox from "../../../components/GooeyCheckbox.tsx";
 import {useState} from "react";
+import {Button} from "../../../components/Basic/PrimaryButton.tsx";
 
 type Props = {
     handler: React.Dispatch<React.SetStateAction<number>>;
@@ -48,16 +49,17 @@ function Methods({handler,setData}: Props) {
                     </div>
                 </div>
 
-                <button className="flex h-15 w-[1050px] justify-between px-[10px] items-center gap-[23px] bg-accent text-light font-poppins text-[18px] font-medium cursor-pointer transition-colors duration-200 rounded-[32px] hover:bg-[#a190a1] active:bg-[#635963]" onClick={() => {
-                    setData((prevData) => ({ ...prevData, methods: enabledMethods }));
-                    handler(4)
-                }}>
+                <Button icon={
                     <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
                         <path d="M16 32C20.2435 32 24.3131 30.3143 27.3137 27.3137C30.3143 24.3131 32 20.2435 32 16C32 11.7565 30.3143 7.68687 27.3137 4.68629C24.3131 1.68571 20.2435 0 16 0C11.7565 0 7.68687 1.68571 4.68629 4.68629C1.68571 7.68687 0 11.7565 0 16C0 20.2435 1.68571 24.3131 4.68629 27.3137C7.68687 30.3143 11.7565 32 16 32ZM23.0625 13.0625L15.0625 21.0625C14.475 21.65 13.525 21.65 12.9438 21.0625L8.94375 17.0625C8.35625 16.475 8.35625 15.525 8.94375 14.9438C9.53125 14.3625 10.4813 14.3563 11.0625 14.9438L14 17.8813L20.9375 10.9375C21.525 10.35 22.475 10.35 23.0562 10.9375C23.6375 11.525 23.6437 12.475 23.0562 13.0562L23.0625 13.0625Z" fill="#D8D7D7"/>
                     </svg>
-                    <p className="text-light font-poppins text-[18px] font-medium">Im all set!</p>
-                    <div></div>
-                </button>
+                } justify={"between"} size={"pill"} children={
+                    <p>I'm all set!</p>
+                } onClick={async() => {
+                    await new Promise(r => setTimeout(r, 1100));
+                    setData((prevData) => ({ ...prevData, methods: enabledMethods }));
+                    handler(4)
+                }} />
             </div>
         </div>
     )

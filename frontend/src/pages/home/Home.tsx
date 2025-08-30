@@ -1,6 +1,23 @@
+import LightRays from "../../components/Backgrounds/LightRays.tsx";
+
 function Home() {
     return (
         <>
+            <div style={{ width: '100vw', height: '100vh', position: 'fixed', marginTop: '-20px' }}>
+                <LightRays
+                    raysOrigin="bottom-center"
+                    raysColor="#8A7B8A"
+                    raysSpeed={1.3}
+                    lightSpread={2}
+                    rayLength={3}
+                    fadeDistance={2}
+                    saturation={0}
+                    followMouse={false}
+                    noiseAmount={0.1}
+                    distortion={0.05}
+                    className="custom-rays"
+                />
+            </div>
             <div className="mt-5 flex justify-between items-start w-full relative">
                 <div className="absolute left-1/2 -translate-x-1/2 flex gap-[60px] mt-[20px]">
                     <button className="text-[#8A7B8A] text-center bg-transparent border-none font-poppins text-[28px] font-normal">about</button>
@@ -25,20 +42,20 @@ function Home() {
                     <p className="text-[#D8D7D7] ml-[40px] font-poppins text-[48px] font-[600] leading-[22px]">Get Started</p>
                 </button>
             </div>
-            <div className={"blur-[200px]"}>
-                <div className={"blur-[200px]"}>
-                    <div className={"blur-[200px]"}>
-                        <div className="fixed inset-x-0 bottom-0 w-full h-[698px] grid grid-cols-3 gap-x-20 place-content-end -z-10 blur-[300px] scale-y-[-1]">
-                            <div className="blur-[200px] w-[312px] h-[247px] rounded-full bg-accent" />
-                            <div className="blur-[200px] w-[444px] h-[448px] rounded-full bg-accent" />
-                            <div className="blur-[200px] w-[335px] h-[228px] rounded-full bg-accent" />
-                            <div className="blur-[200px] w-[557px] h-[355px] rounded-full bg-accent" />
-                            <div className="blur-[200px] w-[219px] h-[171px] rounded-full bg-accent" />
-                            <div className="blur-[200px] w-[520px] h-[158px] rounded-full bg-accent" />
-                        </div>
-                    </div>
-                </div>
-            </div>
+            {/*<div className={"blur-[200px]"}>*/}
+            {/*    <div className={"blur-[200px]"}>*/}
+            {/*        <div className={"blur-[200px]"}>*/}
+            {/*            <div className="absolute w-full h-[698px] grid grid-cols-3 gap-x-20 place-content-end -z-10 blur-[300px] scale-y-[-1]">*/}
+            {/*                <div className="blur-[200px] w-[312px] h-[247px] rounded-full bg-accent" />*/}
+            {/*                <div className="blur-[200px] w-[444px] h-[448px] rounded-full bg-accent" />*/}
+            {/*                <div className="blur-[200px] w-[335px] h-[228px] rounded-full bg-accent" />*/}
+            {/*                <div className="blur-[200px] w-[557px] h-[355px] rounded-full bg-accent" />*/}
+            {/*                <div className="blur-[200px] w-[219px] h-[171px] rounded-full bg-accent" />*/}
+            {/*                <div className="blur-[200px] w-[520px] h-[158px] rounded-full bg-accent" />*/}
+            {/*            </div>*/}
+            {/*        </div>*/}
+            {/*    </div>*/}
+            {/*</div>*/}
         </>
     )
 }
