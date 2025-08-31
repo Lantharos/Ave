@@ -30,12 +30,16 @@ export default function PasskeyLogin({handler, setData}: Props) {
                     handler(4); // Assuming step 4 is the next step after passkey
                 } else {
                     console.error("No assertion returned from passkey authentication.");
+                    setData((prev) => ({...prev, passkey: false}));
+                    handler(2); // Go back to method selection on failure
                 }
             } catch (error) {
                 console.error("Passkey authentication failed:", error);
+                setData((prev) => ({...prev, passkey: false}));
+                handler(2); // Go back to method selection on error
             }
         })();
-    }, []);
+    }, [handler, setData]);
 
     return (
         <>
