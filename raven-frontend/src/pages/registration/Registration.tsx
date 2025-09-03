@@ -1,6 +1,5 @@
 import {useState, useRef, useEffect} from "react";
 import Start from "./steps/start.tsx";
-import PasswordChoice from "./steps/passwordchoice.tsx";
 import Password from "./steps/password.tsx";
 import Methods from "./steps/methods.tsx";
 import Passkey from "./steps/passkey.tsx";
@@ -11,6 +10,7 @@ import PrivacyPolicy from "./steps/privacy.tsx";
 import TermsOfUse from "./steps/terms.tsx";
 import RavenLogoMotion from "../../components/RavenLogo.tsx";
 import Aurora from "../../components/Backgrounds/Aurora.tsx";
+import Finalize from "./steps/finalize.tsx";
 
 export default function Registration() {
     const [step, setStep] = useState(0);
@@ -19,12 +19,27 @@ export default function Registration() {
     const [contentOverflowing, setContentOverflowing] = useState(false);
     const containerRef = useRef<HTMLDivElement | null>(null);
 
+    async function registerToBackend() {
+        // TODO
+        await new Promise(res => setTimeout(res, 2000));
+    }
+
     function returnStepComponent() {
         switch (step) {
             case 0:
                 return <Start handler={setStep} setData={setData} />
             case 1:
-                return <PasswordChoice handler={setStep} setData={setData} />
+                return (
+                    <div>
+                        <h1 className={"font-poppins"}>How did you get here?</h1>
+                        <p className="text-[#878787] text-justify text-[18px] leading-[26px] space-y-4">
+                            This registration flow is not meant to be accessed directly. Please go back to the homepage and start the registration process from there.
+                        </p>
+                        <div className="mt-10">
+                            <RavenLogoMotion onClick={() => window.location.href = "/"} size={100} />
+                        </div>
+                    </div>
+                )
             case 2:
                 return <Password handler={setStep} setData={setData} />
             case 3:
@@ -47,13 +62,9 @@ export default function Registration() {
             case 8:
                 return <TermsOfUse handler={setStep} setData={setData} />
             case 9:
-                // Final step - show summary or success message
-                return (
-                    <div className="mt-[13%]">
-                        <h1 className="text-[#D8D7D7] text-center font-montserratAlt text-[96px] font-[500] leading-none">All set!</h1>
-                        <p className="text-[#878787] text-center font-poppins text-[22px] font-normal mt-6">Your ID has been created successfully. You can now log in using your chosen methods.</p>
-                    </div>
-                );
+                return <Finalize waitFor={registerToBackend()} onComplete={() => {
+                    window.location.href="/dashboard"
+                }} />
             default:
                 return <Start handler={setStep} setData={setData} />
         }

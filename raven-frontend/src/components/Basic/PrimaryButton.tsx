@@ -2,7 +2,7 @@ import React, { useState } from "react";
 
 type ButtonProps = {
     children?: React.ReactNode;
-    onClick?: (e: React.MouseEvent<HTMLButtonElement>) => void | Promise<any>;
+    onClick?: (e: React.MouseEvent<HTMLButtonElement>) => void | Promise<void>;
     className?: string;
     icon?: React.ReactNode;
     iconPosition?: "left" | "right" | "only";
@@ -13,7 +13,7 @@ type ButtonProps = {
     asSubmit?: boolean;
     loading?: boolean;
     ariaLabel?: string;
-    customMiddleGap?: number;
+    customMiddleGap?: number; // in px
 };
 
 function cn(...parts: Array<string | false | undefined>) {
@@ -42,7 +42,7 @@ export function Button({
                            asSubmit,
                            loading: loadingProp,
                            ariaLabel,
-                           customMiddleGap
+                           customMiddleGap,
                        }: ButtonProps) {
     const [internalLoading, setInternalLoading] = useState(false);
     const loading = loadingProp ?? internalLoading;
@@ -50,10 +50,10 @@ export function Button({
     const handleClick = async (e: React.MouseEvent<HTMLButtonElement>) => {
         if (!onClick) return;
         const maybePromise = onClick(e);
-        if (maybePromise && typeof (maybePromise as any).then === "function") {
+        if (maybePromise && typeof (maybePromise as Promise<void>).then === "function") {
             try {
                 setInternalLoading(true);
-                await (maybePromise as Promise<any>);
+                await (maybePromise as Promise<void>);
             } finally {
                 setInternalLoading(false);
             }
@@ -79,7 +79,16 @@ export function Button({
                     : "h-[50px] rounded-[16px] text-[18px] leading-[22px] gap-[10px] px-[16px]";
 
     const layout = justify === "between" ? "justify-between" : "justify-center";
-    const middleGap = justify !== "between" && iconPosition !== "only" ? `gap-[${customMiddleGap ? customMiddleGap : 10}px]` : undefined;
+
+    // Use a CSS variable for the gap so Tailwind can emit "gap-[var(--mid-gap)]" once.
+    // Allow 0 explicitly: if customMiddleGap is undefined, fall back to 10.
+    const middleGapClass =
+        justify !== "between" && iconPosition !== "only" ? "gap-[var(--mid-gap)]" : undefined;
+
+    const middleGapStyle: React.CSSProperties | undefined =
+        justify !== "between" && iconPosition !== "only"
+            ? ({ ["--mid-gap" as any]: `${customMiddleGap ?? 10}px` } as React.CSSProperties)
+            : undefined;
 
     return (
         <button
@@ -89,27 +98,27 @@ export function Button({
             onClick={handleClick}
             className={cn(base, sizing, layout, className)}
         >
-            {/* Left slot: show icon; when loading keep an invisible placeholder to preserve width */}
+            {/* Left slot (only used for justify-between) */}
             {justify === "between" && (
                 <span className={cn("flex items-center", loading && "opacity-0")}>{icon}</span>
             )}
 
             {/* Middle slot */}
-            <span className={cn("flex items-center", middleGap)}>
-                {loading ? (
-                    <Spinner className={cn(size === "lg" ? "w-6 h-6" : "w-5 h-5")} />
-                ) : justify === "between" ? (
-                    <span>{children}</span>
-                ) : (
-                    <>
-                        {iconPosition === "left" && icon}
-                        {iconPosition !== "only" && <span>{children}</span>}
-                        {iconPosition === "right" && icon}
-                    </>
-                )}
-            </span>
+            <span className={cn("flex items-center", middleGapClass)} style={middleGapStyle}>
+        {loading ? (
+            <Spinner className={cn(size === "lg" ? "w-6 h-6" : "w-5 h-5")} />
+        ) : justify === "between" ? (
+            <span>{children}</span>
+        ) : (
+            <>
+                {iconPosition === "left" && icon}
+                {iconPosition !== "only" && <span>{children}</span>}
+                {iconPosition === "right" && icon}
+            </>
+        )}
+      </span>
 
-            {/* Right slot: always render invisible icon to balance the left slot */}
+            {/* Right slot (invisible for balance when justify-between) */}
             {justify === "between" && <span className="opacity-0">{icon}</span>}
         </button>
     );

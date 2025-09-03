@@ -9,13 +9,14 @@ type Props = {
 
 function Start({handler,setData}: Props) {
     const [name, setName] = useState("")
+    const [error, setError] = useState("")
 
     return (
         <div className="mt-[13%]">
             <h1 className="text-[#D8D7D7] text-center font-montserratAlt text-[96px] font-[500] leading-none">hello!</h1>
 
-            <div className="flex items-end gap-[20px] justify-center mt-6">
-                <FancyInput placeholder={"What's your full name?"} type={"text"} autoComplete={"name"} onInput={(input) => setName(input.currentTarget.value)} />
+            <div className="flex items-start gap-[20px] justify-center mt-6">
+                <FancyInput error={(error != "")} helperText={error} placeholder={"What's your full name?"} type={"text"} autoComplete={"name"} onInput={(input) => setName(input.currentTarget.value)} />
 
                 <div className={"w-[250px]"}>
                     <Button icon={<svg width="25" height="24" viewBox="0 0 25 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -23,9 +24,14 @@ function Start({handler,setData}: Props) {
                     </svg>} justify={"center"} size={"sm"} children={
                         <p>Continue</p>
                     } onClick={async() => {
+                        if (name.length < 1) {
+                            setError("Name cannot be empty")
+                            return;
+                        }
+                        setError("")
                         await new Promise(r => setTimeout(r, 1100));
                         setData({name: name})
-                        handler(1)
+                        handler(2)
                     }} />
                 </div>
             </div>

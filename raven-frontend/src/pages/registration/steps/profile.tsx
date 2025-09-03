@@ -31,11 +31,8 @@ function Profile({handler,setData}: Props) {
                 <div className="relative self-end">
                     <img src={"/placeholder.svg"} alt={"Profile"} className="w-[150px] max-w-full rounded-[16px]"/>
                     <button className="bg-[#202020] hover:bg-[#404040] transition-colors duration-300 rounded-[12px] p-[10px] absolute bottom-2 right-2 cursor-pointer">
-                        <svg width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
-                            <path
-                                d="M12.7648 0.659846L11.0614 2.36313L15.6367 6.93806L17.3401 5.23478C18.22 4.35499 18.22 2.92972 17.3401 2.04992L15.9534 0.659846C15.0736 -0.219949 13.6482 -0.219949 12.7683 0.659846H12.7648ZM10.266 3.15846L2.06216 11.3652C1.69613 11.7312 1.42865 12.1852 1.28084 12.6814L0.0349506 16.9149C-0.0530357 17.2141 0.0279117 17.5343 0.246118 17.7525C0.464324 17.9707 0.784594 18.0516 1.08023 17.9672L5.31413 16.7214C5.81037 16.5736 6.26438 16.3061 6.63041 15.9401L14.8413 7.7334L10.266 3.15846Z"
-                                fill="#D8D7D7"
-                            />
+                        <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M10 1V13M10 1L15 6M10 1L5 6M19 13V17C19 17.5304 18.7893 18.0391 18.4142 18.4142C18.0391 18.7893 17.5304 19 17 19H3C2.46957 19 1.96086 18.7893 1.58579 18.4142C1.21071 18.0391 1 17.5304 1 17L1 13" stroke="#D8D7D7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
                         </svg>
                     </button>
                 </div>
@@ -46,8 +43,9 @@ function Profile({handler,setData}: Props) {
                     <FancyInput
                         placeholder={"Your display name"}
                         type={"text"}
-                        onInput={(event) => {
-                            setProfile(prev => ({...prev, displayName: event.currentTarget.value}))
+                        onChange={(event) => {
+                            const value = event.currentTarget.value;
+                            setProfile(prev => ({...prev, displayName: value}))
                         }}
                         helperText={"This is how your name will appear publicly"}
                     />
@@ -56,8 +54,9 @@ function Profile({handler,setData}: Props) {
                 <FancyInput
                     placeholder={"@your_username"}
                     type={"text"}
-                    onInput={(event) => {
-                        setProfile(prev => ({...prev, username: event.currentTarget.value}))
+                    onChange={(event) => {
+                        const value = event.currentTarget.value;
+                        setProfile(prev => ({...prev, username: value}))
                     }}
                 />
 

@@ -10,6 +10,7 @@ type Props = {
 function Password({handler,setData}: Props) {
     const [password, setPassword] = useState("")
     const [show, setShow] = useState(false);
+    const [error, setError] = useState("")
 
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
@@ -33,7 +34,7 @@ function Password({handler,setData}: Props) {
                 Please enter a strong password to secure your account. This password will be used for logging in and should be kept confidential. Make sure it is not easily guessable.
             </p>
 
-            <div className="flex items-end gap-5 justify-center self-stretch mt-4">
+            <div className="flex items-start gap-5 justify-center self-stretch mt-4">
                 <FancyInput className="flex h-[50px] w-[420px] px-[15px] items-center gap-[10px] rounded-[16px] bg-[rgba(32,32,32,0.70)] outline-none border-none text-light placeholder:text-muted font-poppins text-[18px] font-normal" type={show ? "text" : "password"} autoComplete="new-password" placeholder="•••••••••••••••••••••" onKeyDown={
                     (e) => {
                         if (e.key === 'Enter') {
@@ -43,7 +44,7 @@ function Password({handler,setData}: Props) {
                     }
                 } onInput={(input) => {
                     setPassword(input.currentTarget.value)
-                }} />
+                }} error={(error != "")} helperText={error} />
 
                 <div className={"w-[240px]"}>
                     <Button icon={<svg width="25" height="24" viewBox="0 0 25 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -51,6 +52,27 @@ function Password({handler,setData}: Props) {
                     </svg>} justify={"center"} size={"sm"} children={
                         <p>Continue</p>
                     } onClick={async() => {
+                        if (password.length < 16) {
+                            setError("Password must be at least 16 characters long")
+                            return;
+                        } if (password.length > 128) {
+                            setError("Password cannot be longer than 128 characters")
+                            return;
+                        } if (!/[A-Z]/.test(password)) {
+                            setError("Password must have at least one uppercase letter")
+                            return;
+                        } if (!/[a-z]/.test(password)) {
+                            setError("Password must have at least one lowercase letter")
+                            return;
+                        } if (!/[0-9]/.test(password)) {
+                            setError("Password must have at least one number")
+                            return;
+                        } if (!/[^A-Za-z0-9]/.test(password)) {
+                            setError("Password must have at least one special character")
+                            return;
+                        }
+
+                        setError("")
                         await new Promise(r => setTimeout(r, 1100));
                         setData((prevState) => ({...prevState, password: password}))
                         handler(3)

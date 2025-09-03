@@ -5,6 +5,7 @@ type Props = {
     setData: React.Dispatch<React.SetStateAction<object>>;
 };
 
+// @Deprecated passwordless cannot be selected at registration now as there is criteria to meet so users dont get locked out
 function PasswordChoice({handler,setData}: Props) {
     return (
         <div className="flex flex-col items-center gap-5 pt-[60px]">

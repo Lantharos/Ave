@@ -18,3 +18,5 @@ createRoot(document.getElementById('root')!).render(
     </Router>
   </StrictMode>,
 )
+
+export const Endpoint = "http://localhost:3000"

@@ -1,6 +1,7 @@
 import FancySelect from "../../../components/Basic/FancySelect.tsx";
 import {useState} from "react";
 import {Button} from "../../../components/Basic/PrimaryButton.tsx";
+import FancyInput from "../../../components/Basic/FancyInput.tsx";
 
 type Props = {
     handler: React.Dispatch<React.SetStateAction<number>>;
@@ -35,7 +36,35 @@ function SecurityQuestions({handler,setData}: Props) {
     const [q1, setQ1] = useState<string>();
     const [q2, setQ2] = useState<string>();
     const [q3, setQ3] = useState<string>();
-    const [securityQuestions, setSecurityQuestions] = useState<{ q1?: string; q2?: string; q3?: string }>({ q1, q2, q3 });
+
+    // answers state
+    const [answers, setAnswers] = useState<{ q1?: string; q2?: string; q3?: string }>({});
+
+    // individual error messages
+    const [errors, setErrors] = useState<{ q1?: string; a1?: string; q2?: string; a2?: string; q3?: string; a3?: string }>({});
+
+    const validate = () => {
+        const nextErrors: typeof errors = {};
+        if (!q1) nextErrors.q1 = "You need to select a question"; else if (!answers.q1) nextErrors.a1 = "You need to answer this question";
+        if (!q2) nextErrors.q2 = "You need to select a question"; else if (!answers.q2) nextErrors.a2 = "You need to answer this question";
+        if (!q3) nextErrors.q3 = "You need to select a question"; else if (!answers.q3) nextErrors.a3 = "You need to answer this question";
+        setErrors(nextErrors);
+        return Object.keys(nextErrors).length === 0;
+    };
+
+    const onContinue = async () => {
+        if (!validate()) return; // don't proceed if errors
+        await new Promise(r => setTimeout(r, 1100));
+        setData((prevData) => ({
+            ...prevData,
+            securityQuestions: {
+                q1: { q: q1, value: answers.q1 },
+                q2: { q: q2, value: answers.q2 },
+                q3: { q: q3, value: answers.q3 }
+            }
+        }));
+        handler(5);
+    };
 
     return (
         <div className="flex flex-row items-center gap-70 mt-[5%]">
@@ -48,12 +77,54 @@ function SecurityQuestions({handler,setData}: Props) {
             </div>
 
             <div className={"flex flex-col items-center gap-5 w-[530px]"}>
-                <FancySelect options={questions} placeholder={"Select a question"} value={q1} onChange={setQ1}/>
-                <input onInput={(event) => {setSecurityQuestions({q1: event.currentTarget.value, q2: securityQuestions.q2, q3: securityQuestions.q3})}} className="flex h-[50px] w-full px-[15px] items-center gap-[10px] rounded-[16px] bg-[rgba(32,32,32,0.70)] outline-none border-none text-light placeholder:text-muted font-poppins text-[18px] font-normal" />
-                <FancySelect options={questions} placeholder={"Select a question"} value={q2} onChange={setQ2}/>
-                <input onInput={(event) => {setSecurityQuestions({q1: securityQuestions.q1, q2: event.currentTarget.value, q3: securityQuestions.q3})}} className="flex h-[50px] w-full px-[15px] items-center gap-[10px] rounded-[16px] bg-[rgba(32,32,32,0.70)] outline-none border-none text-light placeholder:text-muted font-poppins text-[18px] font-normal" />
-                <FancySelect options={questions} placeholder={"Select a question"} value={q3} onChange={setQ3}/>
-                <input onInput={(event) => {setSecurityQuestions({q1: securityQuestions.q1, q2: securityQuestions.q2, q3: event.currentTarget.value})}} className="flex h-[50px] w-full px-[15px] items-center gap-[10px] rounded-[16px] bg-[rgba(32,32,32,0.70)] outline-none border-none text-light placeholder:text-muted font-poppins text-[18px] font-normal" />
+                <FancySelect
+                    options={questions}
+                    placeholder={"Select a question"}
+                    value={q1}
+                    onChange={(v) => { setQ1(v); setErrors(e => ({...e, q1: undefined})); }}
+                    error={!!errors.q1}
+                    helperText={errors.q1}
+                />
+                <FancyInput
+                    placeholder="Answer"
+                    value={answers.q1 || ""}
+                    onChange={(e) => { const v = e.currentTarget.value; setAnswers(a => ({...a, q1: v})); if (errors.a1) setErrors(er => ({...er, a1: undefined})); }}
+                    error={!!errors.a1}
+                    helperText={errors.a1}
+                />
+
+                <FancySelect
+                    options={questions}
+                    placeholder={"Select a question"}
+                    value={q2}
+                    onChange={(v) => { setQ2(v); setErrors(e => ({...e, q2: undefined})); }}
+                    error={!!errors.q2}
+                    helperText={errors.q2}
+                />
+                <FancyInput
+                    placeholder="Answer"
+                    value={answers.q2 || ""}
+                    onChange={(e) => { const v = e.currentTarget.value; setAnswers(a => ({...a, q2: v})); if (errors.a2) setErrors(er => ({...er, a2: undefined})); }}
+                    error={!!errors.a2}
+                    helperText={errors.a2}
+                />
+
+                <FancySelect
+                    options={questions}
+                    placeholder={"Select a question"}
+                    value={q3}
+                    onChange={(v) => { setQ3(v); setErrors(e => ({...e, q3: undefined})); }}
+                    error={!!errors.q3}
+                    helperText={errors.q3}
+                />
+                <FancyInput
+                    placeholder="Answer"
+                    value={answers.q3 || ""}
+                    onChange={(e) => { const v = e.currentTarget.value; setAnswers(a => ({...a, q3: v})); if (errors.a3) setErrors(er => ({...er, a3: undefined})); }}
+                    error={!!errors.a3}
+                    helperText={errors.a3}
+                    onKeyDown={(e) => { if (e.key === 'Enter') onContinue(); }}
+                />
 
                 <div className={"rounded-[64px] w-full"}>
                     <Button icon={
@@ -62,11 +133,7 @@ function SecurityQuestions({handler,setData}: Props) {
                         </svg>
                     } justify={"between"} size={"md"} children={
                         <p>Continue</p>
-                    } onClick={async() => {
-                        await new Promise(r => setTimeout(r, 1100));
-                        setData((prevData) => ({ ...prevData, securityQuestions: { q1: {q: q1, value: securityQuestions.q1}, q2: {q: q2, value: securityQuestions.q2}, q3: {q: q3, value: securityQuestions.q3} } }));
-                        handler(5)
-                    }} />
+                    } onClick={onContinue} />
                 </div>
             </div>
         </div>
