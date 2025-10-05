@@ -1,4 +1,4 @@
-import {useState, useRef, useEffect} from "react";
+import {useEffect, useRef, useState} from "react";
 import Start from "./steps/start.tsx";
 import Password from "./steps/password.tsx";
 import Methods from "./steps/methods.tsx";
@@ -11,6 +11,30 @@ import TermsOfUse from "./steps/terms.tsx";
 import RavenLogoMotion from "../../components/RavenLogo.tsx";
 import Aurora from "../../components/Backgrounds/Aurora.tsx";
 import Finalize from "./steps/finalize.tsx";
+import {
+    deriveKekFromPassword,
+    hashSecurityAnswer,
+    hashTrustCode,
+    initCrypto,
+    newMEK,
+    randomBytes,
+    s,
+    wrapMEK
+} from "../../util/crypto/crypto.ts";
+import {apiPOST} from "../../util/api.ts";
+import {useMEK} from "../../util/MekContext.tsx";
+
+type RegisterBody = {
+    acceptedPrivacy: boolean;
+    acceptedTerms: boolean;
+    methods: Record<string, boolean>;
+    profile: { displayName: string; username: string; bio?: string; avatar?: string | null };
+    // IMPORTANT: hash security answers & trust codes client-side before sending
+    securityQuestions?: { q: string; answerHash: string }[];
+    trustCodes?: { codeHash: string }[];
+    // server will store password hash, but we ALSO use password to wrap MEK client-side
+    password: string;
+};
 
 export default function Registration() {
     const [step, setStep] = useState(0);
@@ -18,10 +42,116 @@ export default function Registration() {
     const [data, setData] = useState<Record<string, any>>({});
     const [contentOverflowing, setContentOverflowing] = useState(false);
     const containerRef = useRef<HTMLDivElement | null>(null);
+    const { setMek } = useMEK();
 
     async function registerToBackend() {
-        // TODO
-        await new Promise(res => setTimeout(res, 2000));
+        const form: RegisterBody = {
+            acceptedPrivacy: data.acceptedPrivacy,
+            acceptedTerms: data.acceptedTerms,
+            methods: data.methods,
+            profile: data.profile,
+            password: data.password
+        };
+
+        // 1) validate form (should be already validated, but double-check)
+        if (!form.acceptedPrivacy || !form.acceptedTerms) throw new Error("You must accept the privacy policy and terms of use.");
+        if (!form.profile || !form.profile.displayName || !form.profile.username) throw new Error("Profile information is incomplete.");
+        if (!form.password || form.password.length < 8) throw new Error("Password is too short.");
+
+        await initCrypto()
+
+        const MEK = newMEK()
+
+        const salt = randomBytes(16);
+        const KEK = await deriveKekFromPassword(form.password, salt);
+
+        // helpers: normalize incoming shapes to arrays you can map over
+        const toQuestionArray = (input: unknown): Array<{ q: string; value: string }> => {
+            if (!input) return [];
+            if (Array.isArray(input)) return input as Array<{ q: string; value: string }>;
+            if (typeof input === "object") {
+                // handle dict form: { "question": "answer", ... }
+                const obj = input as Record<string, unknown>;
+                // also handle single object form: { q: "...", value: "..." }
+                if ("q" in obj && "value" in obj) {
+                    return [{ q: String((obj as any).q), value: String((obj as any).value) }];
+                }
+                return Object.entries(obj).map(([q, value]) => ({ q, value: String(value ?? "") }));
+            }
+            // anything else -> ignore
+            return [];
+        };
+
+        const toTrustCodeArray = (input: unknown): Array<{ code: string }> => {
+            if (!input) return [];
+            if (Array.isArray(input)) {
+                return (input as Array<any>).map((item) =>
+                    typeof item === "string" ? { code: item } : { code: String(item.code ?? "") }
+                );
+            }
+            // single string or single object
+            if (typeof input === "string") return [{ code: input }];
+            if (typeof input === "object") {
+                return [{ code: String((input as any).code ?? "") }];
+            }
+            return [];
+        };
+
+        try {
+            // SECURITY QUESTIONS
+            const sqItems = toQuestionArray((data as any).securityQuestions);
+            if (sqItems.length) {
+                form.securityQuestions = await Promise.all(
+                    sqItems.map(async (item) => {
+                        const { encoded } = await hashSecurityAnswer(item.value, data.profile.username);
+                        return { q: item.q, answerHash: encoded };
+                    })
+                );
+            } else {
+                form.securityQuestions = undefined;
+            }
+
+            // TRUST CODES
+            const tcItems = toTrustCodeArray((data as any).trustCodes);
+            if (tcItems.length) {
+                form.trustCodes = await Promise.all(
+                    tcItems.map(async (item) => {
+                        const { encoded } = await hashTrustCode(item.code, data.profile.username);
+                        return { codeHash: encoded };
+                    })
+                );
+            } else {
+                form.trustCodes = undefined;
+            }
+        } catch (e) {
+            console.error("Hashing error:", e);
+            throw new Error("Failed to hash security answers or trust codes.");
+        }
+
+        // 3) send profile to server (NO MEK)
+        const registerResp = await apiPOST<{ user: never; deviceId: string }>(
+            "/auth/register",
+            form
+        );
+
+        const deviceId = registerResp.deviceId;
+
+        // 4) wrap MEK with KEK; use deviceId as AAD (binds blob to this device)
+        const aad = new TextEncoder().encode(deviceId);
+        const { ciphertext, nonce } = await wrapMEK(KEK, MEK, aad);
+
+        // 5) upload wrapped blob to server
+        await apiPOST("/keys/mek/upload", {
+            deviceId,
+            type: "mek",
+            algo: "xchacha20poly1305",
+            wrapped: s.toB64(ciphertext),
+            nonce: s.toB64(nonce),
+            salt: s.toB64(salt),
+        });
+
+        // 6) store MEK in context
+        setMek(MEK);
     }
 
     function returnStepComponent() {
@@ -31,9 +161,9 @@ export default function Registration() {
             case 1:
                 return (
                     <div>
-                        <h1 className={"font-poppins"}>How did you get here?</h1>
+                        <h1 className={"font-poppins text-[48px]"}>How did you get here?</h1>
                         <p className="text-[#878787] text-justify text-[18px] leading-[26px] space-y-4">
-                            This registration flow is not meant to be accessed directly. Please go back to the homepage and start the registration process from there.
+                            You sneaky goose, there are no secrets here, just go back to the homepage.
                         </p>
                         <div className="mt-10">
                             <RavenLogoMotion onClick={() => window.location.href = "/"} size={100} />
