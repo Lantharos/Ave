@@ -1,0 +1,67 @@
+<script lang="ts">
+    import Aq from "./components/AQ.svelte";
+</script>
+
+<div class="bg-[#090909] w-full h-screen flex flex-col items-start px-[200px] py-[100px] gap-[100px] overflow-y-scroll scroll-smooth">
+    <div class="flex flex-row w-full justify-between items-start">
+        <div class="flex flex-row">
+            <button class="px-[40px] py-[20px]  cursor-pointer hover:bg-[#121212] transition-colors duration-300 rounded-full flex items-center justify-center text-[#B9BBBE] text-[24px]" onclick={() => {window.location.href = "/#/"}}>
+                about
+            </button>
+            <button class="px-[40px] py-[20px]  cursor-pointer hover:bg-[#121212] transition-colors duration-300 rounded-full flex items-center justify-center text-[#B9BBBE] text-[24px]" onclick={() => {window.location.href = "/#/login"}}>
+                login
+            </button>
+            <button class="px-[40px] py-[20px] cursor-pointer hover:bg-[#121212] transition-colors duration-300 rounded-full flex items-center justify-center text-[#B9BBBE] text-[24px]" onclick={() => {window.location.href = "/#/register"}}>
+                new id
+            </button>
+            <button class="px-[40px] py-[20px] cursor-pointer hover:bg-[#121212] transition-colors duration-300 rounded-full flex items-center justify-center text-[#B9BBBE] text-[24px]">
+                asterisk
+            </button>
+            <button class="px-[40px] py-[20px] bg-[#171717] rounded-full flex items-center justify-center text-[#B9BBBE] text-[24px]">
+                faq
+            </button>
+        </div>
+
+        <div class="flex flex-col items-end justify-end">
+            <button class="cursor-pointer hover:text-[#FFFFFF] hover:underline transition-all duration-300 rounded-full flex items-center justify-center text-[#A5A7AA] text-[24px]">
+                privacy policy
+            </button>
+            <button class="cursor-pointer hover:text-[#FFFFFF] hover:underline transition-all duration-300 rounded-full flex items-center justify-center text-[#A5A7AA] text-[24px]">
+                terms of service
+            </button>
+        </div>
+    </div>
+
+    <div class="flex flex-col w-full items-start justify-center gap-[10px] z-10">
+        <Aq
+                question="What exactly is RAVEN?"
+                answer="Raven is your digital identity. It’s how you log in, prove who you are, and stay secure, without handing over your data. Think of it as a keychain that only you control."
+        />
+        <Aq
+                question="Do I need an email or phone number?"
+                answer="Nope. Raven doesn’t rely on personal identifiers like emails or phone numbers. Your ID lives on your devices, not in some giant database."
+        />
+        <Aq
+                question="How do I sign in to an app with Raven?"
+                answer="When an app supports Raven, you’ll see the option to “Sign in with Raven.” Choose your identity, approve the request, and you’re in — no passwords, no forms."
+        />
+        <Aq
+                question="What happens if I lose my device?"
+                answer="If you lose access to a device, you can restore your Raven ID using another device that’s already trusted. That trusted device will securely transfer your encryption keys and verify your identity. If you don’t have any other trusted device, you’ll need to recover access using your Trust Codes or Security Questions. These must match exactly, since Raven never stores or sees your answers—they’re hashed and used only to unlock your backup encryption keys. Because Raven never holds your private keys, we can’t restore access for you. Your security stays fully in your hands."
+        />
+        <Aq
+                question="Does Raven track me across apps?"
+                answer="Absolutely not. Raven doesn’t store or link your activity between apps. Each app only gets what it needs to function, nothing more."
+        />
+        <Aq
+                question="Is Raven decentralized or cloud-based?"
+                answer="It’s hybrid. Your identity lives locally on your devices, but Raven coordinates keys and security verification so everything stays synced and encrypted."
+        />
+        <Aq
+                question="Can I have multiple identities?"
+                answer="Yes! You can create up to 5 separate identities (for work, personal use, or just vibes) — all managed under the same secure Raven ID."
+        />
+    </div>
+
+    <img src="/grads/home_grad.png" class="absolute bottom-0 left-0 w-full h-auto pointer-events-none select-none" alt="gradient"/>
+</div>
