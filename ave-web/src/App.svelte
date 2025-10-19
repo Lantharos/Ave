@@ -6,6 +6,8 @@
     import Login from "./pages/login/Login.svelte";
     import Register from "./pages/register/Register.svelte";
     import Dashboard from "./pages/dashboard/Dashboard.svelte";
+    import PrivacyPolicy from "./pages/home/legal/PrivacyPolicy.svelte";
+    import TermsOfService from "./pages/home/legal/TermsOfService.svelte";
 
     const routes = {
         '/': Home,
@@ -13,6 +15,8 @@
         '/login': Login,
         '/register': Register,
         '/dashboard': Dashboard,
+        '/privacy': PrivacyPolicy,
+        '/terms': TermsOfService,
         '*': NotFound
     };
 </script>

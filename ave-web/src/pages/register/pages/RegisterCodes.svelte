@@ -30,7 +30,7 @@
             <Text type="p" size={24}>
                 These codes are your last resort for restoring access if you ever lose all your trusted devices.
                 <br><br>
-                Keep them somewhere safe — like where you’d store important documents such as your ID or birth certificate, as anyone with these codes can log in to your ID.
+                Keep them somewhere safe — like where you’d store important documents such as your ID or birth certificate, as anyone with these codes can log in to your Ave.
             </Text>
         </div>
 

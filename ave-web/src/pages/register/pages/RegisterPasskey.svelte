@@ -17,7 +17,7 @@
             </Text>
 
             <Text type="p" size={24}>
-                A passkey is a secure and convenient way to confirm actions on your Raven ID.
+                A passkey is a secure and convenient way to confirm actions on your Ave.
                 <br><br>
                 To set up your passkey:
                 <br>

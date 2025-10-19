@@ -23,10 +23,10 @@
         </div>
 
         <div class="flex flex-col items-end justify-end">
-            <button class="cursor-pointer hover:text-[#FFFFFF] hover:underline transition-all duration-300 rounded-full flex items-center justify-center text-[#A5A7AA] text-[24px]">
+            <button class="cursor-pointer hover:text-[#FFFFFF] hover:underline transition-all duration-300 rounded-full flex items-center justify-center text-[#A5A7AA] text-[24px]" onclick={() => {window.location.href = "/#/privacy"}}>
                 privacy policy
             </button>
-            <button class="cursor-pointer hover:text-[#FFFFFF] hover:underline transition-all duration-300 rounded-full flex items-center justify-center text-[#A5A7AA] text-[24px]">
+            <button class="cursor-pointer hover:text-[#FFFFFF] hover:underline transition-all duration-300 rounded-full flex items-center justify-center text-[#A5A7AA] text-[24px]" onclick={() => {window.location.href = "/#/terms"}}>
                 terms of service
             </button>
         </div>
@@ -34,7 +34,7 @@
 
     <div class="flex flex-col w-full items-start justify-center gap-[10px] z-10">
         <Text type={"h"} size={96} weight={"bold"}>
-            Meet RAVEN.
+            Meet Ave.
         </Text>
 
         <Text type={"h"} size={36} weight={"medium"}>

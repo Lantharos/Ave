@@ -12,12 +12,12 @@
     <div class="flex flex-row w-full items-start justify-between gap-[100px]">
         <div class="flex flex-col w-[55%] items-start justify-start gap-[20px]">
             <Text type="h" weight="medium" size={48}>
-                Welcome to Raven.<br />
+                Welcome to Ave.<br />
                 Your new digital identity.
             </Text>
 
             <Text type="p" weight="normal" size={24}>
-                Raven keeps who you are safe on your own device, never on ours.
+                Ave keeps who you are safe on your own device, never on ours.
                 <br /><br />
                 You'll set up your security layers once, and you're done.
                 <br /><br />
@@ -55,7 +55,6 @@
     <div class="flex flex-col gap-[40px] w-[40%]">
         <Text type="hd" size={36} cclass="self-center">ARE YOU READY?</Text>
 
-        <!-- use on:click, not onclick -->
         <Button
                 text="LET'S GO!"
                 icon="/icons/chevronbk-right-38.svg"
