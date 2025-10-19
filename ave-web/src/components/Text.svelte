@@ -1,6 +1,6 @@
 <script lang="ts">
     export let type: 'h' | 'hd' | 'p' = 'p';
-    export let weight: 'normal' | 'medium' | 'bold' | 'black' = 'normal';
+    export let weight: 'normal' | 'medium' | 'semibold' | 'bold' | 'black' = 'normal';
     export let size: number = type === 'h' ? 40 : type === 'hd' ? 18 : 24;
     export let color: string = type === 'p' ? '#878787' : '#D3D3D3';
     export let cclass: string = '';
@@ -9,7 +9,8 @@
         weight === 'normal' ? 'font-normal' :
             weight === 'medium' ? 'font-medium' :
                 weight === 'bold' ? 'font-extrabold' :
-                    'font-black';
+                    weight === 'semibold' ? 'font-semibold' :
+                        'font-black';
 </script>
 
 {#if type === 'h'}
