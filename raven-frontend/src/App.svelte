@@ -5,12 +5,14 @@
     import NotFound from './pages/status/NotFound.svelte';
     import Login from "./pages/login/Login.svelte";
     import Register from "./pages/register/Register.svelte";
+    import Dashboard from "./pages/dashboard/Dashboard.svelte";
 
     const routes = {
         '/': Home,
         '/faq': FAQ,
         '/login': Login,
         '/register': Register,
+        '/dashboard': Dashboard,
         '*': NotFound
     };
 </script>

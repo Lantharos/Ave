@@ -7,18 +7,19 @@
         onNext?.();
     }
 
-    // trust code format: XXXX-XXXX-XXXX-XXXX, where X is a random alphanumeric character
+    // trust code format: XXXXX-XXXXX-XXXXX-XXXXX, where X is a random alphanumeric character or symbol
     const generateRandomCode = () => {
-        const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+        const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%^&*_+-=';
         let code = '';
-        for (let i = 0; i < 16; i++) {
-            if (i > 0 && i % 4 === 0) code += '-';
+        for (let i = 0; i < 25; i++) {
+            if (i > 0 && i % 5 === 0) code += '-';
             code += chars.charAt(Math.floor(Math.random() * chars.length));
         }
         return code;
     };
 
-    const randomTrustCode = generateRandomCode();
+    const trustCode1 = generateRandomCode();
+    const trustCode2 = generateRandomCode();
 </script>
 
 <div class="w-full min-h-screen flex flex-col items-start justify-center px-[150px] py-[150px] gap-[150px]">
@@ -35,19 +36,25 @@
 
         <div class="flex flex-col gap-[10px] w-[40%]">
             <div class="flex flex-col gap-[10px] p-[30px] bg-[#171717] rounded-[32px]">
-                <Text type="hd" size={16} color="#878787">RANDOM TRUST CODE</Text>
-                <Text type="h" size={24} color="#FFFFFF">{randomTrustCode}</Text>
+                <Text type="hd" size={16} color="#878787">PRIMARY TRUST CODE</Text>
+                <Text type="h" size={24} color="#FFFFFF">{trustCode1}</Text>
                 <button class="cursor-pointer bg-[#333333] hover:bg-[#444444] text-white px-[15px] py-[10px] rounded-full text-[16px] font-medium transition-colors duration-300"
                         onclick={() => {
-                            navigator.clipboard.writeText(randomTrustCode);
+                            navigator.clipboard.writeText(trustCode1);
                         }}>
                     <Text type="h" size={16} color="#D3D3D3" weight="black">COPY TO CLIPBOARD</Text>
                 </button>
             </div>
 
             <div class="flex flex-col gap-[10px] p-[30px] bg-[#171717] rounded-[32px]">
-                <Text type="hd" size={16} color="#878787">CUSTOM TRUST CODE</Text>
-                <input type="text" class="w-full bg-[#111111] rounded-full mt-[10px] px-[20px] py-[15px] text-white focus:outline-none" placeholder="e.g. KITT-ENLO-VER1-2345" />
+                <Text type="hd" size={16} color="#878787">BACKUP TRUST CODE</Text>
+                <Text type="h" size={24} color="#FFFFFF">{trustCode2}</Text>
+                <button class="cursor-pointer bg-[#333333] hover:bg-[#444444] text-white px-[15px] py-[10px] rounded-full text-[16px] font-medium transition-colors duration-300"
+                        onclick={() => {
+                            navigator.clipboard.writeText(trustCode2);
+                        }}>
+                    <Text type="h" size={16} color="#D3D3D3" weight="black">COPY TO CLIPBOARD</Text>
+                </button>
             </div>
 
             <Button text="CONTINUE" onclick={() => onNext()} icon="/icons/chevronbk-right-38.svg" />
