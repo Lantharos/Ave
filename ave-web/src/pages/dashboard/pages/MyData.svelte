@@ -18,7 +18,7 @@
        { icon: "/icons/chevron-right-68.svg", color: "#FFFFFF", onClick: () => {} },
     ]}></ActionCard>
 
-    <ActionCard action="DELETE MY DATA" description="Deleting your ID permanently erases all encrypted data and breaks access for apps using this identity. This action cannot be undone." buttons={[
+    <ActionCard color="#E14747" action="DELETE MY DATA" description="Deleting your ID permanently erases all encrypted data and breaks access for apps using this identity. This action cannot be undone." buttons={[
        { icon: "/icons/chevron-right-68.svg", color: "#E14747", onClick: () => {} },
     ]}></ActionCard>
 

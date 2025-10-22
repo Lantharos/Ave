@@ -1,7 +1,14 @@
 <script>
     import Text from "../../../components/Text.svelte";
-    import IdentityCard from "../../../components/IdentityCard.svelte";
     import ActionCard from "../../../components/ActionCard.svelte";
+    import Device from "./components/Device.svelte";
+
+    const devices = [
+        { id: 1, hostname: "Niko's S23", ip: "100.123.128.109", location: "Belgrade, Serbia", type: "phone", primary: true },
+        { id: 2, hostname: "Work Laptop", ip: "100.123.128.109", location: "Belgrade, Serbia", type: "computer", primary: false },
+        { id: 3, hostname: "iPad Pro", ip: "100.123.128.109", location: "Belgrade, Serbia", type: "tablet", primary: false },
+        { id: 4, hostname: "Home PC", ip: "100.123.128.109", location: "Belgrade, Serbia", type: "computer", primary: false },
+    ];
 </script>
 
 <div class="flex flex-col gap-[40px] w-full z-10 px-[60px] py-[40px] bg-[#111111]/60 rounded-[64px] backdrop-blur-[20px]">
@@ -14,7 +21,15 @@
        { icon: "/icons/chevron-right-68.svg", color: "#FFFFFF", onClick: () => {} },
     ]}></ActionCard>
 
-    <ActionCard action="REVOKE ALL DEVICES" description="This will invalidate keys on all enrolled devices, except this one, you will need to re-add every device again." buttons={[
+    <ActionCard color="#FFB400" action="REVOKE ALL DEVICES" description="This will invalidate keys on all enrolled devices, except this one, you will need to re-add every device again." buttons={[
        { icon: "/icons/chevron-right-68.svg", color: "#FFB400", onClick: () => {} },
     ]}></ActionCard>
+
+    <div class="grid grid-cols-4 gap-[20px]">
+        {#each devices as device}
+            {#if ["phone", "computer", "tablet"].includes(device.type)}
+                <Device device={device} />
+            {/if}
+        {/each}
+    </div>
 </div>

@@ -5,6 +5,7 @@
     import Security from "./pages/Security.svelte";
     import MyData from "./pages/MyData.svelte";
     import Devices from "./pages/Devices.svelte";
+    import ActivityLog from "./pages/ActivityLog.svelte";
 
     let identities = [{
         name: "Niko Arden",
@@ -52,6 +53,8 @@
             <Devices />
         {:else if selectedPage === "My Data"}
             <MyData />
+        {:else if selectedPage === "Activity Log"}
+            <ActivityLog />
         {/if}
     </div>
 

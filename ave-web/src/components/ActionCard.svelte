@@ -17,7 +17,7 @@
 
 <div class="flex flex-row w-full rounded-[36px] overflow-clip gap-[10px]">
     <div class="flex flex-col flex-grow bg-[#171717] p-[40px] gap-[10px]">
-        <h2 class="text-[{color}] text-[18px] font-black">{action}</h2>
+        <h2 class="text-[18px] font-black" style="color: {color};">{action}</h2>
         <p class="text-[#878787] text-[18px]">{description}</p>
     </div>
 
