@@ -8,6 +8,7 @@
     import Dashboard from "./pages/dashboard/Dashboard.svelte";
     import PrivacyPolicy from "./pages/home/legal/PrivacyPolicy.svelte";
     import TermsOfService from "./pages/home/legal/TermsOfService.svelte";
+    import Authorize from './pages/authorize/Authorize.svelte';
 
     const routes = {
         '/': Home,
@@ -17,6 +18,7 @@
         '/dashboard': Dashboard,
         '/privacy': PrivacyPolicy,
         '/terms': TermsOfService,
+        '/authorize': Authorize,
         '*': NotFound
     };
 </script>
