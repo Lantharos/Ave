@@ -21,6 +21,72 @@ const app = new Hono();
 // In-memory store for auth challenges (in production, use Redis)
 const authChallenges = new Map<string, { challenge: string; userId: string; expiresAt: number }>();
 
+/**
+ * Get or create a device for a user
+ * Uses fingerprint (stored in client localStorage) to uniquely identify devices
+ * Falls back to creating new device if no fingerprint match
+ */
+async function getOrCreateDevice(
+  userId: string,
+  deviceInfo: { name: string; type: string; browser?: string; os?: string; fingerprint?: string }
+): Promise<{ id: string; name: string; type: string; isNew: boolean }> {
+  // Try to find an existing device with the same fingerprint
+  if (deviceInfo.fingerprint) {
+    const [existingDevice] = await db
+      .select()
+      .from(devices)
+      .where(
+        and(
+          eq(devices.userId, userId),
+          eq(devices.fingerprint, deviceInfo.fingerprint)
+        )
+      )
+      .limit(1);
+    
+    if (existingDevice) {
+      // Update last seen, device info (in case browser was updated), and return existing device
+      await db
+        .update(devices)
+        .set({ 
+          lastSeenAt: new Date(), 
+          isActive: true,
+          // Update name/browser/os in case they changed (e.g., browser update)
+          name: deviceInfo.name,
+          browser: deviceInfo.browser,
+          os: deviceInfo.os,
+        })
+        .where(eq(devices.id, existingDevice.id));
+      
+      return {
+        id: existingDevice.id,
+        name: deviceInfo.name, // Return updated name
+        type: existingDevice.type,
+        isNew: false,
+      };
+    }
+  }
+  
+  // Create new device
+  const [newDevice] = await db
+    .insert(devices)
+    .values({
+      userId,
+      name: deviceInfo.name,
+      type: deviceInfo.type,
+      browser: deviceInfo.browser,
+      os: deviceInfo.os,
+      fingerprint: deviceInfo.fingerprint,
+    })
+    .returning();
+  
+  return {
+    id: newDevice.id,
+    name: newDevice.name,
+    type: newDevice.type,
+    isNew: true,
+  };
+}
+
 // Start login - find user by handle and return options
 app.post("/start", zValidator("json", z.object({
   handle: z.string().min(3).max(32),
@@ -98,6 +164,7 @@ app.post("/passkey", zValidator("json", z.object({
     type: z.enum(["phone", "computer", "tablet"]),
     browser: z.string().optional(),
     os: z.string().optional(),
+    fingerprint: z.string().max(64).optional(),
   }),
 })), async (c) => {
   const { authSessionId, credential, device } = c.req.valid("json");
@@ -177,23 +244,14 @@ app.post("/passkey", zValidator("json", z.object({
     
     authChallenges.delete(authSessionId);
     
-    // Create or update device
-    const [newDevice] = await db
-      .insert(devices)
-      .values({
-        userId: storedChallenge.userId,
-        name: device.name,
-        type: device.type,
-        browser: device.browser,
-        os: device.os,
-      })
-      .returning();
+    // Get or create device (reuses existing device if browser/OS matches)
+    const deviceRecord = await getOrCreateDevice(storedChallenge.userId, device);
     
     // Create session
     const sessionToken = generateSessionToken();
     await db.insert(sessions).values({
       userId: storedChallenge.userId,
-      deviceId: newDevice.id,
+      deviceId: deviceRecord.id,
       tokenHash: hashSessionToken(sessionToken),
       expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
       ipAddress: c.req.header("x-forwarded-for") || c.req.header("x-real-ip"),
@@ -204,8 +262,8 @@ app.post("/passkey", zValidator("json", z.object({
     await db.insert(activityLogs).values({
       userId: storedChallenge.userId,
       action: "login",
-      details: { method: "passkey", deviceName: device.name },
-      deviceId: newDevice.id,
+      details: { method: "passkey", deviceName: deviceRecord.name, isNewDevice: deviceRecord.isNew },
+      deviceId: deviceRecord.id,
       ipAddress: c.req.header("x-forwarded-for") || c.req.header("x-real-ip"),
       userAgent: c.req.header("user-agent"),
       severity: "info",
@@ -221,9 +279,9 @@ app.post("/passkey", zValidator("json", z.object({
       success: true,
       sessionToken,
       device: {
-        id: newDevice.id,
-        name: newDevice.name,
-        type: newDevice.type,
+        id: deviceRecord.id,
+        name: deviceRecord.name,
+        type: deviceRecord.type,
       },
       identities: userIdentities.map((i) => ({
         id: i.id,
@@ -256,6 +314,7 @@ app.post("/request-approval", zValidator("json", z.object({
     type: z.enum(["phone", "computer", "tablet"]),
     browser: z.string().optional(),
     os: z.string().optional(),
+    fingerprint: z.string().max(64).optional(),
   }),
 })), async (c) => {
   const { handle, requesterPublicKey, device } = c.req.valid("json");
@@ -280,6 +339,7 @@ app.post("/request-approval", zValidator("json", z.object({
       deviceType: device.type,
       browser: device.browser,
       os: device.os,
+      fingerprint: device.fingerprint,
       ipAddress: c.req.header("x-forwarded-for") || c.req.header("x-real-ip"),
       requesterPublicKey,
       expiresAt: new Date(Date.now() + 5 * 60 * 1000), // 5 minutes
@@ -335,22 +395,19 @@ app.get("/request-status/:requestId", async (c) => {
       return c.json({ error: "Account not found" }, 404);
     }
     
-    // Create device and session
-    const [newDevice] = await db
-      .insert(devices)
-      .values({
-        userId: identity.userId,
-        name: request.deviceName || "Unknown Device",
-        type: request.deviceType || "computer",
-        browser: request.browser,
-        os: request.os,
-      })
-      .returning();
+    // Get or create device (reuses existing device if fingerprint matches)
+    const deviceRecord = await getOrCreateDevice(identity.userId, {
+      name: request.deviceName || "Unknown Device",
+      type: request.deviceType || "computer",
+      browser: request.browser || undefined,
+      os: request.os || undefined,
+      fingerprint: request.fingerprint || undefined,
+    });
     
     const sessionToken = generateSessionToken();
     await db.insert(sessions).values({
       userId: identity.userId,
-      deviceId: newDevice.id,
+      deviceId: deviceRecord.id,
       tokenHash: hashSessionToken(sessionToken),
       expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
       ipAddress: request.ipAddress,
@@ -361,8 +418,8 @@ app.get("/request-status/:requestId", async (c) => {
     await db.insert(activityLogs).values({
       userId: identity.userId,
       action: "login",
-      details: { method: "device_approval", deviceName: request.deviceName },
-      deviceId: newDevice.id,
+      details: { method: "device_approval", deviceName: deviceRecord.name, isNewDevice: deviceRecord.isNew },
+      deviceId: deviceRecord.id,
       ipAddress: request.ipAddress,
       severity: "info",
     });
@@ -381,9 +438,9 @@ app.get("/request-status/:requestId", async (c) => {
       sessionToken,
       encryptedMasterKey: request.encryptedMasterKey,
       device: {
-        id: newDevice.id,
-        name: newDevice.name,
-        type: newDevice.type,
+        id: deviceRecord.id,
+        name: deviceRecord.name,
+        type: deviceRecord.type,
       },
       identities: userIdentities.map((i) => ({
         id: i.id,
@@ -414,6 +471,7 @@ app.post("/trust-code", zValidator("json", z.object({
     type: z.enum(["phone", "computer", "tablet"]),
     browser: z.string().optional(),
     os: z.string().optional(),
+    fingerprint: z.string().max(64).optional(),
   }),
 })), async (c) => {
   const { handle, code, device } = c.req.valid("json");
@@ -487,22 +545,13 @@ app.post("/trust-code", zValidator("json", z.object({
     .where(eq(users.id, identity.userId))
     .limit(1);
   
-  // Create device and session
-  const [newDevice] = await db
-    .insert(devices)
-    .values({
-      userId: identity.userId,
-      name: device.name,
-      type: device.type,
-      browser: device.browser,
-      os: device.os,
-    })
-    .returning();
+  // Get or create device (reuses existing device if browser/OS matches)
+  const deviceRecord = await getOrCreateDevice(identity.userId, device);
   
   const sessionToken = generateSessionToken();
   await db.insert(sessions).values({
     userId: identity.userId,
-    deviceId: newDevice.id,
+    deviceId: deviceRecord.id,
     tokenHash: hashSessionToken(sessionToken),
     expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
     ipAddress: c.req.header("x-forwarded-for") || c.req.header("x-real-ip"),
@@ -513,8 +562,8 @@ app.post("/trust-code", zValidator("json", z.object({
   await db.insert(activityLogs).values({
     userId: identity.userId,
     action: "login",
-    details: { method: "trust_code", deviceName: device.name },
-    deviceId: newDevice.id,
+    details: { method: "trust_code", deviceName: deviceRecord.name, isNewDevice: deviceRecord.isNew },
+    deviceId: deviceRecord.id,
     ipAddress: c.req.header("x-forwarded-for") || c.req.header("x-real-ip"),
     userAgent: c.req.header("user-agent"),
     severity: "warning", // Trust code usage is noteworthy
@@ -538,9 +587,9 @@ app.post("/trust-code", zValidator("json", z.object({
     // Return the encrypted master key backup - client will decrypt with the trust code
     encryptedMasterKeyBackup: user?.encryptedMasterKeyBackup,
     device: {
-      id: newDevice.id,
-      name: newDevice.name,
-      type: newDevice.type,
+      id: deviceRecord.id,
+      name: deviceRecord.name,
+      type: deviceRecord.type,
     },
     identities: userIdentities.map((i) => ({
       id: i.id,

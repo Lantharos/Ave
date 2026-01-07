@@ -126,6 +126,7 @@ export const api = {
         type: "phone" | "computer" | "tablet";
         browser?: string;
         os?: string;
+        fingerprint?: string;
       };
       prfEncryptedMasterKey?: string; // Master key encrypted with PRF output (if passkey supports PRF)
     }) =>
@@ -173,6 +174,7 @@ export const api = {
         type: "phone" | "computer" | "tablet";
         browser?: string;
         os?: string;
+        fingerprint?: string;
       };
     }) =>
       request<{
@@ -195,6 +197,7 @@ export const api = {
         type: "phone" | "computer" | "tablet";
         browser?: string;
         os?: string;
+        fingerprint?: string;
       };
     }) =>
       request<{
@@ -222,6 +225,7 @@ export const api = {
         type: "phone" | "computer" | "tablet";
         browser?: string;
         os?: string;
+        fingerprint?: string;
       };
     }) =>
       request<{

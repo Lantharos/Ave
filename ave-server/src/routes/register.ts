@@ -121,6 +121,7 @@ const completeRegistrationSchema = z.object({
     type: z.enum(["phone", "computer", "tablet"]),
     browser: z.string().optional(),
     os: z.string().optional(),
+    fingerprint: z.string().max(64).optional(),
   }),
   // PRF-encrypted master key (if passkey supports PRF extension)
   prfEncryptedMasterKey: z.string().optional(),
@@ -228,6 +229,7 @@ app.post("/complete", zValidator("json", completeRegistrationSchema), async (c) 
         type: data.device.type,
         browser: data.device.browser,
         os: data.device.os,
+        fingerprint: data.device.fingerprint,
       })
       .returning();
     

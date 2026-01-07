@@ -90,6 +90,9 @@ export const devices = pgTable("devices", {
   browser: varchar("browser", { length: 64 }),
   os: varchar("os", { length: 64 }),
   
+  // Unique fingerprint for this device/browser combination (stored in client localStorage)
+  fingerprint: varchar("fingerprint", { length: 64 }),
+  
   // For push notifications / real-time
   pushSubscription: jsonb("push_subscription"),
   
@@ -97,6 +100,7 @@ export const devices = pgTable("devices", {
   isActive: boolean("is_active").default(true).notNull(),
 }, (table) => [
   index("devices_user_id_idx").on(table.userId),
+  index("devices_fingerprint_idx").on(table.fingerprint),
 ]);
 
 // Sessions - active login sessions
@@ -132,6 +136,7 @@ export const loginRequests = pgTable("login_requests", {
   deviceType: varchar("device_type", { length: 32 }),
   browser: varchar("browser", { length: 64 }),
   os: varchar("os", { length: 64 }),
+  fingerprint: varchar("fingerprint", { length: 64 }),
   ipAddress: varchar("ip_address", { length: 45 }),
   
   // Ephemeral key exchange for E2EE key transfer

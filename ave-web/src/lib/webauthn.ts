@@ -157,6 +157,23 @@ export async function authenticateWithPasskey(
 }
 
 /**
+ * Get or generate a persistent device fingerprint
+ * This is stored in localStorage and uniquely identifies this browser on this device
+ */
+function getDeviceFingerprint(): string {
+  const STORAGE_KEY = "ave_device_fingerprint";
+  let fingerprint = localStorage.getItem(STORAGE_KEY);
+  
+  if (!fingerprint) {
+    // Generate a new fingerprint (UUID v4 style)
+    fingerprint = crypto.randomUUID();
+    localStorage.setItem(STORAGE_KEY, fingerprint);
+  }
+  
+  return fingerprint;
+}
+
+/**
  * Get device info for registration/login
  */
 export function getDeviceInfo(): {
@@ -164,6 +181,7 @@ export function getDeviceInfo(): {
   type: "phone" | "computer" | "tablet";
   browser: string;
   os: string;
+  fingerprint: string;
 } {
   const ua = navigator.userAgent;
   
@@ -206,5 +224,8 @@ export function getDeviceInfo(): {
   // Generate device name
   const name = `${browser} on ${os}`;
   
-  return { name, type, browser, os };
+  // Get persistent fingerprint for this device/browser
+  const fingerprint = getDeviceFingerprint();
+  
+  return { name, type, browser, os, fingerprint };
 }
