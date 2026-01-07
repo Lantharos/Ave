@@ -36,13 +36,13 @@
                 <img src="/icons/devices/laptop-75.svg" alt="device icon" class="mb-[10px]" />
             {/if}
         </div>
-        <Text type="h" size={20} weight="bold" color="#FFFFFF">{device.name}</Text>
+        <Text type="h" size={20} weight="bold" color="#FFFFFF" cclass="text-center">{device.name}</Text>
         {#if device.browser && device.os}
-            <Text type="p" size={16} color="#B9BBBE">{device.browser} on {device.os}</Text>
+            <Text type="p" size={16} color="#B9BBBE" cclass="text-center">{device.browser} on {device.os}</Text>
         {:else if device.os}
-            <Text type="p" size={16} color="#B9BBBE">{device.os}</Text>
+            <Text type="p" size={16} color="#B9BBBE" cclass="text-center">{device.os}</Text>
         {/if}
-        <Text type="p" size={14} color="#666666">Last seen: {formatLastSeen(device.lastSeenAt)}</Text>
+        <Text type="p" size={14} color="#666666" cclass="text-center">Last seen: {formatLastSeen(device.lastSeenAt)}</Text>
     </div>
     <button 
         class="w-full max-h-full rounded-full bg-[#171717] hover:bg-[#202020] transition-colors duration-300 cursor-pointer flex items-center justify-center px-[20px] py-[10px] disabled:opacity-50 disabled:cursor-not-allowed"
