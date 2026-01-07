@@ -1,6 +1,6 @@
 <script lang="ts">
     import { onMount } from "svelte";
-    import { push } from "svelte-spa-router";
+    import { goto } from "@mateothegreat/svelte5-router";
     import Text from "../../components/Text.svelte";
     import SidebarButton from "./components/SidebarButton.svelte";
     import Identity from "./pages/Identity.svelte";
@@ -22,7 +22,7 @@
     onMount(async () => {
         // Check if authenticated
         if (!$isAuthenticated) {
-            push("/login");
+            goto("/login");
             return;
         }
 
@@ -47,7 +47,7 @@
 
     async function handleLogout() {
         await auth.logout();
-        push("/login");
+        goto("/login");
     }
 
     async function handleNewIdentity() {

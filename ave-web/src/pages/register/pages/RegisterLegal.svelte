@@ -17,7 +17,7 @@
            </Text>
 
            <Text type="p" size={16}>
-               By clicking "I AGREE", you acknowledge that you have read and agree to Ave's <a href="/#/terms" class="hover:text-[#FFFFFF] text-[#A5A7AA] transition-colors duration-300 underline">Terms of Service</a>.
+               By clicking "I AGREE", you acknowledge that you have read and agree to Ave's <a href="/terms" target="_blank" class="hover:text-[#FFFFFF] text-[#A5A7AA] transition-colors duration-300 underline">Terms of Service</a>.
                <br><br>
                Please ensure you understand your rights and responsibilities while using our services.
                <br><br>
@@ -31,7 +31,7 @@
            </Text>
 
            <Text type="p" size={16}>
-               By clicking "I AGREE", you acknowledge that you have read and agree to Ave's <a href="/#/privacy" class="hover:text-[#FFFFFF] text-[#A5A7AA] transition-colors duration-300 underline">Privacy Policy</a>.
+               By clicking "I AGREE", you acknowledge that you have read and agree to Ave's <a href="/privacy" target="_blank" class="hover:text-[#FFFFFF] text-[#A5A7AA] transition-colors duration-300 underline">Privacy Policy</a>.
                <br><br>
                We are committed to protecting your personal information and ensuring your privacy while using our services.
                <br><br>

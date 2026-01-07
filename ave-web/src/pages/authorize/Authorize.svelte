@@ -4,12 +4,24 @@
     import { api, type Identity } from "../../lib/api";
     import { generateAppKey, encryptAppKey, exportAppKey, loadMasterKey, decryptAppKey, hasMasterKey } from "../../lib/crypto";
     import { auth, isAuthenticated, identities as identitiesStore, currentIdentity } from "../../stores/auth";
-    import { push, querystring } from "svelte-spa-router";
+    import { goto } from "@mateothegreat/svelte5-router";
     import { get } from "svelte/store";
+
+    // Parse query params from window.location
+    let querystring = $state(window.location.search.slice(1));
+    
+    // Update querystring when URL changes
+    $effect(() => {
+        const updateQuery = () => {
+            querystring = window.location.search.slice(1);
+        };
+        window.addEventListener('popstate', updateQuery);
+        return () => window.removeEventListener('popstate', updateQuery);
+    });
 
     // Parse query params
     let params = $derived.by(() => {
-        const searchParams = new URLSearchParams($querystring || "");
+        const searchParams = new URLSearchParams(querystring || "");
         const codeChallenge = searchParams.get("code_challenge");
         const codeChallengeMethod = searchParams.get("code_challenge_method");
         
@@ -222,7 +234,7 @@
         if (!$isAuthenticated) {
             // Redirect to login, then come back
             const returnUrl = encodeURIComponent(window.location.pathname + window.location.search);
-            push(`/login?return=${returnUrl}`);
+            goto(`/login?return=${returnUrl}`);
             return;
         }
         loadAppInfo();
@@ -302,7 +314,7 @@
                 <div class="flex flex-col gap-[15px] w-full max-w-[350px]">
                     <button 
                         class="w-full py-[18px] bg-[#FFFFFF] text-[#090909] font-semibold rounded-[16px] hover:bg-[#E0E0E0] transition-colors"
-                        onclick={() => push("/login?return=" + encodeURIComponent(window.location.pathname + window.location.search))}
+                        onclick={() => goto("/login?return=" + encodeURIComponent(window.location.pathname + window.location.search))}
                     >
                         Sign In with Trust Code
                     </button>

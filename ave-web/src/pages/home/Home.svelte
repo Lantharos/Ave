@@ -1,5 +1,6 @@
-<script>
+<script lang="ts">
     import Text from "../../components/Text.svelte";
+    import { goto, route } from "@mateothegreat/svelte5-router";
 </script>
 
 <div class="bg-[#090909] w-full h-screen-fixed flex flex-col items-start px-[200px] py-[100px] gap-[100px] relative">
@@ -8,27 +9,27 @@
             <button class="px-[40px] py-[20px] bg-[#171717] rounded-full flex items-center justify-center text-[#B9BBBE] text-[24px]">
                 about
             </button>
-            <button class="px-[40px] py-[20px] cursor-pointer hover:bg-[#121212] transition-colors duration-300 rounded-full flex items-center justify-center text-[#B9BBBE] text-[24px]" onclick={() => {window.location.href = "/#/login"}}>
+            <a href="/login" use:route class="px-[40px] py-[20px] cursor-pointer hover:bg-[#121212] transition-colors duration-300 rounded-full flex items-center justify-center text-[#B9BBBE] text-[24px]">
                 login
-            </button>
-            <button class="px-[40px] py-[20px] cursor-pointer hover:bg-[#121212] transition-colors duration-300 rounded-full flex items-center justify-center text-[#B9BBBE] text-[24px]" onclick={() => {window.location.href = "/#/register"}}>
+            </a>
+            <a href="/register" use:route class="px-[40px] py-[20px] cursor-pointer hover:bg-[#121212] transition-colors duration-300 rounded-full flex items-center justify-center text-[#B9BBBE] text-[24px]">
                 new id
-            </button>
+            </a>
             <button class="px-[40px] py-[20px] cursor-pointer hover:bg-[#121212] transition-colors duration-300 rounded-full flex items-center justify-center text-[#B9BBBE] text-[24px]">
                 asterisk
             </button>
-            <button class="px-[40px] py-[20px] cursor-pointer hover:bg-[#121212] transition-colors duration-300 rounded-full flex items-center justify-center text-[#B9BBBE] text-[24px]" onclick={() => {window.location.href = "/#/faq"}}>
+            <a href="/faq" use:route class="px-[40px] py-[20px] cursor-pointer hover:bg-[#121212] transition-colors duration-300 rounded-full flex items-center justify-center text-[#B9BBBE] text-[24px]">
                 faq
-            </button>
+            </a>
         </div>
 
         <div class="flex flex-col items-end justify-end">
-            <button class="cursor-pointer hover:text-[#FFFFFF] hover:underline transition-all duration-300 rounded-full flex items-center justify-center text-[#A5A7AA] text-[24px]" onclick={() => {window.location.href = "/#/privacy"}}>
+            <a href="/privacy" use:route class="cursor-pointer hover:text-[#FFFFFF] hover:underline transition-all duration-300 rounded-full flex items-center justify-center text-[#A5A7AA] text-[24px]">
                 privacy policy
-            </button>
-            <button class="cursor-pointer hover:text-[#FFFFFF] hover:underline transition-all duration-300 rounded-full flex items-center justify-center text-[#A5A7AA] text-[24px]" onclick={() => {window.location.href = "/#/terms"}}>
+            </a>
+            <a href="/terms" use:route class="cursor-pointer hover:text-[#FFFFFF] hover:underline transition-all duration-300 rounded-full flex items-center justify-center text-[#A5A7AA] text-[24px]">
                 terms of service
-            </button>
+            </a>
         </div>
     </div>
 

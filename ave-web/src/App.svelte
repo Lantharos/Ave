@@ -1,5 +1,5 @@
 <script lang="ts">
-    import Router, { replace } from 'svelte-spa-router';
+    import { Router } from '@mateothegreat/svelte5-router';
     import { onMount } from 'svelte';
     import Home from './pages/home/Home.svelte';
     import FAQ from './pages/home/FAQ.svelte';
@@ -13,17 +13,20 @@
     import { auth, isAuthenticated, isLoading } from './stores/auth';
     import { websocket } from './stores/websocket';
 
-    const routes = {
-        '/': Home,
-        '/faq': FAQ,
-        '/login': Login,
-        '/register': Register,
-        '/dashboard': Dashboard,
-        '/dashboard/*': Dashboard,
-        '/privacy': PrivacyPolicy,
-        '/terms': TermsOfService,
-        '/authorize': Authorize,
-        '*': NotFound
+    const routes = [
+        { path: '/', component: Home },
+        { path: '/faq', component: FAQ },
+        { path: '/login', component: Login },
+        { path: '/register', component: Register },
+        { path: '/dashboard', component: Dashboard },
+        { path: '/dashboard/(.*)', component: Dashboard },
+        { path: '/privacy', component: PrivacyPolicy },
+        { path: '/terms', component: TermsOfService },
+        { path: '/authorize', component: Authorize }
+    ];
+
+    const statuses = {
+        404: { component: NotFound }
     };
 
     // Protected routes that require authentication
@@ -49,5 +52,5 @@
         <div class="w-12 h-12 border-4 border-transparent border-t-white rounded-full animate-spin"></div>
     </div>
 {:else}
-    <Router {routes} />
+    <Router {routes} {statuses} />
 {/if}

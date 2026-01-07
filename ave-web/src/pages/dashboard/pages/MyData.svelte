@@ -2,7 +2,7 @@
     import Text from "../../../components/Text.svelte";
     import ActionCard from "../../../components/ActionCard.svelte";
     import { api } from "../../../lib/api";
-    import { push } from "svelte-spa-router";
+    import { goto } from "@mateothegreat/svelte5-router";
     import { auth } from "../../../stores/auth";
 
     let exporting = $state(false);
@@ -50,7 +50,7 @@
             auth.logout();
             
             // Redirect to home
-            push("/");
+            goto("/");
         } catch (err) {
             error = err instanceof Error ? err.message : "Failed to delete account";
             deleting = false;

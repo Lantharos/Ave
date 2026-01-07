@@ -17,8 +17,8 @@
         encryptMasterKeyWithPrf,
     } from "../../lib/crypto";
     import { registerPasskey, getDeviceInfo } from "../../lib/webauthn";
-    import { auth } from "../../stores/auth";
-    import { push } from "svelte-spa-router";
+    import { auth, isAuthenticated } from "../../stores/auth";
+    import { goto } from "@mateothegreat/svelte5-router";
 
     // Registration state
     let currentPage: keyof typeof pageBg = "welcome";
@@ -72,6 +72,12 @@
     }
 
     onMount(async () => {
+        // Redirect to dashboard if already logged in
+        if ($isAuthenticated) {
+            goto("/dashboard");
+            return;
+        }
+        
         await preloadImages(Object.values(pageBg));
         loaded = true;
     });
@@ -197,7 +203,7 @@
     }
 
     function handleEnrollmentComplete() {
-        push("/dashboard");
+        goto("/dashboard");
     }
 </script>
 

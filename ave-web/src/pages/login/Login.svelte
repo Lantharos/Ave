@@ -3,11 +3,19 @@
     import LoginStart from "./pages/LoginStart.svelte";
     import LoginTrustCode from "./pages/LoginTrustCode.svelte";
     import LoginWaiting from "./pages/LoginWaiting.svelte";
-    import { push } from "svelte-spa-router";
-    import { auth } from "../../stores/auth";
+    import { goto } from "@mateothegreat/svelte5-router";
+    import { auth, isAuthenticated } from "../../stores/auth";
     import type { Identity, Device } from "../../lib/api";
+    import { onMount } from "svelte";
 
     let currentPage = $state<"login" | "methods" | "trust-code" | "waiting">("login");
+    
+    // Redirect to dashboard if already logged in
+    onMount(() => {
+        if ($isAuthenticated) {
+            goto("/dashboard");
+        }
+    });
     let error = $state("");
     
     // State passed between steps
@@ -56,7 +64,7 @@
     }
 
     function handleLoginSuccess() {
-        push("/dashboard");
+        goto("/dashboard");
     }
 
     function setError(msg: string) {
