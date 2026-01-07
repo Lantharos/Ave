@@ -2,7 +2,7 @@
     export let action: string;
     export let description: string;
     export let color: string = "#FFFFFF";
-    export let buttons: Array<{ icon: string; color: string; onClick: () => void }>;
+    export let buttons: Array<{ icon: string; color: string; onClick: () => void; loading?: boolean; disabled?: boolean }>;
 
     if (!color) {
         color = "#FFFFFF";
@@ -24,11 +24,16 @@
     <div class="flex flex-row gap-[20px] min-h-full">
         {#each buttons as button}
             <button
-                    class="flex flex-row items-center justify-center aspect-square w-fit h-full gap-[10px] px-[40px] py-[10px] bg-[#171717] text-[18px] hover:bg-[#202020] transition-colors duration-300 cursor-pointer"
+                    class="flex flex-row items-center justify-center aspect-square w-fit h-full gap-[10px] px-[40px] py-[10px] bg-[#171717] text-[18px] hover:bg-[#202020] transition-colors duration-300 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                     style="color: {button.color};"
                     on:click={button.onClick}
+                    disabled={button.loading || button.disabled}
             >
-                <img src={button.icon} alt="icon" />
+                {#if button.loading}
+                    <div class="w-[24px] h-[24px] border-2 border-current border-t-transparent rounded-full animate-spin"></div>
+                {:else}
+                    <img src={button.icon} alt="icon" />
+                {/if}
             </button>
         {/each}
     </div>

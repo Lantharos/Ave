@@ -1,11 +1,22 @@
 <script lang="ts">
     import Text from "../../../components/Text.svelte";
     import Button from "../../../components/Button.svelte";
-    import IdentityCard from "../../../components/IdentityCard.svelte";
 
     let { onNext } = $props<{ onNext?: () => void }>();
-    function goNext() {
-        onNext?.();
+    
+    let isLoading = $state(false);
+    let error = $state("");
+    
+    async function handleSetupPasskey() {
+        isLoading = true;
+        error = "";
+        
+        try {
+            onNext?.();
+        } catch (e: any) {
+            error = e.message || "Failed to set up passkey";
+            isLoading = false;
+        }
     }
 </script>
 
@@ -27,8 +38,19 @@
                 <br>
                 3. Ensure your device is secure and only accessible by you.
             </Text>
+            
+            {#if error}
+                <div class="bg-red-600/20 border border-red-600 text-red-400 px-4 py-3 rounded-2xl mt-4">
+                    {error}
+                </div>
+            {/if}
         </div>
 
-        <Button text="SET UP PASSKEY" onclick={() => onNext()} icon="/icons/passkey-32-bk.svg" />
+        <Button 
+            text={isLoading ? "SETTING UP..." : "SET UP PASSKEY"} 
+            onclick={handleSetupPasskey} 
+            icon="/icons/passkey-32-bk.svg"
+            disabled={isLoading}
+        />
     </div>
 </div>
