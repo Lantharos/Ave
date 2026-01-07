@@ -1,4 +1,4 @@
-<div class="bg-[#090909] w-full h-screen flex flex-col items-center justify-center px-[200px] py-[100px] gap-[50px]">
+<div class="bg-[#090909] w-full h-screen-fixed flex flex-col items-center justify-center px-[200px] py-[100px] gap-[50px] relative">
     <h1 class="font-extrabold text-[#FFFFFF]/80 text-[96px]">
         404
     </h1>

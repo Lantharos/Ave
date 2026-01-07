@@ -3,14 +3,28 @@
 
 :root {
     font-family: Poppins, sans-serif;
+    --vh: 1vh;
 }
 
-/* Responsive zoom scaling for smaller screens */
+html, body, #app {
+    margin: 0;
+    padding: 0;
+    background-color: #090909;
+    min-height: 100vh;
+    min-height: calc(var(--vh, 1vh) * 100);
+}
+
+/* Full height utility that works with zoom */
+.h-screen-fixed {
+    height: 100vh;
+    height: calc(var(--vh, 1vh) * 100);
+}
+
 html {
     zoom: 1;
 }
 
-/* For screens smaller than 1440px, start scaling down */
+/* Responsive zoom scaling for smaller screens */
 @media (max-width: 1440px) {
     html {
         zoom: 0.85;

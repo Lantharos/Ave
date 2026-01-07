@@ -229,7 +229,7 @@
     });
 </script>
 
-<div class="bg-[#090909] h-screen flex items-center gap-[50px] p-[50px]">
+<div class="bg-[#090909] h-screen-fixed flex items-center gap-[50px] p-[50px] relative">
     <div class="flex-1 z-10 flex flex-col items-start justify-between h-full p-[50px]">
         <div class="flex flex-row gap-[20px] items-start">
             {#if appInfo?.iconUrl}

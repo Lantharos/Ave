@@ -2,7 +2,7 @@
     import Aq from "./components/AQ.svelte";
 </script>
 
-<div class="bg-[#090909] w-full h-screen flex flex-col items-start px-[200px] py-[100px] gap-[100px] overflow-y-scroll scroll-smooth">
+<div class="bg-[#090909] w-full h-screen-fixed flex flex-col items-start px-[200px] py-[100px] gap-[100px] overflow-y-scroll scroll-smooth relative">
     <div class="flex flex-row w-full justify-between items-start">
         <div class="flex flex-row">
             <button class="px-[40px] py-[20px]  cursor-pointer hover:bg-[#121212] transition-colors duration-300 rounded-full flex items-center justify-center text-[#B9BBBE] text-[24px]" onclick={() => {window.location.href = "/#/"}}>

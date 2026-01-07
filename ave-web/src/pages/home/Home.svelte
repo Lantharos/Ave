@@ -2,7 +2,7 @@
     import Text from "../../components/Text.svelte";
 </script>
 
-<div class="bg-[#090909] w-full h-screen flex flex-col items-start px-[200px] py-[100px] gap-[100px]">
+<div class="bg-[#090909] w-full h-screen-fixed flex flex-col items-start px-[200px] py-[100px] gap-[100px] relative">
     <div class="flex flex-row w-full justify-between items-start">
         <div class="flex flex-row">
             <button class="px-[40px] py-[20px] bg-[#171717] rounded-full flex items-center justify-center text-[#B9BBBE] text-[24px]">

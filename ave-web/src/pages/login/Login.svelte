@@ -68,7 +68,7 @@
     }
 </script>
 
-<div class="bg-[#090909] w-full h-screen flex flex-col items-center justify-center overflow-auto">
+<div class="bg-[#090909] w-full h-screen-fixed flex flex-col items-center justify-center overflow-auto relative">
     {#if error}
         <div class="fixed top-4 left-1/2 -translate-x-1/2 bg-red-600/90 text-white px-6 py-3 rounded-full z-50 backdrop-blur-sm">
             {error}

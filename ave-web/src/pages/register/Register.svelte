@@ -245,7 +245,7 @@
         </div>
     </div>
 {:else}
-    <div class="bg-[#090909] w-full h-screen grid place-items-center">
+    <div class="bg-[#090909] w-full h-screen-fixed grid place-items-center">
         <div class="w-12 h-12 border-4 border-transparent border-t-white rounded-full animate-spin"></div>
     </div>
 {/if}
