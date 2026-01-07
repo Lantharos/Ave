@@ -54,7 +54,7 @@
 
 <div class="bg-[#090909] w-full min-h-screen flex flex-row">
     <!-- Sidebar Navigation -->
-    <nav class="w-[300px] h-screen sticky top-0 border-r border-[#161616] bg-[#090909] flex flex-col">
+    <nav class="w-[300px] h-screen-fixed sticky top-0 border-r border-[#161616] bg-[#090909] flex flex-col">
         <div class="p-[30px] border-b border-[#161616]">
             <a href="/" use:route class="flex items-center gap-[12px]">
                 <Text type="h" size={26} weight="bold" color="#FFFFFF">Ave</Text>
@@ -68,7 +68,7 @@
                 <p class="text-[#555555] text-[11px] font-bold tracking-[0.1em] mb-[10px] px-[12px]">OAUTH INTEGRATION</p>
                 {#each sections as section}
                     <button 
-                        class="text-left px-[16px] py-[12px] rounded-[10px] text-[15px] transition-all duration-200 {activeSection === section.id ? 'bg-[#1a1a1a] text-[#FFFFFF] font-medium' : 'text-[#777777] hover:text-[#CCCCCC] hover:bg-[#111111]'}"
+                        class="text-left px-[16px] py-[12px] rounded-[10px] text-[16px] transition-all duration-200 {activeSection === section.id ? 'bg-[#1a1a1a] text-[#FFFFFF] font-medium' : 'text-[#777777] hover:text-[#CCCCCC] hover:bg-[#111111]'}"
                         onclick={() => scrollToSection(section.id)}
                     >
                         {section.title}
