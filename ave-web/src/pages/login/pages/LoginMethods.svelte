@@ -37,7 +37,14 @@
         onError?: (error: string) => void;
         loginRequestId?: string | null;
         ephemeralKeyPair?: { publicKey: string; privateKey: CryptoKey } | null;
-        pendingPasskeyLogin?: { sessionToken: string; identities: Identity[]; device: any } | null;
+        pendingPasskeyLogin?: { 
+            sessionToken: string; 
+            identities: Identity[]; 
+            device: any;
+            prfSupported?: boolean;
+            usedPasskeyId?: string;
+            authOptions?: PublicKeyCredentialRequestOptions;
+        } | null;
     }>();
 
     let isLoading = $state(false);
@@ -55,6 +62,12 @@
             // Request PRF extension during authentication to potentially decrypt master key
             const { credential, prfOutput } = await authenticateWithPasskey(authOptions, true);
             const deviceInfo = getDeviceInfo();
+            
+            // PRF is supported if we got prfOutput (even if server doesn't have encrypted key yet)
+            const prfSupported = !!prfOutput;
+            
+            // Extract the passkey ID from the credential response
+            const usedPasskeyId = (credential as any).id as string;
             
             const result = await api.login.passkey({
                 authSessionId,
@@ -92,19 +105,27 @@
                 } catch (prfError) {
                     console.error("[Login] PRF decryption failed:", prfError);
                     // PRF decryption failed, fall back to trust codes
+                    // Include PRF info so we can set it up after trust code recovery
                     pendingPasskeyLogin = {
                         sessionToken: result.sessionToken,
                         identities: result.identities,
                         device: result.device,
+                        prfSupported,
+                        usedPasskeyId,
+                        authOptions,
                     };
                     onSelect?.("trust-code");
                 }
             } else {
-                // No master key and no PRF - need to recover via trust code
+                // No master key and no PRF encrypted key on server - need to recover via trust code
+                // Include PRF info so we can set it up after trust code recovery
                 pendingPasskeyLogin = {
                     sessionToken: result.sessionToken,
                     identities: result.identities,
                     device: result.device,
+                    prfSupported,
+                    usedPasskeyId,
+                    authOptions,
                 };
                 onSelect?.("trust-code");
             }

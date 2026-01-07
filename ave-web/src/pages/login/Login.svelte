@@ -21,7 +21,14 @@
     let ephemeralKeyPair = $state<{ publicKey: string; privateKey: CryptoKey } | null>(null);
     
     // For passkey login without master key - we already authenticated but need the master key
-    let pendingPasskeyLogin = $state<{ sessionToken: string; identities: Identity[]; device: Device } | null>(null);
+    let pendingPasskeyLogin = $state<{ 
+        sessionToken: string; 
+        identities: Identity[]; 
+        device: Device;
+        prfSupported?: boolean;
+        usedPasskeyId?: string;
+        authOptions?: PublicKeyCredentialRequestOptions;
+    } | null>(null);
 
     function handleLoginStart(data: {
         handle: string;
