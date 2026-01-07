@@ -159,7 +159,7 @@
 <div class="flex flex-col gap-[40px] w-full z-10 px-[60px] py-[40px] bg-[#111111]/60 rounded-[64px] backdrop-blur-[20px]">
     <div class="flex flex-col gap-[10px]">
         <Text type="h" size={48} weight="bold">Security</Text>
-        <Text type="p" size={20}>Protect your Raven ID and the devices that can access it.</Text>
+        <Text type="p" size={20}>Protect your Ave ID and the devices that can access it.</Text>
     </div>
 
     {#if error}

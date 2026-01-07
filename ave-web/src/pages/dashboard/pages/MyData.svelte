@@ -71,7 +71,7 @@
 
     <ActionCard 
         action="DOWNLOAD MY DATA" 
-        description="This package includes only metadata tied to your Raven ID. App-level data must be exported from those apps directly." 
+        description="This package includes only metadata tied to your Ave ID. App-level data must be exported from those apps directly." 
         buttons={[
             { 
                 icon: exporting ? "" : "/icons/chevron-right-68.svg", 
@@ -95,7 +95,7 @@
         ]}
     />
 
-    <Text type="p" size={16} color="#878787" cclass="self-center">Raven is designed to minimize stored data. What little exists is encrypted end-to-end and visible only to you.</Text>
+    <Text type="p" size={16} color="#878787" cclass="self-center">Ave is designed to minimize stored data. What little exists is encrypted end-to-end and visible only to you.</Text>
 </div>
 
 {#if showDeleteConfirm}

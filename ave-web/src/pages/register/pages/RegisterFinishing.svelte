@@ -12,7 +12,7 @@
                 </Text>
 
                 <Text type="p" size={24}>
-                    Raven will now generate your encryption keys and finish setup. This may take a few moments. Please ensure you stay connected to the internet during this process.
+                    Ave will now generate your encryption keys and finish setup. This may take a few moments. Please ensure you stay connected to the internet during this process.
                 </Text>
             </div>
 
