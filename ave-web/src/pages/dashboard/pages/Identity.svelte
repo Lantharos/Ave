@@ -275,6 +275,7 @@
                         class="w-full bg-transparent border-b border-[#333333] mt-[10px] pb-[5px] text-white focus:outline-none" 
                         placeholder="Enter your name"
                         bind:value={displayName}
+                        autocomplete="off"
                     />
                 </div>
                 <div class="p-[30px] bg-[#111111] rounded-[32px]">
@@ -284,6 +285,7 @@
                         class="w-full bg-transparent border-b border-[#333333] mt-[10px] pb-[5px] text-white focus:outline-none" 
                         placeholder="Enter your handle"
                         bind:value={handle}
+                        autocomplete="off"
                     />
                 </div>
                 <div class="p-[30px] bg-[#111111] rounded-[32px]">
@@ -293,6 +295,7 @@
                         class="w-full bg-transparent border-b border-[#333333] mt-[10px] pb-[5px] text-white focus:outline-none" 
                         placeholder="Enter your email"
                         bind:value={email}
+                        autocomplete="off"
                     />
                 </div>
                 <div class="p-[30px] bg-[#111111] rounded-[32px]">
@@ -301,6 +304,7 @@
                         type="date" 
                         class="w-full bg-transparent border-b border-[#333333] mt-[10px] pb-[5px] text-white focus:outline-none"
                         bind:value={birthday}
+                        autocomplete="off"
                     />
                 </div>
             </div>
@@ -327,14 +331,15 @@
                     <div class="p-[30px] bg-[#111111] rounded-[32px] w-full flex flex-col justify-center">
                         <Text type="hd" size={16} color="#878787">NAME</Text>
                         {#if editing.displayName}
-                            <div class="flex gap-2 items-center mt-[10px]">
+                            <div class="flex gap-3 items-center mt-[10px]">
                                 <input 
                                     type="text" 
-                                    class="flex-1 bg-transparent border-b border-[#333333] pb-[5px] text-white focus:outline-none" 
+                                    class="flex-1 bg-transparent border-b border-[#333333] pb-[8px] text-white text-[24px] focus:outline-none" 
                                     bind:value={displayName}
+                                    autocomplete="off"
                                 />
                                 <button 
-                                    class="px-3 py-1 bg-[#FFFFFF] hover:bg-[#E0E0E0] text-[#090909] rounded-full text-sm"
+                                    class="px-5 py-2 bg-[#FFFFFF] hover:bg-[#E0E0E0] text-[#090909] rounded-full text-[16px] font-medium"
                                     onclick={() => saveField("displayName")}
                                     disabled={isSaving}
                                 >
@@ -360,14 +365,15 @@
                     <div class="p-[30px] bg-[#111111] rounded-[32px] w-full flex flex-col justify-center">
                         <Text type="hd" size={16} color="#878787">HANDLE</Text>
                         {#if editing.handle}
-                            <div class="flex gap-2 items-center mt-[10px]">
+                            <div class="flex gap-3 items-center mt-[10px]">
                                 <input 
                                     type="text" 
-                                    class="flex-1 bg-transparent border-b border-[#333333] pb-[5px] text-white focus:outline-none" 
+                                    class="flex-1 bg-transparent border-b border-[#333333] pb-[8px] text-white text-[24px] focus:outline-none" 
                                     bind:value={handle}
+                                    autocomplete="off"
                                 />
                                 <button 
-                                    class="px-3 py-1 bg-[#FFFFFF] hover:bg-[#E0E0E0] text-[#090909] rounded-full text-sm"
+                                    class="px-5 py-2 bg-[#FFFFFF] hover:bg-[#E0E0E0] text-[#090909] rounded-full text-[16px] font-medium"
                                     onclick={() => saveField("handle")}
                                     disabled={isSaving}
                                 >
@@ -393,15 +399,16 @@
                     <div class="p-[30px] bg-[#111111] rounded-[32px] w-full flex flex-col justify-center">
                         <Text type="hd" size={16} color="#878787">EMAIL</Text>
                         {#if editing.email}
-                            <div class="flex gap-2 items-center mt-[10px]">
+                            <div class="flex gap-3 items-center mt-[10px]">
                                 <input 
                                     type="email" 
-                                    class="flex-1 bg-transparent border-b border-[#333333] pb-[5px] text-white focus:outline-none" 
+                                    class="flex-1 bg-transparent border-b border-[#333333] pb-[8px] text-white text-[24px] focus:outline-none" 
                                     bind:value={email}
                                     placeholder="Enter email"
+                                    autocomplete="off"
                                 />
                                 <button 
-                                    class="px-3 py-1 bg-[#FFFFFF] hover:bg-[#E0E0E0] text-[#090909] rounded-full text-sm"
+                                    class="px-5 py-2 bg-[#FFFFFF] hover:bg-[#E0E0E0] text-[#090909] rounded-full text-[16px] font-medium"
                                     onclick={() => saveField("email")}
                                     disabled={isSaving}
                                 >
@@ -427,14 +434,15 @@
                     <div class="p-[30px] bg-[#111111] rounded-[32px] w-full flex flex-col justify-center">
                         <Text type="hd" size={16} color="#878787">BIRTHDAY</Text>
                         {#if editing.birthday}
-                            <div class="flex gap-2 items-center mt-[10px]">
+                            <div class="flex gap-3 items-center mt-[10px]">
                                 <input 
                                     type="date" 
-                                    class="flex-1 bg-transparent border-b border-[#333333] pb-[5px] text-white focus:outline-none" 
+                                    class="flex-1 bg-transparent border-b border-[#333333] pb-[8px] text-white text-[24px] focus:outline-none" 
                                     bind:value={birthday}
+                                    autocomplete="off"
                                 />
                                 <button 
-                                    class="px-3 py-1 bg-[#FFFFFF] hover:bg-[#E0E0E0] text-[#090909] rounded-full text-sm"
+                                    class="px-5 py-2 bg-[#FFFFFF] hover:bg-[#E0E0E0] text-[#090909] rounded-full text-[16px] font-medium"
                                     onclick={() => saveField("birthday")}
                                     disabled={isSaving}
                                 >

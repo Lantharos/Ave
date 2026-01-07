@@ -26,7 +26,7 @@
     let bannerButton = $state<HTMLButtonElement | null>(null);
     let showColorPicker = $state(false);
     let customColor = $state(bannerColor || "#CCCCCC");
-    let pickerPosition = $state({ top: 0, right: 0 });
+    let pickerPosition = $state({ top: 0, left: 0 });
     
     // Preset colors for the palette
     const presetColors = [
@@ -64,20 +64,11 @@
         if (!showColorPicker && bannerButton) {
             // Calculate position relative to viewport
             const rect = bannerButton.getBoundingClientRect();
-            const dropdownWidth = 220;
             
-            // Position below the button, aligned to the right edge
-            // But ensure it doesn't go off-screen
-            let right = window.innerWidth - rect.right;
-            if (right < 10) right = 10;
-            if (rect.right - dropdownWidth < 10) {
-                // If dropdown would go off left edge, align to left of button instead
-                right = window.innerWidth - rect.left - dropdownWidth;
-            }
-            
+            // Position below the button, right edge of dropdown aligns with right edge of button
             pickerPosition = {
-                top: rect.bottom + 10, // 10px below button
-                right: right
+                top: rect.bottom + 12,
+                left: rect.right // We'll use CSS transform to align right edge
             };
         }
         
@@ -200,20 +191,20 @@
 {#if showColorPicker}
     <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
     <div 
-        class="color-picker-dropdown fixed bg-[#171717] rounded-[16px] p-[15px] shadow-xl border border-[#333333] z-[9999] w-[220px]"
-        style="top: {pickerPosition.top}px; right: {pickerPosition.right}px;"
+        class="color-picker-dropdown fixed bg-[#1a1a1a] rounded-[20px] p-[20px] shadow-2xl border border-[#333333] z-[9999]"
+        style="top: {pickerPosition.top}px; left: {pickerPosition.left}px; transform: translateX(-100%); width: 280px;"
         onclick={(e) => e.stopPropagation()}
         onkeydown={(e) => e.key === "Escape" && (showColorPicker = false)}
         role="menu"
         tabindex="-1"
     >
-        <p class="text-[#878787] text-[12px] font-semibold mb-[10px]">BANNER COLOR</p>
+        <p class="text-[#878787] text-[14px] font-semibold mb-[16px]">BANNER COLOR</p>
         
         <!-- Preset Colors Grid -->
-        <div class="grid grid-cols-6 gap-[8px] mb-[15px]">
+        <div class="grid grid-cols-6 gap-[10px] mb-[20px]">
             {#each presetColors as color}
                 <button
-                    class="w-[28px] h-[28px] rounded-[8px] border-2 transition-transform hover:scale-110 {color === customColor ? 'border-white' : 'border-transparent'}"
+                    class="w-[34px] h-[34px] rounded-[10px] border-2 transition-transform hover:scale-110 {color === customColor ? 'border-white' : 'border-transparent'}"
                     style="background-color: {color};"
                     onclick={() => selectColor(color)}
                     aria-label="Select color {color}"
@@ -222,22 +213,23 @@
         </div>
         
         <!-- Custom Color Input -->
-        <div class="flex items-center gap-[8px] mb-[15px]">
+        <div class="flex items-center gap-[10px] mb-[20px]">
             <input 
                 type="color" 
-                class="w-[36px] h-[36px] rounded-[8px] cursor-pointer border-0 p-0"
+                class="w-[40px] h-[40px] rounded-[8px] cursor-pointer border-0 p-0 shrink-0"
+                style="background: none;"
                 value={customColor}
                 oninput={handleCustomColorChange}
             />
             <input 
                 type="text" 
-                class="flex-1 bg-[#111111] text-white text-[14px] px-[10px] py-[8px] rounded-[8px] border border-[#333333] focus:outline-none focus:border-[#555555] uppercase"
+                class="flex-1 min-w-0 bg-[#111111] text-white text-[14px] px-[12px] py-[10px] rounded-[10px] border border-[#333333] focus:outline-none focus:border-[#555555] uppercase"
                 value={customColor}
                 oninput={(e) => customColor = (e.target as HTMLInputElement).value}
                 maxlength={7}
             />
             <button 
-                class="px-[12px] py-[8px] bg-[#FFFFFF] text-[#090909] text-[12px] font-semibold rounded-[8px] hover:bg-[#E0E0E0] transition-colors"
+                class="px-[16px] py-[10px] bg-[#FFFFFF] text-[#090909] text-[14px] font-semibold rounded-[10px] hover:bg-[#E0E0E0] transition-colors shrink-0"
                 onclick={applyCustomColor}
             >
                 Apply
@@ -246,15 +238,15 @@
         
         <!-- Upload Image Option -->
         <button 
-            class="w-full flex items-center gap-[10px] px-[12px] py-[10px] bg-[#111111] hover:bg-[#222222] rounded-[8px] transition-colors text-left"
+            class="w-full flex items-center gap-[12px] px-[16px] py-[14px] bg-[#111111] hover:bg-[#222222] rounded-[12px] transition-colors text-left"
             onclick={handleBannerImageClick}
         >
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                 <path d="M21 15V19C21 19.5304 20.7893 20.0391 20.4142 20.4142C20.0391 20.7893 19.5304 21 19 21H5C4.46957 21 3.96086 20.7893 3.58579 20.4142C3.21071 20.0391 3 19.5304 3 19V15" stroke="white" stroke-opacity="0.8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
                 <path d="M17 8L12 3L7 8" stroke="white" stroke-opacity="0.8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
                 <path d="M12 3V15" stroke="white" stroke-opacity="0.8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
             </svg>
-            <span class="text-[#FFFFFF] text-[14px]">Upload Image</span>
+            <span class="text-[#FFFFFF] text-[16px]">Upload Image</span>
         </button>
     </div>
 {/if}
