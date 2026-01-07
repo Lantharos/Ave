@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { Router } from '@mateothegreat/svelte5-router';
+    import { Router, StatusCode, type Statuses } from '@mateothegreat/svelte5-router';
     import { onMount } from 'svelte';
     import Home from './pages/home/Home.svelte';
     import FAQ from './pages/home/FAQ.svelte';
@@ -10,6 +10,7 @@
     import PrivacyPolicy from "./pages/home/legal/PrivacyPolicy.svelte";
     import TermsOfService from "./pages/home/legal/TermsOfService.svelte";
     import Authorize from './pages/authorize/Authorize.svelte';
+    import Docs from './pages/docs/Docs.svelte';
     import { auth, isAuthenticated, isLoading } from './stores/auth';
     import { websocket } from './stores/websocket';
 
@@ -22,11 +23,12 @@
         { path: '/dashboard/(.*)', component: Dashboard },
         { path: '/privacy', component: PrivacyPolicy },
         { path: '/terms', component: TermsOfService },
-        { path: '/authorize', component: Authorize }
+        { path: '/authorize', component: Authorize },
+        { path: '/docs', component: Docs }
     ];
 
-    const statuses = {
-        404: { component: NotFound }
+    const statuses: Statuses = {
+        [StatusCode.NotFound]: () => ({ component: NotFound })
     };
 
     // Protected routes that require authentication

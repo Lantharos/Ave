@@ -1,0 +1,645 @@
+<script lang="ts">
+    import Text from "../../components/Text.svelte";
+    import DocSec from "./components/DocSec.svelte";
+    import CodeBlock from "./components/CodeBlock.svelte";
+    import { route } from "@mateothegreat/svelte5-router";
+    import { onMount } from "svelte";
+
+    let activeSection = $state("overview");
+    let mainContent: HTMLElement;
+
+    const sections = [
+        { id: "overview", title: "Overview" },
+        { id: "getting-started", title: "Getting Started" },
+        { id: "authorization-flow", title: "Authorization Flow" },
+        { id: "pkce", title: "PKCE (Public Clients)" },
+        { id: "e2ee", title: "End-to-End Encryption" },
+        { id: "endpoints", title: "API Endpoints" },
+        { id: "user-data", title: "User Data" },
+        { id: "security", title: "Security Best Practices" },
+        { id: "examples", title: "Code Examples" },
+    ];
+
+    function scrollToSection(id: string) {
+        const element = document.getElementById(id);
+        if (element) {
+            element.scrollIntoView({ behavior: "smooth" });
+        }
+    }
+
+    onMount(() => {
+        // Scroll spy to update active section
+        const observer = new IntersectionObserver(
+            (entries) => {
+                entries.forEach((entry) => {
+                    if (entry.isIntersecting) {
+                        activeSection = entry.target.id;
+                    }
+                });
+            },
+            {
+                rootMargin: "-20% 0px -60% 0px",
+                threshold: 0
+            }
+        );
+
+        sections.forEach(({ id }) => {
+            const element = document.getElementById(id);
+            if (element) observer.observe(element);
+        });
+
+        return () => observer.disconnect();
+    });
+</script>
+
+<div class="bg-[#090909] w-full min-h-screen flex flex-row">
+    <!-- Sidebar Navigation -->
+    <nav class="w-[300px] h-screen sticky top-0 border-r border-[#161616] bg-[#090909] flex flex-col">
+        <div class="p-[30px] border-b border-[#161616]">
+            <a href="/" use:route class="flex items-center gap-[12px]">
+                <Text type="h" size={26} weight="bold" color="#FFFFFF">Ave</Text>
+                <span class="text-[#444444] text-[20px]">/</span>
+                <Text type="h" size={18} weight="medium" color="#666666">Docs</Text>
+            </a>
+        </div>
+
+        <div class="flex-1 overflow-y-auto p-[20px] scrollbar-hide">
+            <div class="flex flex-col gap-[4px]">
+                <p class="text-[#555555] text-[11px] font-bold tracking-[0.1em] mb-[10px] px-[12px]">OAUTH INTEGRATION</p>
+                {#each sections as section}
+                    <button 
+                        class="text-left px-[16px] py-[12px] rounded-[10px] text-[15px] transition-all duration-200 {activeSection === section.id ? 'bg-[#1a1a1a] text-[#FFFFFF] font-medium' : 'text-[#777777] hover:text-[#CCCCCC] hover:bg-[#111111]'}"
+                        onclick={() => scrollToSection(section.id)}
+                    >
+                        {section.title}
+                    </button>
+                {/each}
+            </div>
+        </div>
+
+        <div class="p-[20px] border-t border-[#161616]">
+            <a href="/" use:route class="text-[#555555] hover:text-[#FFFFFF] text-[14px] transition-colors flex items-center gap-[8px]">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M19 12H5M12 19l-7-7 7-7"/>
+                </svg>
+                Back to Ave
+            </a>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main bind:this={mainContent} class="flex-1 overflow-y-auto">
+        <div class="max-w-[1000px] mx-auto px-[60px] py-[80px]">
+            <div class="mb-[80px]">
+                <Text type="h" size={56} weight="bold">OAuth Integration</Text>
+                <p class="text-[#777777] text-[20px] mt-[16px] leading-[1.6]">
+                    Let users sign in with their Ave identity. Secure, privacy-focused, and optionally end-to-end encrypted.
+                </p>
+            </div>
+
+            <div class="flex flex-col gap-[80px]">
+                <DocSec title="Overview" id="overview">
+                    <p class="text-[#999999] text-[17px] leading-[1.8]">
+                        Ave provides OAuth 2.0 authentication that lets your app authenticate users with their Ave identity. Unlike traditional OAuth providers, Ave is built with privacy at its core:
+                    </p>
+                    <ul class="list-disc list-inside mt-[20px] space-y-[12px] text-[#999999] text-[17px]">
+                        <li><strong class="text-[#DDDDDD]">No tracking</strong> - Ave doesn't track users across apps</li>
+                        <li><strong class="text-[#DDDDDD]">User controls data</strong> - Users choose exactly what to share</li>
+                        <li><strong class="text-[#DDDDDD]">Multiple identities</strong> - Users can have up to 5 identities and choose which one to use</li>
+                        <li><strong class="text-[#DDDDDD]">Optional E2EE</strong> - Apps can request encryption keys for end-to-end encrypted data</li>
+                    </ul>
+
+                    <div class="mt-[30px] p-[24px] bg-[#0f0f0f] border border-[#1f1f1f] rounded-[12px]">
+                        <p class="text-[#888888] text-[16px] leading-[1.7]">
+                            <strong class="text-[#BBBBBB]">Coming Soon:</strong> Asterisk, our developer portal, will let you create and manage OAuth apps yourself. Until then, reach out to register your app.
+                        </p>
+                    </div>
+                </DocSec>
+
+                <DocSec title="Getting Started" id="getting-started">
+                    <p class="text-[#999999] text-[17px] leading-[1.8]">
+                        To integrate Ave authentication into your app, you'll need:
+                    </p>
+
+                    <div class="mt-[24px] flex flex-col gap-[12px]">
+                        <div class="p-[24px] bg-[#0f0f0f] rounded-[12px] border border-[#1a1a1a]">
+                            <p class="text-[#666666] text-[12px] font-bold tracking-[0.1em] mb-[8px]">1. CLIENT ID</p>
+                            <p class="text-[#CCCCCC] text-[16px]">A unique identifier for your app (e.g., <code>app_4b21fc0238997355...</code>)</p>
+                        </div>
+                        <div class="p-[24px] bg-[#0f0f0f] rounded-[12px] border border-[#1a1a1a]">
+                            <p class="text-[#666666] text-[12px] font-bold tracking-[0.1em] mb-[8px]">2. CLIENT SECRET (optional)</p>
+                            <p class="text-[#CCCCCC] text-[16px]">For server-side apps. Public clients (SPAs, mobile) use PKCE instead.</p>
+                        </div>
+                        <div class="p-[24px] bg-[#0f0f0f] rounded-[12px] border border-[#1a1a1a]">
+                            <p class="text-[#666666] text-[12px] font-bold tracking-[0.1em] mb-[8px]">3. REDIRECT URI</p>
+                            <p class="text-[#CCCCCC] text-[16px]">Where Ave sends users after authorization (must be pre-registered)</p>
+                        </div>
+                    </div>
+
+                    <p class="text-[#999999] text-[17px] mt-[30px] leading-[1.8]">
+                        Ave supports two authentication methods:
+                    </p>
+                    <ul class="list-disc list-inside mt-[16px] space-y-[10px] text-[#999999] text-[17px]">
+                        <li><strong class="text-[#DDDDDD]">Client Secret</strong> - For server-side apps that can securely store secrets</li>
+                        <li><strong class="text-[#DDDDDD]">PKCE (Proof Key for Code Exchange)</strong> - For SPAs, mobile apps, and any public client</li>
+                    </ul>
+                </DocSec>
+
+                <DocSec title="Authorization Flow" id="authorization-flow">
+                    <p class="text-[#999999] text-[17px] leading-[1.8]">
+                        Ave uses the standard OAuth 2.0 Authorization Code flow:
+                    </p>
+
+                    <div class="mt-[30px] flex flex-col gap-[24px]">
+                        <div class="flex gap-[20px] items-start">
+                            <div class="w-[36px] h-[36px] rounded-full bg-[#222222] flex items-center justify-center text-[#FFFFFF] text-[14px] font-bold shrink-0">1</div>
+                            <div>
+                                <p class="text-[#FFFFFF] text-[17px] font-semibold">Redirect to Ave</p>
+                                <p class="text-[#888888] text-[15px] mt-[4px]">Send the user to Ave's authorization page with your app details</p>
+                            </div>
+                        </div>
+                        <div class="flex gap-[20px] items-start">
+                            <div class="w-[36px] h-[36px] rounded-full bg-[#222222] flex items-center justify-center text-[#FFFFFF] text-[14px] font-bold shrink-0">2</div>
+                            <div>
+                                <p class="text-[#FFFFFF] text-[17px] font-semibold">User Authorizes</p>
+                                <p class="text-[#888888] text-[15px] mt-[4px]">The user selects an identity and swipes to authorize your app</p>
+                            </div>
+                        </div>
+                        <div class="flex gap-[20px] items-start">
+                            <div class="w-[36px] h-[36px] rounded-full bg-[#222222] flex items-center justify-center text-[#FFFFFF] text-[14px] font-bold shrink-0">3</div>
+                            <div>
+                                <p class="text-[#FFFFFF] text-[17px] font-semibold">Receive Authorization Code</p>
+                                <p class="text-[#888888] text-[15px] mt-[4px]">Ave redirects back to your app with a temporary authorization code</p>
+                            </div>
+                        </div>
+                        <div class="flex gap-[20px] items-start">
+                            <div class="w-[36px] h-[36px] rounded-full bg-[#222222] flex items-center justify-center text-[#FFFFFF] text-[14px] font-bold shrink-0">4</div>
+                            <div>
+                                <p class="text-[#FFFFFF] text-[17px] font-semibold">Exchange for Token</p>
+                                <p class="text-[#888888] text-[15px] mt-[4px]">Your app exchanges the code for an access token and user info</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <h3 class="text-[#FFFFFF] text-[22px] font-semibold mt-[50px] mb-[16px]">Authorization URL</h3>
+                    <p class="text-[#999999] text-[16px] mb-[16px]">
+                        Redirect users to the Ave authorization page:
+                    </p>
+                    <CodeBlock code={`https://aveid.net/authorize?
+  client_id=YOUR_CLIENT_ID
+  &redirect_uri=https://yourapp.com/callback
+  &scope=profile
+  &state=RANDOM_STATE_VALUE`} />
+
+                    <div class="mt-[30px] overflow-x-auto">
+                        <table class="w-full text-[15px]">
+                            <thead>
+                                <tr class="border-b border-[#222222]">
+                                    <th class="text-left py-[14px] text-[#AAAAAA] font-semibold">Parameter</th>
+                                    <th class="text-left py-[14px] text-[#AAAAAA] font-semibold">Required</th>
+                                    <th class="text-left py-[14px] text-[#AAAAAA] font-semibold">Description</th>
+                                </tr>
+                            </thead>
+                            <tbody class="text-[#888888]">
+                                <tr class="border-b border-[#1a1a1a]">
+                                    <td class="py-[14px]"><code>client_id</code></td>
+                                    <td class="py-[14px]">Yes</td>
+                                    <td class="py-[14px]">Your app's client ID</td>
+                                </tr>
+                                <tr class="border-b border-[#1a1a1a]">
+                                    <td class="py-[14px]"><code>redirect_uri</code></td>
+                                    <td class="py-[14px]">Yes</td>
+                                    <td class="py-[14px]">Must match a registered redirect URI</td>
+                                </tr>
+                                <tr class="border-b border-[#1a1a1a]">
+                                    <td class="py-[14px]"><code>scope</code></td>
+                                    <td class="py-[14px]">No</td>
+                                    <td class="py-[14px]">Requested permissions (default: <code>profile</code>)</td>
+                                </tr>
+                                <tr class="border-b border-[#1a1a1a]">
+                                    <td class="py-[14px]"><code>state</code></td>
+                                    <td class="py-[14px]">Recommended</td>
+                                    <td class="py-[14px]">Random string to prevent CSRF attacks</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </DocSec>
+
+                <DocSec title="PKCE (Public Clients)" id="pkce">
+                    <p class="text-[#999999] text-[17px] leading-[1.8]">
+                        For single-page applications (SPAs), mobile apps, or any client that can't securely store a client secret, use PKCE (Proof Key for Code Exchange). This is the recommended approach for most modern apps.
+                    </p>
+
+                    <h3 class="text-[#FFFFFF] text-[22px] font-semibold mt-[40px] mb-[20px]">How PKCE Works</h3>
+                    <div class="flex flex-col gap-[12px]">
+                        <div class="p-[20px] bg-[#0f0f0f] rounded-[12px] border border-[#1a1a1a]">
+                            <p class="text-[#666666] text-[12px] font-bold tracking-[0.1em] mb-[6px]">1. GENERATE CODE VERIFIER</p>
+                            <p class="text-[#999999] text-[15px]">Create a cryptographically random string (43-128 characters)</p>
+                        </div>
+                        <div class="p-[20px] bg-[#0f0f0f] rounded-[12px] border border-[#1a1a1a]">
+                            <p class="text-[#666666] text-[12px] font-bold tracking-[0.1em] mb-[6px]">2. CREATE CODE CHALLENGE</p>
+                            <p class="text-[#999999] text-[15px]">Hash the verifier with SHA-256 and base64url encode it</p>
+                        </div>
+                        <div class="p-[20px] bg-[#0f0f0f] rounded-[12px] border border-[#1a1a1a]">
+                            <p class="text-[#666666] text-[12px] font-bold tracking-[0.1em] mb-[6px]">3. INCLUDE IN AUTH REQUEST</p>
+                            <p class="text-[#999999] text-[15px]">Add <code>code_challenge</code> and <code>code_challenge_method=S256</code> to the URL</p>
+                        </div>
+                        <div class="p-[20px] bg-[#0f0f0f] rounded-[12px] border border-[#1a1a1a]">
+                            <p class="text-[#666666] text-[12px] font-bold tracking-[0.1em] mb-[6px]">4. INCLUDE VERIFIER IN TOKEN REQUEST</p>
+                            <p class="text-[#999999] text-[15px]">Send the original <code>code_verifier</code> when exchanging the code for tokens</p>
+                        </div>
+                    </div>
+
+                    <h3 class="text-[#FFFFFF] text-[22px] font-semibold mt-[40px] mb-[16px]">PKCE Implementation</h3>
+                    <CodeBlock code={`// Generate code verifier (random 32 bytes, base64url encoded)
+function generateCodeVerifier() {
+  const array = new Uint8Array(32);
+  crypto.getRandomValues(array);
+  return base64UrlEncode(array);
+}
+
+// Generate code challenge (SHA-256 hash of verifier)
+async function generateCodeChallenge(verifier) {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(verifier);
+  const hash = await crypto.subtle.digest('SHA-256', data);
+  return base64UrlEncode(new Uint8Array(hash));
+}
+
+// Base64 URL encoding (no padding, URL-safe characters)
+function base64UrlEncode(bytes) {
+  return btoa(String.fromCharCode(...bytes))
+    .replace(/\\+/g, '-')
+    .replace(/\\//g, '_')
+    .replace(/=/g, '');
+}`} />
+
+                    <h3 class="text-[#FFFFFF] text-[22px] font-semibold mt-[40px] mb-[16px]">Authorization URL with PKCE</h3>
+                    <CodeBlock code={`https://aveid.net/authorize?
+  client_id=YOUR_CLIENT_ID
+  &redirect_uri=https://yourapp.com/callback
+  &scope=profile
+  &state=RANDOM_STATE_VALUE
+  &code_challenge=E9Melhoa2OwvFrEMTJguCHaoeK1t8...
+  &code_challenge_method=S256`} />
+                </DocSec>
+
+                <DocSec title="End-to-End Encryption" id="e2ee">
+                    <div class="p-[28px] bg-[#0a1a0f] border-[2px] border-[#1a4a2a] rounded-[16px] mb-[30px]">
+                        <div class="flex items-center gap-[12px] mb-[12px]">
+                            <svg width="24" height="24" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <path d="M10.5 15V10.5C10.5 8.51088 11.2902 6.60322 12.6967 5.1967C14.1032 3.79018 16.0109 3 18 3C19.9891 3 21.8968 3.79018 23.3033 5.1967C24.7098 6.60322 25.5 8.51088 25.5 10.5V15M19.5 24C19.5 24.8284 18.8284 25.5 18 25.5C17.1716 25.5 16.5 24.8284 16.5 24C16.5 23.1716 17.1716 22.5 18 22.5C18.8284 22.5 19.5 23.1716 19.5 24ZM7.5 15H28.5C30.1569 15 31.5 16.3431 31.5 18V30C31.5 31.6569 30.1569 33 28.5 33H7.5C5.84315 33 4.5 31.6569 4.5 30V18C4.5 16.3431 5.84315 15 7.5 15Z" stroke="#32A94C" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                            <p class="text-[#32A94C] text-[18px] font-semibold">End-to-End Encryption</p>
+                        </div>
+                        <p class="text-[#5a9a6a] text-[15px] leading-[1.7]">
+                            Apps can request encryption keys from Ave, enabling true end-to-end encrypted data that neither Ave nor your servers can read.
+                        </p>
+                    </div>
+
+                    <p class="text-[#999999] text-[17px] leading-[1.8]">
+                        When your app has E2EE enabled, Ave provides an app-specific encryption key during each login. This key is:
+                    </p>
+                    <ul class="list-disc list-inside mt-[20px] space-y-[12px] text-[#999999] text-[17px]">
+                        <li><strong class="text-[#DDDDDD]">Unique to your app</strong> - Each app gets its own key per user identity</li>
+                        <li><strong class="text-[#DDDDDD]">Controlled by the user</strong> - Encrypted with the user's master key on Ave's servers</li>
+                        <li><strong class="text-[#DDDDDD]">Passed securely</strong> - Delivered via URL fragment (never logged by servers)</li>
+                        <li><strong class="text-[#DDDDDD]">Persistent</strong> - Same key is provided on subsequent logins with the same identity</li>
+                    </ul>
+
+                    <h3 class="text-[#FFFFFF] text-[22px] font-semibold mt-[40px] mb-[20px]">How It Works</h3>
+                    <div class="flex flex-col gap-[20px]">
+                        <div class="flex gap-[20px] items-start">
+                            <div class="w-[36px] h-[36px] rounded-full bg-[#1a3a2a] flex items-center justify-center text-[#32A94C] text-[14px] font-bold shrink-0">1</div>
+                            <div>
+                                <p class="text-[#FFFFFF] text-[16px] font-semibold">First Authorization</p>
+                                <p class="text-[#888888] text-[15px] mt-[4px]">Ave generates a new AES-256-GCM key for your app. The key is encrypted with the user's master key and stored on Ave.</p>
+                            </div>
+                        </div>
+                        <div class="flex gap-[20px] items-start">
+                            <div class="w-[36px] h-[36px] rounded-full bg-[#1a3a2a] flex items-center justify-center text-[#32A94C] text-[14px] font-bold shrink-0">2</div>
+                            <div>
+                                <p class="text-[#FFFFFF] text-[16px] font-semibold">Key Delivery</p>
+                                <p class="text-[#888888] text-[15px] mt-[4px]">After authorization, Ave decrypts the key client-side and passes it to your app via the URL fragment (<code>#app_key=...</code>)</p>
+                            </div>
+                        </div>
+                        <div class="flex gap-[20px] items-start">
+                            <div class="w-[36px] h-[36px] rounded-full bg-[#1a3a2a] flex items-center justify-center text-[#32A94C] text-[14px] font-bold shrink-0">3</div>
+                            <div>
+                                <p class="text-[#FFFFFF] text-[16px] font-semibold">Encrypt User Data</p>
+                                <p class="text-[#888888] text-[15px] mt-[4px]">Your app uses the key to encrypt/decrypt user data. Encrypted data can be stored anywhere.</p>
+                            </div>
+                        </div>
+                        <div class="flex gap-[20px] items-start">
+                            <div class="w-[36px] h-[36px] rounded-full bg-[#1a3a2a] flex items-center justify-center text-[#32A94C] text-[14px] font-bold shrink-0">4</div>
+                            <div>
+                                <p class="text-[#FFFFFF] text-[16px] font-semibold">Subsequent Logins</p>
+                                <p class="text-[#888888] text-[15px] mt-[4px]">When the user logs in again with the same identity, they receive the same key.</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <h3 class="text-[#FFFFFF] text-[22px] font-semibold mt-[40px] mb-[12px]">Identity-Specific Keys</h3>
+                    <p class="text-[#999999] text-[16px] leading-[1.8]">
+                        Each identity gets its own encryption key. If a user has multiple identities (e.g., personal and work), each identity will have separate encrypted data in your app.
+                    </p>
+                    <div class="mt-[20px] p-[20px] bg-[#1a1212] border border-[#2a1a1a] rounded-[12px]">
+                        <p class="text-[#aa8888] text-[15px]">
+                            <strong class="text-[#E14747]">Important:</strong> Store user data keyed by the identity ID, not just the user. This ensures data separation when users switch between identities.
+                        </p>
+                    </div>
+
+                    <h3 class="text-[#FFFFFF] text-[22px] font-semibold mt-[40px] mb-[16px]">Receiving the App Key</h3>
+                    <CodeBlock code={`// After OAuth redirect, extract the app key from the URL fragment
+const hashParams = new URLSearchParams(window.location.hash.substring(1));
+const appKeyBase64 = hashParams.get('app_key');
+
+if (appKeyBase64) {
+  // Import the key for use with Web Crypto API
+  const keyBytes = Uint8Array.from(atob(appKeyBase64), c => c.charCodeAt(0));
+  const appKey = await crypto.subtle.importKey(
+    'raw',
+    keyBytes,
+    { name: 'AES-GCM', length: 256 },
+    true,
+    ['encrypt', 'decrypt']
+  );
+  
+  // Clean URL to remove the key from browser history
+  window.history.replaceState({}, document.title, window.location.pathname);
+}`} />
+
+                    <h3 class="text-[#FFFFFF] text-[22px] font-semibold mt-[40px] mb-[16px]">Encrypting Data</h3>
+                    <CodeBlock code={`async function encryptData(key, plaintext) {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(plaintext);
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  
+  const encrypted = await crypto.subtle.encrypt(
+    { name: 'AES-GCM', iv },
+    key,
+    data
+  );
+  
+  // Combine IV + ciphertext and encode as base64
+  const combined = new Uint8Array(iv.length + encrypted.byteLength);
+  combined.set(iv);
+  combined.set(new Uint8Array(encrypted), iv.length);
+  
+  return btoa(String.fromCharCode(...combined));
+}
+
+async function decryptData(key, encryptedBase64) {
+  const combined = Uint8Array.from(atob(encryptedBase64), c => c.charCodeAt(0));
+  const iv = combined.slice(0, 12);
+  const ciphertext = combined.slice(12);
+  
+  const decrypted = await crypto.subtle.decrypt(
+    { name: 'AES-GCM', iv },
+    key,
+    ciphertext
+  );
+  
+  return new TextDecoder().decode(decrypted);
+}`} />
+                </DocSec>
+
+                <DocSec title="API Endpoints" id="endpoints">
+                    <h3 class="text-[#FFFFFF] text-[22px] font-semibold mb-[12px]">Authorization Endpoint</h3>
+                    <p class="text-[#999999] text-[16px]">
+                        <code>GET /authorize</code> - User-facing authorization page
+                    </p>
+
+                    <h3 class="text-[#FFFFFF] text-[22px] font-semibold mt-[40px] mb-[12px]">Token Endpoint</h3>
+                    <p class="text-[#999999] text-[16px] mb-[16px]">
+                        <code>POST /api/oauth/token</code> - Exchange authorization code for tokens
+                    </p>
+                    <CodeBlock code={`// Request
+POST https://aveid.net/api/oauth/token
+Content-Type: application/json
+
+{
+  "grantType": "authorization_code",
+  "code": "AUTHORIZATION_CODE",
+  "redirectUri": "https://yourapp.com/callback",
+  "clientId": "YOUR_CLIENT_ID",
+  "clientSecret": "YOUR_SECRET",    // For confidential clients
+  "codeVerifier": "PKCE_VERIFIER"   // For PKCE clients
+}`} />
+
+                    <CodeBlock code={`// Response
+{
+  "access_token": "eyJhbGciOiJIUzI1NiIs...",
+  "token_type": "Bearer",
+  "expires_in": 3600,
+  "scope": "profile",
+  "user": {
+    "id": "550e8400-e29b-41d4-a716-446655440000",
+    "handle": "johndoe",
+    "displayName": "John Doe",
+    "email": "john@example.com",
+    "avatarUrl": "https://..."
+  },
+  "encrypted_app_key": "..."  // Only for E2EE apps
+}`} />
+
+                    <h3 class="text-[#FFFFFF] text-[22px] font-semibold mt-[40px] mb-[12px]">App Info Endpoint</h3>
+                    <p class="text-[#999999] text-[16px] mb-[16px]">
+                        <code>GET /api/oauth/app/:clientId</code> - Get public app information
+                    </p>
+                    <CodeBlock code={`// Response
+{
+  "app": {
+    "name": "My App",
+    "description": "An awesome app",
+    "iconUrl": "https://...",
+    "websiteUrl": "https://myapp.com",
+    "supportsE2ee": true
+  }
+}`} />
+                </DocSec>
+
+                <DocSec title="User Data" id="user-data">
+                    <p class="text-[#999999] text-[17px] leading-[1.8]">
+                        When a user authorizes your app, you receive information about their selected identity:
+                    </p>
+
+                    <div class="mt-[24px] overflow-x-auto">
+                        <table class="w-full text-[15px]">
+                            <thead>
+                                <tr class="border-b border-[#222222]">
+                                    <th class="text-left py-[14px] text-[#AAAAAA] font-semibold">Field</th>
+                                    <th class="text-left py-[14px] text-[#AAAAAA] font-semibold">Type</th>
+                                    <th class="text-left py-[14px] text-[#AAAAAA] font-semibold">Description</th>
+                                </tr>
+                            </thead>
+                            <tbody class="text-[#888888]">
+                                <tr class="border-b border-[#1a1a1a]">
+                                    <td class="py-[14px]"><code>id</code></td>
+                                    <td class="py-[14px]">UUID</td>
+                                    <td class="py-[14px]">Unique identifier for this identity</td>
+                                </tr>
+                                <tr class="border-b border-[#1a1a1a]">
+                                    <td class="py-[14px]"><code>handle</code></td>
+                                    <td class="py-[14px]">String</td>
+                                    <td class="py-[14px]">Unique username (e.g., "johndoe")</td>
+                                </tr>
+                                <tr class="border-b border-[#1a1a1a]">
+                                    <td class="py-[14px]"><code>displayName</code></td>
+                                    <td class="py-[14px]">String</td>
+                                    <td class="py-[14px]">User's display name</td>
+                                </tr>
+                                <tr class="border-b border-[#1a1a1a]">
+                                    <td class="py-[14px]"><code>email</code></td>
+                                    <td class="py-[14px]">String | null</td>
+                                    <td class="py-[14px]">Email address (if provided)</td>
+                                </tr>
+                                <tr class="border-b border-[#1a1a1a]">
+                                    <td class="py-[14px]"><code>avatarUrl</code></td>
+                                    <td class="py-[14px]">String | null</td>
+                                    <td class="py-[14px]">URL to user's avatar image</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="mt-[30px] p-[20px] bg-[#0f0f0f] border border-[#1f1f1f] rounded-[12px]">
+                        <p class="text-[#888888] text-[15px]">
+                            <strong class="text-[#BBBBBB]">Note:</strong> The <code>id</code> is the identity ID, not the user ID. If a user logs in with a different identity, they'll have a different ID.
+                        </p>
+                    </div>
+                </DocSec>
+
+                <DocSec title="Security Best Practices" id="security">
+                    <div class="flex flex-col gap-[16px]">
+                        <div class="p-[24px] bg-[#0f0f0f] rounded-[14px] border border-[#1a1a1a]">
+                            <p class="text-[#FFFFFF] text-[17px] font-semibold mb-[8px]">Always Validate State</p>
+                            <p class="text-[#888888] text-[15px] leading-[1.7]">
+                                Generate a random <code>state</code> parameter before redirecting and verify it matches when the user returns. This prevents CSRF attacks.
+                            </p>
+                        </div>
+                        <div class="p-[24px] bg-[#0f0f0f] rounded-[14px] border border-[#1a1a1a]">
+                            <p class="text-[#FFFFFF] text-[17px] font-semibold mb-[8px]">Use PKCE for Public Clients</p>
+                            <p class="text-[#888888] text-[15px] leading-[1.7]">
+                                Never embed client secrets in frontend code. Use PKCE (S256 method) for SPAs and mobile apps.
+                            </p>
+                        </div>
+                        <div class="p-[24px] bg-[#0f0f0f] rounded-[14px] border border-[#1a1a1a]">
+                            <p class="text-[#FFFFFF] text-[17px] font-semibold mb-[8px]">Secure Token Storage</p>
+                            <p class="text-[#888888] text-[15px] leading-[1.7]">
+                                Store access tokens securely. In browsers, use memory or httpOnly cookies. Never store in localStorage for sensitive apps.
+                            </p>
+                        </div>
+                        <div class="p-[24px] bg-[#0f0f0f] rounded-[14px] border border-[#1a1a1a]">
+                            <p class="text-[#FFFFFF] text-[17px] font-semibold mb-[8px]">Clean URL Fragments</p>
+                            <p class="text-[#888888] text-[15px] leading-[1.7]">
+                                For E2EE apps, immediately extract the app key from the URL fragment and clean the URL to prevent the key from appearing in browser history.
+                            </p>
+                        </div>
+                        <div class="p-[24px] bg-[#0f0f0f] rounded-[14px] border border-[#1a1a1a]">
+                            <p class="text-[#FFFFFF] text-[17px] font-semibold mb-[8px]">Register Exact Redirect URIs</p>
+                            <p class="text-[#888888] text-[15px] leading-[1.7]">
+                                Register the full redirect URI including path. Don't use wildcards. This prevents open redirect vulnerabilities.
+                            </p>
+                        </div>
+                    </div>
+                </DocSec>
+
+                <DocSec title="Code Examples" id="examples">
+                    <h3 class="text-[#FFFFFF] text-[22px] font-semibold mb-[12px]">Complete PKCE Flow Example</h3>
+                    <p class="text-[#999999] text-[16px] mb-[16px]">
+                        A complete example of implementing Ave OAuth with PKCE:
+                    </p>
+                    <CodeBlock code={`// Configuration
+const AVE_AUTH_URL = 'https://aveid.net/authorize';
+const AVE_TOKEN_URL = 'https://aveid.net/api/oauth/token';
+const CLIENT_ID = 'your_client_id';
+const REDIRECT_URI = 'https://yourapp.com/callback';
+
+// Start login
+async function loginWithAve() {
+  const codeVerifier = generateCodeVerifier();
+  const codeChallenge = await generateCodeChallenge(codeVerifier);
+  const state = generateRandomString(32);
+  
+  // Store for later verification
+  sessionStorage.setItem('code_verifier', codeVerifier);
+  sessionStorage.setItem('oauth_state', state);
+  
+  const params = new URLSearchParams({
+    client_id: CLIENT_ID,
+    redirect_uri: REDIRECT_URI,
+    scope: 'profile',
+    state: state,
+    code_challenge: codeChallenge,
+    code_challenge_method: 'S256'
+  });
+  
+  window.location.href = AVE_AUTH_URL + '?' + params.toString();
+}
+
+// Handle callback
+async function handleCallback() {
+  const params = new URLSearchParams(window.location.search);
+  const code = params.get('code');
+  const state = params.get('state');
+  
+  // Verify state
+  if (state !== sessionStorage.getItem('oauth_state')) {
+    throw new Error('State mismatch - possible CSRF attack');
+  }
+  
+  // Exchange code for token
+  const response = await fetch(AVE_TOKEN_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      grantType: 'authorization_code',
+      code: code,
+      redirectUri: REDIRECT_URI,
+      clientId: CLIENT_ID,
+      codeVerifier: sessionStorage.getItem('code_verifier')
+    })
+  });
+  
+  const data = await response.json();
+  
+  // Clean up
+  sessionStorage.removeItem('code_verifier');
+  sessionStorage.removeItem('oauth_state');
+  
+  console.log('Logged in as:', data.user.displayName);
+  
+  // For E2EE apps, extract the app key from URL fragment
+  const hashParams = new URLSearchParams(window.location.hash.substring(1));
+  const appKey = hashParams.get('app_key');
+  if (appKey) {
+    console.log('Received app encryption key');
+    window.history.replaceState({}, '', window.location.pathname);
+  }
+}`} />
+                </DocSec>
+            </div>
+
+            <div class="mt-[100px] pt-[40px] border-t border-[#1a1a1a]">
+                <p class="text-[#555555] text-[14px]">
+                    Need help? Contact us at <a href="mailto:hello@lantharos.com" class="text-[#888888] hover:text-white transition-colors">hello@lantharos.com</a>
+                </p>
+            </div>
+        </div>
+    </main>
+</div>
+
+<style>
+    /* Hide scrollbar for Chrome, Safari and Opera */
+    .scrollbar-hide::-webkit-scrollbar {
+        display: none;
+    }
+
+    /* Hide scrollbar for IE, Edge and Firefox */
+    .scrollbar-hide {
+        -ms-overflow-style: none;  /* IE and Edge */
+        scrollbar-width: none;  /* Firefox */
+    }
+</style>

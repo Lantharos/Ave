@@ -267,7 +267,7 @@
 
             <div class="encryption-info">
                 <strong>🔑 Encryption Active</strong>
-                Your notes are encrypted with an app-specific key provided by Ave. This key is stored encrypted on Ave's servers and decrypted each time you log in.
+                Your notes are encrypted with an app-specific key unique to your identity. Each identity has its own separate notes that only that identity can access.
             </div>
 
             <div class="notes-container">
@@ -297,6 +297,7 @@
         // App state
         let appEncryptionKey = null; // The app-specific encryption key from Ave
         let notes = []; // Decrypted notes in memory
+        let currentIdentityId = null; // The identity ID of the logged-in user
         
         // PKCE Helper Functions
         function base64UrlEncode(arrayBuffer) {
@@ -331,6 +332,12 @@
                 result += chars.charAt(Math.floor(Math.random() * chars.length));
             }
             return result;
+        }
+
+        // Helper to get storage key for current identity
+        function getStorageKey(key) {
+            if (!currentIdentityId) return key;
+            return `${key}_${currentIdentityId}`;
         }
 
         // Encryption Functions
@@ -419,10 +426,12 @@
                 await exchangeCodeForToken(code);
             } else {
                 const storedUser = localStorage.getItem('user_data');
-                const storedKey = localStorage.getItem('app_encryption_key');
+                const storedIdentityId = storedUser ? JSON.parse(storedUser).id : null;
+                const storedKey = storedIdentityId ? localStorage.getItem(`app_encryption_key_${storedIdentityId}`) : null;
                 
                 if (storedUser && storedKey) {
                     try {
+                        currentIdentityId = storedIdentityId;
                         appEncryptionKey = await importKey(storedKey);
                         await loadNotes();
                         showLoggedIn(JSON.parse(storedUser));
@@ -498,18 +507,22 @@
                 
                 const data = await response.json();
                 
+                // Store the identity ID for this session
+                currentIdentityId = data.user.id;
+                
                 // Get app encryption key from Ave (passed via URL fragment)
                 if (appKeyFromAve) {
                     // Ave provided the app key - use it
                     appEncryptionKey = await importKey(appKeyFromAve);
-                    localStorage.setItem('app_encryption_key', appKeyFromAve);
-                    console.log('Using app key from Ave');
+                    // Store key per identity since each identity has its own key
+                    localStorage.setItem(`app_encryption_key_${currentIdentityId}`, appKeyFromAve);
+                    console.log('Using app key from Ave for identity:', currentIdentityId);
                 } else {
-                    // Fallback: check if we have a stored key (shouldn't happen normally)
-                    const storedKey = localStorage.getItem('app_encryption_key');
+                    // Fallback: check if we have a stored key for this identity
+                    const storedKey = localStorage.getItem(`app_encryption_key_${currentIdentityId}`);
                     if (storedKey) {
                         appEncryptionKey = await importKey(storedKey);
-                        console.log('Using stored app key');
+                        console.log('Using stored app key for identity:', currentIdentityId);
                     } else {
                         throw new Error('No app encryption key received from Ave');
                     }
@@ -536,8 +549,9 @@
         
         // Notes Management
         async function loadNotes() {
-            // Load encrypted notes from localStorage (in real app, from server)
-            const encryptedNotes = JSON.parse(localStorage.getItem('encrypted_notes') || '[]');
+            // Load encrypted notes from localStorage for this identity
+            const storageKey = getStorageKey('encrypted_notes');
+            const encryptedNotes = JSON.parse(localStorage.getItem(storageKey) || '[]');
             
             // Decrypt all notes
             notes = [];
@@ -571,10 +585,11 @@
                     timestamp: new Date().toISOString()
                 };
                 
-                // Store encrypted (in real app, send to server)
-                const encryptedNotes = JSON.parse(localStorage.getItem('encrypted_notes') || '[]');
+                // Store encrypted notes per identity
+                const storageKey = getStorageKey('encrypted_notes');
+                const encryptedNotes = JSON.parse(localStorage.getItem(storageKey) || '[]');
                 encryptedNotes.push(note);
-                localStorage.setItem('encrypted_notes', JSON.stringify(encryptedNotes));
+                localStorage.setItem(storageKey, JSON.stringify(encryptedNotes));
                 
                 // Add to decrypted notes in memory
                 notes.push({
@@ -591,10 +606,11 @@
         }
         
         async function deleteNote(id) {
-            // Remove from encrypted storage
-            const encryptedNotes = JSON.parse(localStorage.getItem('encrypted_notes') || '[]');
+            // Remove from encrypted storage for this identity
+            const storageKey = getStorageKey('encrypted_notes');
+            const encryptedNotes = JSON.parse(localStorage.getItem(storageKey) || '[]');
             const filtered = encryptedNotes.filter(n => n.id !== id);
-            localStorage.setItem('encrypted_notes', JSON.stringify(filtered));
+            localStorage.setItem(storageKey, JSON.stringify(filtered));
             
             // Remove from memory
             notes = notes.filter(n => n.id !== id);
@@ -627,15 +643,16 @@
         }
         
         function logout() {
-            // Only clear session data, keep encrypted notes and app key
+            // Only clear session data, keep encrypted notes and app keys per identity
             localStorage.removeItem('access_token');
             localStorage.removeItem('user_data');
             localStorage.removeItem('code_verifier');
             localStorage.removeItem('oauth_state');
-            // Keep: encrypted_notes, app_encryption_key
+            // Keep: encrypted_notes_<id>, app_encryption_key_<id> for each identity
             
             notes = [];
             appEncryptionKey = null;
+            currentIdentityId = null;
             showLoggedOut();
         }
         
