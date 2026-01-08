@@ -431,10 +431,10 @@ async function decryptData(key, encryptedBase64) {
 
                     <h3 class="text-[#FFFFFF] text-[22px] font-semibold mt-[40px] mb-[12px]">Token Endpoint</h3>
                     <p class="text-[#999999] text-[16px] mb-[16px]">
-                        <code>POST /api/oauth/token</code> - Exchange authorization code for tokens
+                        <code>POST https://api.aveid.net/oauth/token</code> - Exchange authorization code for tokens
                     </p>
                     <CodeBlock code={`// Request
-POST https://aveid.net/api/oauth/token
+POST https://api.aveid.net/oauth/token
 Content-Type: application/json
 
 {
@@ -464,7 +464,7 @@ Content-Type: application/json
 
                     <h3 class="text-[#FFFFFF] text-[22px] font-semibold mt-[40px] mb-[12px]">App Info Endpoint</h3>
                     <p class="text-[#999999] text-[16px] mb-[16px]">
-                        <code>GET /api/oauth/app/:clientId</code> - Get public app information
+                        <code>GET https://api.aveid.net/oauth/app/:clientId</code> - Get public app information
                     </p>
                     <CodeBlock code={`// Response
 {
@@ -571,7 +571,7 @@ Content-Type: application/json
                     </p>
                     <CodeBlock code={`// Configuration
 const AVE_AUTH_URL = 'https://aveid.net/authorize';
-const AVE_TOKEN_URL = 'https://aveid.net/api/oauth/token';
+const AVE_TOKEN_URL = 'https://api.aveid.net/oauth/token';
 const CLIENT_ID = 'your_client_id';
 const REDIRECT_URI = 'https://yourapp.com/callback';
 

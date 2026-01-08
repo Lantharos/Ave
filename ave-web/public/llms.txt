@@ -198,7 +198,7 @@ async function decryptData(key, encryptedBase64) {
 
 ### Token Endpoint
 
-`POST https://aveid.net/api/oauth/token` - Exchange authorization code for tokens
+`POST https://api.aveid.net/oauth/token` - Exchange authorization code for tokens
 
 **Request:**
 ```json
@@ -237,7 +237,7 @@ The `encrypted_app_key` field is only present for E2EE-enabled apps.
 
 ### App Info Endpoint
 
-`GET https://aveid.net/api/oauth/app/:clientId` - Get public app information
+`GET https://api.aveid.net/oauth/app/:clientId` - Get public app information
 
 **Response:**
 ```json
@@ -290,7 +290,7 @@ A complete example of implementing Ave OAuth with PKCE:
 ```javascript
 // Configuration
 const AVE_AUTH_URL = 'https://aveid.net/authorize';
-const AVE_TOKEN_URL = 'https://aveid.net/api/oauth/token';
+const AVE_TOKEN_URL = 'https://api.aveid.net/oauth/token';
 const CLIENT_ID = 'your_client_id';
 const REDIRECT_URI = 'https://yourapp.com/callback';
 
