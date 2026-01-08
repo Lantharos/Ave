@@ -1,0 +1,363 @@
+# Ave OAuth Documentation
+
+> Let users sign in with their Ave identity. Secure, privacy-focused, and optionally end-to-end encrypted.
+
+## Overview
+
+Ave provides OAuth 2.0 authentication that lets your app authenticate users with their Ave identity. Unlike traditional OAuth providers, Ave is built with privacy at its core:
+
+- **No tracking** - Ave doesn't track users across apps
+- **User controls data** - Users choose exactly what to share
+- **Multiple identities** - Users can have up to 5 identities and choose which one to use
+- **Optional E2EE** - Apps can request encryption keys for end-to-end encrypted data
+
+**Note:** Asterisk, our developer portal, is coming soon and will let you create and manage OAuth apps yourself. Until then, reach out to register your app.
+
+## Getting Started
+
+To integrate Ave authentication into your app, you'll need:
+
+1. **CLIENT ID** - A unique identifier for your app (e.g., `app_4b21fc0238997355...`)
+2. **CLIENT SECRET (optional)** - For server-side apps. Public clients (SPAs, mobile) use PKCE instead.
+3. **REDIRECT URI** - Where Ave sends users after authorization (must be pre-registered)
+
+Ave supports two authentication methods:
+
+- **Client Secret** - For server-side apps that can securely store secrets
+- **PKCE (Proof Key for Code Exchange)** - For SPAs, mobile apps, and any public client
+
+## Authorization Flow
+
+Ave uses the standard OAuth 2.0 Authorization Code flow:
+
+1. **Redirect to Ave** - Send the user to Ave's authorization page with your app details
+2. **User Authorizes** - The user selects an identity and swipes to authorize your app
+3. **Receive Authorization Code** - Ave redirects back to your app with a temporary authorization code
+4. **Exchange for Token** - Your app exchanges the code for an access token and user info
+
+### Authorization URL
+
+Redirect users to the Ave authorization page:
+
+```
+https://aveid.net/authorize?
+  client_id=YOUR_CLIENT_ID
+  &redirect_uri=https://yourapp.com/callback
+  &scope=profile
+  &state=RANDOM_STATE_VALUE
+```
+
+### Authorization URL Parameters
+
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| client_id | Yes | Your app's client ID |
+| redirect_uri | Yes | Must match a registered redirect URI |
+| scope | No | Requested permissions (default: `profile`) |
+| state | Recommended | Random string to prevent CSRF attacks |
+
+## PKCE (Public Clients)
+
+For single-page applications (SPAs), mobile apps, or any client that can't securely store a client secret, use PKCE (Proof Key for Code Exchange). This is the recommended approach for most modern apps.
+
+### How PKCE Works
+
+1. **Generate Code Verifier** - Create a cryptographically random string (43-128 characters)
+2. **Create Code Challenge** - Hash the verifier with SHA-256 and base64url encode it
+3. **Include in Auth Request** - Add `code_challenge` and `code_challenge_method=S256` to the URL
+4. **Include Verifier in Token Request** - Send the original `code_verifier` when exchanging the code for tokens
+
+### PKCE Implementation
+
+```javascript
+// Generate code verifier (random 32 bytes, base64url encoded)
+function generateCodeVerifier() {
+  const array = new Uint8Array(32);
+  crypto.getRandomValues(array);
+  return base64UrlEncode(array);
+}
+
+// Generate code challenge (SHA-256 hash of verifier)
+async function generateCodeChallenge(verifier) {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(verifier);
+  const hash = await crypto.subtle.digest('SHA-256', data);
+  return base64UrlEncode(new Uint8Array(hash));
+}
+
+// Base64 URL encoding (no padding, URL-safe characters)
+function base64UrlEncode(bytes) {
+  return btoa(String.fromCharCode(...bytes))
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=/g, '');
+}
+```
+
+### Authorization URL with PKCE
+
+```
+https://aveid.net/authorize?
+  client_id=YOUR_CLIENT_ID
+  &redirect_uri=https://yourapp.com/callback
+  &scope=profile
+  &state=RANDOM_STATE_VALUE
+  &code_challenge=E9Melhoa2OwvFrEMTJguCHaoeK1t8...
+  &code_challenge_method=S256
+```
+
+## End-to-End Encryption
+
+Apps can request encryption keys from Ave, enabling true end-to-end encrypted data that neither Ave nor your servers can read.
+
+When your app has E2EE enabled, Ave provides an app-specific encryption key during each login. This key is:
+
+- **Unique to your app** - Each app gets its own key per user identity
+- **Controlled by the user** - Encrypted with the user's master key on Ave's servers
+- **Passed securely** - Delivered via URL fragment (never logged by servers)
+- **Persistent** - Same key is provided on subsequent logins with the same identity
+
+### How It Works
+
+1. **First Authorization** - Ave generates a new AES-256-GCM key for your app. The key is encrypted with the user's master key and stored on Ave.
+2. **Key Delivery** - After authorization, Ave decrypts the key client-side and passes it to your app via the URL fragment (`#app_key=...`)
+3. **Encrypt User Data** - Your app uses the key to encrypt/decrypt user data. Encrypted data can be stored anywhere.
+4. **Subsequent Logins** - When the user logs in again with the same identity, they receive the same key.
+
+### Identity-Specific Keys
+
+Each identity gets its own encryption key. If a user has multiple identities (e.g., personal and work), each identity will have separate encrypted data in your app.
+
+**Important:** Store user data keyed by the identity ID, not just the user. This ensures data separation when users switch between identities.
+
+### Receiving the App Key
+
+```javascript
+// After OAuth redirect, extract the app key from the URL fragment
+const hashParams = new URLSearchParams(window.location.hash.substring(1));
+const appKeyBase64 = hashParams.get('app_key');
+
+if (appKeyBase64) {
+  // Import the key for use with Web Crypto API
+  const keyBytes = Uint8Array.from(atob(appKeyBase64), c => c.charCodeAt(0));
+  const appKey = await crypto.subtle.importKey(
+    'raw',
+    keyBytes,
+    { name: 'AES-GCM', length: 256 },
+    true,
+    ['encrypt', 'decrypt']
+  );
+  
+  // Clean URL to remove the key from browser history
+  window.history.replaceState({}, document.title, window.location.pathname);
+}
+```
+
+### Encrypting Data
+
+```javascript
+async function encryptData(key, plaintext) {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(plaintext);
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  
+  const encrypted = await crypto.subtle.encrypt(
+    { name: 'AES-GCM', iv },
+    key,
+    data
+  );
+  
+  // Combine IV + ciphertext and encode as base64
+  const combined = new Uint8Array(iv.length + encrypted.byteLength);
+  combined.set(iv);
+  combined.set(new Uint8Array(encrypted), iv.length);
+  
+  return btoa(String.fromCharCode(...combined));
+}
+
+async function decryptData(key, encryptedBase64) {
+  const combined = Uint8Array.from(atob(encryptedBase64), c => c.charCodeAt(0));
+  const iv = combined.slice(0, 12);
+  const ciphertext = combined.slice(12);
+  
+  const decrypted = await crypto.subtle.decrypt(
+    { name: 'AES-GCM', iv },
+    key,
+    ciphertext
+  );
+  
+  return new TextDecoder().decode(decrypted);
+}
+```
+
+## API Endpoints
+
+### Authorization Endpoint
+
+`GET https://aveid.net/authorize` - User-facing authorization page
+
+### Token Endpoint
+
+`POST https://aveid.net/api/oauth/token` - Exchange authorization code for tokens
+
+**Request:**
+```json
+{
+  "grantType": "authorization_code",
+  "code": "AUTHORIZATION_CODE",
+  "redirectUri": "https://yourapp.com/callback",
+  "clientId": "YOUR_CLIENT_ID",
+  "clientSecret": "YOUR_SECRET",
+  "codeVerifier": "PKCE_VERIFIER"
+}
+```
+
+- Use `clientSecret` for confidential clients (server-side apps)
+- Use `codeVerifier` for PKCE clients (SPAs, mobile apps)
+
+**Response:**
+```json
+{
+  "access_token": "eyJhbGciOiJIUzI1NiIs...",
+  "token_type": "Bearer",
+  "expires_in": 3600,
+  "scope": "profile",
+  "user": {
+    "id": "550e8400-e29b-41d4-a716-446655440000",
+    "handle": "johndoe",
+    "displayName": "John Doe",
+    "email": "john@example.com",
+    "avatarUrl": "https://..."
+  },
+  "encrypted_app_key": "..."
+}
+```
+
+The `encrypted_app_key` field is only present for E2EE-enabled apps.
+
+### App Info Endpoint
+
+`GET https://aveid.net/api/oauth/app/:clientId` - Get public app information
+
+**Response:**
+```json
+{
+  "app": {
+    "name": "My App",
+    "description": "An awesome app",
+    "iconUrl": "https://...",
+    "websiteUrl": "https://myapp.com",
+    "supportsE2ee": true
+  }
+}
+```
+
+## User Data
+
+When a user authorizes your app, you receive information about their selected identity:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| id | UUID | Unique identifier for this identity |
+| handle | String | Unique username (e.g., "johndoe") |
+| displayName | String | User's display name |
+| email | String or null | Email address (if provided) |
+| avatarUrl | String or null | URL to user's avatar image |
+
+**Note:** The `id` is the identity ID, not the user ID. If a user logs in with a different identity, they'll have a different ID.
+
+## Security Best Practices
+
+### Always Validate State
+Generate a random `state` parameter before redirecting and verify it matches when the user returns. This prevents CSRF attacks.
+
+### Use PKCE for Public Clients
+Never embed client secrets in frontend code. Use PKCE (S256 method) for SPAs and mobile apps.
+
+### Secure Token Storage
+Store access tokens securely. In browsers, use memory or httpOnly cookies. Never store in localStorage for sensitive apps.
+
+### Clean URL Fragments
+For E2EE apps, immediately extract the app key from the URL fragment and clean the URL to prevent the key from appearing in browser history.
+
+### Register Exact Redirect URIs
+Register the full redirect URI including path. Don't use wildcards. This prevents open redirect vulnerabilities.
+
+## Complete PKCE Flow Example
+
+A complete example of implementing Ave OAuth with PKCE:
+
+```javascript
+// Configuration
+const AVE_AUTH_URL = 'https://aveid.net/authorize';
+const AVE_TOKEN_URL = 'https://aveid.net/api/oauth/token';
+const CLIENT_ID = 'your_client_id';
+const REDIRECT_URI = 'https://yourapp.com/callback';
+
+// Start login
+async function loginWithAve() {
+  const codeVerifier = generateCodeVerifier();
+  const codeChallenge = await generateCodeChallenge(codeVerifier);
+  const state = generateRandomString(32);
+  
+  // Store for later verification
+  sessionStorage.setItem('code_verifier', codeVerifier);
+  sessionStorage.setItem('oauth_state', state);
+  
+  const params = new URLSearchParams({
+    client_id: CLIENT_ID,
+    redirect_uri: REDIRECT_URI,
+    scope: 'profile',
+    state: state,
+    code_challenge: codeChallenge,
+    code_challenge_method: 'S256'
+  });
+  
+  window.location.href = AVE_AUTH_URL + '?' + params.toString();
+}
+
+// Handle callback
+async function handleCallback() {
+  const params = new URLSearchParams(window.location.search);
+  const code = params.get('code');
+  const state = params.get('state');
+  
+  // Verify state
+  if (state !== sessionStorage.getItem('oauth_state')) {
+    throw new Error('State mismatch - possible CSRF attack');
+  }
+  
+  // Exchange code for token
+  const response = await fetch(AVE_TOKEN_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      grantType: 'authorization_code',
+      code: code,
+      redirectUri: REDIRECT_URI,
+      clientId: CLIENT_ID,
+      codeVerifier: sessionStorage.getItem('code_verifier')
+    })
+  });
+  
+  const data = await response.json();
+  
+  // Clean up
+  sessionStorage.removeItem('code_verifier');
+  sessionStorage.removeItem('oauth_state');
+  
+  console.log('Logged in as:', data.user.displayName);
+  
+  // For E2EE apps, extract the app key from URL fragment
+  const hashParams = new URLSearchParams(window.location.hash.substring(1));
+  const appKey = hashParams.get('app_key');
+  if (appKey) {
+    console.log('Received app encryption key');
+    window.history.replaceState({}, '', window.location.pathname);
+  }
+}
+```
+
+## Contact
+
+Need help? Contact us at hello@lantharos.com

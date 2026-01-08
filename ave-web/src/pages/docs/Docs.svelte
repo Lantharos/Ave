@@ -99,6 +99,24 @@
 
             <div class="flex flex-col gap-[80px]">
                 <DocSec title="Overview" id="overview">
+                    <div class="p-[24px] bg-[#111118] border border-[#252535] rounded-[12px] mb-[30px]">
+                        <div class="flex items-center gap-[10px] mb-[10px]">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#8888ff" stroke-width="2">
+                                <path d="M12 2a4 4 0 0 1 4 4c0 1.1-.9 2-2 2h-4c-1.1 0-2-.9-2-2a4 4 0 0 1 4-4z"/>
+                                <path d="M12 8v4m0 0l-2 6h4l-2-6z"/>
+                                <circle cx="12" cy="18" r="4"/>
+                            </svg>
+                            <p class="text-[#aaaaff] text-[16px] font-semibold">Using an AI Agent?</p>
+                        </div>
+                        <p class="text-[#888899] text-[15px] leading-[1.7] mb-[14px]">
+                            Give them the machine-readable docs instead:
+                        </p>
+                        <code class="block bg-[#0a0a10] text-[#ccccff] px-[16px] py-[12px] rounded-[8px] text-[14px] mb-[14px] select-all">https://aveid.net/llms.txt</code>
+                        <p class="text-[#666677] text-[13px] leading-[1.6]">
+                            <span class="text-[#888899]">Sample prompt:</span> "Please integrate Ave OAuth into my app. Here's the documentation: https://aveid.net/llms.txt"
+                        </p>
+                    </div>
+
                     <p class="text-[#999999] text-[17px] leading-[1.8]">
                         Ave provides OAuth 2.0 authentication that lets your app authenticate users with their Ave identity. Unlike traditional OAuth providers, Ave is built with privacy at its core:
                     </p>
