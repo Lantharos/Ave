@@ -3,7 +3,7 @@
     import LegalSec from "./components/LegalSec.svelte";
 </script>
 
-<div class="bg-[#090909] w-full min-h-screen flex flex-col">
+<div class="bg-[#090909] w-full min-h-screen-fixed flex flex-col">
     <img src="/grads/privacy_grad.png" alt="gradient" class="absolute top-0 left-0 w-full h-auto pointer-events-none select-none" />
     <div class="self-center mt-[100px]">
         <Text type="h" size={96} weight="bold">Your data matters!</Text>

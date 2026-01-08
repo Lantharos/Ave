@@ -20,6 +20,12 @@ html, body, #app {
     height: calc(var(--vh, 1vh) * 100);
 }
 
+/* Min height utility that works with zoom */
+.min-h-screen-fixed {
+    min-height: 100vh;
+    min-height: calc(var(--vh, 1vh) * 100);
+}
+
 html {
     zoom: 1;
 }

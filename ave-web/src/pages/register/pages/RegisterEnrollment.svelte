@@ -17,7 +17,7 @@
     }
 </script>
 
-<div class="w-full min-h-screen flex flex-col items-center justify-center px-[150px] py-[150px] gap-[150px]">
+<div class="w-full min-h-screen-fixed flex flex-col items-center justify-center px-[150px] py-[150px] gap-[150px]">
     <div class="w-[60%] h-auto flex flex-col items-center z-10 gap-[50px]">
         <div class="flex flex-col gap-[10px]">
             <Text type={"hd"} size={36}>YOU'RE ALL SET!</Text>

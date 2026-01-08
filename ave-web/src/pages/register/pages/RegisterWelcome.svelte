@@ -8,7 +8,7 @@
     }
 </script>
 
-<div class="w-full min-h-screen flex flex-col items-center justify-center px-[150px] py-[150px] gap-[150px]">
+<div class="w-full min-h-screen-fixed flex flex-col items-center justify-center px-[150px] py-[150px] gap-[150px]">
     <div class="flex flex-row w-full items-start justify-between gap-[100px]">
         <div class="flex flex-col w-[55%] items-start justify-start gap-[20px]">
             <Text type="h" weight="medium" size={48}>

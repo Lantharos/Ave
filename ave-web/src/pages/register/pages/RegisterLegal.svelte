@@ -9,7 +9,7 @@
     }
 </script>
 
-<div class="w-full min-h-screen flex flex-col items-center justify-center px-[150px] py-[150px] gap-[150px]">
+<div class="w-full min-h-screen-fixed flex flex-col items-center justify-center px-[150px] py-[150px] gap-[150px]">
    <div class="flex flex-col items-center justify-center gap-[10px] w-[50%] z-10">
        <div class="flex flex-col bg-[#171717] p-[30px] rounded-[32px] gap-[20px]">
            <Text type={"hd"} size={36}>

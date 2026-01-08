@@ -114,7 +114,7 @@
     );
 </script>
 
-<div class="w-full min-h-screen flex flex-col items-center justify-center px-[150px] py-[150px] gap-[150px] overflow-auto scroll-smooth">
+<div class="w-full min-h-screen-fixed flex flex-col items-center justify-center px-[150px] py-[150px] gap-[150px] overflow-auto scroll-smooth">
    <div class="flex flex-col items-center justify-center gap-[10px] w-[50%] z-10">
        <Text type={"hd"} size={36} cclass="self-center">
            WHO ARE YOU?

@@ -63,7 +63,7 @@
     let selectedIdentity = $derived(identities.find(i => i.displayName === selectedPage));
 </script>
 
-<div class="bg-[#090909] relative w-full min-h-screen flex flex-row px-[120px] py-[100px] gap-[100px]">
+<div class="bg-[#090909] relative w-full min-h-screen-fixed flex flex-row px-[120px] py-[100px] gap-[100px]">
     <div class="flex flex-col gap-[40px] w-[20%] z-10">
         <div class="flex flex-col gap-[10px]">
             <Text type="hd" size={24} color="#878787">IDENTITIES</Text>

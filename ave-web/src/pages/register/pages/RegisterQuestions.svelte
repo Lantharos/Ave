@@ -63,7 +63,7 @@
     }
 </script>
 
-<div class="w-full min-h-screen flex flex-col items-start justify-center px-[150px] py-[150px] gap-[150px]">
+<div class="w-full min-h-screen-fixed flex flex-col items-start justify-center px-[150px] py-[150px] gap-[150px]">
     <div class="flex flex-row items-center justify-center gap-[100px] w-full z-10">
         <div class="flex flex-col gap-[10px] w-[60%]">
             <Text type={"hd"} size={36}>LET'S ANSWER SOME SECURITY QUESTIONS</Text>
