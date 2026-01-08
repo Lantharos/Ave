@@ -16,7 +16,14 @@
           const vh = window.innerHeight / zoom * 0.01;
           document.documentElement.style.setProperty('--vh', `${vh}px`);
         }
-        setVh();
+        // Run after CSS is loaded and parsed
+        if (document.readyState === 'loading') {
+          document.addEventListener('DOMContentLoaded', setVh);
+        } else {
+          setVh();
+        }
+        // Also run on load (catches late CSS/font loading layout shifts)
+        window.addEventListener('load', setVh);
         window.addEventListener('resize', setVh);
       </script>
   </head>
