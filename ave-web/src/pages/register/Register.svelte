@@ -208,7 +208,7 @@
 </script>
 
 {#if loaded}
-    <div class="relative w-full h-full overflow-y-scroll scroll-smooth bg-[#090909]">
+    <div class="relative w-full min-h-screen-fixed overflow-y-auto scroll-smooth bg-[#090909]">
         <div
                 class="absolute bottom-0 inset-x-0 h-[700px] bg-center bg-cover transition-opacity duration-300 will-change-[opacity] select-none pointer-events-none transform-gpu"
                 style={`background-image:url(${bgA})`}
