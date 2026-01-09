@@ -26,6 +26,15 @@ Ave supports two authentication methods:
 - **Client Secret** - For server-side apps that can securely store secrets
 - **PKCE (Proof Key for Code Exchange)** - For SPAs, mobile apps, and any public client
 
+## Important: API Base URLs
+
+Ave uses two different domains:
+
+- **Authorization Page (user-facing):** `https://aveid.net/authorize`
+- **API Endpoints (server-to-server):** `https://api.aveid.net/api/...`
+
+**Common mistake:** Do NOT use `aveid.net/api` - the correct API base is `api.aveid.net`.
+
 ## Authorization Flow
 
 Ave uses the standard OAuth 2.0 Authorization Code flow:
@@ -132,12 +141,17 @@ Each identity gets its own encryption key. If a user has multiple identities (e.
 
 ### Receiving the App Key
 
+The app key is passed via the URL fragment (hash). **Important:** When using `URLSearchParams` to parse the fragment, the `+` character in base64 may be incorrectly converted to a space. You must handle this:
+
 ```javascript
 // After OAuth redirect, extract the app key from the URL fragment
 const hashParams = new URLSearchParams(window.location.hash.substring(1));
-const appKeyBase64 = hashParams.get('app_key');
+let appKeyBase64 = hashParams.get('app_key');
 
 if (appKeyBase64) {
+  // IMPORTANT: URLSearchParams converts + to space, fix it back
+  appKeyBase64 = appKeyBase64.replace(/ /g, '+');
+  
   // Import the key for use with Web Crypto API
   const keyBytes = Uint8Array.from(atob(appKeyBase64), c => c.charCodeAt(0));
   const appKey = await crypto.subtle.importKey(
@@ -198,7 +212,9 @@ async function decryptData(key, encryptedBase64) {
 
 ### Token Endpoint
 
-`POST https://api.aveid.net/oauth/token` - Exchange authorization code for tokens
+`POST https://api.aveid.net/api/oauth/token` - Exchange authorization code for tokens
+
+**CRITICAL:** The request body must use **camelCase** field names, NOT snake_case:
 
 **Request:**
 ```json
@@ -218,7 +234,7 @@ async function decryptData(key, encryptedBase64) {
 **Response:**
 ```json
 {
-  "access_token": "eyJhbGciOiJIUzI1NiIs...",
+  "access_token": "...",
   "token_type": "Bearer",
   "expires_in": 3600,
   "scope": "profile",
@@ -233,11 +249,14 @@ async function decryptData(key, encryptedBase64) {
 }
 ```
 
-The `encrypted_app_key` field is only present for E2EE-enabled apps.
+**Notes:**
+- The `access_token` returned is an opaque token, NOT a JWT. If your app needs a JWT for its own session management, create one yourself after validating the Ave token.
+- The `encrypted_app_key` field is only present for E2EE-enabled apps.
+- For E2EE apps, the actual usable app_key is passed via the URL fragment (`#app_key=...`) after the redirect, NOT in this response.
 
 ### App Info Endpoint
 
-`GET https://api.aveid.net/oauth/app/:clientId` - Get public app information
+`GET https://api.aveid.net/api/oauth/app/:clientId` - Get public app information
 
 **Response:**
 ```json
@@ -266,6 +285,8 @@ When a user authorizes your app, you receive information about their selected id
 
 **Note:** The `id` is the identity ID, not the user ID. If a user logs in with a different identity, they'll have a different ID.
 
+**Profile Management:** User profile data (avatar, display name, handle) is managed through Ave, not through your app. If you need to show a profile editing UI, link users to Ave to update their profile there.
+
 ## Security Best Practices
 
 ### Always Validate State
@@ -290,7 +311,7 @@ A complete example of implementing Ave OAuth with PKCE:
 ```javascript
 // Configuration
 const AVE_AUTH_URL = 'https://aveid.net/authorize';
-const AVE_TOKEN_URL = 'https://api.aveid.net/oauth/token';
+const AVE_TOKEN_URL = 'https://api.aveid.net/api/oauth/token';  // Note: api.aveid.net, NOT aveid.net/api
 const CLIENT_ID = 'your_client_id';
 const REDIRECT_URI = 'https://yourapp.com/callback';
 
@@ -327,7 +348,7 @@ async function handleCallback() {
     throw new Error('State mismatch - possible CSRF attack');
   }
   
-  // Exchange code for token
+  // Exchange code for token - NOTE: use camelCase field names!
   const response = await fetch(AVE_TOKEN_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -350,13 +371,27 @@ async function handleCallback() {
   
   // For E2EE apps, extract the app key from URL fragment
   const hashParams = new URLSearchParams(window.location.hash.substring(1));
-  const appKey = hashParams.get('app_key');
+  let appKey = hashParams.get('app_key');
   if (appKey) {
+    // Fix URLSearchParams converting + to space
+    appKey = appKey.replace(/ /g, '+');
     console.log('Received app encryption key');
     window.history.replaceState({}, '', window.location.pathname);
   }
 }
 ```
+
+## Common Integration Mistakes
+
+1. **Wrong API URL:** Use `https://api.aveid.net/api/oauth/token`, NOT `https://aveid.net/api/oauth/token`
+
+2. **Wrong field names in token request:** Use camelCase (`grantType`, `clientId`, `clientSecret`, `redirectUri`, `codeVerifier`), NOT snake_case
+
+3. **App key parsing error:** When extracting `app_key` from URL fragment with `URLSearchParams`, the `+` character becomes a space. Replace spaces back to `+` before base64 decoding.
+
+4. **Expecting JWT from Ave:** Ave's access_token is opaque. If you need a JWT for your app's session, create your own after verifying the Ave token.
+
+5. **Storing profile data locally:** User profile (avatar, name) is managed by Ave. Fetch fresh data on login or link to Ave for profile edits.
 
 ## Contact
 

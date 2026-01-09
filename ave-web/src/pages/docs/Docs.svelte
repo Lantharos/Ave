@@ -17,6 +17,7 @@
         { id: "endpoints", title: "API Endpoints" },
         { id: "user-data", title: "User Data" },
         { id: "security", title: "Security Best Practices" },
+        { id: "common-mistakes", title: "Common Mistakes" },
         { id: "examples", title: "Code Examples" },
     ];
 
@@ -431,10 +432,15 @@ async function decryptData(key, encryptedBase64) {
 
                     <h3 class="text-[#FFFFFF] text-[22px] font-semibold mt-[40px] mb-[12px]">Token Endpoint</h3>
                     <p class="text-[#999999] text-[16px] mb-[16px]">
-                        <code>POST https://api.aveid.net/oauth/token</code> - Exchange authorization code for tokens
+                        <code>POST https://api.aveid.net/api/oauth/token</code> - Exchange authorization code for tokens
                     </p>
+                    <div class="mt-[16px] mb-[24px] p-[20px] bg-[#1a1212] border border-[#2a1a1a] rounded-[12px]">
+                        <p class="text-[#aa8888] text-[15px]">
+                            <strong class="text-[#E14747]">Important:</strong> The API base URL is <code>api.aveid.net</code>, NOT <code>aveid.net/api</code>. Request body fields must use <strong>camelCase</strong> (e.g., <code>grantType</code>, <code>clientId</code>).
+                        </p>
+                    </div>
                     <CodeBlock code={`// Request
-POST https://api.aveid.net/oauth/token
+POST https://api.aveid.net/api/oauth/token
 Content-Type: application/json
 
 {
@@ -464,7 +470,7 @@ Content-Type: application/json
 
                     <h3 class="text-[#FFFFFF] text-[22px] font-semibold mt-[40px] mb-[12px]">App Info Endpoint</h3>
                     <p class="text-[#999999] text-[16px] mb-[16px]">
-                        <code>GET https://api.aveid.net/oauth/app/:clientId</code> - Get public app information
+                        <code>GET https://api.aveid.net/api/oauth/app/:clientId</code> - Get public app information
                     </p>
                     <CodeBlock code={`// Response
 {
@@ -564,6 +570,44 @@ Content-Type: application/json
                     </div>
                 </DocSec>
 
+                <DocSec title="Common Mistakes" id="common-mistakes">
+                    <p class="text-[#999999] text-[17px] leading-[1.8] mb-[24px]">
+                        Avoid these common integration pitfalls:
+                    </p>
+                    <div class="flex flex-col gap-[16px]">
+                        <div class="p-[24px] bg-[#1a1212] rounded-[14px] border border-[#2a1a1a]">
+                            <p class="text-[#E14747] text-[17px] font-semibold mb-[8px]">Wrong API URL</p>
+                            <p class="text-[#aa8888] text-[15px] leading-[1.7]">
+                                Use <code>https://api.aveid.net/api/oauth/token</code>, NOT <code>https://aveid.net/api/oauth/token</code>. The API is hosted on a separate subdomain.
+                            </p>
+                        </div>
+                        <div class="p-[24px] bg-[#1a1212] rounded-[14px] border border-[#2a1a1a]">
+                            <p class="text-[#E14747] text-[17px] font-semibold mb-[8px]">Wrong Field Names in Token Request</p>
+                            <p class="text-[#aa8888] text-[15px] leading-[1.7]">
+                                Use camelCase: <code>grantType</code>, <code>clientId</code>, <code>clientSecret</code>, <code>redirectUri</code>, <code>codeVerifier</code>. NOT snake_case like <code>grant_type</code>.
+                            </p>
+                        </div>
+                        <div class="p-[24px] bg-[#1a1212] rounded-[14px] border border-[#2a1a1a]">
+                            <p class="text-[#E14747] text-[17px] font-semibold mb-[8px]">App Key Parsing Error</p>
+                            <p class="text-[#aa8888] text-[15px] leading-[1.7]">
+                                When extracting <code>app_key</code> from the URL fragment with <code>URLSearchParams</code>, the <code>+</code> character in base64 becomes a space. Replace spaces back to <code>+</code> before decoding.
+                            </p>
+                        </div>
+                        <div class="p-[24px] bg-[#1a1212] rounded-[14px] border border-[#2a1a1a]">
+                            <p class="text-[#E14747] text-[17px] font-semibold mb-[8px]">Expecting JWT from Ave</p>
+                            <p class="text-[#aa8888] text-[15px] leading-[1.7]">
+                                Ave's <code>access_token</code> is opaque, not a JWT. If you need a JWT for your app's session management, create your own after validating the Ave token.
+                            </p>
+                        </div>
+                        <div class="p-[24px] bg-[#1a1212] rounded-[14px] border border-[#2a1a1a]">
+                            <p class="text-[#E14747] text-[17px] font-semibold mb-[8px]">Storing Profile Data Locally</p>
+                            <p class="text-[#aa8888] text-[15px] leading-[1.7]">
+                                User profile data (avatar, display name) is managed by Ave. Fetch fresh data on each login or link users to Ave for profile edits.
+                            </p>
+                        </div>
+                    </div>
+                </DocSec>
+
                 <DocSec title="Code Examples" id="examples">
                     <h3 class="text-[#FFFFFF] text-[22px] font-semibold mb-[12px]">Complete PKCE Flow Example</h3>
                     <p class="text-[#999999] text-[16px] mb-[16px]">
@@ -571,7 +615,7 @@ Content-Type: application/json
                     </p>
                     <CodeBlock code={`// Configuration
 const AVE_AUTH_URL = 'https://aveid.net/authorize';
-const AVE_TOKEN_URL = 'https://api.aveid.net/oauth/token';
+const AVE_TOKEN_URL = 'https://api.aveid.net/api/oauth/token';
 const CLIENT_ID = 'your_client_id';
 const REDIRECT_URI = 'https://yourapp.com/callback';
 
