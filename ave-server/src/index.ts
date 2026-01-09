@@ -23,9 +23,15 @@ const app = new Hono();
 
 // Middleware
 app.use("*", logger());
+
+app.use("/api/oauth/*", cors({
+  origin: "*",
+  allowMethods: ["GET", "POST", "OPTIONS"],
+  allowHeaders: ["Content-Type", "Authorization"],
+}));
+
 app.use("*", cors({
   origin: (origin) => {
-    // Allow localhost on any port for development
     if (origin && (origin.startsWith("http://localhost:") || origin.startsWith("http://127.0.0.1:"))) {
       return origin;
     }
@@ -35,6 +41,7 @@ app.use("*", cors({
   allowMethods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
   allowHeaders: ["Content-Type", "Authorization"],
 }));
+
 app.use("*", authMiddleware);
 
 // Health check
