@@ -30,17 +30,25 @@ app.use("/api/oauth/*", cors({
   allowHeaders: ["Content-Type", "Authorization"],
 }));
 
-app.use("*", cors({
-  origin: (origin) => {
-    if (origin && (origin.startsWith("http://localhost:") || origin.startsWith("http://127.0.0.1:"))) {
-      return origin;
-    }
-    return process.env.RP_ORIGIN || "http://localhost:5173";
-  },
-  credentials: true,
-  allowMethods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-  allowHeaders: ["Content-Type", "Authorization"],
-}));
+app.use("*", async (c, next) => {
+  if (c.req.path.startsWith("/api/oauth/")) {
+    return next();
+  }
+  
+  const corsMiddleware = cors({
+    origin: (origin) => {
+      if (origin && (origin.startsWith("http://localhost:") || origin.startsWith("http://127.0.0.1:"))) {
+        return origin;
+      }
+      return process.env.RP_ORIGIN || "http://localhost:5173";
+    },
+    credentials: true,
+    allowMethods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowHeaders: ["Content-Type", "Authorization"],
+  });
+  
+  return corsMiddleware(c, next);
+});
 
 app.use("*", authMiddleware);
 
