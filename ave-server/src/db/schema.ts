@@ -115,7 +115,7 @@ export const sessions = pgTable("sessions", {
   tokenHash: text("token_hash").notNull().unique(),
   
   // IP and location info for activity log
-  ipAddress: varchar("ip_address", { length: 45 }),
+  ipAddress: varchar("ip_address", { length: 90 }),
   userAgent: text("user_agent"),
 }, (table) => [
   index("sessions_user_id_idx").on(table.userId),
@@ -137,7 +137,7 @@ export const loginRequests = pgTable("login_requests", {
   browser: varchar("browser", { length: 64 }),
   os: varchar("os", { length: 64 }),
   fingerprint: varchar("fingerprint", { length: 64 }),
-  ipAddress: varchar("ip_address", { length: 45 }),
+  ipAddress: varchar("ip_address", { length: 90 }),
   
   // Ephemeral key exchange for E2EE key transfer
   // The requesting device generates a keypair, stores private locally, sends public here
@@ -188,7 +188,7 @@ export const activityLogs = pgTable("activity_logs", {
   
   // Where it happened from
   deviceId: uuid("device_id").references(() => devices.id),
-  ipAddress: varchar("ip_address", { length: 45 }),
+  ipAddress: varchar("ip_address", { length: 90 }),
   userAgent: text("user_agent"),
   
   // Color coding for UI

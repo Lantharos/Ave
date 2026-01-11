@@ -10,10 +10,11 @@
 
     let currentPage = $state<"login" | "methods" | "trust-code" | "waiting">("login");
     
-    // Redirect to dashboard if already logged in
+    const returnUrl = new URLSearchParams(window.location.search).get("return");
+    
     onMount(() => {
         if ($isAuthenticated) {
-            goto("/dashboard");
+            goto(returnUrl || "/dashboard");
         }
     });
     let error = $state("");
@@ -64,7 +65,7 @@
     }
 
     function handleLoginSuccess() {
-        goto("/dashboard");
+        goto(returnUrl || "/dashboard");
     }
 
     function setError(msg: string) {
