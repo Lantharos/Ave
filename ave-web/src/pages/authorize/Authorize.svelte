@@ -242,7 +242,7 @@
 </script>
 
 <div class="bg-[#090909] min-h-screen-fixed flex flex-col md:flex-row items-center gap-6 md:gap-[50px] p-6 md:p-[50px] relative overflow-auto">
-    <div class="flex-1 z-10 flex flex-col items-start justify-between h-full p-4 md:p-[50px] w-full">
+    <div class="flex-1 z-10 flex flex-col items-start justify-between min-h-0 md:min-h-full p-4 md:p-[50px] w-full">
         <div class="flex flex-row gap-4 md:gap-[20px] items-start">
             {#if appInfo?.iconUrl}
                 <img src={appInfo.iconUrl} alt="{appInfo.name} Logo" class="w-12 h-12 md:w-[80px] md:h-[80px]"/>
@@ -263,7 +263,7 @@
             </div>
         </div>
 
-        <div class="flex flex-col gap-3 md:gap-[20px] mt-4 md:mt-0">
+        <div class="flex flex-col gap-3 md:gap-[20px] mt-6 md:mt-0">
             <h2 class="font-poppins text-base md:text-[32px] text-[#878787]">
                 You're signing in securely through Ave.
             </h2>
