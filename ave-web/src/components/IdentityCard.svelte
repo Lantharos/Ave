@@ -120,7 +120,7 @@
     }
 }} />
 
-<div class="flex flex-col w-full rounded-[24px] md:rounded-[32px] overflow-clip relative">
+<div class="flex flex-col w-full rounded-[16px] md:rounded-[32px] overflow-clip relative">
     <!-- Hidden file inputs -->
     <input 
         type="file" 
@@ -137,7 +137,7 @@
         onchange={handleBannerChange}
     />
 
-    <div class="w-full {size === 'small' ? 'h-[60px] md:h-[100px]' : 'h-[80px] md:h-[150px]' } relative overflow-hidden rounded-t-[15px]">
+    <div class="w-full {size === 'small' ? 'h-[50px] md:h-[100px]' : 'h-[60px] md:h-[150px]' } relative overflow-hidden rounded-t-[12px] md:rounded-t-[15px]">
         {#if banner}
             <img src={banner} alt="banner" class="w-full h-full object-cover hover:scale-105 transition-transform duration-300 ease-in-out" />
         {:else}
@@ -164,8 +164,8 @@
         {/if}
     </div>
 
-    <div class="{size === 'small' ? 'w-[80px] h-[80px] md:w-[125px] md:h-[125px]' : 'w-[90px] h-[90px] md:w-[160px] md:h-[160px]' } overflow-hidden mt-[20px] md:mt-[40px] ml-3 md:ml-[40px] z-10 absolute">
-        <img src={avatar} alt="avatar" class="w-full h-full border-[3px] md:border-[6px] border-[#171717] rounded-[18px] md:rounded-[32px] object-cover transition-transform duration-300 ease-in-out" />
+    <div class="{size === 'small' ? 'w-[60px] h-[60px] md:w-[125px] md:h-[125px]' : 'w-[70px] h-[70px] md:w-[160px] md:h-[160px]' } overflow-hidden mt-[15px] md:mt-[40px] ml-2.5 md:ml-[40px] z-10 absolute">
+        <img src={avatar} alt="avatar" class="w-full h-full border-2 md:border-[6px] border-[#171717] rounded-[12px] md:rounded-[32px] object-cover transition-transform duration-300 ease-in-out" />
 
         {#if editable}
             <button 
@@ -180,7 +180,7 @@
         {/if}
     </div>
 
-    <div class="w-full bg-[#171717] flex flex-col p-3 md:p-[40px] pt-[45px] md:pt-[80px]">
+    <div class="w-full bg-[#171717] flex flex-col p-2.5 md:p-[40px] pt-[35px] md:pt-[80px]">
         {#if children}
             {@render children()}
         {/if}
