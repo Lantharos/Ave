@@ -245,7 +245,7 @@
     }
 </script>
 
-<div class="flex flex-col gap-6 md:gap-[40px] w-full z-10 p-4 md:p-[60px] bg-[#111111]/60 rounded-[32px] md:rounded-[64px] backdrop-blur-[20px]">
+<div class="flex flex-col gap-4 md:gap-[40px] w-full z-10 p-3 md:p-[60px] bg-[#111111]/60 rounded-[24px] md:rounded-[64px] backdrop-blur-[20px]">
     {#if error}
         <div class="bg-red-600/20 border border-red-600 text-red-400 px-4 py-3 rounded-2xl">
             {error}

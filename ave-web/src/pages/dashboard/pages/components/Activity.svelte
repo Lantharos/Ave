@@ -57,15 +57,15 @@
 <div class="flex flex-row rounded-[20px] md:rounded-[24px] overflow-hidden">
     <div class="min-h-[80px] md:min-h-[100px] flex-grow max-h-full w-[8px] md:w-[20px] z-10" style="background-color: {getSeverityColor(entry.severity)};"></div>
     <div class="flex flex-col px-3 md:px-[20px] py-3 md:py-[15px] bg-[#171717] rounded-r-[20px] md:rounded-r-[24px] w-full gap-[3px]">
-        <Text type="p" size={20} weight="semibold" color="#FFFFFF">{formatAction(entry.action)}</Text>
-        <Text type="p" size={14} color="#878787">{formatDate(entry.createdAt)}</Text>
+        <Text type="p" size={20} mobileSize={16} weight="semibold" color="#FFFFFF">{formatAction(entry.action)}</Text>
+        <Text type="p" size={14} mobileSize={11} color="#878787">{formatDate(entry.createdAt)}</Text>
         {#if entry.ipAddress}
-            <Text type="p" size={14} color="#878787">IP: {entry.ipAddress}</Text>
+            <Text type="p" size={14} mobileSize={11} color="#878787">IP: {entry.ipAddress}</Text>
         {/if}
         {#if entry.details && Object.keys(entry.details).length > 0}
             <div class="mt-1 md:mt-[5px]">
                 {#each Object.entries(entry.details) as [key, value]}
-                    <Text type="p" size={12} color="#666666">{key}: {String(value)}</Text>
+                    <Text type="p" size={12} mobileSize={10} color="#666666">{key}: {String(value)}</Text>
                 {/each}
             </div>
         {/if}

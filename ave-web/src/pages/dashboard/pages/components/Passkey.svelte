@@ -21,8 +21,8 @@
 
 <div class="flex flex-col md:flex-row gap-2 md:gap-[10px] w-full">
     <div class="flex flex-col justify-center items-start px-4 md:px-[20px] py-3 md:py-[15px] bg-[#111111] rounded-[20px] md:rounded-[24px] flex-grow">
-        <Text type="h" size={20} color="#B9BBBE" weight="bold">{passkey.name || "Unnamed Passkey"}</Text>
-        <Text type="p" size={14} color="#666666">Added {formatDate(passkey.createdAt)}{passkey.lastUsedAt ? ` · Last used ${formatDate(passkey.lastUsedAt)}` : ""}</Text>
+        <Text type="h" size={20} mobileSize={16} color="#B9BBBE" weight="bold">{passkey.name || "Unnamed Passkey"}</Text>
+        <Text type="p" size={14} mobileSize={11} color="#666666">Added {formatDate(passkey.createdAt)}{passkey.lastUsedAt ? ` · Last used ${formatDate(passkey.lastUsedAt)}` : ""}</Text>
     </div>
     <button 
         aria-label="delete" 

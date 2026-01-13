@@ -64,9 +64,9 @@
     let selectedIdentity = $derived(identities.find(i => i.displayName === selectedPage));
 </script>
 
-<div class="bg-[#090909] relative w-full min-h-screen-fixed flex flex-col md:flex-row px-4 md:px-[120px] py-6 md:py-[100px] gap-6 md:gap-[100px]">
+<div class="bg-[#090909] relative w-full min-h-screen-fixed flex flex-col md:flex-row px-3 md:px-[120px] py-4 md:py-[100px] gap-4 md:gap-[100px]">
     <button 
-        class="mobile-menu-btn fixed top-4 right-4 z-50 p-2 bg-[#171717] rounded-full"
+        class="mobile-menu-btn fixed top-3 right-3 z-50 p-2 bg-[#171717] rounded-full"
         onclick={() => mobileSidebarOpen = !mobileSidebarOpen}
     >
         {#if mobileSidebarOpen}
@@ -81,9 +81,9 @@
     </button>
 
     {#if mobileSidebarOpen}
-        <div class="mobile-nav-overlay mobile-scroll-container py-12 px-6">
-            <div class="flex flex-col gap-4 w-full max-w-sm">
-                <Text type="hd" size={18} color="#878787">IDENTITIES</Text>
+        <div class="mobile-nav-overlay mobile-scroll-container py-10 px-4">
+            <div class="flex flex-col gap-2 w-full max-w-sm">
+                <Text type="hd" size={14} color="#878787">IDENTITIES</Text>
                 {#each identities as identity}
                     <SidebarButton 
                         text={identity.displayName} 
@@ -101,9 +101,9 @@
                     />
                 {/if}
                 
-                <div class="h-px bg-[#878787]/20 w-full my-2"></div>
+                <div class="h-px bg-[#878787]/20 w-full my-1"></div>
                 
-                <Text type="hd" size={18} color="#878787">ACCOUNT</Text>
+                <Text type="hd" size={14} color="#878787">ACCOUNT</Text>
                 {#if pendingApprovals > 0}
                     <div class="relative">
                         <SidebarButton 
@@ -121,7 +121,7 @@
                 <SidebarButton text="My Data" bind:currentlySelected={selectedPage} onclick={() => selectPage("My Data")} />
                 <SidebarButton text="Activity Log" bind:currentlySelected={selectedPage} onclick={() => selectPage("Activity Log")} />
                 
-                <div class="h-px bg-[#878787]/20 w-full my-2"></div>
+                <div class="h-px bg-[#878787]/20 w-full my-1"></div>
                 <SidebarButton text="Logout" bind:currentlySelected={selectedPage} onclick={handleLogout} />
             </div>
         </div>
@@ -172,7 +172,7 @@
         <SidebarButton text="Logout" bind:currentlySelected={selectedPage} onclick={handleLogout} />
     </div>
 
-    <div class="flex flex-col w-full md:w-[75%] z-10 mt-12 md:mt-0">
+    <div class="flex flex-col w-full md:w-[75%] z-10 mt-10 md:mt-0">
         {#if selectedIdentity}
             <Identity identity={selectedIdentity} />
         {:else if selectedPage === "New Identity"}

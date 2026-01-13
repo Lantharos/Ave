@@ -36,13 +36,13 @@
                 <img src="/icons/devices/laptop-75.svg" alt="device icon" class="mb-2 md:mb-[10px]" />
             {/if}
         </div>
-        <Text type="h" size={20} weight="bold" color="#FFFFFF" cclass="text-center">{device.name}</Text>
+        <Text type="h" size={20} mobileSize={16} weight="bold" color="#FFFFFF" cclass="text-center">{device.name}</Text>
         {#if device.browser && device.os}
-            <Text type="p" size={16} color="#B9BBBE" cclass="text-center">{device.browser} on {device.os}</Text>
+            <Text type="p" size={16} mobileSize={13} color="#B9BBBE" cclass="text-center">{device.browser} on {device.os}</Text>
         {:else if device.os}
-            <Text type="p" size={16} color="#B9BBBE" cclass="text-center">{device.os}</Text>
+            <Text type="p" size={16} mobileSize={13} color="#B9BBBE" cclass="text-center">{device.os}</Text>
         {/if}
-        <Text type="p" size={14} color="#666666" cclass="text-center">Last seen: {formatLastSeen(device.lastSeenAt)}</Text>
+        <Text type="p" size={14} mobileSize={11} color="#666666" cclass="text-center">Last seen: {formatLastSeen(device.lastSeenAt)}</Text>
     </div>
     <button 
         class="w-full max-h-full rounded-full bg-[#171717] hover:bg-[#202020] transition-colors duration-300 cursor-pointer flex items-center justify-center px-4 md:px-[20px] py-2 md:py-[10px] disabled:opacity-50 disabled:cursor-not-allowed"
@@ -50,7 +50,7 @@
         disabled={device.isCurrent || revoking}
     >
         {#if device.isCurrent}
-            <Text type="hd" size={16} color="#32A94C" cclass="my-2 md:my-[10px]">THIS DEVICE</Text>
+            <Text type="hd" size={16} mobileSize={12} color="#32A94C" cclass="my-2 md:my-[10px]">THIS DEVICE</Text>
         {:else if revoking}
             <div class="w-[20px] h-[20px] border-2 border-[#FFFFFF] border-t-transparent rounded-full animate-spin my-2 md:my-[10px]"></div>
         {:else}

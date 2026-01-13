@@ -156,25 +156,25 @@
     });
 </script>
 
-<div class="flex flex-col gap-6 md:gap-[40px] w-full z-10 px-4 md:px-[60px] py-6 md:py-[40px] bg-[#111111]/60 rounded-[32px] md:rounded-[64px] backdrop-blur-[20px]">
-    <div class="flex flex-col gap-2 md:gap-[10px]">
-        <Text type="h" size={48} weight="bold">Security</Text>
-        <Text type="p" size={20}>Protect your Ave ID and the devices that can access it.</Text>
+<div class="flex flex-col gap-4 md:gap-[40px] w-full z-10 px-3 md:px-[60px] py-4 md:py-[40px] bg-[#111111]/60 rounded-[24px] md:rounded-[64px] backdrop-blur-[20px]">
+    <div class="flex flex-col gap-1 md:gap-[10px]">
+        <Text type="h" size={48} mobileSize={28} weight="bold">Security</Text>
+        <Text type="p" size={20} mobileSize={14}>Protect your Ave ID and the devices that can access it.</Text>
     </div>
 
     {#if error}
-        <div class="bg-[#E14747]/20 border border-[#E14747] rounded-[16px] px-4 md:px-[20px] py-3 md:py-[15px]">
-            <Text type="p" size={16} color="#E14747">{error}</Text>
+        <div class="bg-[#E14747]/20 border border-[#E14747] rounded-[16px] px-3 md:px-[20px] py-2 md:py-[15px]">
+            <Text type="p" size={16} mobileSize={13} color="#E14747">{error}</Text>
         </div>
     {/if}
 
     <div class="flex flex-col gap-2 md:gap-[10px]">
-        <div class="flex flex-col flex-grow bg-[#171717] p-4 md:p-[40px] rounded-[24px] md:rounded-[36px]">
-            <Text type="h" size={24} weight="bold">Passkeys</Text>
-            <p class="text-[#878787] text-base md:text-[18px]">Passkeys are unique, highly secure tokens that provide quick and convenient access to your account or services. They act as a trusted key to unlock your account, often used in scenarios such as account recovery or emergency access.</p>
-            <div class="flex flex-col gap-2 md:gap-[10px] mt-4 md:mt-[20px]">
+        <div class="flex flex-col flex-grow bg-[#171717] p-3 md:p-[40px] rounded-[20px] md:rounded-[36px]">
+            <Text type="h" size={24} mobileSize={18} weight="bold">Passkeys</Text>
+            <p class="text-[#878787] text-sm md:text-[18px]">Passkeys are unique, highly secure tokens that provide quick and convenient access to your account or services. They act as a trusted key to unlock your account, often used in scenarios such as account recovery or emergency access.</p>
+            <div class="flex flex-col gap-2 md:gap-[10px] mt-3 md:mt-[20px]">
                 {#if loading}
-                    <div class="flex justify-center py-4 md:py-[20px]">
+                    <div class="flex justify-center py-3 md:py-[20px]">
                         <div class="w-[32px] h-[32px] border-2 border-[#FFFFFF] border-t-transparent rounded-full animate-spin"></div>
                     </div>
                 {:else if passkeys.length === 0}

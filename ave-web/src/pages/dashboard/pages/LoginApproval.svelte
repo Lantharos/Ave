@@ -90,10 +90,10 @@
     }
 </script>
 
-<div class="flex flex-col gap-4 md:gap-[30px]">
-    <div class="flex flex-col gap-2 md:gap-[10px]">
-        <Text type="hd" size={36}>LOGIN REQUESTS</Text>
-        <Text type="p" size={18}>
+<div class="flex flex-col gap-3 md:gap-[30px]">
+    <div class="flex flex-col gap-1 md:gap-[10px]">
+        <Text type="hd" size={36} mobileSize={22}>LOGIN REQUESTS</Text>
+        <Text type="p" size={18} mobileSize={13}>
             These devices are trying to log in to your account. Only approve requests you initiated.
         </Text>
     </div>
