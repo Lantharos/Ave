@@ -51,11 +51,44 @@
 
         return () => observer.disconnect();
     });
+
+    let mobileSidebarOpen = $state(false);
 </script>
 
-<div class="bg-[#090909] w-full min-h-screen flex flex-row">
-    <!-- Sidebar Navigation -->
-    <nav class="w-[300px] h-screen-fixed sticky top-0 border-r border-[#161616] bg-[#090909] flex flex-col">
+<div class="bg-[#090909] w-full min-h-screen flex flex-col md:flex-row">
+    <button 
+        class="mobile-menu-btn fixed top-4 right-4 z-50 p-2 bg-[#171717] rounded-full"
+        onclick={() => mobileSidebarOpen = !mobileSidebarOpen}
+    >
+        {#if mobileSidebarOpen}
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#B9BBBE" stroke-width="2">
+                <path d="M18 6L6 18M6 6l12 12"/>
+            </svg>
+        {:else}
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#B9BBBE" stroke-width="2">
+                <path d="M3 12h18M3 6h18M3 18h18"/>
+            </svg>
+        {/if}
+    </button>
+
+    {#if mobileSidebarOpen}
+        <div class="mobile-nav-overlay mobile-scroll-container py-12 px-6">
+            <div class="flex flex-col gap-4 w-full max-w-sm">
+                <a href="/" use:route class="text-white text-xl font-bold mb-4">← Back to Ave</a>
+                <p class="text-[#555555] text-xs font-bold tracking-widest">OAUTH INTEGRATION</p>
+                {#each sections as section}
+                    <button 
+                        class="text-left py-2 text-base {activeSection === section.id ? 'text-white font-medium' : 'text-[#777777]'}"
+                        onclick={() => { scrollToSection(section.id); mobileSidebarOpen = false; }}
+                    >
+                        {section.title}
+                    </button>
+                {/each}
+            </div>
+        </div>
+    {/if}
+
+    <nav class="hidden md:flex w-[300px] h-screen-fixed sticky top-0 border-r border-[#161616] bg-[#090909] flex-col desktop-nav">
         <div class="p-[30px] border-b border-[#161616]">
             <a href="/" use:route class="flex items-center gap-[12px]">
                 <Text type="h" size={26} weight="bold" color="#FFFFFF">Ave</Text>
@@ -88,17 +121,16 @@
         </div>
     </nav>
 
-    <!-- Main Content -->
     <main bind:this={mainContent} class="flex-1 overflow-y-auto">
-        <div class="max-w-[1000px] mx-auto px-[60px] py-[80px]">
-            <div class="mb-[80px]">
-                <Text type="h" size={56} weight="bold">OAuth Integration</Text>
-                <p class="text-[#777777] text-[20px] mt-[16px] leading-[1.6]">
+        <div class="max-w-[1000px] mx-auto px-6 md:px-[60px] py-12 md:py-[80px]">
+            <div class="mb-12 md:mb-[80px] mt-8 md:mt-0">
+                <h1 class="font-bold text-white text-3xl md:text-[56px]">OAuth Integration</h1>
+                <p class="text-[#777777] text-base md:text-[20px] mt-4 md:mt-[16px] leading-relaxed">
                     Let users sign in with their Ave identity. Secure, privacy-focused, and optionally end-to-end encrypted.
                 </p>
             </div>
 
-            <div class="flex flex-col gap-[80px]">
+            <div class="flex flex-col gap-12 md:gap-[80px]">
                 <DocSec title="Overview" id="overview">
                     <div class="p-[24px] bg-[#111118] border border-[#252535] rounded-[12px] mb-[30px]">
                         <div class="flex items-center gap-[10px] mb-[10px]">

@@ -15,23 +15,20 @@
 
     let selectedPage = $state<string>("");
     let pendingApprovals = $state(0);
+    let mobileSidebarOpen = $state(false);
 
-    // Get identities from store
     let identities = $derived($identitiesStore);
 
     onMount(async () => {
-        // Check if authenticated
         if (!$isAuthenticated) {
             goto("/login");
             return;
         }
 
-        // Set default selected page
         if (identities.length > 0) {
             selectedPage = identities[0].displayName;
         }
 
-        // Check for pending login requests
         try {
             const { requests } = await api.devices.getPendingRequests();
             pendingApprovals = requests.length;
@@ -39,7 +36,6 @@
             console.error("Failed to fetch pending requests:", e);
         }
 
-        // Listen for new login requests
         websocket.onLoginRequest((request) => {
             pendingApprovals++;
         });
@@ -51,20 +47,87 @@
     }
 
     async function handleNewIdentity() {
-        // Could open a modal or navigate to a new identity form
         selectedPage = "New Identity";
+        mobileSidebarOpen = false;
     }
 
     function selectIdentity(identity: IdentityType) {
         selectedPage = identity.displayName;
+        mobileSidebarOpen = false;
     }
 
-    // Find selected identity
+    function selectPage(page: string) {
+        selectedPage = page;
+        mobileSidebarOpen = false;
+    }
+
     let selectedIdentity = $derived(identities.find(i => i.displayName === selectedPage));
 </script>
 
-<div class="bg-[#090909] relative w-full min-h-screen-fixed flex flex-row px-[120px] py-[100px] gap-[100px]">
-    <div class="flex flex-col gap-[40px] w-[20%] z-10">
+<div class="bg-[#090909] relative w-full min-h-screen-fixed flex flex-col md:flex-row px-4 md:px-[120px] py-6 md:py-[100px] gap-6 md:gap-[100px]">
+    <button 
+        class="mobile-menu-btn fixed top-4 right-4 z-50 p-2 bg-[#171717] rounded-full"
+        onclick={() => mobileSidebarOpen = !mobileSidebarOpen}
+    >
+        {#if mobileSidebarOpen}
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#B9BBBE" stroke-width="2">
+                <path d="M18 6L6 18M6 6l12 12"/>
+            </svg>
+        {:else}
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#B9BBBE" stroke-width="2">
+                <path d="M3 12h18M3 6h18M3 18h18"/>
+            </svg>
+        {/if}
+    </button>
+
+    {#if mobileSidebarOpen}
+        <div class="mobile-nav-overlay mobile-scroll-container py-12 px-6">
+            <div class="flex flex-col gap-4 w-full max-w-sm">
+                <Text type="hd" size={18} color="#878787">IDENTITIES</Text>
+                {#each identities as identity}
+                    <SidebarButton 
+                        text={identity.displayName} 
+                        bind:currentlySelected={selectedPage} 
+                        onclick={() => selectIdentity(identity)} 
+                        image={identity.avatarUrl || "/placeholder.png"} 
+                    />
+                {/each}
+                {#if identities.length < 5}
+                    <SidebarButton 
+                        text="New Identity" 
+                        bind:currentlySelected={selectedPage} 
+                        onclick={handleNewIdentity} 
+                        image="/icons/plus.svg" 
+                    />
+                {/if}
+                
+                <div class="h-px bg-[#878787]/20 w-full my-2"></div>
+                
+                <Text type="hd" size={18} color="#878787">ACCOUNT</Text>
+                {#if pendingApprovals > 0}
+                    <div class="relative">
+                        <SidebarButton 
+                            text="Login Requests" 
+                            bind:currentlySelected={selectedPage} 
+                            onclick={() => selectPage("Login Requests")} 
+                        />
+                        <span class="absolute -top-1 -right-1 bg-red-500 text-white text-xs w-5 h-5 rounded-full flex items-center justify-center">
+                            {pendingApprovals}
+                        </span>
+                    </div>
+                {/if}
+                <SidebarButton text="Security" bind:currentlySelected={selectedPage} onclick={() => selectPage("Security")} />
+                <SidebarButton text="Devices" bind:currentlySelected={selectedPage} onclick={() => selectPage("Devices")} />
+                <SidebarButton text="My Data" bind:currentlySelected={selectedPage} onclick={() => selectPage("My Data")} />
+                <SidebarButton text="Activity Log" bind:currentlySelected={selectedPage} onclick={() => selectPage("Activity Log")} />
+                
+                <div class="h-px bg-[#878787]/20 w-full my-2"></div>
+                <SidebarButton text="Logout" bind:currentlySelected={selectedPage} onclick={handleLogout} />
+            </div>
+        </div>
+    {/if}
+
+    <div class="hidden md:flex flex-col gap-[40px] w-[20%] z-10 desktop-nav">
         <div class="flex flex-col gap-[10px]">
             <Text type="hd" size={24} color="#878787">IDENTITIES</Text>
             {#each identities as identity}
@@ -109,7 +172,7 @@
         <SidebarButton text="Logout" bind:currentlySelected={selectedPage} onclick={handleLogout} />
     </div>
 
-    <div class="flex flex-col w-[75%] z-10">
+    <div class="flex flex-col w-full md:w-[75%] z-10 mt-12 md:mt-0">
         {#if selectedIdentity}
             <Identity identity={selectedIdentity} />
         {:else if selectedPage === "New Identity"}

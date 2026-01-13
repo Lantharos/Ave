@@ -245,7 +245,7 @@
     }
 </script>
 
-<div class="flex flex-col gap-[40px] w-full z-10 p-[60px] bg-[#111111]/60 rounded-[64px] backdrop-blur-[20px]">
+<div class="flex flex-col gap-6 md:gap-[40px] w-full z-10 p-4 md:p-[60px] bg-[#111111]/60 rounded-[32px] md:rounded-[64px] backdrop-blur-[20px]">
     {#if error}
         <div class="bg-red-600/20 border border-red-600 text-red-400 px-4 py-3 rounded-2xl">
             {error}
@@ -267,42 +267,42 @@
             onUploadAvatar={handleAvatarUpload} 
             onChangeBanner={handleBannerChange}
         >
-            <div class="flex flex-col gap-[10px]">
-                <div class="p-[30px] bg-[#111111] rounded-[32px]">
+            <div class="flex flex-col gap-2 md:gap-[10px]">
+                <div class="p-4 md:p-[30px] bg-[#111111] rounded-[24px] md:rounded-[32px]">
                     <Text type="hd" size={16} color="#878787">NAME *</Text>
                     <input 
                         type="text" 
-                        class="w-full bg-transparent border-b border-[#333333] mt-[10px] pb-[5px] text-white focus:outline-none" 
+                        class="w-full bg-transparent border-b border-[#333333] mt-2 md:mt-[10px] pb-[5px] text-white focus:outline-none" 
                         placeholder="Enter your name"
                         bind:value={displayName}
                         autocomplete="off"
                     />
                 </div>
-                <div class="p-[30px] bg-[#111111] rounded-[32px]">
+                <div class="p-4 md:p-[30px] bg-[#111111] rounded-[24px] md:rounded-[32px]">
                     <Text type="hd" size={16} color="#878787">HANDLE *</Text>
                     <input 
                         type="text" 
-                        class="w-full bg-transparent border-b border-[#333333] mt-[10px] pb-[5px] text-white focus:outline-none" 
+                        class="w-full bg-transparent border-b border-[#333333] mt-2 md:mt-[10px] pb-[5px] text-white focus:outline-none" 
                         placeholder="Enter your handle"
                         bind:value={handle}
                         autocomplete="off"
                     />
                 </div>
-                <div class="p-[30px] bg-[#111111] rounded-[32px]">
+                <div class="p-4 md:p-[30px] bg-[#111111] rounded-[24px] md:rounded-[32px]">
                     <Text type="hd" size={16} color="#878787">EMAIL</Text>
                     <input 
                         type="email" 
-                        class="w-full bg-transparent border-b border-[#333333] mt-[10px] pb-[5px] text-white focus:outline-none" 
+                        class="w-full bg-transparent border-b border-[#333333] mt-2 md:mt-[10px] pb-[5px] text-white focus:outline-none" 
                         placeholder="Enter your email"
                         bind:value={email}
                         autocomplete="off"
                     />
                 </div>
-                <div class="p-[30px] bg-[#111111] rounded-[32px]">
+                <div class="p-4 md:p-[30px] bg-[#111111] rounded-[24px] md:rounded-[32px]">
                     <Text type="hd" size={16} color="#878787">BIRTHDAY</Text>
                     <input 
                         type="date" 
-                        class="w-full bg-transparent border-b border-[#333333] mt-[10px] pb-[5px] text-white focus:outline-none"
+                        class="w-full bg-transparent border-b border-[#333333] mt-2 md:mt-[10px] pb-[5px] text-white focus:outline-none"
                         bind:value={birthday}
                         autocomplete="off"
                     />
@@ -325,16 +325,16 @@
             onUploadAvatar={handleAvatarUpload} 
             onChangeBanner={handleBannerChange}
         >
-            <div class="flex flex-col gap-[10px]">
+            <div class="flex flex-col gap-2 md:gap-[10px]">
                 <!-- Name Field -->
-                <div class="flex flex-row gap-[10px]">
-                    <div class="p-[30px] bg-[#111111] rounded-[32px] w-full flex flex-col justify-center">
+                <div class="flex flex-col md:flex-row gap-2 md:gap-[10px]">
+                    <div class="p-4 md:p-[30px] bg-[#111111] rounded-[24px] md:rounded-[32px] w-full flex flex-col justify-center">
                         <Text type="hd" size={16} color="#878787">NAME</Text>
                         {#if editing.displayName}
-                            <div class="flex gap-3 items-center mt-[10px]">
+                            <div class="flex flex-col md:flex-row gap-3 items-stretch md:items-center mt-2 md:mt-[10px]">
                                 <input 
                                     type="text" 
-                                    class="flex-1 bg-transparent border-b border-[#333333] pb-[8px] text-white text-[24px] focus:outline-none" 
+                                    class="flex-1 bg-transparent border-b border-[#333333] pb-[8px] text-white text-lg md:text-[24px] focus:outline-none" 
                                     bind:value={displayName}
                                     autocomplete="off"
                                 />
@@ -353,7 +353,7 @@
 
                     <button 
                         onclick={() => { editing.displayName = !editing.displayName }} 
-                        class="aspect-square flex-grow h-full p-[40px] bg-[#111111] hover:bg-[#202020] transition-colors duration-300 cursor-pointer rounded-[32px] flex items-center justify-center" 
+                        class="w-full md:w-auto md:aspect-square flex-grow h-14 md:h-full p-4 md:p-[40px] bg-[#111111] hover:bg-[#202020] transition-colors duration-300 cursor-pointer rounded-[24px] md:rounded-[32px] flex items-center justify-center" 
                         aria-label="edit name"
                     >
                         {@html editIcon}
@@ -361,14 +361,14 @@
                 </div>
 
                 <!-- Handle Field -->
-                <div class="flex flex-row gap-[10px]">
-                    <div class="p-[30px] bg-[#111111] rounded-[32px] w-full flex flex-col justify-center">
+                <div class="flex flex-col md:flex-row gap-2 md:gap-[10px]">
+                    <div class="p-4 md:p-[30px] bg-[#111111] rounded-[24px] md:rounded-[32px] w-full flex flex-col justify-center">
                         <Text type="hd" size={16} color="#878787">HANDLE</Text>
                         {#if editing.handle}
-                            <div class="flex gap-3 items-center mt-[10px]">
+                            <div class="flex flex-col md:flex-row gap-3 items-stretch md:items-center mt-2 md:mt-[10px]">
                                 <input 
                                     type="text" 
-                                    class="flex-1 bg-transparent border-b border-[#333333] pb-[8px] text-white text-[24px] focus:outline-none" 
+                                    class="flex-1 bg-transparent border-b border-[#333333] pb-[8px] text-white text-lg md:text-[24px] focus:outline-none" 
                                     bind:value={handle}
                                     autocomplete="off"
                                 />
@@ -387,7 +387,7 @@
 
                     <button 
                         onclick={() => { editing.handle = !editing.handle }} 
-                        class="aspect-square flex-grow h-full p-[40px] bg-[#111111] hover:bg-[#202020] transition-colors duration-300 cursor-pointer rounded-[32px] flex items-center justify-center" 
+                        class="w-full md:w-auto md:aspect-square flex-grow h-14 md:h-full p-4 md:p-[40px] bg-[#111111] hover:bg-[#202020] transition-colors duration-300 cursor-pointer rounded-[24px] md:rounded-[32px] flex items-center justify-center" 
                         aria-label="edit handle"
                     >
                         {@html editIcon}
@@ -395,14 +395,14 @@
                 </div>
 
                 <!-- Email Field -->
-                <div class="flex flex-row gap-[10px]">
-                    <div class="p-[30px] bg-[#111111] rounded-[32px] w-full flex flex-col justify-center">
+                <div class="flex flex-col md:flex-row gap-2 md:gap-[10px]">
+                    <div class="p-4 md:p-[30px] bg-[#111111] rounded-[24px] md:rounded-[32px] w-full flex flex-col justify-center">
                         <Text type="hd" size={16} color="#878787">EMAIL</Text>
                         {#if editing.email}
-                            <div class="flex gap-3 items-center mt-[10px]">
+                            <div class="flex flex-col md:flex-row gap-3 items-stretch md:items-center mt-2 md:mt-[10px]">
                                 <input 
                                     type="email" 
-                                    class="flex-1 bg-transparent border-b border-[#333333] pb-[8px] text-white text-[24px] focus:outline-none" 
+                                    class="flex-1 bg-transparent border-b border-[#333333] pb-[8px] text-white text-lg md:text-[24px] focus:outline-none" 
                                     bind:value={email}
                                     placeholder="Enter email"
                                     autocomplete="off"
@@ -422,7 +422,7 @@
 
                     <button 
                         onclick={() => { editing.email = !editing.email }} 
-                        class="aspect-square flex-grow h-full p-[40px] bg-[#111111] hover:bg-[#202020] transition-colors duration-300 cursor-pointer rounded-[32px] flex items-center justify-center" 
+                        class="w-full md:w-auto md:aspect-square flex-grow h-14 md:h-full p-4 md:p-[40px] bg-[#111111] hover:bg-[#202020] transition-colors duration-300 cursor-pointer rounded-[24px] md:rounded-[32px] flex items-center justify-center" 
                         aria-label="edit email"
                     >
                         {@html editIcon}
@@ -430,14 +430,14 @@
                 </div>
 
                 <!-- Birthday Field -->
-                <div class="flex flex-row gap-[10px]">
-                    <div class="p-[30px] bg-[#111111] rounded-[32px] w-full flex flex-col justify-center">
+                <div class="flex flex-col md:flex-row gap-2 md:gap-[10px]">
+                    <div class="p-4 md:p-[30px] bg-[#111111] rounded-[24px] md:rounded-[32px] w-full flex flex-col justify-center">
                         <Text type="hd" size={16} color="#878787">BIRTHDAY</Text>
                         {#if editing.birthday}
-                            <div class="flex gap-3 items-center mt-[10px]">
+                            <div class="flex flex-col md:flex-row gap-3 items-stretch md:items-center mt-2 md:mt-[10px]">
                                 <input 
                                     type="date" 
-                                    class="flex-1 bg-transparent border-b border-[#333333] pb-[8px] text-white text-[24px] focus:outline-none" 
+                                    class="flex-1 bg-transparent border-b border-[#333333] pb-[8px] text-white text-lg md:text-[24px] focus:outline-none" 
                                     bind:value={birthday}
                                     autocomplete="off"
                                 />
@@ -456,7 +456,7 @@
 
                     <button 
                         onclick={() => { editing.birthday = !editing.birthday }} 
-                        class="aspect-square flex-grow h-full p-[40px] bg-[#111111] hover:bg-[#202020] transition-colors duration-300 cursor-pointer rounded-[32px] flex items-center justify-center" 
+                        class="w-full md:w-auto md:aspect-square flex-grow h-14 md:h-full p-4 md:p-[40px] bg-[#111111] hover:bg-[#202020] transition-colors duration-300 cursor-pointer rounded-[24px] md:rounded-[32px] flex items-center justify-center" 
                         aria-label="edit birthday"
                     >
                         {@html editIcon}
@@ -468,19 +468,19 @@
         <!-- Delete Identity Section -->
         {#if !identity.isPrimary}
             {#if showDeleteConfirm}
-                <div class="p-[30px] bg-[#111111] rounded-[32px] flex flex-col gap-[15px]">
+                <div class="p-4 md:p-[30px] bg-[#111111] rounded-[24px] md:rounded-[32px] flex flex-col gap-3 md:gap-[15px]">
                     <Text type="h" size={18} color="#E14747">Delete this identity?</Text>
-                    <p class="text-[#878787] text-[14px]">This action cannot be undone. All data associated with this identity will be permanently removed.</p>
-                    <div class="flex gap-[10px] mt-[10px]">
+                    <p class="text-[#878787] text-sm md:text-[14px]">This action cannot be undone. All data associated with this identity will be permanently removed.</p>
+                    <div class="flex gap-2 md:gap-[10px] mt-2 md:mt-[10px]">
                         <button 
-                            class="flex-1 py-[15px] bg-[#E14747] hover:bg-[#C73E3E] text-white rounded-[16px] text-[14px] font-semibold transition-colors"
+                            class="flex-1 py-3 md:py-[15px] bg-[#E14747] hover:bg-[#C73E3E] text-white rounded-[16px] text-[14px] font-semibold transition-colors"
                             onclick={deleteIdentity}
                             disabled={isDeleting}
                         >
                             {isDeleting ? "Deleting..." : "Delete"}
                         </button>
                         <button 
-                            class="flex-1 py-[15px] bg-[#222222] hover:bg-[#333333] text-white rounded-[16px] text-[14px] font-semibold transition-colors"
+                            class="flex-1 py-3 md:py-[15px] bg-[#222222] hover:bg-[#333333] text-white rounded-[16px] text-[14px] font-semibold transition-colors"
                             onclick={() => showDeleteConfirm = false}
                             disabled={isDeleting}
                         >
@@ -490,10 +490,10 @@
                 </div>
             {:else}
                 <button 
-                    class="w-full p-[30px] bg-[#111111] hover:bg-[#1a1a1a] rounded-[32px] text-[#878787] hover:text-[#E14747] transition-colors flex items-center justify-between group"
+                    class="w-full p-4 md:p-[30px] bg-[#111111] hover:bg-[#1a1a1a] rounded-[24px] md:rounded-[32px] text-[#878787] hover:text-[#E14747] transition-colors flex items-center justify-between group"
                     onclick={() => showDeleteConfirm = true}
                 >
-                    <div class="flex items-center gap-[15px]">
+                    <div class="flex items-center gap-3 md:gap-[15px]">
                         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" class="opacity-60 group-hover:opacity-100 transition-opacity">
                             <path d="M3 6H5H21" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
                             <path d="M8 6V4C8 3.46957 8.21071 2.96086 8.58579 2.58579C8.96086 2.21071 9.46957 2 10 2H14C14.5304 2 15.0391 2.21071 15.4142 2.58579C15.7893 2.96086 16 3.46957 16 4V6M19 6V20C19 20.5304 18.7893 21.0391 18.4142 21.4142C18.0391 21.7893 17.5304 22 17 22H7C6.46957 22 5.96086 21.7893 5.58579 21.4142C5.21071 21.0391 5 20.5304 5 20V6H19Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>

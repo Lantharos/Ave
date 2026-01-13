@@ -156,29 +156,29 @@
     });
 </script>
 
-<div class="flex flex-col gap-[40px] w-full z-10 px-[60px] py-[40px] bg-[#111111]/60 rounded-[64px] backdrop-blur-[20px]">
-    <div class="flex flex-col gap-[10px]">
+<div class="flex flex-col gap-6 md:gap-[40px] w-full z-10 px-4 md:px-[60px] py-6 md:py-[40px] bg-[#111111]/60 rounded-[32px] md:rounded-[64px] backdrop-blur-[20px]">
+    <div class="flex flex-col gap-2 md:gap-[10px]">
         <Text type="h" size={48} weight="bold">Security</Text>
         <Text type="p" size={20}>Protect your Ave ID and the devices that can access it.</Text>
     </div>
 
     {#if error}
-        <div class="bg-[#E14747]/20 border border-[#E14747] rounded-[16px] px-[20px] py-[15px]">
+        <div class="bg-[#E14747]/20 border border-[#E14747] rounded-[16px] px-4 md:px-[20px] py-3 md:py-[15px]">
             <Text type="p" size={16} color="#E14747">{error}</Text>
         </div>
     {/if}
 
-    <div class="flex flex-col gap-[10px]">
-        <div class="flex flex-col flex-grow bg-[#171717] p-[40px] rounded-[36px]">
+    <div class="flex flex-col gap-2 md:gap-[10px]">
+        <div class="flex flex-col flex-grow bg-[#171717] p-4 md:p-[40px] rounded-[24px] md:rounded-[36px]">
             <Text type="h" size={24} weight="bold">Passkeys</Text>
-            <p class="text-[#878787] text-[18px]">Passkeys are unique, highly secure tokens that provide quick and convenient access to your account or services. They act as a trusted key to unlock your account, often used in scenarios such as account recovery or emergency access.</p>
-            <div class="flex flex-col gap-[10px] mt-[20px]">
+            <p class="text-[#878787] text-base md:text-[18px]">Passkeys are unique, highly secure tokens that provide quick and convenient access to your account or services. They act as a trusted key to unlock your account, often used in scenarios such as account recovery or emergency access.</p>
+            <div class="flex flex-col gap-2 md:gap-[10px] mt-4 md:mt-[20px]">
                 {#if loading}
-                    <div class="flex justify-center py-[20px]">
+                    <div class="flex justify-center py-4 md:py-[20px]">
                         <div class="w-[32px] h-[32px] border-2 border-[#FFFFFF] border-t-transparent rounded-full animate-spin"></div>
                     </div>
                 {:else if passkeys.length === 0}
-                    <div class="text-center py-[20px]">
+                    <div class="text-center py-4 md:py-[20px]">
                         <Text type="p" size={16} color="#666666">No passkeys registered yet.</Text>
                     </div>
                 {:else}
@@ -213,7 +213,7 @@
        { icon: "/icons/pencil-56.svg", color: "#FFFFFF", onClick: () => {} },
     ]}/>
 
-    <div class="flex flex-col gap-[10px]">
+    <div class="flex flex-col gap-2 md:gap-[10px]">
         <ActionCard 
             action="TRUST CODES" 
             description="Trust codes can be used to recover your account. You have {trustCodesRemaining} code(s)." 
@@ -230,23 +230,23 @@
 </div>
 
 {#if showNewCodes}
-    <div class="fixed inset-0 bg-black/80 flex items-center justify-center z-50 backdrop-blur-sm">
-        <div class="bg-[#171717] rounded-[36px] p-[40px] max-w-[500px] w-full mx-[20px]">
+    <div class="fixed inset-0 bg-black/80 flex items-center justify-center z-50 backdrop-blur-sm p-4">
+        <div class="bg-[#171717] rounded-[24px] md:rounded-[36px] p-6 md:p-[40px] max-w-[500px] w-full">
             <Text type="h" size={24} weight="bold">New Trust Codes</Text>
-            <p class="text-[#878787] text-[16px] mt-[10px]">
+            <p class="text-[#878787] text-sm md:text-[16px] mt-2 md:mt-[10px]">
                 Save these codes in a secure place. They will not be shown again.
             </p>
             
-            <div class="flex flex-col gap-[10px] mt-[20px]">
+            <div class="flex flex-col gap-2 md:gap-[10px] mt-4 md:mt-[20px]">
                 {#each newCodes as code}
-                    <div class="bg-[#111111] rounded-[16px] px-[20px] py-[15px] font-mono text-center">
+                    <div class="bg-[#111111] rounded-[16px] px-4 md:px-[20px] py-3 md:py-[15px] font-mono text-center">
                         <Text type="p" size={18} color="#FFFFFF">{code}</Text>
                     </div>
                 {/each}
             </div>
 
             <button 
-                class="w-full mt-[30px] bg-[#FFFFFF] text-[#000000] font-semibold py-[15px] rounded-[16px] hover:bg-[#E0E0E0] transition-colors"
+                class="w-full mt-6 md:mt-[30px] bg-[#FFFFFF] text-[#000000] font-semibold py-3 md:py-[15px] rounded-[16px] hover:bg-[#E0E0E0] transition-colors"
                 onclick={() => { showNewCodes = false; newCodes = []; }}
             >
                 I've saved these codes

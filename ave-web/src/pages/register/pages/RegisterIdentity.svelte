@@ -114,9 +114,9 @@
     );
 </script>
 
-<div class="w-full min-h-screen-fixed flex flex-col items-center justify-center px-[150px] py-[150px] gap-[150px] overflow-auto scroll-smooth">
-   <div class="flex flex-col items-center justify-center gap-[10px] w-[50%] z-10">
-       <Text type={"hd"} size={36} cclass="self-center">
+<div class="w-full min-h-screen-fixed flex flex-col items-center justify-center px-6 md:px-[150px] py-12 md:py-[150px] gap-8 md:gap-[150px] overflow-auto scroll-smooth">
+   <div class="flex flex-col items-center justify-center gap-4 md:gap-[10px] w-full md:w-[50%] z-10">
+       <Text type={"hd"} size={36} cclass="self-center text-2xl md:text-[36px]">
            WHO ARE YOU?
        </Text>
 
@@ -127,18 +127,18 @@
             onUploadAvatar={handleAvatarUpload} 
             onChangeBanner={handleBannerChange}
         >
-            <div class="flex flex-col gap-[10px]">
-                <div class="p-[30px] bg-[#111111] rounded-[32px]">
+            <div class="flex flex-col gap-2 md:gap-[10px]">
+                <div class="p-5 md:p-[30px] bg-[#111111] rounded-[24px] md:rounded-[32px]">
                     <Text type="hd" size={16} color="#878787">NAME *</Text>
                     <input 
                         type="text" 
-                        class="w-full bg-transparent border-b border-[#333333] mt-[10px] pb-[5px] text-white focus:outline-none" 
+                        class="w-full bg-transparent border-b border-[#333333] mt-2 md:mt-[10px] pb-[5px] text-white focus:outline-none text-base md:text-inherit" 
                         placeholder="Enter your name"
                         bind:value={displayName}
                         maxlength={64}
                     />
                 </div>
-                <div class="p-[30px] bg-[#111111] rounded-[32px]">
+                <div class="p-5 md:p-[30px] bg-[#111111] rounded-[24px] md:rounded-[32px]">
                     <div class="flex items-center justify-between">
                         <Text type="hd" size={16} color="#878787">HANDLE *</Text>
                         {#if isCheckingHandle}
@@ -149,7 +149,7 @@
                     </div>
                     <input 
                         type="text" 
-                        class="w-full bg-transparent border-b mt-[10px] pb-[5px] text-white focus:outline-none {handleError ? 'border-red-500' : 'border-[#333333]'}" 
+                        class="w-full bg-transparent border-b mt-2 md:mt-[10px] pb-[5px] text-white focus:outline-none text-base md:text-inherit {handleError ? 'border-red-500' : 'border-[#333333]'}" 
                         placeholder="Enter your handle"
                         value={handle}
                         oninput={onHandleChange}
@@ -158,23 +158,23 @@
                     {#if handleError}
                         <p class="text-red-500 text-sm mt-1">{handleError}</p>
                     {:else}
-                        <p class="text-[#555] text-sm mt-1">Letters, numbers, and underscores only</p>
+                        <p class="text-[#555] text-xs md:text-sm mt-1">Letters, numbers, and underscores only</p>
                     {/if}
                 </div>
-                <div class="p-[30px] bg-[#111111] rounded-[32px]">
+                <div class="p-5 md:p-[30px] bg-[#111111] rounded-[24px] md:rounded-[32px]">
                     <Text type="hd" size={16} color="#878787">EMAIL</Text>
                     <input 
                         type="email" 
-                        class="w-full bg-transparent border-b border-[#333333] mt-[10px] pb-[5px] text-white focus:outline-none" 
+                        class="w-full bg-transparent border-b border-[#333333] mt-2 md:mt-[10px] pb-[5px] text-white focus:outline-none text-base md:text-inherit" 
                         placeholder="Enter your email (optional)"
                         bind:value={email}
                     />
                 </div>
-                <div class="p-[30px] bg-[#111111] rounded-[32px]">
+                <div class="p-5 md:p-[30px] bg-[#111111] rounded-[24px] md:rounded-[32px]">
                     <Text type="hd" size={16} color="#878787">BIRTHDAY</Text>
                     <input 
                         type="date" 
-                        class="w-full bg-transparent border-b border-[#333333] mt-[10px] pb-[5px] text-white focus:outline-none"
+                        class="w-full bg-transparent border-b border-[#333333] mt-2 md:mt-[10px] pb-[5px] text-white focus:outline-none text-base md:text-inherit"
                         bind:value={birthday}
                     />
                 </div>

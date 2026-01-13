@@ -147,15 +147,15 @@
     }
 </script>
 
-<div class="w-[50%] h-auto flex flex-col items-center z-10 gap-[40px]">
+<div class="w-full md:w-[50%] h-auto flex flex-col items-center z-10 gap-6 md:gap-[40px] px-4 md:px-0">
     <div class="text-center">
-        <h1 class="font-black text-[36px] text-[#FFFFFF]/80">WAITING FOR APPROVAL</h1>
-        <p class="text-[#878787] mt-2">
+        <h1 class="font-black text-2xl md:text-[36px] text-[#FFFFFF]/80">WAITING FOR APPROVAL</h1>
+        <p class="text-[#878787] text-sm md:text-base mt-2">
             Open Ave on one of your trusted devices and approve this login request.
         </p>
     </div>
 
-    <div class="flex flex-col items-center gap-6 p-8 bg-[#171717]/80 rounded-[32px]">
+    <div class="flex flex-col items-center gap-4 md:gap-6 p-5 md:p-8 bg-[#171717]/80 rounded-[24px] md:rounded-[32px] w-full md:w-auto">
         {#if status === "waiting"}
             <Spinner />
             <Text type="p" size={18} color="#878787">

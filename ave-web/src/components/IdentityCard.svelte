@@ -120,7 +120,7 @@
     }
 }} />
 
-<div class="flex flex-col w-full rounded-[32px] overflow-clip relative">
+<div class="flex flex-col w-full rounded-[24px] md:rounded-[32px] overflow-clip relative">
     <!-- Hidden file inputs -->
     <input 
         type="file" 
@@ -137,7 +137,7 @@
         onchange={handleBannerChange}
     />
 
-    <div class="w-full {size === 'small' ? 'h-[100px]' : 'h-[150px]' } relative overflow-hidden rounded-t-[15px]">
+    <div class="w-full {size === 'small' ? 'h-[80px] md:h-[100px]' : 'h-[100px] md:h-[150px]' } relative overflow-hidden rounded-t-[15px]">
         {#if banner}
             <img src={banner} alt="banner" class="w-full h-full object-cover hover:scale-105 transition-transform duration-300 ease-in-out" />
         {:else}
@@ -149,7 +149,7 @@
                 <button 
                     bind:this={bannerButton}
                     aria-label="edit banner" 
-                    class="w-[40px] h-[40px] rounded-[15px] bg-[#202020]/70 flex flex-col items-center justify-center absolute bottom-[10px] right-[10px] hover:bg-[#202020]/90 transition-colors duration-300 cursor-pointer z-10"
+                    class="w-[36px] h-[36px] md:w-[40px] md:h-[40px] rounded-[12px] md:rounded-[15px] bg-[#202020]/70 flex flex-col items-center justify-center absolute bottom-2 md:bottom-[10px] right-2 md:right-[10px] hover:bg-[#202020]/90 transition-colors duration-300 cursor-pointer z-10"
                     onclick={handleBannerClick}
                 >
                     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -164,13 +164,13 @@
         {/if}
     </div>
 
-    <div class="{size === 'small' ? 'w-[125px] h-[125px]' : 'w-[160px] h-[160px]' } overflow-hidden mt-[40px] ml-[40px] z-10 absolute">
-        <img src={avatar} alt="avatar" class="w-full h-full border-[6px] border-[#171717] rounded-[32px] object-cover transition-transform duration-300 ease-in-out" />
+    <div class="{size === 'small' ? 'w-[100px] h-[100px] md:w-[125px] md:h-[125px]' : 'w-[120px] h-[120px] md:w-[160px] md:h-[160px]' } overflow-hidden mt-[30px] md:mt-[40px] ml-4 md:ml-[40px] z-10 absolute">
+        <img src={avatar} alt="avatar" class="w-full h-full border-4 md:border-[6px] border-[#171717] rounded-[24px] md:rounded-[32px] object-cover transition-transform duration-300 ease-in-out" />
 
         {#if editable}
             <button 
                 aria-label="edit avatar" 
-                class="w-[36px] h-[36px] rounded-[12px] bg-[#202020]/70 flex flex-col items-center justify-center absolute bottom-[15px] right-[20px] hover:bg-[#202020]/90 transition-colors duration-300 cursor-pointer"
+                class="w-[32px] h-[32px] md:w-[36px] md:h-[36px] rounded-[10px] md:rounded-[12px] bg-[#202020]/70 flex flex-col items-center justify-center absolute bottom-3 md:bottom-[15px] right-3 md:right-[20px] hover:bg-[#202020]/90 transition-colors duration-300 cursor-pointer"
                 onclick={handleAvatarClick}
             >
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -180,7 +180,7 @@
         {/if}
     </div>
 
-    <div class="w-full bg-[#171717] flex flex-col p-[40px] pt-[80px]">
+    <div class="w-full bg-[#171717] flex flex-col p-4 md:p-[40px] pt-[60px] md:pt-[80px]">
         {#if children}
             {@render children()}
         {/if}

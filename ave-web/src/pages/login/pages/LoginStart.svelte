@@ -48,17 +48,17 @@
     }
 </script>
 
-<div class="w-auto h-auto flex flex-col items-center z-10">
-    <h1 class="font-black text-[36px] text-[#FFFFFF]/80">WHO'S SIGNING IN</h1>
-    <h2 class="font-normal text-[18px] text-[#878787] mt-[10px] mb-[40px]">
+<div class="w-full md:w-auto h-auto flex flex-col items-center z-10 px-4 md:px-0">
+    <h1 class="font-black text-2xl md:text-[36px] text-[#FFFFFF]/80 text-center">WHO'S SIGNING IN</h1>
+    <h2 class="font-normal text-sm md:text-[18px] text-[#878787] mt-2 md:mt-[10px] mb-6 md:mb-[40px] text-center">
         Enter your handle to continue.
     </h2>
 
-    <div class="flex flex-row justify-between items-center w-full gap-[40px]">
-        <div class="flex flex-col gap-[20px] min-w-[400px]">
-            <div class="flex flex-col p-[30px] bg-[#171717]/80 rounded-[42px]">
+    <div class="flex flex-col md:flex-row justify-between items-center w-full gap-6 md:gap-[40px]">
+        <div class="flex flex-col gap-4 md:gap-[20px] w-full md:min-w-[400px]">
+            <div class="flex flex-col p-5 md:p-[30px] bg-[#171717]/80 rounded-[32px] md:rounded-[42px]">
                 <input 
-                    class="px-[15px] py-[10px] bg-[#090909]/50 text-[#FFFFFF] text-[18px] rounded-full focus:outline-none focus:ring-2 focus:ring-[#B9BBBE] focus:border-[#B9BBBE]" 
+                    class="px-4 md:px-[15px] py-3 md:py-[10px] bg-[#090909]/50 text-[#FFFFFF] text-base md:text-[18px] rounded-full focus:outline-none focus:ring-2 focus:ring-[#B9BBBE] focus:border-[#B9BBBE]" 
                     type="text" 
                     placeholder="Your Handle or ID"
                     bind:value={handle}
@@ -75,7 +75,7 @@
             />
         </div>
 
-        <div class="flex flex-col p-[25px] bg-[#171717]/80 rounded-[42px]">
+        <div class="hidden md:flex flex-col p-[25px] bg-[#171717]/80 rounded-[42px]">
             <div class="w-[200px] h-[200px] bg-[#222] rounded-[20px] flex items-center justify-center">
                 <span class="text-[#555] text-sm">QR Login Coming Soon</span>
             </div>

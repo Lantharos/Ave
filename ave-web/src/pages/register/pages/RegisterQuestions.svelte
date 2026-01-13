@@ -63,22 +63,22 @@
     }
 </script>
 
-<div class="w-full min-h-screen-fixed flex flex-col items-start justify-center px-[150px] py-[150px] gap-[150px]">
-    <div class="flex flex-row items-center justify-center gap-[100px] w-full z-10">
-        <div class="flex flex-col gap-[10px] w-[60%]">
-            <Text type={"hd"} size={36}>LET'S ANSWER SOME SECURITY QUESTIONS</Text>
+<div class="w-full min-h-screen-fixed flex flex-col items-start justify-center px-6 md:px-[150px] py-12 md:py-[150px] gap-8 md:gap-[150px]">
+    <div class="flex flex-col md:flex-row items-center justify-center gap-8 md:gap-[100px] w-full z-10">
+        <div class="flex flex-col gap-4 md:gap-[10px] w-full md:w-[60%]">
+            <h2 class="font-black text-[#D3D3D3] text-xl md:text-[36px]">LET'S ANSWER SOME SECURITY QUESTIONS</h2>
 
-            <Text type="p" size={24}>
+            <p class="font-normal text-[#878787] text-base md:text-[24px]">
                 Select three security questions and provide your answers. These will be used to verify your identity if you need to prove it.
-            </Text>
+            </p>
         </div>
 
-        <div class="flex flex-col gap-[10px] w-[40%]">
+        <div class="flex flex-col gap-2 md:gap-[10px] w-full md:w-[40%]">
             {#each [0, 1, 2] as i}
-                <div class="flex flex-col gap-[10px] p-[30px] bg-[#171717] rounded-[32px]">
+                <div class="flex flex-col gap-2 md:gap-[10px] p-5 md:p-[30px] bg-[#171717] rounded-[24px] md:rounded-[32px]">
                     <div class="relative w-full">
                         <select 
-                            class="appearance-none w-full text-white focus:outline-none bg-[#111111] px-[20px] py-[15px] rounded-full cursor-pointer pr-10"
+                            class="appearance-none w-full text-white focus:outline-none bg-[#111111] px-4 md:px-[20px] py-3 md:py-[15px] rounded-full cursor-pointer pr-10 text-sm md:text-base"
                             value={selectedQuestions[i] ?? ""}
                             onchange={(e) => selectQuestion(i as 0 | 1 | 2, parseInt((e.target as HTMLSelectElement).value))}
                         >
@@ -87,14 +87,14 @@
                                 <option value={question.id}>{question.label}</option>
                             {/each}
                         </select>
-                        <svg class="absolute right-5 top-1/2 -translate-y-1/2 pointer-events-none" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="white" width="20" height="20">
+                        <svg class="absolute right-4 md:right-5 top-1/2 -translate-y-1/2 pointer-events-none" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="white" width="20" height="20">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
                         </svg>
                     </div>
 
                     <input 
                         type="text" 
-                        class="w-full bg-[#111111] rounded-full mt-[10px] px-[20px] py-[15px] text-white focus:outline-none" 
+                        class="w-full bg-[#111111] rounded-full mt-2 md:mt-[10px] px-4 md:px-[20px] py-3 md:py-[15px] text-white focus:outline-none text-sm md:text-base" 
                         placeholder="Enter your answer"
                         bind:value={answers[i]}
                         disabled={selectedQuestions[i] === null}

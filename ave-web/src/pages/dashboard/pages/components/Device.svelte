@@ -24,16 +24,16 @@
 </script>
 
 <div class="flex flex-col gap-[3px] h-full">
-    <div class="flex flex-col bg-[#171717] rounded-[24px] p-[20px] gap-[10px] items-center justify-center">
-        <div class="w-[50px] aspect-square">
+    <div class="flex flex-col bg-[#171717] rounded-[20px] md:rounded-[24px] p-4 md:p-[20px] gap-2 md:gap-[10px] items-center justify-center">
+        <div class="w-[40px] md:w-[50px] aspect-square">
             {#if device.type === 'phone'}
-                <img src="/icons/devices/phone-75.svg" alt="phone icon" class="mb-[10px]" />
+                <img src="/icons/devices/phone-75.svg" alt="phone icon" class="mb-2 md:mb-[10px]" />
             {:else if device.type === 'computer'}
-                <img src="/icons/devices/laptop-75.svg" alt="computer icon" class="mb-[10px]" />
+                <img src="/icons/devices/laptop-75.svg" alt="computer icon" class="mb-2 md:mb-[10px]" />
             {:else if device.type === 'tablet'}
-                <img src="/icons/devices/tablet-75.svg" alt="tablet icon" class="mb-[10px]" />
+                <img src="/icons/devices/tablet-75.svg" alt="tablet icon" class="mb-2 md:mb-[10px]" />
             {:else}
-                <img src="/icons/devices/laptop-75.svg" alt="device icon" class="mb-[10px]" />
+                <img src="/icons/devices/laptop-75.svg" alt="device icon" class="mb-2 md:mb-[10px]" />
             {/if}
         </div>
         <Text type="h" size={20} weight="bold" color="#FFFFFF" cclass="text-center">{device.name}</Text>
@@ -45,14 +45,14 @@
         <Text type="p" size={14} color="#666666" cclass="text-center">Last seen: {formatLastSeen(device.lastSeenAt)}</Text>
     </div>
     <button 
-        class="w-full max-h-full rounded-full bg-[#171717] hover:bg-[#202020] transition-colors duration-300 cursor-pointer flex items-center justify-center px-[20px] py-[10px] disabled:opacity-50 disabled:cursor-not-allowed"
+        class="w-full max-h-full rounded-full bg-[#171717] hover:bg-[#202020] transition-colors duration-300 cursor-pointer flex items-center justify-center px-4 md:px-[20px] py-2 md:py-[10px] disabled:opacity-50 disabled:cursor-not-allowed"
         onclick={() => onRevoke?.(device.id)}
         disabled={device.isCurrent || revoking}
     >
         {#if device.isCurrent}
-            <Text type="hd" size={16} color="#32A94C" cclass="my-[10px]">THIS DEVICE</Text>
+            <Text type="hd" size={16} color="#32A94C" cclass="my-2 md:my-[10px]">THIS DEVICE</Text>
         {:else if revoking}
-            <div class="w-[20px] h-[20px] border-2 border-[#FFFFFF] border-t-transparent rounded-full animate-spin my-[10px]"></div>
+            <div class="w-[20px] h-[20px] border-2 border-[#FFFFFF] border-t-transparent rounded-full animate-spin my-2 md:my-[10px]"></div>
         {:else}
             <img src="/icons/devices/x-41.svg" alt="remove device" />
         {/if}

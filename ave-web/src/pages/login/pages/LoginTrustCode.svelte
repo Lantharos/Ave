@@ -140,41 +140,41 @@
     }
 </script>
 
-<div class="w-[50%] h-auto flex flex-col items-center z-10 gap-[30px]">
+<div class="w-full md:w-[50%] h-auto flex flex-col items-center z-10 gap-5 md:gap-[30px] px-4 md:px-0">
     <div class="text-center">
         {#if isRecoveryMode}
-            <h1 class="font-black text-[36px] text-[#FFFFFF]/80">RECOVER ENCRYPTION KEY</h1>
-            <p class="text-[#878787] mt-2">
+            <h1 class="font-black text-2xl md:text-[36px] text-[#FFFFFF]/80">RECOVER ENCRYPTION KEY</h1>
+            <p class="text-[#878787] text-sm md:text-base mt-2">
                 Enter a trust code to restore your encryption key on this device.
             </p>
         {:else}
-            <h1 class="font-black text-[36px] text-[#FFFFFF]/80">ENTER YOUR TRUST CODE</h1>
-            <p class="text-[#878787] mt-2">
+            <h1 class="font-black text-2xl md:text-[36px] text-[#FFFFFF]/80">ENTER YOUR TRUST CODE</h1>
+            <p class="text-[#878787] text-sm md:text-base mt-2">
                 Enter one of your backup trust codes to sign in.
             </p>
         {/if}
     </div>
 
     {#if isRecoveryMode}
-        <div class="p-[20px] bg-[#32A94C]/20 border border-[#32A94C] rounded-[16px] flex items-center gap-[15px]">
+        <div class="p-4 md:p-[20px] bg-[#32A94C]/20 border border-[#32A94C] rounded-[16px] flex items-center gap-3 md:gap-[15px]">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                 <path d="M9 12L11 14L15 10M21 12C21 16.9706 16.9706 21 12 21C7.02944 21 3 16.9706 3 12C3 7.02944 7.02944 3 12 3C16.9706 3 21 7.02944 21 12Z" stroke="#32A94C" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
             </svg>
-            <p class="text-[#32A94C] text-[14px]">Passkey verified! Just need your encryption key.</p>
+            <p class="text-[#32A94C] text-xs md:text-[14px]">Passkey verified! Just need your encryption key.</p>
         </div>
     {/if}
 
-    <div class="w-full p-[30px] bg-[#171717]/80 rounded-[32px]">
+    <div class="w-full p-5 md:p-[30px] bg-[#171717]/80 rounded-[24px] md:rounded-[32px]">
         <Text type="hd" size={16} color="#878787">TRUST CODE</Text>
         <input 
             type="text" 
-            class="w-full bg-[#111111] rounded-full mt-[10px] px-[20px] py-[15px] text-white focus:outline-none font-mono text-lg tracking-wider"
-            placeholder="XXXXX-XXXXX-XXXXX-XXXXX-XXXXX"
+            class="w-full bg-[#111111] rounded-full mt-2 md:mt-[10px] px-4 md:px-[20px] py-3 md:py-[15px] text-white focus:outline-none font-mono text-base md:text-lg tracking-wider"
+            placeholder="XXXXX-XXXXX-XXXXX"
             bind:value={code}
             onkeydown={handleKeydown}
             disabled={isLoading}
         />
-        <p class="text-[#555] text-sm mt-2">
+        <p class="text-[#555] text-xs md:text-sm mt-2">
             Trust codes can be reused and never expire.
         </p>
     </div>

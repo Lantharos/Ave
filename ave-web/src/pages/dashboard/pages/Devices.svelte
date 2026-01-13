@@ -87,14 +87,14 @@
     });
 </script>
 
-<div class="flex flex-col gap-[40px] w-full z-10 px-[60px] py-[40px] bg-[#111111]/60 rounded-[64px] backdrop-blur-[20px]">
-    <div class="flex flex-col gap-[10px]">
+<div class="flex flex-col gap-6 md:gap-[40px] w-full z-10 px-4 md:px-[60px] py-6 md:py-[40px] bg-[#111111]/60 rounded-[32px] md:rounded-[64px] backdrop-blur-[20px]">
+    <div class="flex flex-col gap-2 md:gap-[10px]">
         <Text type="h" size={48} weight="bold">Devices</Text>
         <Text type="p" size={20}>Here are all the devices currently logged in to your ID.</Text>
     </div>
 
     {#if error}
-        <div class="bg-[#E14747]/20 border border-[#E14747] rounded-[16px] px-[20px] py-[15px]">
+        <div class="bg-[#E14747]/20 border border-[#E14747] rounded-[16px] px-4 md:px-[20px] py-3 md:py-[15px]">
             <Text type="p" size={16} color="#E14747">{error}</Text>
         </div>
     {/if}
@@ -128,11 +128,11 @@
             <div class="w-[48px] h-[48px] border-2 border-[#FFFFFF] border-t-transparent rounded-full animate-spin"></div>
         </div>
     {:else if devices.length === 0}
-        <div class="text-center py-[40px]">
+        <div class="text-center py-8 md:py-[40px]">
             <Text type="p" size={18} color="#666666">No devices found.</Text>
         </div>
     {:else}
-        <div class="grid grid-cols-4 gap-[20px]">
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-[20px]">
             {#each devices as device (device.id)}
                 <Device 
                     {device} 
@@ -147,7 +147,7 @@
 <!-- Add Device Modal -->
 {#if showAddDeviceModal}
     <div 
-        class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center"
+        class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4"
         onclick={() => showAddDeviceModal = false}
         onkeydown={(e) => e.key === "Escape" && (showAddDeviceModal = false)}
         role="dialog"
@@ -155,27 +155,27 @@
         tabindex="-1"
     >
         <div 
-            class="bg-[#171717] rounded-[36px] p-[40px] max-w-[500px] w-full mx-[20px]"
+            class="bg-[#171717] rounded-[24px] md:rounded-[36px] p-6 md:p-[40px] max-w-[500px] w-full"
             onclick={(e) => e.stopPropagation()}
             onkeydown={(e) => e.stopPropagation()}
             role="presentation"
         >
             <Text type="h" size={24} weight="bold">Add a New Device</Text>
-            <p class="text-[#878787] text-[16px] mt-[10px]">
+            <p class="text-[#878787] text-sm md:text-[16px] mt-2 md:mt-[10px]">
                 To add a new device to your account:
             </p>
-            <ol class="text-[#FFFFFF] text-[16px] mt-[20px] list-decimal list-inside space-y-3">
+            <ol class="text-[#FFFFFF] text-sm md:text-[16px] mt-4 md:mt-[20px] list-decimal list-inside space-y-3">
                 <li>Open <strong>ave.id</strong> on your new device</li>
                 <li>Enter your handle to sign in</li>
                 <li>Choose "Confirm on another device"</li>
                 <li>A notification will appear here for you to approve</li>
             </ol>
-            <p class="text-[#666666] text-[14px] mt-[20px]">
+            <p class="text-[#666666] text-xs md:text-[14px] mt-4 md:mt-[20px]">
                 You can also use a trust code if you don't have access to any trusted devices.
             </p>
-            <div class="flex gap-[10px] mt-[30px]">
+            <div class="flex gap-2 md:gap-[10px] mt-6 md:mt-[30px]">
                 <button 
-                    class="flex-1 py-[15px] bg-[#FFFFFF] text-[#090909] font-semibold rounded-[16px] hover:bg-[#E0E0E0] transition-colors"
+                    class="flex-1 py-3 md:py-[15px] bg-[#FFFFFF] text-[#090909] font-semibold rounded-[16px] hover:bg-[#E0E0E0] transition-colors"
                     onclick={() => showAddDeviceModal = false}
                 >
                     Got it

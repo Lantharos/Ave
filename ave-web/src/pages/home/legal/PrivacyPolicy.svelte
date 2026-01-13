@@ -5,12 +5,12 @@
 
 <div class="bg-[#090909] w-full min-h-screen-fixed flex flex-col">
     <img src="/grads/privacy_grad.png" alt="gradient" class="absolute top-0 left-0 w-full h-auto pointer-events-none select-none" />
-    <div class="self-center mt-[100px]">
-        <Text type="h" size={96} weight="bold">Your data matters!</Text>
-        <Text type="p" size={36} weight="medium" cclass="self-center text-center">Here's how we protect it</Text>
+    <div class="self-center mt-12 md:mt-[100px] px-6 md:px-0 text-center">
+        <h1 class="font-bold text-white text-4xl md:text-[96px]">Your data matters!</h1>
+        <p class="font-medium text-[#D3D3D3] text-lg md:text-[36px] mt-2 md:mt-0">Here's how we protect it</p>
     </div>
 
-    <div class="w-[60%] self-center flex flex-col gap-[80px] mt-[120px] mb-[100px]">
+    <div class="w-full md:w-[60%] self-center flex flex-col gap-12 md:gap-[80px] mt-16 md:mt-[120px] mb-12 md:mb-[100px] px-6 md:px-0">
         <LegalSec title="Introduction">
             Ave is designed to protect your privacy by default. We don’t sell your data, track your behavior, or store personal information beyond what’s strictly necessary for identity verification and cryptographic key management.
             <br><br>

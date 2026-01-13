@@ -58,13 +58,13 @@
     }
 </script>
 
-<div class="flex flex-col gap-[40px] w-full z-10 px-[60px] py-[40px] bg-[#111111]/60 rounded-[64px] backdrop-blur-[20px]">
-    <div class="flex flex-col gap-[10px]">
+<div class="flex flex-col gap-6 md:gap-[40px] w-full z-10 px-4 md:px-[60px] py-6 md:py-[40px] bg-[#111111]/60 rounded-[32px] md:rounded-[64px] backdrop-blur-[20px]">
+    <div class="flex flex-col gap-2 md:gap-[10px]">
         <Text type="h" size={48} weight="bold">My Data</Text>
     </div>
 
     {#if error}
-        <div class="bg-[#E14747]/20 border border-[#E14747] rounded-[16px] px-[20px] py-[15px]">
+        <div class="bg-[#E14747]/20 border border-[#E14747] rounded-[16px] px-4 md:px-[20px] py-3 md:py-[15px]">
             <Text type="p" size={16} color="#E14747">{error}</Text>
         </div>
     {/if}
@@ -99,33 +99,33 @@
 </div>
 
 {#if showDeleteConfirm}
-    <div class="fixed inset-0 bg-black/80 flex items-center justify-center z-50 backdrop-blur-sm">
-        <div class="bg-[#171717] rounded-[36px] p-[40px] max-w-[500px] w-full mx-[20px]">
+    <div class="fixed inset-0 bg-black/80 flex items-center justify-center z-50 backdrop-blur-sm p-4">
+        <div class="bg-[#171717] rounded-[24px] md:rounded-[36px] p-6 md:p-[40px] max-w-[500px] w-full">
             <Text type="h" size={24} weight="bold" color="#E14747">Delete Account</Text>
-            <p class="text-[#878787] text-[16px] mt-[10px]">
+            <p class="text-[#878787] text-sm md:text-[16px] mt-2 md:mt-[10px]">
                 This will permanently delete your account and all associated data. This action cannot be undone.
             </p>
-            <p class="text-[#FFFFFF] text-[16px] mt-[20px]">
+            <p class="text-[#FFFFFF] text-sm md:text-[16px] mt-4 md:mt-[20px]">
                 Type <span class="font-bold text-[#E14747]">DELETE MY ACCOUNT</span> to confirm:
             </p>
             
             <input 
                 type="text" 
-                class="w-full mt-[10px] px-[20px] py-[15px] bg-[#111111] rounded-[16px] text-[#FFFFFF] text-[16px] focus:outline-none focus:ring-2 focus:ring-[#E14747]"
+                class="w-full mt-2 md:mt-[10px] px-4 md:px-[20px] py-3 md:py-[15px] bg-[#111111] rounded-[16px] text-[#FFFFFF] text-sm md:text-[16px] focus:outline-none focus:ring-2 focus:ring-[#E14747]"
                 placeholder="DELETE MY ACCOUNT"
                 bind:value={deleteConfirmText}
             />
 
-            <div class="flex flex-row gap-[10px] mt-[30px]">
+            <div class="flex flex-row gap-2 md:gap-[10px] mt-6 md:mt-[30px]">
                 <button 
-                    class="flex-1 py-[15px] bg-[#222222] text-[#FFFFFF] font-semibold rounded-[16px] hover:bg-[#333333] transition-colors"
+                    class="flex-1 py-3 md:py-[15px] bg-[#222222] text-[#FFFFFF] font-semibold rounded-[16px] hover:bg-[#333333] transition-colors"
                     onclick={() => { showDeleteConfirm = false; deleteConfirmText = ""; error = null; }}
                     disabled={deleting}
                 >
                     Cancel
                 </button>
                 <button 
-                    class="flex-1 py-[15px] bg-[#E14747] text-[#FFFFFF] font-semibold rounded-[16px] hover:bg-[#C33C3C] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    class="flex-1 py-3 md:py-[15px] bg-[#E14747] text-[#FFFFFF] font-semibold rounded-[16px] hover:bg-[#C33C3C] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     onclick={handleDelete}
                     disabled={deleting || deleteConfirmText !== "DELETE MY ACCOUNT"}
                 >

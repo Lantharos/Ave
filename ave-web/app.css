@@ -14,13 +14,11 @@ html, body, #app {
     min-height: calc(var(--vh, 1vh) * 100);
 }
 
-/* Full height utility that works with zoom */
 .h-screen-fixed {
     height: 100vh;
     height: calc(var(--vh, 1vh) * 100);
 }
 
-/* Min height utility that works with zoom */
 .min-h-screen-fixed {
     min-height: 100vh;
     min-height: calc(var(--vh, 1vh) * 100);
@@ -30,26 +28,25 @@ html {
     zoom: 1;
 }
 
-/* Responsive zoom scaling for smaller screens */
-@media (max-width: 1440px) {
+@media (max-width: 1440px) and (min-width: 769px) {
     html {
         zoom: 0.85;
     }
 }
 
-@media (max-width: 1280px) {
+@media (max-width: 1280px) and (min-width: 769px) {
     html {
         zoom: 0.7;
     }
 }
 
-@media (max-width: 1024px) {
+@media (max-width: 1024px) and (min-width: 769px) {
     html {
         zoom: 0.6;
     }
 }
 
-@media (max-width: 900px) {
+@media (max-width: 900px) and (min-width: 769px) {
     html {
         zoom: 0.5;
     }
@@ -57,6 +54,42 @@ html {
 
 @media (max-width: 768px) {
     html {
-        zoom: 0.45;
+        zoom: 1;
+    }
+}
+
+.mobile-nav-overlay {
+    position: fixed;
+    inset: 0;
+    background-color: rgba(9, 9, 9, 0.98);
+    z-index: 100;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    backdrop-filter: blur(10px);
+}
+
+.mobile-menu-btn {
+    display: none;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    padding: 8px;
+}
+
+@media (max-width: 768px) {
+    .mobile-menu-btn {
+        display: flex;
+    }
+    
+    .desktop-nav {
+        display: none !important;
+    }
+    
+    .mobile-scroll-container {
+        -webkit-overflow-scrolling: touch;
+        overflow-y: auto;
     }
 }
