@@ -66,15 +66,15 @@
 
 <div class="bg-[#090909] relative w-full min-h-screen-fixed flex flex-col md:flex-row px-3 md:px-[120px] py-4 md:py-[100px] gap-4 md:gap-[100px]">
     <button 
-        class="mobile-menu-btn fixed top-3 right-3 z-50 p-2 bg-[#171717] rounded-full"
+        class="mobile-menu-btn fixed top-3 right-3 z-50 p-2 bg-[#171717] rounded-full md:hidden"
         onclick={() => mobileSidebarOpen = !mobileSidebarOpen}
     >
         {#if mobileSidebarOpen}
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#B9BBBE" stroke-width="2">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#B9BBBE" stroke-width="2">
                 <path d="M18 6L6 18M6 6l12 12"/>
             </svg>
         {:else}
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#B9BBBE" stroke-width="2">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#B9BBBE" stroke-width="2">
                 <path d="M3 12h18M3 6h18M3 18h18"/>
             </svg>
         {/if}
