@@ -263,21 +263,21 @@
             </div>
         </div>
 
-        <div class="flex flex-col gap-4 md:gap-[20px] mt-6 md:mt-0">
-            <h2 class="font-poppins text-lg md:text-[32px] text-[#878787]">
+        <div class="flex flex-col gap-3 md:gap-[20px] mt-4 md:mt-0">
+            <h2 class="font-poppins text-base md:text-[32px] text-[#878787]">
                 You're signing in securely through Ave.
             </h2>
 
             {#if appInfo?.supportsE2ee}
                 <div class="flex flex-col gap-2 md:gap-[10px]">
-                    <div class="p-5 md:p-[30px] bg-[#171717]/80 flex flex-col gap-2 md:gap-[10px] border-2 border-[#32A94C] rounded-[24px] md:rounded-[32px]">
-                        <h3 class="font-poppins flex flex-row gap-2 md:gap-[10px] text-base md:text-[24px] text-[#32A94C] items-center">
-                            <svg class="w-6 h-6 md:w-9 md:h-9" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <div class="p-4 md:p-[30px] bg-[#171717]/80 flex flex-col gap-2 md:gap-[10px] border-2 border-[#32A94C] rounded-[20px] md:rounded-[32px]">
+                        <h3 class="font-poppins flex flex-row gap-2 md:gap-[10px] text-sm md:text-[24px] text-[#32A94C] items-center">
+                            <svg class="w-5 h-5 md:w-9 md:h-9" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
                                 <path d="M10.5 15V10.5C10.5 8.51088 11.2902 6.60322 12.6967 5.1967C14.1032 3.79018 16.0109 3 18 3C19.9891 3 21.8968 3.79018 23.3033 5.1967C24.7098 6.60322 25.5 8.51088 25.5 10.5V15M19.5 24C19.5 24.8284 18.8284 25.5 18 25.5C17.1716 25.5 16.5 24.8284 16.5 24C16.5 23.1716 17.1716 22.5 18 22.5C18.8284 22.5 19.5 23.1716 19.5 24ZM7.5 15H28.5C30.1569 15 31.5 16.3431 31.5 18V30C31.5 31.6569 30.1569 33 28.5 33H7.5C5.84315 33 4.5 31.6569 4.5 30V18C4.5 16.3431 5.84315 15 7.5 15Z" stroke="#32A94C" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
                             </svg>
                             End-to-End Encrypted
                         </h3>
-                        <p class="font-poppins text-sm md:text-[22px] text-[#878787]">
+                        <p class="font-poppins text-xs md:text-[22px] text-[#878787]">
                             This app requests encryption keys from Ave each time you log in, ensuring your data stays end-to-end encrypted.
                         </p>
                     </div>
@@ -285,14 +285,14 @@
             {/if}
 
             {#if appInfo?.description}
-                <p class="font-poppins text-sm md:text-[20px] text-[#666666]">
+                <p class="font-poppins text-xs md:text-[20px] text-[#666666]">
                     {appInfo.description}
                 </p>
             {/if}
         </div>
     </div>
 
-    <div class="flex-1 w-full h-auto md:h-full px-6 md:px-[75px] z-10 py-8 md:py-[70px] flex flex-col justify-between rounded-[32px] md:rounded-[64px] bg-[#111111]/60 backdrop-blur-xl">
+    <div class="flex-1 w-full h-auto md:h-full px-4 md:px-[75px] z-10 py-5 md:py-[70px] flex flex-col justify-between rounded-[24px] md:rounded-[64px] bg-[#111111]/60 backdrop-blur-xl">
         {#if loading}
             <div class="flex-1 flex items-center justify-center">
                 <div class="w-[48px] h-[48px] border-2 border-[#FFFFFF] border-t-transparent rounded-full animate-spin"></div>
@@ -334,27 +334,27 @@
                 </button>
             </div>
         {:else if selectedIdentity}
-            <div class="flex flex-col gap-6 md:gap-[40px]">
-                <div class="flex flex-col md:flex-row gap-4 md:gap-[20px] items-start md:items-center">
-                    <h1 class="text-white text-2xl md:text-[48px] font-bold font-poppins">Signing in as</h1>
+            <div class="flex flex-col gap-4 md:gap-[40px]">
+                <div class="flex flex-col md:flex-row gap-3 md:gap-[20px] items-start md:items-center">
+                    <h1 class="text-white text-xl md:text-[48px] font-bold font-poppins">Signing in as</h1>
 
                     <!-- Identity dropdown -->
                     <div class="relative w-full md:w-auto">
                         <button 
-                            class="bg-[#171717] p-2 md:p-[10px] items-center rounded-full flex flex-row gap-2 md:gap-[15px] hover:bg-[#242424] cursor-pointer transition-colors duration-300"
+                            class="bg-[#171717] p-1.5 md:p-[10px] items-center rounded-full flex flex-row gap-2 md:gap-[15px] hover:bg-[#242424] cursor-pointer transition-colors duration-300"
                             onclick={() => { identityDropdownOpen = !identityDropdownOpen; }}
                         >
                             {#if selectedIdentity.avatarUrl}
-                                <img src={selectedIdentity.avatarUrl} alt="User Avatar" class="w-10 h-10 md:w-[50px] md:h-[50px] rounded-full object-cover"/>
+                                <img src={selectedIdentity.avatarUrl} alt="User Avatar" class="w-8 h-8 md:w-[50px] md:h-[50px] rounded-full object-cover"/>
                             {:else}
-                                <div class="w-10 h-10 md:w-[50px] md:h-[50px] rounded-full bg-[#222222] flex items-center justify-center">
-                                    <Text type="h" size={20} color="#878787">{selectedIdentity.displayName[0]}</Text>
+                                <div class="w-8 h-8 md:w-[50px] md:h-[50px] rounded-full bg-[#222222] flex items-center justify-center">
+                                    <Text type="h" size={20} mobileSize={14} color="#878787">{selectedIdentity.displayName[0]}</Text>
                                 </div>
                             {/if}
-                            <span class="text-white text-lg md:text-[24px] font-poppins font-semibold">
+                            <span class="text-white text-base md:text-[24px] font-poppins font-semibold">
                                 {selectedIdentity.displayName}
                             </span>
-                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <svg class="w-5 h-5 md:w-6 md:h-6" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                                 <path d="M6 9L12 15L18 9" stroke="#C7C7C7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
                             </svg>
                         </button>
@@ -389,19 +389,19 @@
                 >
                     <div class="flex flex-col gap-2 md:gap-[10px]">
                         <div class="flex flex-col md:flex-row gap-2 md:gap-[10px] w-full flex-1">
-                            <div class="p-4 md:p-[30px] bg-[#111111] rounded-[24px] md:rounded-[32px] flex-1">
-                                <Text type="hd" size={16} color="#878787">NAME</Text>
-                                <Text type="h" size={26} color="#FFFFFF">{selectedIdentity.displayName}</Text>
+                            <div class="p-3 md:p-[30px] bg-[#111111] rounded-[20px] md:rounded-[32px] flex-1">
+                                <Text type="hd" size={16} mobileSize={12} color="#878787">NAME</Text>
+                                <Text type="h" size={26} mobileSize={18} color="#FFFFFF">{selectedIdentity.displayName}</Text>
                             </div>
-                            <div class="p-4 md:p-[30px] bg-[#111111] rounded-[24px] md:rounded-[32px] flex-1">
-                                <Text type="hd" size={16} color="#878787">HANDLE</Text>
-                                <Text type="h" size={26} color="#FFFFFF">{selectedIdentity.handle}</Text>
+                            <div class="p-3 md:p-[30px] bg-[#111111] rounded-[20px] md:rounded-[32px] flex-1">
+                                <Text type="hd" size={16} mobileSize={12} color="#878787">HANDLE</Text>
+                                <Text type="h" size={26} mobileSize={18} color="#FFFFFF">{selectedIdentity.handle}</Text>
                             </div>
                         </div>
                         {#if selectedIdentity.email}
-                            <div class="p-4 md:p-[30px] bg-[#111111] rounded-[24px] md:rounded-[32px]">
-                                <Text type="hd" size={16} color="#878787">EMAIL</Text>
-                                <Text type="h" size={26} color="#FFFFFF">{selectedIdentity.email}</Text>
+                            <div class="p-3 md:p-[30px] bg-[#111111] rounded-[20px] md:rounded-[32px]">
+                                <Text type="hd" size={16} mobileSize={12} color="#878787">EMAIL</Text>
+                                <Text type="h" size={26} mobileSize={18} color="#FFFFFF">{selectedIdentity.email}</Text>
                             </div>
                         {/if}
                     </div>
@@ -409,35 +409,35 @@
             </div>
 
             <!-- Swipe to authorize -->
-            <div class="flex flex-col gap-4 md:gap-[20px] mt-6 md:mt-0">
+            <div class="flex flex-col gap-3 md:gap-[20px] mt-4 md:mt-0">
                 <div 
                     id="auth-slider"
-                    class="rounded-full bg-[#171717]/80 border-4 md:border-[6px] border-[#171717]/80 w-full relative h-[70px] md:h-[82px]"
+                    class="rounded-full bg-[#171717]/80 border-[3px] md:border-[6px] border-[#171717]/80 w-full relative h-[50px] md:h-[82px]"
                 >
                     <button 
-                        class="w-[58px] h-[58px] md:w-[70px] md:h-[70px] bg-white rounded-full cursor-grab flex items-center justify-center absolute top-0 z-10 transition-transform {sliderActive ? '' : 'transition-all duration-300'}"
-                        style="left: calc({sliderPosition * 100}% * (1 - 70px / 100%))"
+                        class="w-[44px] h-[44px] md:w-[70px] md:h-[70px] bg-white rounded-full cursor-grab flex items-center justify-center absolute top-0 z-10 transition-transform {sliderActive ? '' : 'transition-all duration-300'}"
+                        style="left: calc({sliderPosition * 100}% * (1 - 44px / 100%)); --mobile-btn: 44px; --desktop-btn: 70px;"
                         onmousedown={handleSliderStart}
                         ontouchstart={handleSliderStart}
                         disabled={authorizing}
                         aria-label="Drag to authorize"
                     >
                         {#if authorizing}
-                            <div class="w-[24px] h-[24px] border-2 border-[#090909] border-t-transparent rounded-full animate-spin"></div>
+                            <div class="w-5 h-5 md:w-[24px] md:h-[24px] border-2 border-[#090909] border-t-transparent rounded-full animate-spin"></div>
                         {:else}
-                            <svg class="w-7 h-7 md:w-[35px] md:h-[35px]" viewBox="0 0 35 35" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <svg class="w-5 h-5 md:w-[35px] md:h-[35px]" viewBox="0 0 35 35" fill="none" xmlns="http://www.w3.org/2000/svg">
                                 <path d="M11 30L23 18L11 6" stroke="#090909" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
                             </svg>
                         {/if}
                     </button>
 
-                    <p class="text-[#878787] text-base md:text-[18px] font-poppins font-normal absolute top-0 bottom-0 left-0 right-0 text-center py-[18px] md:py-[20px] pointer-events-none">
+                    <p class="text-[#878787] text-sm md:text-[18px] font-poppins font-normal absolute top-0 bottom-0 left-0 right-0 text-center flex items-center justify-center pointer-events-none">
                         {authorizing ? "Authorizing..." : "Swipe to Authorize"}
                     </p>
                 </div>
 
                 <button 
-                    class="text-[#878787] text-sm md:text-[16px] hover:text-[#E14747] transition-colors"
+                    class="text-[#878787] text-xs md:text-[16px] hover:text-[#E14747] transition-colors"
                     onclick={handleDeny}
                     disabled={authorizing}
                 >
