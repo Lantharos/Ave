@@ -450,7 +450,7 @@
                                 </button>
                             </div>
                         {:else}
-                            <Text type="h" size={24} mobileSize={16} weight="medium">{formatBirthday(identity.birthday || "")}</Text></Text>
+                            <Text type="h" size={24} mobileSize={16} weight="medium">{formatBirthday(identity.birthday || "")}</Text>
                         {/if}
                     </div>
 
