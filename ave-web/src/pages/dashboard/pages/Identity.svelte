@@ -210,8 +210,8 @@
         }
     }
 
-    // Edit button SVG
-    const editIcon = `<svg width="42" height="42" viewBox="0 0 42 42" fill="none" xmlns="http://www.w3.org/2000/svg">
+    // Edit button SVG - responsive sizing via class
+    const editIcon = `<svg class="w-5 h-5 md:w-[42px] md:h-[42px]" viewBox="0 0 42 42" fill="none" xmlns="http://www.w3.org/2000/svg">
         <g clip-path="url(#clip0_3396_259)">
             <path d="M26.25 8.75006L33.25 15.7501M37.0545 11.9211C37.9798 10.996 38.4996 9.74137 38.4998 8.43305C38.5 7.12473 37.9804 5.86992 37.0554 4.94468C36.1304 4.01944 34.8757 3.49955 33.5674 3.49939C32.2591 3.49923 31.0043 4.0188 30.079 4.94381L6.72351 28.3046C6.31719 28.7097 6.01671 29.2085 5.84851 29.7571L3.53676 37.3731C3.49153 37.5244 3.48811 37.6852 3.52687 37.8383C3.56563 37.9914 3.64512 38.1312 3.7569 38.2428C3.86868 38.3544 4.00859 38.4337 4.16178 38.4722C4.31498 38.5107 4.47574 38.507 4.62701 38.4616L12.2448 36.1516C12.7928 35.9849 13.2916 35.6862 13.6973 35.2818L37.0545 11.9211Z" stroke="white" stroke-opacity="0.8" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
         </g>
@@ -268,8 +268,8 @@
             onChangeBanner={handleBannerChange}
         >
             <div class="flex flex-col gap-2 md:gap-[10px]">
-                <div class="p-4 md:p-[30px] bg-[#111111] rounded-[24px] md:rounded-[32px]">
-                    <Text type="hd" size={16} color="#878787">NAME *</Text>
+                <div class="p-3 md:p-[30px] bg-[#111111] rounded-[16px] md:rounded-[32px]">
+                    <Text type="hd" size={16} mobileSize={12} color="#878787">NAME *</Text>
                     <input 
                         type="text" 
                         class="w-full bg-transparent border-b border-[#333333] mt-2 md:mt-[10px] pb-[5px] text-white focus:outline-none" 
@@ -278,8 +278,8 @@
                         autocomplete="off"
                     />
                 </div>
-                <div class="p-4 md:p-[30px] bg-[#111111] rounded-[24px] md:rounded-[32px]">
-                    <Text type="hd" size={16} color="#878787">HANDLE *</Text>
+                <div class="p-3 md:p-[30px] bg-[#111111] rounded-[16px] md:rounded-[32px]">
+                    <Text type="hd" size={16} mobileSize={12} color="#878787">HANDLE *</Text>
                     <input 
                         type="text" 
                         class="w-full bg-transparent border-b border-[#333333] mt-2 md:mt-[10px] pb-[5px] text-white focus:outline-none" 
@@ -288,8 +288,8 @@
                         autocomplete="off"
                     />
                 </div>
-                <div class="p-4 md:p-[30px] bg-[#111111] rounded-[24px] md:rounded-[32px]">
-                    <Text type="hd" size={16} color="#878787">EMAIL</Text>
+                <div class="p-3 md:p-[30px] bg-[#111111] rounded-[16px] md:rounded-[32px]">
+                    <Text type="hd" size={16} mobileSize={12} color="#878787">EMAIL</Text>
                     <input 
                         type="email" 
                         class="w-full bg-transparent border-b border-[#333333] mt-2 md:mt-[10px] pb-[5px] text-white focus:outline-none" 
@@ -298,8 +298,8 @@
                         autocomplete="off"
                     />
                 </div>
-                <div class="p-4 md:p-[30px] bg-[#111111] rounded-[24px] md:rounded-[32px]">
-                    <Text type="hd" size={16} color="#878787">BIRTHDAY</Text>
+                <div class="p-3 md:p-[30px] bg-[#111111] rounded-[16px] md:rounded-[32px]">
+                    <Text type="hd" size={16} mobileSize={12} color="#878787">BIRTHDAY</Text>
                     <input 
                         type="date" 
                         class="w-full bg-transparent border-b border-[#333333] mt-2 md:mt-[10px] pb-[5px] text-white focus:outline-none"
@@ -328,8 +328,8 @@
             <div class="flex flex-col gap-2 md:gap-[10px]">
                 <!-- Name Field -->
                 <div class="flex flex-col md:flex-row gap-2 md:gap-[10px]">
-                    <div class="p-4 md:p-[30px] bg-[#111111] rounded-[24px] md:rounded-[32px] w-full flex flex-col justify-center">
-                        <Text type="hd" size={16} color="#878787">NAME</Text>
+                    <div class="p-3 md:p-[30px] bg-[#111111] rounded-[16px] md:rounded-[32px] w-full flex flex-col justify-center">
+                        <Text type="hd" size={16} mobileSize={12} color="#878787">NAME</Text>
                         {#if editing.displayName}
                             <div class="flex flex-col md:flex-row gap-3 items-stretch md:items-center mt-2 md:mt-[10px]">
                                 <input 
@@ -347,13 +347,13 @@
                                 </button>
                             </div>
                         {:else}
-                            <Text type="h" size={24} weight="medium">{identity.displayName}</Text>
+                            <Text type="h" size={24} mobileSize={16} weight="medium">{identity.displayName}</Text>
                         {/if}
                     </div>
 
                     <button 
                         onclick={() => { editing.displayName = !editing.displayName }} 
-                        class="w-full md:w-auto md:aspect-square flex-grow h-14 md:h-full p-4 md:p-[40px] bg-[#111111] hover:bg-[#202020] transition-colors duration-300 cursor-pointer rounded-[24px] md:rounded-[32px] flex items-center justify-center" 
+                        class="w-full md:w-auto md:aspect-square flex-grow h-12 md:h-full p-3 md:p-[40px] bg-[#111111] hover:bg-[#202020] transition-colors duration-300 cursor-pointer rounded-[16px] md:rounded-[32px] flex items-center justify-center" 
                         aria-label="edit name"
                     >
                         {@html editIcon}
@@ -362,8 +362,8 @@
 
                 <!-- Handle Field -->
                 <div class="flex flex-col md:flex-row gap-2 md:gap-[10px]">
-                    <div class="p-4 md:p-[30px] bg-[#111111] rounded-[24px] md:rounded-[32px] w-full flex flex-col justify-center">
-                        <Text type="hd" size={16} color="#878787">HANDLE</Text>
+                    <div class="p-3 md:p-[30px] bg-[#111111] rounded-[16px] md:rounded-[32px] w-full flex flex-col justify-center">
+                        <Text type="hd" size={16} mobileSize={12} color="#878787">HANDLE</Text>
                         {#if editing.handle}
                             <div class="flex flex-col md:flex-row gap-3 items-stretch md:items-center mt-2 md:mt-[10px]">
                                 <input 
@@ -381,13 +381,13 @@
                                 </button>
                             </div>
                         {:else}
-                            <Text type="h" size={24} weight="medium">@{identity.handle}</Text>
+                            <Text type="h" size={24} mobileSize={16} weight="medium">@{identity.handle}</Text>
                         {/if}
                     </div>
 
                     <button 
                         onclick={() => { editing.handle = !editing.handle }} 
-                        class="w-full md:w-auto md:aspect-square flex-grow h-14 md:h-full p-4 md:p-[40px] bg-[#111111] hover:bg-[#202020] transition-colors duration-300 cursor-pointer rounded-[24px] md:rounded-[32px] flex items-center justify-center" 
+                        class="w-full md:w-auto md:aspect-square flex-grow h-12 md:h-full p-3 md:p-[40px] bg-[#111111] hover:bg-[#202020] transition-colors duration-300 cursor-pointer rounded-[16px] md:rounded-[32px] flex items-center justify-center" 
                         aria-label="edit handle"
                     >
                         {@html editIcon}
@@ -396,8 +396,8 @@
 
                 <!-- Email Field -->
                 <div class="flex flex-col md:flex-row gap-2 md:gap-[10px]">
-                    <div class="p-4 md:p-[30px] bg-[#111111] rounded-[24px] md:rounded-[32px] w-full flex flex-col justify-center">
-                        <Text type="hd" size={16} color="#878787">EMAIL</Text>
+                    <div class="p-3 md:p-[30px] bg-[#111111] rounded-[16px] md:rounded-[32px] w-full flex flex-col justify-center">
+                        <Text type="hd" size={16} mobileSize={12} color="#878787">EMAIL</Text>
                         {#if editing.email}
                             <div class="flex flex-col md:flex-row gap-3 items-stretch md:items-center mt-2 md:mt-[10px]">
                                 <input 
@@ -416,13 +416,13 @@
                                 </button>
                             </div>
                         {:else}
-                            <Text type="h" size={24} weight="medium">{identity.email || "Not set"}</Text>
+                            <Text type="h" size={24} mobileSize={16} weight="medium">{identity.email || "Not set"}</Text>
                         {/if}
                     </div>
 
                     <button 
                         onclick={() => { editing.email = !editing.email }} 
-                        class="w-full md:w-auto md:aspect-square flex-grow h-14 md:h-full p-4 md:p-[40px] bg-[#111111] hover:bg-[#202020] transition-colors duration-300 cursor-pointer rounded-[24px] md:rounded-[32px] flex items-center justify-center" 
+                        class="w-full md:w-auto md:aspect-square flex-grow h-12 md:h-full p-3 md:p-[40px] bg-[#111111] hover:bg-[#202020] transition-colors duration-300 cursor-pointer rounded-[16px] md:rounded-[32px] flex items-center justify-center" 
                         aria-label="edit email"
                     >
                         {@html editIcon}
@@ -431,8 +431,8 @@
 
                 <!-- Birthday Field -->
                 <div class="flex flex-col md:flex-row gap-2 md:gap-[10px]">
-                    <div class="p-4 md:p-[30px] bg-[#111111] rounded-[24px] md:rounded-[32px] w-full flex flex-col justify-center">
-                        <Text type="hd" size={16} color="#878787">BIRTHDAY</Text>
+                    <div class="p-3 md:p-[30px] bg-[#111111] rounded-[16px] md:rounded-[32px] w-full flex flex-col justify-center">
+                        <Text type="hd" size={16} mobileSize={12} color="#878787">BIRTHDAY</Text>
                         {#if editing.birthday}
                             <div class="flex flex-col md:flex-row gap-3 items-stretch md:items-center mt-2 md:mt-[10px]">
                                 <input 
@@ -450,13 +450,13 @@
                                 </button>
                             </div>
                         {:else}
-                            <Text type="h" size={24} weight="medium">{formatBirthday(identity.birthday || "")}</Text>
+                            <Text type="h" size={24} mobileSize={16} weight="medium">{formatBirthday(identity.birthday || "")}</Text></Text>
                         {/if}
                     </div>
 
                     <button 
                         onclick={() => { editing.birthday = !editing.birthday }} 
-                        class="w-full md:w-auto md:aspect-square flex-grow h-14 md:h-full p-4 md:p-[40px] bg-[#111111] hover:bg-[#202020] transition-colors duration-300 cursor-pointer rounded-[24px] md:rounded-[32px] flex items-center justify-center" 
+                        class="w-full md:w-auto md:aspect-square flex-grow h-12 md:h-full p-3 md:p-[40px] bg-[#111111] hover:bg-[#202020] transition-colors duration-300 cursor-pointer rounded-[16px] md:rounded-[32px] flex items-center justify-center" 
                         aria-label="edit birthday"
                     >
                         {@html editIcon}
@@ -468,7 +468,7 @@
         <!-- Delete Identity Section -->
         {#if !identity.isPrimary}
             {#if showDeleteConfirm}
-                <div class="p-4 md:p-[30px] bg-[#111111] rounded-[24px] md:rounded-[32px] flex flex-col gap-3 md:gap-[15px]">
+                <div class="p-3 md:p-[30px] bg-[#111111] rounded-[16px] md:rounded-[32px] flex flex-col gap-3 md:gap-[15px]">
                     <Text type="h" size={18} color="#E14747">Delete this identity?</Text>
                     <p class="text-[#878787] text-sm md:text-[14px]">This action cannot be undone. All data associated with this identity will be permanently removed.</p>
                     <div class="flex gap-2 md:gap-[10px] mt-2 md:mt-[10px]">

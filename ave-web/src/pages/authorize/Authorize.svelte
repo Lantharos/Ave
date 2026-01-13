@@ -292,7 +292,7 @@
         </div>
     </div>
 
-    <div class="flex-1 w-full h-auto md:h-full px-4 md:px-[75px] z-10 py-5 md:py-[70px] flex flex-col justify-between rounded-[24px] md:rounded-[64px] bg-[#111111]/60 backdrop-blur-xl">
+    <div class="flex-1 w-full md:min-h-full px-4 md:px-[75px] z-10 py-5 md:py-[70px] flex flex-col justify-between rounded-[24px] md:rounded-[64px] bg-[#111111]/60 backdrop-blur-xl">
         {#if loading}
             <div class="flex-1 flex items-center justify-center">
                 <div class="w-[48px] h-[48px] border-2 border-[#FFFFFF] border-t-transparent rounded-full animate-spin"></div>
