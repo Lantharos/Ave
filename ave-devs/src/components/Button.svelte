@@ -11,8 +11,9 @@
   .btn {
     border: 0;
     border-radius: 999px;
-    padding: 10px 18px;
+    padding: 8px 16px;
     font-size: 14px;
+    line-height: 1.2;
     font-weight: 600;
     cursor: pointer;
     transition: transform 0.2s ease, background 0.2s ease, color 0.2s ease;

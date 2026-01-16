@@ -17,6 +17,7 @@
   let activeView: View = "overview";
   let apps: DevApp[] = [];
   let selectedApp: (DevApp & { redirectUrisText?: string }) | null = null;
+  let deleteTarget: DevApp | null = null;
   let loading = true;
   let error = "";
   let session = loadSession();
@@ -214,14 +215,26 @@
     }
   }
 
-  async function handleDeleteApp(appId: string) {
-    if (!session?.accessTokenJwt) return;
+  function requestDelete(app: DevApp) {
+    deleteTarget = app;
+  }
+
+  function cancelDelete() {
+    deleteTarget = null;
+  }
+
+  async function confirmDelete() {
+    if (!session?.accessTokenJwt || !deleteTarget) return;
     error = "";
+    const target = deleteTarget;
     try {
-      await deleteApp(session.accessTokenJwt, appId);
-      apps = apps.filter((app) => app.id !== appId);
-      activeView = "apps";
-      selectedApp = null;
+      await deleteApp(session.accessTokenJwt, target.id);
+      apps = apps.filter((app) => app.id !== target.id);
+      if (selectedApp?.id === target.id) {
+        activeView = "apps";
+        selectedApp = null;
+      }
+      deleteTarget = null;
     } catch (err) {
       error = err instanceof Error ? err.message : "Failed to delete app";
     }
@@ -288,6 +301,19 @@
         </div>
       </div>
     {:else}
+      {#if deleteTarget}
+        <div class="modal-backdrop">
+          <div class="modal">
+            <h3>Delete {deleteTarget.name}?</h3>
+            <p>This will permanently delete the app and its credentials.</p>
+            <div class="action-row">
+              <Button variant="ghost" on:click={cancelDelete}>Cancel</Button>
+              <Button variant="outline" on:click={confirmDelete}>Delete app</Button>
+            </div>
+          </div>
+        </div>
+      {/if}
+
       <header class="hero">
         <div>
           <p class="eyebrow">Ave Developer Portal</p>
@@ -413,31 +439,31 @@
               <Button variant="ghost" on:click={() => (activeView = "apps")}>Cancel</Button>
             </div>
             <div class="form__grid">
-              <label class="full">
+              <label>
                 App name
                 <Input bind:value={form.name} placeholder="My App" />
               </label>
-              <label class="full">
+              <label>
                 Description
                 <Input bind:value={form.description} placeholder="Short description" />
               </label>
-              <label class="full">
+              <label>
                 Website URL
                 <Input bind:value={form.websiteUrl} placeholder="https://" />
               </label>
-              <label class="full">
+              <label>
                 Icon URL
                 <Input bind:value={form.iconUrl} placeholder="https://" />
               </label>
-              <label class="full">
+              <label>
                 Redirect URIs (one per line)
                 <Textarea bind:value={form.redirectUris} rows={4} />
               </label>
-              <label class="full">
+              <label>
                 Access token TTL (seconds)
                 <Input type="number" bind:value={form.accessTokenTtlSeconds} />
               </label>
-              <label class="full">
+              <label>
                 Refresh token TTL (seconds)
                 <Input type="number" bind:value={form.refreshTokenTtlSeconds} />
               </label>
@@ -463,36 +489,36 @@
               <div class="action-row">
                 <Button variant="ghost" on:click={() => handleCopy(app.clientId)}>Copy client ID</Button>
                 <Button variant="outline" on:click={() => handleRotateSecret(app.id)}>Rotate secret</Button>
-                <Button variant="outline" on:click={() => handleDeleteApp(app.id)}>Delete app</Button>
+                <Button variant="outline" on:click={() => requestDelete(app)}>Delete app</Button>
                 <Button variant="ghost" on:click={() => (activeView = "apps")}>Back to apps</Button>
               </div>
             </div>
             <div class="form__grid">
-              <label class="full">
+              <label>
                 App name
                 <Input bind:value={app.name} placeholder="App name" />
               </label>
-              <label class="full">
+              <label>
                 Description
                 <Input bind:value={app.description} placeholder="Description" />
               </label>
-              <label class="full">
+              <label>
                 Website URL
                 <Input bind:value={app.websiteUrl} placeholder="https://" />
               </label>
-              <label class="full">
+              <label>
                 Icon URL
                 <Input bind:value={app.iconUrl} placeholder="https://" />
               </label>
-              <label class="full">
+              <label>
                 Redirect URIs (one per line)
                 <Textarea bind:value={app.redirectUrisText} rows={4} />
               </label>
-              <label class="full">
+              <label>
                 Access token TTL (seconds)
                 <Input type="number" bind:value={app.accessTokenTtlSeconds} />
               </label>
-              <label class="full">
+              <label>
                 Refresh token TTL (seconds)
                 <Input type="number" bind:value={app.refreshTokenTtlSeconds} />
               </label>
@@ -736,9 +762,9 @@
   }
 
   .form__grid {
-    display: grid;
+    display: flex;
+    flex-direction: column;
     gap: 16px;
-    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   }
 
   label {
@@ -768,6 +794,27 @@
     flex-direction: column;
     gap: 14px;
     max-width: 420px;
+  }
+
+  .modal-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 50;
+  }
+
+  .modal {
+    background: #0f0f0f;
+    border-radius: 20px;
+    padding: 24px;
+    max-width: 420px;
+    width: calc(100% - 32px);
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
   }
 
   @media (max-width: 900px) {
