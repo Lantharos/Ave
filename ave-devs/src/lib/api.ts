@@ -180,3 +180,19 @@ export async function updateApp(accessTokenJwt: string, appId: string, payload: 
 
   return response.json();
 }
+
+export async function deleteApp(accessTokenJwt: string, appId: string): Promise<{ success: boolean }> {
+  const response = await fetch(`${API_BASE}/api/apps/${appId}`, {
+    method: "DELETE",
+    headers: {
+      Authorization: `Bearer ${accessTokenJwt}`,
+    },
+  });
+
+  if (!response.ok) {
+    const data = await response.json();
+    throw new Error(data.error || "Failed to delete app");
+  }
+
+  return response.json();
+}

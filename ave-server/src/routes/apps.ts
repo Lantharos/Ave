@@ -8,7 +8,7 @@ import { verifyJwt, getResourceAudience } from "../lib/oidc";
 
 const app = new Hono();
 
-const DEV_PORTAL_CLIENT_ID = process.env.DEV_PORTAL_CLIENT_ID;
+const DEV_PORTAL_CLIENT_ID = process.env.DEV_PORTAL_CLIENT_ID || process.env.VITE_DEV_PORTAL_CLIENT_ID;
 const RESOURCE_AUDIENCE = getResourceAudience();
 const allowedScopes = ["openid", "profile", "email", "offline_access", "user_id"] as const;
 
@@ -43,11 +43,6 @@ async function requireOidcUser(c: any, next: any) {
 
   if (payload.cid !== DEV_PORTAL_CLIENT_ID) {
     return c.json({ error: "Forbidden" }, 403);
-  }
-
-  const scope = typeof payload.scope === "string" ? payload.scope : "";
-  if (!scope.split(" ").includes("user_id")) {
-    return c.json({ error: "Insufficient scope" }, 403);
   }
 
   const userId = (payload.uid || payload.sid) as string | undefined;
@@ -183,6 +178,25 @@ app.patch("/:appId", zValidator("json", baseAppSchema.partial()), async (c) => {
       createdAt: updated.createdAt,
     },
   });
+});
+
+app.delete("/:appId", async (c) => {
+  const userId = c.get("devUserId") as string;
+  const appId = c.req.param("appId");
+
+  const [existing] = await db
+    .select()
+    .from(oauthApps)
+    .where(and(eq(oauthApps.id, appId), eq(oauthApps.ownerId, userId)))
+    .limit(1);
+
+  if (!existing) {
+    return c.json({ error: "App not found" }, 404);
+  }
+
+  await db.delete(oauthApps).where(eq(oauthApps.id, appId));
+
+  return c.json({ success: true });
 });
 
 app.post("/:appId/rotate-secret", async (c) => {

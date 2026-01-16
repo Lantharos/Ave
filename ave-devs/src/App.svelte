@@ -5,17 +5,18 @@
   import Input from "./components/Input.svelte";
   import Textarea from "./components/Textarea.svelte";
   import Toggle from "./components/Toggle.svelte";
-  import { createApp, fetchApps, rotateSecret, type DevApp } from "./lib/api";
+  import { createApp, fetchApps, rotateSecret, updateApp, deleteApp, type DevApp } from "./lib/api";
   import { handleCallback, refreshSession, startLogin, logout } from "./lib/auth";
   import { loadSession } from "./lib/storage";
   import { defaultScopes } from "./lib/types";
 
-  type View = "overview" | "apps" | "create" | "activity" | "settings";
+  type View = "overview" | "apps" | "create" | "activity" | "settings" | "app";
 
   const clientId = import.meta.env.VITE_DEV_PORTAL_CLIENT_ID as string | undefined;
 
   let activeView: View = "overview";
   let apps: DevApp[] = [];
+  let selectedApp: (DevApp & { redirectUrisText?: string }) | null = null;
   let loading = true;
   let error = "";
   let session = loadSession();
@@ -44,11 +45,11 @@
   const resources = [
     {
       title: "OIDC Discovery",
-      detail: "https://aveid.net/.well-known/openid-configuration",
+      detail: "https://api.aveid.net/.well-known/openid-configuration",
     },
     {
       title: "JWKS",
-      detail: "https://aveid.net/.well-known/jwks.json",
+      detail: "https://api.aveid.net/.well-known/jwks.json",
     },
     {
       title: "Token Endpoint",
@@ -64,14 +65,17 @@
     {
       title: "Web apps (PKCE)",
       description: "Use the Ave SDK for SPA-friendly OAuth + OIDC.",
+      href: "https://aveid.net/docs#pkce",
     },
     {
       title: "Server apps",
       description: "Exchange tokens server-side with client secret.",
+      href: "https://aveid.net/docs#endpoints",
     },
     {
       title: "Embed sign-in",
       description: "Drop in the Ave iframe widget with postMessage events.",
+      href: "https://aveid.net/docs#sdks",
     },
   ];
 
@@ -165,7 +169,7 @@
     }
   }
 
-  async function handleRotateSecret(appId: string) {
+  async   function handleRotateSecret(appId: string) {
     if (!session?.accessTokenJwt) return;
     error = "";
     try {
@@ -175,6 +179,62 @@
       error = err instanceof Error ? err.message : "Failed to rotate secret";
     }
   }
+
+  function openApp(app: DevApp) {
+    selectedApp = { ...app, redirectUrisText: app.redirectUris.join("\n") } as DevApp & { redirectUrisText: string };
+    activeView = "app";
+  }
+
+  async function saveApp() {
+    if (!session?.accessTokenJwt || !selectedApp) return;
+    error = "";
+    const app = selectedApp as DevApp & { redirectUrisText?: string };
+    try {
+      const payload = {
+        name: app.name,
+        description: app.description || undefined,
+        websiteUrl: app.websiteUrl || undefined,
+        iconUrl: app.iconUrl || undefined,
+        redirectUris: (app.redirectUrisText || "")
+          .split("\n")
+          .map((uri) => uri.trim())
+          .filter(Boolean),
+        supportsE2ee: app.supportsE2ee,
+        allowedScopes: app.allowedScopes,
+        accessTokenTtlSeconds: app.accessTokenTtlSeconds,
+        refreshTokenTtlSeconds: app.refreshTokenTtlSeconds,
+        allowUserIdScope: app.allowUserIdScope,
+      };
+
+      const result = await updateApp(session.accessTokenJwt, selectedApp.id, payload);
+      apps = apps.map((app) => (app.id === result.app.id ? result.app : app));
+      selectedApp = { ...result.app, redirectUrisText: result.app.redirectUris.join("\n") } as DevApp & { redirectUrisText: string };
+    } catch (err) {
+      error = err instanceof Error ? err.message : "Failed to update app";
+    }
+  }
+
+  async function handleDeleteApp(appId: string) {
+    if (!session?.accessTokenJwt) return;
+    error = "";
+    try {
+      await deleteApp(session.accessTokenJwt, appId);
+      apps = apps.filter((app) => app.id !== appId);
+      activeView = "apps";
+      selectedApp = null;
+    } catch (err) {
+      error = err instanceof Error ? err.message : "Failed to delete app";
+    }
+  }
+
+  async function handleCopy(text: string) {
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch (err) {
+      error = err instanceof Error ? err.message : "Failed to copy";
+    }
+  }
+
 
   function startDevLogin() {
     if (!clientId) {
@@ -235,8 +295,8 @@
           <p>Control OAuth + OIDC apps, credentials, and security posture.</p>
         </div>
         <div class="hero__actions">
-          <Button variant="ghost">View docs</Button>
-          <Button variant="outline">Contact support</Button>
+          <Button variant="ghost" on:click={() => window.open("https://aveid.net/docs", "_blank")}>View docs</Button>
+          <Button variant="outline" on:click={() => window.location.href = "mailto:hello@lantharos.com"}>Contact support</Button>
         </div>
       </header>
 
@@ -274,13 +334,14 @@
             </div>
           </div>
           <div class="grid">
-            {#each quickStarts as item}
+              {#each quickStarts as item}
               <Card>
                 <h3>{item.title}</h3>
                 <p>{item.description}</p>
-                <Button variant="outline">View guide</Button>
+                <Button variant="outline" on:click={() => window.open(item.href, "_blank")}>View guide</Button>
               </Card>
             {/each}
+
           </div>
         </section>
 
@@ -291,7 +352,7 @@
                 <h2>Live endpoints</h2>
                 <p>Reference the current Ave OIDC endpoints and key sets.</p>
               </div>
-              <Button variant="ghost">Open API reference</Button>
+              <Button variant="ghost" on:click={() => window.open("https://aveid.net/docs#endpoints", "_blank")}>Open API reference</Button>
             </div>
             <div class="stack">
               {#each resources as item}
@@ -300,7 +361,7 @@
                     <h4>{item.title}</h4>
                     <p>{item.detail}</p>
                   </div>
-                  <Button variant="outline">Copy URL</Button>
+                  <Button variant="outline" on:click={() => handleCopy(item.detail)}>Copy URL</Button>
                 </div>
               {/each}
             </div>
@@ -332,7 +393,7 @@
                       <p>Scopes: {app.allowedScopes.join(", ")}</p>
                     </div>
                     <div class="app-actions">
-                      <Button variant="ghost">Manage</Button>
+                      <Button variant="ghost" on:click={() => openApp(app)}>Manage</Button>
                       <Button variant="outline" on:click={() => handleRotateSecret(app.id)}>Rotate secret</Button>
                     </div>
                   </div>
@@ -352,19 +413,19 @@
               <Button variant="ghost" on:click={() => (activeView = "apps")}>Cancel</Button>
             </div>
             <div class="form__grid">
-              <label>
+              <label class="full">
                 App name
                 <Input bind:value={form.name} placeholder="My App" />
               </label>
-              <label>
+              <label class="full">
                 Description
                 <Input bind:value={form.description} placeholder="Short description" />
               </label>
-              <label>
+              <label class="full">
                 Website URL
                 <Input bind:value={form.websiteUrl} placeholder="https://" />
               </label>
-              <label>
+              <label class="full">
                 Icon URL
                 <Input bind:value={form.iconUrl} placeholder="https://" />
               </label>
@@ -372,11 +433,11 @@
                 Redirect URIs (one per line)
                 <Textarea bind:value={form.redirectUris} rows={4} />
               </label>
-              <label>
+              <label class="full">
                 Access token TTL (seconds)
                 <Input type="number" bind:value={form.accessTokenTtlSeconds} />
               </label>
-              <label>
+              <label class="full">
                 Refresh token TTL (seconds)
                 <Input type="number" bind:value={form.refreshTokenTtlSeconds} />
               </label>
@@ -387,6 +448,61 @@
             </div>
             <div class="form__actions">
               <Button variant="primary" on:click={handleCreate} disabled={creating || !form.name || !form.redirectUris}>Create app</Button>
+            </div>
+          </Card>
+        </section>
+      {:else if activeView === "app" && selectedApp}
+        {@const app = selectedApp}
+        <section class="section">
+          <Card>
+            <div class="section__header">
+              <div>
+                <h2>{app.name}</h2>
+                <p>Manage credentials, redirects, and scopes.</p>
+              </div>
+              <div class="action-row">
+                <Button variant="ghost" on:click={() => handleCopy(app.clientId)}>Copy client ID</Button>
+                <Button variant="outline" on:click={() => handleRotateSecret(app.id)}>Rotate secret</Button>
+                <Button variant="outline" on:click={() => handleDeleteApp(app.id)}>Delete app</Button>
+                <Button variant="ghost" on:click={() => (activeView = "apps")}>Back to apps</Button>
+              </div>
+            </div>
+            <div class="form__grid">
+              <label class="full">
+                App name
+                <Input bind:value={app.name} placeholder="App name" />
+              </label>
+              <label class="full">
+                Description
+                <Input bind:value={app.description} placeholder="Description" />
+              </label>
+              <label class="full">
+                Website URL
+                <Input bind:value={app.websiteUrl} placeholder="https://" />
+              </label>
+              <label class="full">
+                Icon URL
+                <Input bind:value={app.iconUrl} placeholder="https://" />
+              </label>
+              <label class="full">
+                Redirect URIs (one per line)
+                <Textarea bind:value={app.redirectUrisText} rows={4} />
+              </label>
+              <label class="full">
+                Access token TTL (seconds)
+                <Input type="number" bind:value={app.accessTokenTtlSeconds} />
+              </label>
+              <label class="full">
+                Refresh token TTL (seconds)
+                <Input type="number" bind:value={app.refreshTokenTtlSeconds} />
+              </label>
+              <div class="toggle-row">
+                <Toggle bind:checked={app.supportsE2ee} label="Enable E2EE" />
+                <Toggle bind:checked={app.allowUserIdScope} label="Allow user_id scope (discouraged)" />
+              </div>
+            </div>
+            <div class="form__actions">
+              <Button variant="primary" on:click={saveApp}>Save changes</Button>
             </div>
           </Card>
         </section>
@@ -492,7 +608,7 @@
   }
 
   .content {
-    padding: 32px clamp(24px, 4vw, 56px) 72px;
+    padding: 36px clamp(24px, 4vw, 56px) 72px;
     display: flex;
     flex-direction: column;
     gap: 28px;
@@ -502,7 +618,7 @@
     display: flex;
     justify-content: space-between;
     align-items: flex-start;
-    gap: 20px;
+    gap: 24px;
     flex-wrap: wrap;
   }
 
@@ -522,6 +638,7 @@
     display: flex;
     gap: 12px;
     flex-wrap: wrap;
+    margin-top: 12px;
   }
 
   p {
@@ -542,7 +659,7 @@
     justify-content: space-between;
     gap: 16px;
     flex-wrap: wrap;
-    margin-bottom: 12px;
+    margin-bottom: 18px;
   }
 
   h2 {
