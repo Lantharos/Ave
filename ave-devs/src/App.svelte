@@ -786,6 +786,14 @@
     margin-top: 24px;
     display: flex;
     justify-content: flex-end;
+    align-items: center;
+  }
+
+  .action-row {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    align-items: center;
   }
 
   .signin {

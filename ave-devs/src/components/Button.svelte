@@ -23,6 +23,8 @@
     align-items: center;
     justify-content: center;
     white-space: nowrap;
+    height: auto;
+    align-self: center;
   }
 
   .btn:disabled {
