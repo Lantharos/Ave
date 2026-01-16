@@ -17,6 +17,7 @@ import securityRoutes from "./routes/security";
 import activityRoutes from "./routes/activity";
 import mydataRoutes from "./routes/mydata";
 import oauthRoutes, { oidcRoutes } from "./routes/oauth";
+import appsRoutes from "./routes/apps";
 
 import uploadRoutes from "./routes/upload";
 
@@ -82,6 +83,7 @@ app.route("/api/security", securityRoutes);
 app.route("/api/activity", activityRoutes);
 app.route("/api/mydata", mydataRoutes);
 app.route("/api/oauth", oauthRoutes);
+app.route("/api/apps", appsRoutes);
 app.route("/.well-known", oidcRoutes);
 app.route("/api/upload", uploadRoutes);
 
