@@ -446,12 +446,18 @@ app.post("/token", zValidator("json", z.discriminatedUnion("grantType", [
     return c.json({ error: "invalid_request", error_description: "Client authentication required" }, 400);
   }
 
-  const allowedScopes = (oauthApp.allowedScopes || []) as string[];
-  const requestedScopes = parseScopes(authCode.scope);
+  const baseScopes = (oauthApp.allowedScopes && oauthApp.allowedScopes.length > 0
+    ? oauthApp.allowedScopes
+    : ["openid", "profile", "email", "offline_access"]) as string[];
+  const allowedScopes = oauthApp.allowUserIdScope
+    ? [...new Set([...baseScopes, "user_id"])]
+    : baseScopes;
+  const requestedScopes = parseScopes(scope);
   const invalidScopes = requestedScopes.filter((s) => !allowedScopes.includes(s));
   if (invalidScopes.length > 0) {
     return c.json({ error: "invalid_scope", error_description: `Invalid scopes: ${invalidScopes.join(", ")}` }, 400);
   }
+
   
   // Delete used code
   authorizationCodes.delete(code);
@@ -557,13 +563,15 @@ app.post("/token", zValidator("json", z.discriminatedUnion("grantType", [
 
 
 // OIDC discovery
+const DISCOVERY_BASE = process.env.OIDC_DISCOVERY_BASE || "https://api.aveid.net";
+
 oidcRoutes.get("/openid-configuration", (c) => {
   return c.json({
     issuer: ISSUER,
-    authorization_endpoint: `${ISSUER}/authorize`,
-    token_endpoint: `${ISSUER}/api/oauth/token`,
-    userinfo_endpoint: `${ISSUER}/api/oauth/userinfo`,
-    jwks_uri: `${ISSUER}/.well-known/jwks.json`,
+    authorization_endpoint: `${ISSUER}/signin`,
+    token_endpoint: `${DISCOVERY_BASE}/api/oauth/token`,
+    userinfo_endpoint: `${DISCOVERY_BASE}/api/oauth/userinfo`,
+    jwks_uri: `${DISCOVERY_BASE}/.well-known/jwks.json`,
     scopes_supported: ["openid", "profile", "email", "offline_access", "user_id"],
     response_types_supported: ["code"],
     grant_types_supported: ["authorization_code", "refresh_token"],

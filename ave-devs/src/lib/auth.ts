@@ -22,7 +22,7 @@ export async function startLogin(config: AuthConfig): Promise<void> {
   const params = new URLSearchParams({
     client_id: config.clientId,
     redirect_uri: REDIRECT_URI,
-    scope: "openid profile email user_id",
+    scope: "openid profile email",
     state,
     nonce,
     code_challenge: codeChallenge,

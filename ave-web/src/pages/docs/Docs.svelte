@@ -13,12 +13,14 @@
         { id: "getting-started", title: "Getting Started" },
         { id: "authorization-flow", title: "Authorization Flow" },
         { id: "pkce", title: "PKCE (Public Clients)" },
+        { id: "sdks", title: "SDKs & Embed" },
         { id: "e2ee", title: "End-to-End Encryption" },
         { id: "endpoints", title: "API Endpoints" },
         { id: "user-data", title: "User Data" },
         { id: "security", title: "Security Best Practices" },
         { id: "common-mistakes", title: "Common Mistakes" },
         { id: "examples", title: "Code Examples" },
+
     ];
 
     function scrollToSection(id: string) {
@@ -339,8 +341,8 @@ async function generateCodeChallenge(verifier) {
 // Base64 URL encoding (no padding, URL-safe characters)
 function base64UrlEncode(bytes) {
   return btoa(String.fromCharCode(...bytes))
-    .replace(/\\+/g, '-')
-    .replace(/\\//g, '_')
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
     .replace(/=/g, '');
 }`} />
 
@@ -353,8 +355,58 @@ function base64UrlEncode(bytes) {
   &nonce=RANDOM_NONCE
   &code_challenge=E9Melhoa2OwvFrEMTJguCHaoeK1t8...
   &code_challenge_method=S256`} />
-
                 </DocSec>
+
+                <DocSec title="SDKs & Embed" id="sdks">
+                    <p class="text-[#999999] text-[17px] leading-[1.8]">
+                        Ave ships official SDKs plus an embed widget to make integration faster.
+                    </p>
+                    <div class="mt-[24px] grid grid-cols-1 md:grid-cols-2 gap-[16px]">
+                        <div class="p-[20px] bg-[#0f0f0f] rounded-[14px] border border-[#1a1a1a]">
+                            <p class="text-[#FFFFFF] font-semibold">@ave-id/sdk</p>
+                            <p class="text-[#888888] text-[14px] mt-[6px]">PKCE helpers, token exchange, userinfo, and server helpers.</p>
+                            <code class="block mt-[12px] text-[#ccccff]">npm install @ave-id/sdk</code>
+                        </div>
+                        <div class="p-[20px] bg-[#0f0f0f] rounded-[14px] border border-[#1a1a1a]">
+                            <p class="text-[#FFFFFF] font-semibold">@ave-id/embed</p>
+                            <p class="text-[#888888] text-[14px] mt-[6px]">Iframe embed with postMessage callbacks.</p>
+                            <code class="block mt-[12px] text-[#ccccff]">npm install @ave-id/embed</code>
+                        </div>
+                    </div>
+                    <div class="mt-[24px]">
+                        <CodeBlock code={`// Client (PKCE)
+import { startPkceLogin } from "@ave-id/sdk/client";
+
+await startPkceLogin({
+  clientId: "YOUR_CLIENT_ID",
+  redirectUri: "https://yourapp.com/callback",
+});`} />
+                    </div>
+                    <div class="mt-[24px]">
+                        <CodeBlock code={`// Server
+import { exchangeCodeServer } from "@ave-id/sdk/server";
+
+const tokens = await exchangeCodeServer({
+  clientId: "YOUR_CLIENT_ID",
+  clientSecret: process.env.AVE_SECRET,
+  redirectUri: "https://yourapp.com/callback",
+}, {
+  code: "CODE_FROM_CALLBACK",
+});`} />
+                    </div>
+                    <div class="mt-[24px]">
+                        <CodeBlock code={`// Embed
+import { mountAveEmbed } from "@ave-id/embed";
+
+mountAveEmbed({
+  container: document.getElementById("ave-embed"),
+  clientId: "YOUR_CLIENT_ID",
+  redirectUri: "https://yourapp.com/callback",
+  onSuccess: ({ redirectUrl }) => window.location.href = redirectUrl,
+});`} />
+                    </div>
+                </DocSec>
+
 
                 <DocSec title="End-to-End Encryption" id="e2ee">
                     <div class="p-[28px] bg-[#0a1a0f] border-[2px] border-[#1a4a2a] rounded-[16px] mb-[30px]">
@@ -543,7 +595,7 @@ Content-Type: application/json
 
                     <h3 class="text-[#FFFFFF] text-[22px] font-semibold mt-[40px] mb-[12px]">Userinfo Endpoint</h3>
                     <p class="text-[#999999] text-[16px] mb-[16px]">
-                        <code>GET https://api.aveid.net/api/oauth/userinfo</code> - Fetch OpenID profile claims
+                        <code>GET https://api.aveid.net/api/oauth/userinfo</code> - Fetch OpenID profile claims (works with opaque or JWT access tokens)
                     </p>
                     <CodeBlock code={`// Request
 GET https://api.aveid.net/api/oauth/userinfo
@@ -561,7 +613,7 @@ Authorization: Bearer ACCESS_TOKEN
 
                     <h3 class="text-[#FFFFFF] text-[22px] font-semibold mt-[40px] mb-[12px]">Discovery & JWKS</h3>
                     <p class="text-[#999999] text-[16px] mb-[16px]">
-                        <code>GET https://aveid.net/.well-known/openid-configuration</code> and <code>GET https://aveid.net/.well-known/jwks.json</code>
+                        <code>GET https://api.aveid.net/.well-known/openid-configuration</code> and <code>GET https://api.aveid.net/.well-known/jwks.json</code>
                     </p>
                 </DocSec>
 
