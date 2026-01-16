@@ -3,7 +3,7 @@
   export let disabled = false;
 </script>
 
-<button class={`btn btn--${variant}`} {disabled}>
+<button class={`btn btn--${variant}`} {disabled} on:click>
   <slot />
 </button>
 
