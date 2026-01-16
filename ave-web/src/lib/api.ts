@@ -213,9 +213,11 @@ export const api = {
         status: "pending" | "approved" | "denied" | "expired";
         sessionToken?: string;
         encryptedMasterKey?: string;
+        approverPublicKey?: string;
         device?: Device;
         identities?: Identity[];
       }>(`/api/login/request-status/${requestId}`),
+
     
     trustCode: (data: {
       handle: string;
@@ -262,11 +264,12 @@ export const api = {
     getPendingRequests: () =>
       request<{ requests: LoginRequest[] }>("/api/devices/pending-requests"),
     
-    approveRequest: (requestId: string, encryptedMasterKey: string) =>
+    approveRequest: (requestId: string, encryptedMasterKey: string, approverPublicKey?: string) =>
       request<{ success: boolean }>("/api/devices/approve-request", {
         method: "POST",
-        body: JSON.stringify({ requestId, encryptedMasterKey }),
+        body: JSON.stringify({ requestId, encryptedMasterKey, approverPublicKey }),
       }),
+
     
     denyRequest: (requestId: string) =>
       request<{ success: boolean }>("/api/devices/deny-request", {
@@ -441,17 +444,19 @@ export const api = {
     authorize: (data: {
       clientId: string;
       redirectUri: string;
-      scope?: string;
+      scope: string;
       state?: string;
       identityId: string;
       codeChallenge?: string;
       codeChallengeMethod?: "S256" | "plain";
       encryptedAppKey?: string;
+      nonce?: string;
     }) =>
       request<{ redirectUrl: string }>("/api/oauth/authorize", {
         method: "POST",
         body: JSON.stringify(data),
       }),
+
     
     getAuthorization: (clientId: string) =>
       request<{

@@ -92,9 +92,11 @@ app.get("/pending-requests", async (c) => {
 app.post("/approve-request", zValidator("json", z.object({
   requestId: z.string().uuid(),
   encryptedMasterKey: z.string(), // Master key encrypted with requester's public key
+  approverPublicKey: z.string(), // Approver's ephemeral public key
 })), async (c) => {
   const user = c.get("user")!;
-  const { requestId, encryptedMasterKey } = c.req.valid("json");
+  const { requestId, encryptedMasterKey, approverPublicKey } = c.req.valid("json");
+
   
   // Find the request
   const [request] = await db
@@ -134,8 +136,10 @@ app.post("/approve-request", zValidator("json", z.object({
       status: "approved",
       encryptedMasterKey,
       approvedByDeviceId: user.deviceId,
+      approverPublicKey,
     })
     .where(eq(loginRequests.id, requestId));
+
   
   // Log activity
   await db.insert(activityLogs).values({
@@ -155,7 +159,9 @@ app.post("/approve-request", zValidator("json", z.object({
   // Notify the requesting device via WebSocket
   notifyLoginRequestStatus(requestId, "approved", {
     encryptedMasterKey,
+    approverPublicKey,
   });
+
   
   return c.json({ success: true });
 });

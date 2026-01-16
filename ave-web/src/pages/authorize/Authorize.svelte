@@ -28,11 +28,14 @@
         return {
             clientId: searchParams.get("client_id") || "",
             redirectUri: searchParams.get("redirect_uri") || "",
-            scope: searchParams.get("scope") || "profile",
+            scope: searchParams.get("scope") || "openid profile email",
             state: searchParams.get("state") || "",
+            nonce: searchParams.get("nonce") || "",
+            embed: searchParams.get("embed") === "1",
             codeChallenge: codeChallenge || undefined,
             codeChallengeMethod: (codeChallengeMethod === "S256" || codeChallengeMethod === "plain") ? codeChallengeMethod : undefined,
         };
+
     });
 
     let appInfo = $state<{
@@ -114,6 +117,7 @@
                 scope: params.scope,
                 state: params.state,
                 identityId: selectedIdentity.id,
+                nonce: params.nonce || undefined,
             };
             
             // Only include PKCE params if they exist
@@ -170,7 +174,12 @@
             }
             
             // Redirect back to the app
+            if (params.embed) {
+                window.parent?.postMessage({ type: "ave:success", payload: { redirectUrl } }, window.location.origin);
+                return;
+            }
             window.location.href = redirectUrl;
+
         } catch (err) {
             error = err instanceof Error ? err.message : "Authorization failed";
             authorizing = false;
@@ -178,24 +187,28 @@
         }
     }
 
-    function handleSliderStart(e: MouseEvent | TouchEvent) {
+    let sliderPointerId: number | null = null;
+
+    function handleSliderStart(e: PointerEvent) {
         if (authorizing) return;
         sliderActive = true;
-        document.addEventListener("mousemove", handleSliderMove);
-        document.addEventListener("mouseup", handleSliderEnd);
-        document.addEventListener("touchmove", handleSliderMove);
-        document.addEventListener("touchend", handleSliderEnd);
+        sliderPointerId = e.pointerId;
+        const target = e.currentTarget as HTMLElement | null;
+        target?.setPointerCapture?.(e.pointerId);
+        document.addEventListener("pointermove", handleSliderMove);
+        document.addEventListener("pointerup", handleSliderEnd);
+        document.addEventListener("pointercancel", handleSliderEnd);
     }
 
-    function handleSliderMove(e: MouseEvent | TouchEvent) {
-        if (!sliderActive) return;
+    function handleSliderMove(e: PointerEvent) {
+        if (!sliderActive || sliderPointerId !== e.pointerId) return;
         
         const slider = document.getElementById("auth-slider");
         if (!slider) return;
         
         const rect = slider.getBoundingClientRect();
-        const clientX = "touches" in e ? e.touches[0].clientX : e.clientX;
-        const position = Math.max(0, Math.min(1, (clientX - rect.left - 35) / (rect.width - 70)));
+        const buttonWidth = window.innerWidth < 768 ? 44 : 70;
+        const position = Math.max(0, Math.min(1, (e.clientX - rect.left - buttonWidth / 2) / (rect.width - buttonWidth)));
         sliderPosition = position;
         
         // Auto-authorize when fully slid
@@ -205,19 +218,20 @@
         }
     }
 
-    function handleSliderEnd() {
-        if (!sliderActive) return;
+    function handleSliderEnd(e: PointerEvent) {
+        if (!sliderActive || sliderPointerId !== e.pointerId) return;
         sliderActive = false;
-        document.removeEventListener("mousemove", handleSliderMove);
-        document.removeEventListener("mouseup", handleSliderEnd);
-        document.removeEventListener("touchmove", handleSliderMove);
-        document.removeEventListener("touchend", handleSliderEnd);
+        sliderPointerId = null;
+        document.removeEventListener("pointermove", handleSliderMove);
+        document.removeEventListener("pointerup", handleSliderEnd);
+        document.removeEventListener("pointercancel", handleSliderEnd);
         
         // Snap back if not authorized
         if (sliderPosition < 0.95) {
             sliderPosition = 0;
         }
     }
+
 
     function handleDeny() {
         // Redirect back with error
@@ -226,7 +240,12 @@
         if (params.state) {
             redirectUrl.searchParams.set("state", params.state);
         }
+        if (params.embed) {
+            window.parent?.postMessage({ type: "ave:error", payload: { error: "access_denied" } }, window.location.origin);
+            return;
+        }
         window.location.href = redirectUrl.toString();
+
     }
 
     // Check auth and load app info
@@ -234,9 +253,13 @@
         if (!$isAuthenticated) {
             // Redirect to login, then come back
             const returnUrl = encodeURIComponent(window.location.pathname + window.location.search);
+            if (params.embed) {
+                window.parent?.postMessage({ type: "ave:auth_required" }, window.location.origin);
+            }
             goto(`/login?return=${returnUrl}`);
             return;
         }
+
         loadAppInfo();
     });
 </script>
@@ -268,6 +291,12 @@
                 You're signing in securely through Ave.
             </h2>
 
+            {#if appInfo?.description}
+                <p class="font-poppins text-xs md:text-[20px] text-[#666666]">
+                    {appInfo.description}
+                </p>
+            {/if}
+
             {#if appInfo?.supportsE2ee}
                 <div class="flex flex-col gap-2 md:gap-[10px]">
                     <div class="p-4 md:p-[30px] bg-[#171717]/80 flex flex-col gap-2 md:gap-[10px] border-2 border-[#32A94C] rounded-[20px] md:rounded-[32px]">
@@ -283,13 +312,8 @@
                     </div>
                 </div>
             {/if}
-
-            {#if appInfo?.description}
-                <p class="font-poppins text-xs md:text-[20px] text-[#666666]">
-                    {appInfo.description}
-                </p>
-            {/if}
         </div>
+
     </div>
 
     <div class="flex-1 w-full md:min-h-full px-4 md:px-[75px] z-10 py-5 md:py-[70px] flex flex-col justify-between rounded-[24px] md:rounded-[64px] bg-[#111111]/60 backdrop-blur-xl">
@@ -336,7 +360,8 @@
         {:else if selectedIdentity}
             <div class="flex flex-col gap-4 md:gap-[40px]">
                 <div class="flex flex-col md:flex-row gap-3 md:gap-[20px] items-start md:items-center">
-                    <h1 class="text-white text-xl md:text-[48px] font-bold font-poppins">Signing in as</h1>
+                <h1 class="text-white text-xl md:text-[48px] font-bold font-poppins">Sign in as</h1>
+
 
                     <!-- Identity dropdown -->
                     <div class="relative w-full md:w-auto">
@@ -408,7 +433,7 @@
                 </IdentityCard>
             </div>
 
-            <!-- Swipe to authorize -->
+            <!-- Swipe to sign in -->
             <div class="flex flex-col gap-3 md:gap-[20px] mt-4 md:mt-0">
                 <div 
                     id="auth-slider"
@@ -417,10 +442,9 @@
                     <button 
                         class="w-[44px] h-[44px] md:w-[70px] md:h-[70px] bg-white rounded-full cursor-grab flex items-center justify-center absolute top-0 z-10 transition-transform {sliderActive ? '' : 'transition-all duration-300'}"
                         style="left: calc({sliderPosition * 100}% * (1 - 44px / 100%)); --mobile-btn: 44px; --desktop-btn: 70px;"
-                        onmousedown={handleSliderStart}
-                        ontouchstart={handleSliderStart}
+                        onpointerdown={handleSliderStart}
                         disabled={authorizing}
-                        aria-label="Drag to authorize"
+                        aria-label="Drag to sign in"
                     >
                         {#if authorizing}
                             <div class="w-5 h-5 md:w-[24px] md:h-[24px] border-2 border-[#090909] border-t-transparent rounded-full animate-spin"></div>
@@ -432,8 +456,9 @@
                     </button>
 
                     <p class="text-[#878787] text-sm md:text-[18px] font-poppins font-normal absolute top-0 bottom-0 left-0 right-0 text-center flex items-center justify-center pointer-events-none">
-                        {authorizing ? "Authorizing..." : "Swipe to Authorize"}
+                        {authorizing ? "Signing in..." : "Swipe to Sign In"}
                     </p>
+
                 </div>
 
                 <button 

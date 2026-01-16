@@ -24,15 +24,18 @@
         { path: '/privacy', component: PrivacyPolicy },
         { path: '/terms', component: TermsOfService },
         { path: '/authorize', component: Authorize },
+        { path: '/signin', component: Authorize },
         { path: '/docs', component: Docs }
     ];
+
 
     const statuses: Statuses = {
         [StatusCode.NotFound]: () => ({ component: NotFound })
     };
 
     // Protected routes that require authentication
-    const protectedRoutes = ['/dashboard', '/authorize'];
+    const protectedRoutes = ['/dashboard', '/authorize', '/signin'];
+
 
     // Routes that should redirect to dashboard if already authenticated
     const authRoutes = ['/login', '/register'];

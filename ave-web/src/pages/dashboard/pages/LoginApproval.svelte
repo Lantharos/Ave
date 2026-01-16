@@ -51,8 +51,12 @@
                 ourKeyPair.privateKey
             );
 
-            // Send approval with encrypted master key
-            await api.devices.approveRequest(request.id, encryptedMasterKey);
+            // Send approval with encrypted master key + our public key
+            await api.devices.approveRequest(
+                request.id,
+                encryptedMasterKey,
+                ourKeyPair.publicKey
+            );
             
             // Remove from list
             requests = requests.filter(r => r.id !== request.id);

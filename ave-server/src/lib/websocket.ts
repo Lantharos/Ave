@@ -160,9 +160,11 @@ export async function notifyLoginRequest(handle: string, request: {
 export function notifyLoginRequestStatus(requestId: string, status: "approved" | "denied", data?: {
   sessionToken?: string;
   encryptedMasterKey?: string;
+  approverPublicKey?: string;
   identities?: any[];
   device?: any;
 }) {
+
   const socket = loginRequestSubscribers.get(requestId);
   if (!socket) return;
   

@@ -55,10 +55,12 @@
         status: string;
         sessionToken?: string;
         encryptedMasterKey?: string;
+        approverPublicKey?: string;
         device?: any;
         identities?: any[];
     }) {
         if (data.status === "approved") {
+
             status = "approved";
             if (pollInterval) {
                 clearInterval(pollInterval);
@@ -109,6 +111,7 @@
     async function completeLogin(data: {
         sessionToken?: string;
         encryptedMasterKey?: string;
+        approverPublicKey?: string;
         device?: any;
         identities?: any[];
     }) {
@@ -117,12 +120,13 @@
         // Try to decrypt the master key
         let masterKey = undefined;
         
-        if (data.encryptedMasterKey && ephemeralKeyPair) {
+        if (data.encryptedMasterKey && ephemeralKeyPair && data.approverPublicKey) {
             try {
-                // We need the approver's public key, which should be in the response
-                // For now, we'll skip this since the key transfer is complex
-                // In production, you'd need the approver to send their ephemeral public key too
-                console.log("Master key transfer not yet implemented");
+                masterKey = await decryptMasterKeyFromDevice(
+                    data.encryptedMasterKey,
+                    data.approverPublicKey,
+                    ephemeralKeyPair.privateKey
+                );
             } catch (e) {
                 console.error("Failed to decrypt master key:", e);
             }
@@ -134,6 +138,7 @@
             data.device,
             masterKey
         );
+
         
         onSuccess?.();
     }

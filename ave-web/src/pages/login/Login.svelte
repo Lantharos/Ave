@@ -11,12 +11,29 @@
     let currentPage = $state<"login" | "methods" | "trust-code" | "waiting">("login");
     
     const returnUrl = new URLSearchParams(window.location.search).get("return");
+    let pendingOauth = $state<{ clientId: string; redirectUri: string; scope: string; state?: string; nonce?: string } | null>(null);
+
     
     onMount(() => {
+        const params = new URLSearchParams(window.location.search);
+        const clientId = params.get("client_id");
+        const redirectUri = params.get("redirect_uri");
+
+        if (clientId && redirectUri) {
+            pendingOauth = {
+                clientId,
+                redirectUri,
+                scope: params.get("scope") || "openid profile email",
+                state: params.get("state") || undefined,
+                nonce: params.get("nonce") || undefined,
+            };
+        }
+
         if ($isAuthenticated) {
-            goto(returnUrl || "/dashboard");
+            goto(returnUrl || (pendingOauth ? "/signin" : "/dashboard"));
         }
     });
+
     let error = $state("");
     
     // State passed between steps
@@ -65,8 +82,21 @@
     }
 
     function handleLoginSuccess() {
+        if (pendingOauth) {
+            const params = new URLSearchParams({
+                client_id: pendingOauth.clientId,
+                redirect_uri: pendingOauth.redirectUri,
+                scope: pendingOauth.scope,
+                state: pendingOauth.state || "",
+                nonce: pendingOauth.nonce || "",
+            });
+            goto(`/signin?${params.toString()}`);
+            return;
+        }
+
         goto(returnUrl || "/dashboard");
     }
+
 
     function setError(msg: string) {
         error = msg;

@@ -1,10 +1,11 @@
 # Example OAuth Apps - Login with Ave
 
-This folder contains three example applications showing different ways to integrate "Login with Ave":
+This folder contains three example applications showing different ways to integrate "Sign in with Ave":
 
-1. **`index.html`** - Basic OAuth with client secret (confidential clients)
-2. **`index-pkce.html`** - PKCE flow without client secret (public clients)
+1. **`index.html`** - OAuth/OIDC with client secret (confidential clients)
+2. **`index-pkce.html`** - OIDC PKCE flow without client secret (public clients)
 3. **`index-e2ee.html`** - End-to-end encrypted notes app
+
 
 ---
 
@@ -20,11 +21,12 @@ This outputs SQL to insert into your database and credentials for your app confi
 
 ---
 
-## Example 1: Basic OAuth (Client Secret)
+## Example 1: OAuth/OIDC (Client Secret)
 
 **File:** `index.html`  
 **Port:** `8000`  
 **Best for:** Backend applications
+
 
 ### Setup:
 1. Run `node generate-credentials.js`
@@ -35,11 +37,12 @@ This outputs SQL to insert into your database and credentials for your app confi
 
 ---
 
-## Example 2: PKCE (Public Client)
+## Example 2: OIDC PKCE (Public Client)
 
 **File:** `index-pkce.html`  
 **Port:** `8001`  
 **Best for:** SPAs, mobile apps
+
 
 ### Setup:
 1. Run `node generate-credentials.js`
@@ -52,7 +55,8 @@ This outputs SQL to insert into your database and credentials for your app confi
 - ✅ No client secret in frontend code
 - ✅ Uses SHA-256 code challenge/verifier
 - ✅ More secure for public clients
-- ✅ Industry standard for SPAs
+- ✅ Industry standard for SPAs + OIDC
+
 
 ---
 
@@ -134,7 +138,8 @@ This demo generates a local encryption key for simplicity. In production:
 
 ---
 
-## OAuth 2.0 Flow Diagram
+## OAuth/OIDC Flow Diagram
+
 
 ```
 User                    Your App                    Ave
@@ -202,7 +207,9 @@ User                    Your App                    Ave
 | "App not found" | Verify `client_id` matches database |
 | CORS errors | Configure Ave backend to allow requests from your origin |
 | "Code verifier mismatch" | Ensure code_verifier matches the one used to generate code_challenge |
+| "invalid_scope" | Ensure requested scopes are enabled for the app (openid/profile/email/offline_access) |
 | Encryption fails | Check browser supports Web Crypto API (requires HTTPS or localhost) |
+
 
 ---
 
@@ -226,5 +233,7 @@ User                    Your App                    Ave
 ## Additional Resources
 
 - OAuth 2.0 RFC: https://datatracker.ietf.org/doc/html/rfc6749
+- OIDC Core: https://openid.net/specs/openid-connect-core-1_0.html
 - PKCE RFC: https://datatracker.ietf.org/doc/html/rfc7636
 - Web Crypto API: https://developer.mozilla.org/en-US/docs/Web/API/Web_Crypto_API
+

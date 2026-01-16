@@ -381,6 +381,10 @@ app.get("/request-status/:requestId", async (c) => {
   }
   
   if (request.status === "approved" && request.encryptedMasterKey) {
+    if (!request.approverPublicKey) {
+      return c.json({ error: "Approval key missing" }, 400);
+    }
+
     // Login approved! Return the encrypted master key
     // The requesting device can decrypt this with its private ephemeral key
     
@@ -437,6 +441,7 @@ app.get("/request-status/:requestId", async (c) => {
       status: "approved",
       sessionToken,
       encryptedMasterKey: request.encryptedMasterKey,
+      approverPublicKey: request.approverPublicKey,
       device: {
         id: deviceRecord.id,
         name: deviceRecord.name,
@@ -452,6 +457,7 @@ app.get("/request-status/:requestId", async (c) => {
         isPrimary: i.isPrimary,
       })),
     });
+
   }
   
   if (request.status === "denied") {

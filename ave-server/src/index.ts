@@ -16,7 +16,8 @@ import identitiesRoutes from "./routes/identities";
 import securityRoutes from "./routes/security";
 import activityRoutes from "./routes/activity";
 import mydataRoutes from "./routes/mydata";
-import oauthRoutes from "./routes/oauth";
+import oauthRoutes, { oidcRoutes } from "./routes/oauth";
+
 import uploadRoutes from "./routes/upload";
 
 const app = new Hono();
@@ -29,6 +30,13 @@ app.use("/api/oauth/*", cors({
   allowMethods: ["GET", "POST", "OPTIONS"],
   allowHeaders: ["Content-Type", "Authorization"],
 }));
+
+app.use("/.well-known/*", cors({
+  origin: "*",
+  allowMethods: ["GET", "OPTIONS"],
+  allowHeaders: ["Content-Type", "Authorization"],
+}));
+
 
 app.use("*", async (c, next) => {
   if (c.req.path.startsWith("/api/oauth/")) {
@@ -70,7 +78,9 @@ app.route("/api/security", securityRoutes);
 app.route("/api/activity", activityRoutes);
 app.route("/api/mydata", mydataRoutes);
 app.route("/api/oauth", oauthRoutes);
+app.route("/.well-known", oidcRoutes);
 app.route("/api/upload", uploadRoutes);
+
 
 // 404 handler
 app.notFound((c) => {

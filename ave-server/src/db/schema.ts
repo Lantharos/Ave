@@ -151,6 +151,7 @@ export const loginRequests = pgTable("login_requests", {
   
   // Which device approved it
   approvedByDeviceId: uuid("approved_by_device_id").references(() => devices.id),
+  approverPublicKey: text("approver_public_key"),
 }, (table) => [
   index("login_requests_handle_idx").on(table.handle),
   index("login_requests_status_idx").on(table.status),
@@ -214,12 +215,42 @@ export const oauthApps = pgTable("oauth_apps", {
   clientSecretHash: text("client_secret_hash").notNull(),
   redirectUris: jsonb("redirect_uris").$type<string[]>().notNull(),
   
+  // OIDC settings
+  allowedScopes: jsonb("allowed_scopes").$type<string[]>().default(["openid", "profile", "email", "offline_access"]),
+  accessTokenTtlSeconds: integer("access_token_ttl_seconds").default(3600).notNull(),
+  refreshTokenTtlSeconds: integer("refresh_token_ttl_seconds").default(30 * 24 * 60 * 60).notNull(),
+  allowUserIdScope: boolean("allow_user_id_scope").default(false).notNull(),
+  
   // Does this app support E2EE?
   supportsE2ee: boolean("supports_e2ee").default(false),
   
   // Developer who owns this app
   ownerId: uuid("owner_id").references(() => users.id),
 });
+
+// OAuth refresh tokens
+export const oauthRefreshTokens = pgTable("oauth_refresh_tokens", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  revokedAt: timestamp("revoked_at"),
+  expiresAt: timestamp("expires_at").notNull(),
+  
+  // Who + app
+  userId: uuid("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
+  identityId: uuid("identity_id").references(() => identities.id, { onDelete: "cascade" }).notNull(),
+  appId: uuid("app_id").references(() => oauthApps.id, { onDelete: "cascade" }).notNull(),
+  
+  // Token info
+  tokenHash: text("token_hash").notNull().unique(),
+  scope: text("scope").notNull(),
+  rotatedFromId: uuid("rotated_from_id"),
+  reuseDetectedAt: timestamp("reuse_detected_at"),
+}, (table) => [
+  index("oauth_refresh_tokens_user_id_idx").on(table.userId),
+  index("oauth_refresh_tokens_app_id_idx").on(table.appId),
+  index("oauth_refresh_tokens_identity_id_idx").on(table.identityId),
+  index("oauth_refresh_tokens_token_hash_idx").on(table.tokenHash),
+]);
 
 // OAuth authorizations - which apps a user has authorized
 export const oauthAuthorizations = pgTable("oauth_authorizations", {
@@ -256,3 +287,6 @@ export type ActivityLog = typeof activityLogs.$inferSelect;
 export type NewActivityLog = typeof activityLogs.$inferInsert;
 export type OAuthApp = typeof oauthApps.$inferSelect;
 export type OAuthAuthorization = typeof oauthAuthorizations.$inferSelect;
+export type OAuthRefreshToken = typeof oauthRefreshTokens.$inferSelect;
+export type NewOAuthRefreshToken = typeof oauthRefreshTokens.$inferInsert;
+

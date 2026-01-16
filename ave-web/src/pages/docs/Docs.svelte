@@ -162,7 +162,8 @@
 
                     <div class="mt-[30px] p-[24px] bg-[#0f0f0f] border border-[#1f1f1f] rounded-[12px]">
                         <p class="text-[#888888] text-[16px] leading-[1.7]">
-                            <strong class="text-[#BBBBBB]">Coming Soon:</strong> Asterisk, our developer portal, will let you create and manage OAuth apps yourself. Until then, reach out to register your app.
+                            <strong class="text-[#BBBBBB]">Developer Portal:</strong> Manage OAuth apps at <code>https://devs.aveid.net</code> (create apps, rotate secrets, and configure redirect URIs).
+
                         </p>
                     </div>
                 </DocSec>
@@ -198,8 +199,9 @@
 
                 <DocSec title="Authorization Flow" id="authorization-flow">
                     <p class="text-[#999999] text-[17px] leading-[1.8]">
-                        Ave uses the standard OAuth 2.0 Authorization Code flow:
+                        Ave supports OAuth 2.0 + OpenID Connect using the Authorization Code flow:
                     </p>
+
 
                     <div class="mt-[30px] flex flex-col gap-[24px]">
                         <div class="flex gap-[20px] items-start">
@@ -213,7 +215,8 @@
                             <div class="w-[36px] h-[36px] rounded-full bg-[#222222] flex items-center justify-center text-[#FFFFFF] text-[14px] font-bold shrink-0">2</div>
                             <div>
                                 <p class="text-[#FFFFFF] text-[17px] font-semibold">User Authorizes</p>
-                                <p class="text-[#888888] text-[15px] mt-[4px]">The user selects an identity and swipes to authorize your app</p>
+                                <p class="text-[#888888] text-[15px] mt-[4px]">The user selects an identity and swipes to sign in</p>
+
                             </div>
                         </div>
                         <div class="flex gap-[20px] items-start">
@@ -234,13 +237,16 @@
 
                     <h3 class="text-[#FFFFFF] text-[22px] font-semibold mt-[50px] mb-[16px]">Authorization URL</h3>
                     <p class="text-[#999999] text-[16px] mb-[16px]">
-                        Redirect users to the Ave authorization page:
+                        Redirect users to the Ave sign-in page (<code>/authorize</code> still works for backwards compatibility):
                     </p>
-                    <CodeBlock code={`https://aveid.net/authorize?
+
+                    <CodeBlock code={`https://aveid.net/signin?
   client_id=YOUR_CLIENT_ID
   &redirect_uri=https://yourapp.com/callback
-  &scope=profile
-  &state=RANDOM_STATE_VALUE`} />
+  &scope=openid%20profile%20email
+  &state=RANDOM_STATE_VALUE
+  &nonce=RANDOM_NONCE`} />
+
 
                     <div class="mt-[30px] overflow-x-auto">
                         <table class="w-full text-[15px]">
@@ -265,13 +271,25 @@
                                 <tr class="border-b border-[#1a1a1a]">
                                     <td class="py-[14px]"><code>scope</code></td>
                                     <td class="py-[14px]">No</td>
-                                    <td class="py-[14px]">Requested permissions (default: <code>profile</code>)</td>
+                                    <td class="py-[14px]">Requested permissions (default: <code>openid profile email</code>)</td>
                                 </tr>
+                                <tr class="border-b border-[#1a1a1a]">
+                                    <td class="py-[14px]"><code>nonce</code></td>
+                                    <td class="py-[14px]">Recommended</td>
+                                    <td class="py-[14px]">Random string for ID token replay protection</td>
+                                </tr>
+
                                 <tr class="border-b border-[#1a1a1a]">
                                     <td class="py-[14px]"><code>state</code></td>
                                     <td class="py-[14px]">Recommended</td>
                                     <td class="py-[14px]">Random string to prevent CSRF attacks</td>
                                 </tr>
+                                <tr class="border-b border-[#1a1a1a]">
+                                    <td class="py-[14px]"><code>response_type</code></td>
+                                    <td class="py-[14px]">No</td>
+                                    <td class="py-[14px]">Always <code>code</code> for Ave</td>
+                                </tr>
+
                             </tbody>
                         </table>
                     </div>
@@ -327,13 +345,15 @@ function base64UrlEncode(bytes) {
 }`} />
 
                     <h3 class="text-[#FFFFFF] text-[22px] font-semibold mt-[40px] mb-[16px]">Authorization URL with PKCE</h3>
-                    <CodeBlock code={`https://aveid.net/authorize?
+                    <CodeBlock code={`https://aveid.net/signin?
   client_id=YOUR_CLIENT_ID
   &redirect_uri=https://yourapp.com/callback
-  &scope=profile
+  &scope=openid%20profile%20email
   &state=RANDOM_STATE_VALUE
+  &nonce=RANDOM_NONCE
   &code_challenge=E9Melhoa2OwvFrEMTJguCHaoeK1t8...
   &code_challenge_method=S256`} />
+
                 </DocSec>
 
                 <DocSec title="End-to-End Encryption" id="e2ee">
@@ -464,8 +484,10 @@ async function decryptData(key, encryptedBase64) {
 
                     <h3 class="text-[#FFFFFF] text-[22px] font-semibold mt-[40px] mb-[12px]">Token Endpoint</h3>
                     <p class="text-[#999999] text-[16px] mb-[16px]">
-                        <code>POST https://api.aveid.net/api/oauth/token</code> - Exchange authorization code for tokens
+                        <code>POST https://api.aveid.net/api/oauth/token</code> - Exchange authorization code or refresh token for tokens (returns both opaque and JWT access tokens)
                     </p>
+
+
                     <div class="mt-[16px] mb-[24px] p-[20px] bg-[#1a1212] border border-[#2a1a1a] rounded-[12px]">
                         <p class="text-[#aa8888] text-[15px]">
                             <strong class="text-[#E14747]">Important:</strong> The API base URL is <code>api.aveid.net</code>, NOT <code>aveid.net/api</code>. Request body fields must use <strong>camelCase</strong> (e.g., <code>grantType</code>, <code>clientId</code>).
@@ -486,10 +508,13 @@ Content-Type: application/json
 
                     <CodeBlock code={`// Response
 {
-  "access_token": "eyJhbGciOiJIUzI1NiIs...",
+  "access_token": "opaque_token",
+  "access_token_jwt": "eyJhbGciOiJSUzI1NiIs...",
+  "id_token": "eyJhbGciOiJSUzI1NiIs...",
+  "refresh_token": "rt_...",
   "token_type": "Bearer",
   "expires_in": 3600,
-  "scope": "profile",
+  "scope": "openid profile email",
   "user": {
     "id": "550e8400-e29b-41d4-a716-446655440000",
     "handle": "johndoe",
@@ -499,6 +524,7 @@ Content-Type: application/json
   },
   "encrypted_app_key": "..."  // Only for E2EE apps
 }`} />
+
 
                     <h3 class="text-[#FFFFFF] text-[22px] font-semibold mt-[40px] mb-[12px]">App Info Endpoint</h3>
                     <p class="text-[#999999] text-[16px] mb-[16px]">
@@ -514,7 +540,31 @@ Content-Type: application/json
     "supportsE2ee": true
   }
 }`} />
+
+                    <h3 class="text-[#FFFFFF] text-[22px] font-semibold mt-[40px] mb-[12px]">Userinfo Endpoint</h3>
+                    <p class="text-[#999999] text-[16px] mb-[16px]">
+                        <code>GET https://api.aveid.net/api/oauth/userinfo</code> - Fetch OpenID profile claims
+                    </p>
+                    <CodeBlock code={`// Request
+GET https://api.aveid.net/api/oauth/userinfo
+Authorization: Bearer ACCESS_TOKEN
+
+// Response
+{
+  "sub": "identity_uuid",
+  "name": "John Doe",
+  "preferred_username": "johndoe",
+  "email": "john@example.com",
+  "picture": "https://...",
+  "iss": "https://aveid.net"
+}`} />
+
+                    <h3 class="text-[#FFFFFF] text-[22px] font-semibold mt-[40px] mb-[12px]">Discovery & JWKS</h3>
+                    <p class="text-[#999999] text-[16px] mb-[16px]">
+                        <code>GET https://aveid.net/.well-known/openid-configuration</code> and <code>GET https://aveid.net/.well-known/jwks.json</code>
+                    </p>
                 </DocSec>
+
 
                 <DocSec title="User Data" id="user-data">
                     <p class="text-[#999999] text-[17px] leading-[1.8]">
@@ -582,6 +632,13 @@ Content-Type: application/json
                             </p>
                         </div>
                         <div class="p-[24px] bg-[#0f0f0f] rounded-[14px] border border-[#1a1a1a]">
+                            <p class="text-[#FFFFFF] text-[17px] font-semibold mb-[8px]">Verify ID Tokens</p>
+                            <p class="text-[#888888] text-[15px] leading-[1.7]">
+                                Validate ID tokens using the JWKS from <code>/.well-known/jwks.json</code> and check <code>iss</code>, <code>aud</code>, and <code>exp</code>.
+                            </p>
+
+                        </div>
+                        <div class="p-[24px] bg-[#0f0f0f] rounded-[14px] border border-[#1a1a1a]">
                             <p class="text-[#FFFFFF] text-[17px] font-semibold mb-[8px]">Secure Token Storage</p>
                             <p class="text-[#888888] text-[15px] leading-[1.7]">
                                 Store access tokens securely. In browsers, use memory or httpOnly cookies. Never store in localStorage for sensitive apps.
@@ -616,9 +673,10 @@ Content-Type: application/json
                         <div class="p-[24px] bg-[#1a1212] rounded-[14px] border border-[#2a1a1a]">
                             <p class="text-[#E14747] text-[17px] font-semibold mb-[8px]">Wrong Field Names in Token Request</p>
                             <p class="text-[#aa8888] text-[15px] leading-[1.7]">
-                                Use camelCase: <code>grantType</code>, <code>clientId</code>, <code>clientSecret</code>, <code>redirectUri</code>, <code>codeVerifier</code>. NOT snake_case like <code>grant_type</code>.
+                                Use camelCase: <code>grantType</code>, <code>clientId</code>, <code>clientSecret</code>, <code>redirectUri</code>, <code>codeVerifier</code>, <code>refreshToken</code>. NOT snake_case like <code>grant_type</code>.
                             </p>
                         </div>
+
                         <div class="p-[24px] bg-[#1a1212] rounded-[14px] border border-[#2a1a1a]">
                             <p class="text-[#E14747] text-[17px] font-semibold mb-[8px]">App Key Parsing Error</p>
                             <p class="text-[#aa8888] text-[15px] leading-[1.7]">
@@ -641,12 +699,13 @@ Content-Type: application/json
                 </DocSec>
 
                 <DocSec title="Code Examples" id="examples">
-                    <h3 class="text-[#FFFFFF] text-[22px] font-semibold mb-[12px]">Complete PKCE Flow Example</h3>
+                    <h3 class="text-[#FFFFFF] text-[22px] font-semibold mb-[12px]">Complete OIDC PKCE Flow Example</h3>
                     <p class="text-[#999999] text-[16px] mb-[16px]">
-                        A complete example of implementing Ave OAuth with PKCE:
+                        A complete example of implementing Ave OIDC with PKCE:
                     </p>
-                    <CodeBlock code={`// Configuration
-const AVE_AUTH_URL = 'https://aveid.net/authorize';
+
+                     <CodeBlock code={`// Configuration
+const AVE_AUTH_URL = 'https://aveid.net/signin';
 const AVE_TOKEN_URL = 'https://api.aveid.net/api/oauth/token';
 const CLIENT_ID = 'your_client_id';
 const REDIRECT_URI = 'https://yourapp.com/callback';
@@ -656,16 +715,19 @@ async function loginWithAve() {
   const codeVerifier = generateCodeVerifier();
   const codeChallenge = await generateCodeChallenge(codeVerifier);
   const state = generateRandomString(32);
+  const nonce = generateRandomString(32);
   
   // Store for later verification
   sessionStorage.setItem('code_verifier', codeVerifier);
   sessionStorage.setItem('oauth_state', state);
+  sessionStorage.setItem('oauth_nonce', nonce);
   
   const params = new URLSearchParams({
     client_id: CLIENT_ID,
     redirect_uri: REDIRECT_URI,
-    scope: 'profile',
+    scope: 'openid profile email',
     state: state,
+    nonce: nonce,
     code_challenge: codeChallenge,
     code_challenge_method: 'S256'
   });
@@ -702,6 +764,7 @@ async function handleCallback() {
   // Clean up
   sessionStorage.removeItem('code_verifier');
   sessionStorage.removeItem('oauth_state');
+  sessionStorage.removeItem('oauth_nonce');
   
   console.log('Logged in as:', data.user.displayName);
   
@@ -713,6 +776,7 @@ async function handleCallback() {
     window.history.replaceState({}, '', window.location.pathname);
   }
 }`} />
+
                 </DocSec>
             </div>
 
