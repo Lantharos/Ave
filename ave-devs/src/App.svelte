@@ -782,6 +782,12 @@
     margin-top: 6px;
   }
 
+  .form__actions {
+    margin-top: 24px;
+    display: flex;
+    justify-content: flex-end;
+  }
+
   .signin {
     display: flex;
     align-items: center;

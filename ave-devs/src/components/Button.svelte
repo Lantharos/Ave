@@ -19,6 +19,10 @@
     transition: transform 0.2s ease, background 0.2s ease, color 0.2s ease;
     background: transparent;
     color: #ffffff;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    white-space: nowrap;
   }
 
   .btn:disabled {
