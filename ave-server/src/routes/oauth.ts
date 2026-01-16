@@ -452,7 +452,7 @@ app.post("/token", zValidator("json", z.discriminatedUnion("grantType", [
   const allowedScopes = oauthApp.allowUserIdScope
     ? [...new Set([...baseScopes, "user_id"])]
     : baseScopes;
-  const requestedScopes = parseScopes(scope);
+  const requestedScopes = parseScopes(authCode.scope);
   const invalidScopes = requestedScopes.filter((s) => !allowedScopes.includes(s));
   if (invalidScopes.length > 0) {
     return c.json({ error: "invalid_scope", error_description: `Invalid scopes: ${invalidScopes.join(", ")}` }, 400);
