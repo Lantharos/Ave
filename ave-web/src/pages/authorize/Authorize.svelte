@@ -188,13 +188,24 @@
     }
 
     let sliderPointerId: number | null = null;
+    let sliderTarget: HTMLElement | null = null;
 
     function handleSliderStart(e: PointerEvent) {
         if (authorizing) return;
         sliderActive = true;
         sliderPointerId = e.pointerId;
-        const target = e.currentTarget as HTMLElement | null;
-        target?.setPointerCapture?.(e.pointerId);
+        sliderTarget = e.currentTarget as HTMLElement | null;
+        
+        // Set pointer capture for better tracking across browsers
+        if (sliderTarget) {
+            try {
+                sliderTarget.setPointerCapture(e.pointerId);
+            } catch (err) {
+                // Fallback for browsers that don't support pointer capture
+                console.warn("Pointer capture not supported", err);
+            }
+        }
+        
         document.addEventListener("pointermove", handleSliderMove);
         document.addEventListener("pointerup", handleSliderEnd);
         document.addEventListener("pointercancel", handleSliderEnd);
@@ -202,6 +213,8 @@
 
     function handleSliderMove(e: PointerEvent) {
         if (!sliderActive || sliderPointerId !== e.pointerId) return;
+        
+        e.preventDefault(); // Prevent default drag behavior in Firefox
         
         const slider = document.getElementById("auth-slider");
         if (!slider) return;
@@ -221,7 +234,18 @@
     function handleSliderEnd(e: PointerEvent) {
         if (!sliderActive || sliderPointerId !== e.pointerId) return;
         sliderActive = false;
+        
+        // Release pointer capture - critical for Firefox
+        if (sliderTarget && sliderPointerId !== null) {
+            try {
+                sliderTarget.releasePointerCapture(sliderPointerId);
+            } catch (err) {
+                // Ignore errors if pointer capture wasn't set
+            }
+        }
+        
         sliderPointerId = null;
+        sliderTarget = null;
         document.removeEventListener("pointermove", handleSliderMove);
         document.removeEventListener("pointerup", handleSliderEnd);
         document.removeEventListener("pointercancel", handleSliderEnd);
@@ -252,7 +276,7 @@
     $effect(() => {
         if (!$isAuthenticated) {
             // Redirect to login, then come back
-            const returnUrl = encodeURIComponent(window.location.pathname + window.location.search);
+            const returnUrl = encodeURIComponent(window.location.pathname) + window.location.search;
             if (params.embed) {
                 window.parent?.postMessage({ type: "ave:auth_required" }, window.location.origin);
             }
@@ -338,7 +362,7 @@
                 <div class="flex flex-col gap-[15px] w-full max-w-[350px]">
                     <button 
                         class="w-full py-[18px] bg-[#FFFFFF] text-[#090909] font-semibold rounded-[16px] hover:bg-[#E0E0E0] transition-colors"
-                        onclick={() => goto("/login?return=" + encodeURIComponent(window.location.pathname + window.location.search))}
+                        onclick={() => goto("/login?return=" + encodeURIComponent(window.location.pathname) + window.location.search)}
                     >
                         Sign In with Trust Code
                     </button>

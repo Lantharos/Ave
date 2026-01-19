@@ -1,6 +1,6 @@
 import { createHash } from "crypto";
 
-const ISSUER = process.env.OIDC_ISSUER || "https://aveid.net";
+const ISSUER = process.env.OIDC_ISSUER || "https://api.aveid.net";
 const RESOURCE_AUDIENCE = process.env.OIDC_RESOURCE_AUDIENCE || "https://api.aveid.net";
 const JWT_KID = process.env.OIDC_KID || "ave-oidc-v1";
 const JWT_PRIVATE_KEY_PEM = process.env.OIDC_PRIVATE_KEY_PEM;
