@@ -188,72 +188,91 @@
     }
 
     let sliderPointerId: number | null = null;
-    let sliderTarget: HTMLElement | null = null;
+    let sliderRef: HTMLElement | null = null;
+    let sliderMaxTravel = $state(0);
+
+    function getButtonWidth() {
+        return typeof window !== 'undefined' && window.innerWidth < 768 ? 44 : 70;
+    }
 
     function handleSliderStart(e: PointerEvent) {
         if (authorizing) return;
+        e.preventDefault();
+        
         sliderActive = true;
         sliderPointerId = e.pointerId;
-        sliderTarget = e.currentTarget as HTMLElement | null;
         
-        // Set pointer capture for better tracking across browsers
-        if (sliderTarget) {
-            try {
-                sliderTarget.setPointerCapture(e.pointerId);
-            } catch (err) {
-                // Fallback for browsers that don't support pointer capture
-                console.warn("Pointer capture not supported", err);
-            }
+        // Get the slider track element and calculate max travel distance
+        sliderRef = document.getElementById("auth-slider");
+        if (sliderRef) {
+            const rect = sliderRef.getBoundingClientRect();
+            sliderMaxTravel = rect.width - getButtonWidth();
         }
         
-        document.addEventListener("pointermove", handleSliderMove);
-        document.addEventListener("pointerup", handleSliderEnd);
-        document.addEventListener("pointercancel", handleSliderEnd);
+        // Use pointer capture on the slider track for reliable cross-browser tracking
+        if (sliderRef) {
+            try {
+                sliderRef.setPointerCapture(e.pointerId);
+            } catch (err) {
+                // Fallback - add document listeners
+                document.addEventListener("pointermove", handleSliderMove);
+                document.addEventListener("pointerup", handleSliderEnd);
+                document.addEventListener("pointercancel", handleSliderEnd);
+            }
+        }
     }
 
     function handleSliderMove(e: PointerEvent) {
-        if (!sliderActive || sliderPointerId !== e.pointerId) return;
+        if (!sliderActive) return;
+        // Only filter by pointerId if we have one set (allows fallback to work)
+        if (sliderPointerId !== null && e.pointerId !== sliderPointerId) return;
         
-        e.preventDefault(); // Prevent default drag behavior in Firefox
+        e.preventDefault();
         
-        const slider = document.getElementById("auth-slider");
-        if (!slider) return;
+        if (!sliderRef || sliderMaxTravel <= 0) return;
         
-        const rect = slider.getBoundingClientRect();
-        const buttonWidth = window.innerWidth < 768 ? 44 : 70;
-        const position = Math.max(0, Math.min(1, (e.clientX - rect.left - buttonWidth / 2) / (rect.width - buttonWidth)));
+        const rect = sliderRef.getBoundingClientRect();
+        const buttonWidth = getButtonWidth();
+        const relativeX = e.clientX - rect.left - buttonWidth / 2;
+        const position = Math.max(0, Math.min(1, relativeX / sliderMaxTravel));
         sliderPosition = position;
         
         // Auto-authorize when fully slid
         if (position >= 0.95) {
-            sliderActive = false;
+            cleanupSlider();
             handleAuthorize();
         }
     }
 
     function handleSliderEnd(e: PointerEvent) {
-        if (!sliderActive || sliderPointerId !== e.pointerId) return;
-        sliderActive = false;
+        if (!sliderActive) return;
+        if (sliderPointerId !== null && e.pointerId !== sliderPointerId) return;
         
-        // Release pointer capture - critical for Firefox
-        if (sliderTarget && sliderPointerId !== null) {
-            try {
-                sliderTarget.releasePointerCapture(sliderPointerId);
-            } catch (err) {
-                // Ignore errors if pointer capture wasn't set
-            }
-        }
-        
-        sliderPointerId = null;
-        sliderTarget = null;
-        document.removeEventListener("pointermove", handleSliderMove);
-        document.removeEventListener("pointerup", handleSliderEnd);
-        document.removeEventListener("pointercancel", handleSliderEnd);
+        cleanupSlider();
         
         // Snap back if not authorized
         if (sliderPosition < 0.95) {
             sliderPosition = 0;
         }
+    }
+    
+    function cleanupSlider() {
+        sliderActive = false;
+        
+        // Release pointer capture
+        if (sliderRef && sliderPointerId !== null) {
+            try {
+                sliderRef.releasePointerCapture(sliderPointerId);
+            } catch (err) {
+                // Ignore - may not have been captured
+            }
+        }
+        
+        sliderPointerId = null;
+        sliderRef = null;
+        document.removeEventListener("pointermove", handleSliderMove);
+        document.removeEventListener("pointerup", handleSliderEnd);
+        document.removeEventListener("pointercancel", handleSliderEnd);
     }
 
 
@@ -459,16 +478,18 @@
 
             <!-- Swipe to sign in -->
             <div class="flex flex-col gap-3 md:gap-[20px] mt-4 md:mt-0">
+                <!-- svelte-ignore a11y_no_static_element_interactions -->
                 <div 
                     id="auth-slider"
-                    class="rounded-full bg-[#171717]/80 border-[3px] md:border-[6px] border-[#171717]/80 w-full relative h-[50px] md:h-[82px]"
+                    class="rounded-full bg-[#171717]/80 border-[3px] md:border-[6px] border-[#171717]/80 w-full relative h-[50px] md:h-[82px] touch-none select-none [container-type:inline-size]"
+                    onpointerdown={handleSliderStart}
+                    onpointermove={handleSliderMove}
+                    onpointerup={handleSliderEnd}
+                    onpointercancel={handleSliderEnd}
                 >
-                    <button 
-                        class="w-[44px] h-[44px] md:w-[70px] md:h-[70px] bg-white rounded-full cursor-grab flex items-center justify-center absolute top-0 z-10 transition-transform {sliderActive ? '' : 'transition-all duration-300'}"
-                        style="left: calc({sliderPosition * 100}% * (1 - 44px / 100%)); --mobile-btn: 44px; --desktop-btn: 70px;"
-                        onpointerdown={handleSliderStart}
-                        disabled={authorizing}
-                        aria-label="Drag to sign in"
+                    <div 
+                        class="w-[44px] h-[44px] md:w-[70px] md:h-[70px] bg-white rounded-full cursor-grab flex items-center justify-center absolute top-0 left-0 z-10 pointer-events-none {sliderActive ? '' : 'transition-[transform] duration-300'}"
+                        style="transform: translateX(calc({sliderPosition} * (100cqw - 100%)));"
                     >
                         {#if authorizing}
                             <div class="w-5 h-5 md:w-[24px] md:h-[24px] border-2 border-[#090909] border-t-transparent rounded-full animate-spin"></div>
@@ -477,7 +498,7 @@
                                 <path d="M11 30L23 18L11 6" stroke="#090909" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
                             </svg>
                         {/if}
-                    </button>
+                    </div>
 
                     <p class="text-[#878787] text-sm md:text-[18px] font-poppins font-normal absolute top-0 bottom-0 left-0 right-0 text-center flex items-center justify-center pointer-events-none">
                         {authorizing ? "Signing in..." : "Swipe to Sign In"}
