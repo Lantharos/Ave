@@ -57,6 +57,7 @@
     let identityDropdownOpen = $state(false);
     let loading = $state(true);
     let authorizing = $state(false);
+    let autoAuthorizing = $state(false);
     let error = $state<string | null>(null);
     let sliderPosition = $state(0);
     let sliderActive = $state(false);
@@ -70,26 +71,27 @@
             return;
         }
 
+        loading = true;
+        error = null;
+
         try {
-            loading = true;
-            
             // Load app info and check for existing authorization in parallel
             const [appData, authData] = await Promise.all([
                 api.oauth.getApp(params.clientId),
                 api.oauth.getAuthorization(params.clientId),
             ]);
-            
+
             appInfo = appData.app;
             existingAuth = authData.authorization;
-            
+
             // Check if this is an E2EE app and we don't have the master key
             if (appData.app.supportsE2ee && !hasMasterKey()) {
                 needsMasterKey = true;
             }
-            
+
             // Set default selected identity
             const authState = get(auth);
-            
+
             // If there's an existing auth, try to use that identity
             if (existingAuth) {
                 const existingIdentity = authState.identities.find(i => i.id === existingAuth!.identityId);
@@ -97,19 +99,20 @@
             } else {
                 selectedIdentity = authState.currentIdentity || authState.identities[0] || null;
             }
-            
-            // Auto-authorize if:
-            // 1. User has only one identity
-            // 2. App was previously authorized with this identity
-            // 3. Not an E2EE app that needs master key, OR we have the master key
-            if (
+
+            const shouldAutoAuthorize = (
                 authState.identities.length === 1 &&
                 existingAuth &&
                 existingAuth.identityId === authState.identities[0].id &&
                 (!appData.app.supportsE2ee || hasMasterKey())
-            ) {
-                // Auto-authorize - same identity, already authorized before
-                handleAuthorize();
+            );
+
+            if (shouldAutoAuthorize) {
+                // Keep UI in loading state while we redirect.
+                autoAuthorizing = true;
+                await handleAuthorize();
+                // If we got here, redirect failed (error set) or we're embedded.
+                autoAuthorizing = false;
             }
         } catch (err) {
             error = err instanceof Error ? err.message : "Failed to load app info";
@@ -322,6 +325,11 @@
     });
 </script>
 
+{#if loading || autoAuthorizing}
+    <div class="bg-[#090909] min-h-screen-fixed flex items-center justify-center p-6 md:p-[50px]">
+        <div class="w-[48px] h-[48px] border-2 border-[#FFFFFF] border-t-transparent rounded-full animate-spin"></div>
+    </div>
+{:else}
 <div class="bg-[#090909] min-h-screen-fixed flex flex-col md:flex-row md:items-stretch items-center gap-6 md:gap-[50px] p-6 md:p-[50px] relative overflow-auto">
     <div class="flex-1 z-10 flex flex-col items-start justify-start md:justify-between p-4 md:p-[50px] w-full">
         <div class="flex flex-row gap-4 md:gap-[20px] items-start">
@@ -389,11 +397,7 @@
     </div>
 
     <div class="flex-1 w-full md:min-h-full px-4 md:px-[75px] z-10 py-5 md:py-[70px] flex flex-col justify-between rounded-[24px] md:rounded-[64px] bg-[#111111]/60 backdrop-blur-xl">
-        {#if loading}
-            <div class="flex-1 flex items-center justify-center">
-                <div class="w-[48px] h-[48px] border-2 border-[#FFFFFF] border-t-transparent rounded-full animate-spin"></div>
-            </div>
-        {:else if needsMasterKey}
+        {#if needsMasterKey}
             <div class="flex flex-col gap-[30px] items-center justify-center flex-1">
                 <div class="w-[80px] h-[80px] rounded-full bg-[#E14747]/20 flex items-center justify-center">
                     <svg width="40" height="40" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -553,3 +557,4 @@
         </svg>
     </div>
 </div>
+{/if}

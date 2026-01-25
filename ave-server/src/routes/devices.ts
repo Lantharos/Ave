@@ -294,16 +294,16 @@ app.delete("/:deviceId", async (c) => {
   return c.json({ success: true });
 });
 
-// Cleanup stale devices (not seen for over 30 days)
+// Cleanup stale devices (not seen for over 14 days)
 // This should be called periodically (e.g., daily cron job)
 export async function cleanupStaleDevices() {
-  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+  const fourteenDaysAgo = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000);
   
   // Get all stale devices
   const staleDevices = await db
     .select()
     .from(devices)
-    .where(lt(devices.lastSeenAt, thirtyDaysAgo));
+    .where(lt(devices.lastSeenAt, fourteenDaysAgo));
   
   if (staleDevices.length === 0) {
     console.log("[Cleanup] No stale devices found");
@@ -331,7 +331,7 @@ export async function cleanupStaleDevices() {
         deviceId: device.id, 
         deviceName: device.name,
         lastSeenAt: device.lastSeenAt,
-        reason: "inactive_30_days" 
+        reason: "inactive_14_days" 
       },
       severity: "info",
     });

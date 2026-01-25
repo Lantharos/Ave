@@ -5,6 +5,7 @@
     import { api, type Passkey as PasskeyType } from "../../../lib/api";
     import { registerPasskey, authenticateWithPasskey } from "../../../lib/webauthn";
     import { loadMasterKey, encryptMasterKeyWithPrf } from "../../../lib/crypto";
+    import { getPushStatus, subscribeToPushNotifications, unsubscribeFromPushNotifications } from "../../../lib/push";
 
     let passkeys = $state<PasskeyType[]>([]);
     let trustCodesRemaining = $state(0);
@@ -15,6 +16,13 @@
     let regeneratingCodes = $state(false);
     let showNewCodes = $state(false);
     let newCodes = $state<string[]>([]);
+
+    let pushSupported = $state(false);
+    let pushPermission = $state<NotificationPermission>("default");
+    let pushSubscribed = $state(false);
+    let pushBusy = $state(false);
+    let showPushPrompt = $state(false);
+    let pushError = $state<string | null>(null);
 
     async function loadSecurityData() {
         try {
@@ -150,9 +158,79 @@
         }
     }
 
+    async function loadPush() {
+        try {
+            const status = await getPushStatus();
+            pushSupported = status.supported;
+            pushPermission = status.permission;
+            pushSubscribed = status.subscribed;
+        } catch {
+            pushSupported = false;
+            pushPermission = "denied";
+            pushSubscribed = false;
+        }
+    }
+
+    function pushDescription(): string {
+        if (!pushSupported) return "Push notifications aren't supported in this browser.";
+        if (pushSubscribed) return "Enabled for this device. We'll notify you about login approval requests.";
+        if (pushPermission === "denied") return "Notifications are blocked in your browser settings for this site.";
+        return "Get a notification when another device asks to log in.";
+    }
+
+    async function handlePushAction() {
+        pushError = null;
+        if (!pushSupported) return;
+
+        if (pushSubscribed) {
+            pushBusy = true;
+            try {
+                await unsubscribeFromPushNotifications();
+                await loadPush();
+            } catch (err) {
+                pushError = err instanceof Error ? err.message : "Failed to disable notifications";
+            } finally {
+                pushBusy = false;
+            }
+            return;
+        }
+
+        if (pushPermission === "denied") {
+            pushError = "Notifications are blocked for this site in your browser settings.";
+            return;
+        }
+
+        // Only show the pre-permission prompt if the browser will actually ask.
+        if (pushPermission === "default") {
+            showPushPrompt = true;
+            return;
+        }
+
+        // Permission already granted.
+        await confirmEnablePush();
+    }
+
+    async function confirmEnablePush() {
+        pushBusy = true;
+        pushError = null;
+        try {
+            const ok = await subscribeToPushNotifications();
+            if (!ok) {
+                pushError = "Couldn't enable notifications. Check your browser permission prompt and try again.";
+            }
+            await loadPush();
+        } catch (err) {
+            pushError = err instanceof Error ? err.message : "Failed to enable notifications";
+        } finally {
+            pushBusy = false;
+            showPushPrompt = false;
+        }
+    }
+
     // Load data on mount
     $effect(() => {
         loadSecurityData();
+        loadPush();
     });
 </script>
 
@@ -198,7 +276,7 @@
             description="Add a passkey to this device." 
             buttons={[
                 { 
-                    icon: addingPasskey ? "" : "/icons/chevron-right-68.svg", 
+                    icon: "/icons/chevron-right-68.svg", 
                     color: "#FFFFFF", 
                     onClick: handleAddPasskey,
                     loading: addingPasskey 
@@ -209,17 +287,13 @@
 
     <div class="h-[1px] bg-[#202020] w-full"></div>
 
-    <ActionCard action="SECURITY QUESTIONS" description="Answer security questions to help protect your account." buttons={[
-       { icon: "/icons/pencil-56.svg", color: "#FFFFFF", onClick: () => {} },
-    ]}/>
-
     <div class="flex flex-col gap-2 md:gap-[10px]">
         <ActionCard 
             action="TRUST CODES" 
             description="Trust codes can be used to recover your account. You have {trustCodesRemaining} code(s)." 
             buttons={[
                 { 
-                    icon: regeneratingCodes ? "" : "/icons/refresh-56.svg", 
+                    icon: "/icons/refresh-56.svg", 
                     color: "#FFFFFF", 
                     onClick: handleRegenerateCodes,
                     loading: regeneratingCodes 
@@ -227,7 +301,61 @@
             ]}
         />
     </div>
+
+    <div class="h-[1px] bg-[#202020] w-full"></div>
+
+    {#if pushError}
+        <div class="bg-[#E14747]/20 border border-[#E14747] rounded-[16px] px-3 md:px-[20px] py-2 md:py-[15px]">
+            <Text type="p" size={16} mobileSize={13} color="#E14747">{pushError}</Text>
+        </div>
+    {/if}
+
+    <div class="flex flex-col gap-2 md:gap-[10px]">
+        <ActionCard 
+            action={pushSubscribed ? "PUSH NOTIFICATIONS (ON)" : "PUSH NOTIFICATIONS"}
+            description={pushDescription()}
+            buttons={[
+                {
+                    icon: "/icons/chevron-right-68.svg",
+                    color: "#FFFFFF",
+                    onClick: handlePushAction,
+                    loading: pushBusy,
+                    disabled: !pushSupported,
+                },
+            ]}
+        />
+    </div>
 </div>
+
+{#if showPushPrompt}
+    <div class="fixed inset-0 bg-black/80 flex items-center justify-center z-50 backdrop-blur-sm p-4">
+        <div class="bg-[#171717] rounded-[24px] md:rounded-[36px] p-6 md:p-[40px] max-w-[520px] w-full">
+            <Text type="h" size={24} weight="bold">Enable notifications?</Text>
+            <p class="text-[#878787] text-sm md:text-[16px] mt-2 md:mt-[10px]">
+                We'll ask your browser for permission next. If you allow it, Ave can notify this device when another device requests a login approval.
+            </p>
+            <div class="flex flex-row gap-2 md:gap-[10px] mt-6 md:mt-[30px]">
+                <button 
+                    class="flex-1 py-3 md:py-[15px] bg-[#222222] text-[#FFFFFF] font-semibold rounded-[16px] hover:bg-[#333333] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    onclick={() => { showPushPrompt = false; }}
+                    disabled={pushBusy}
+                >
+                    Not now
+                </button>
+                <button 
+                    class="flex-1 py-3 md:py-[15px] bg-[#FFFFFF] text-[#000000] font-semibold rounded-[16px] hover:bg-[#E0E0E0] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-3"
+                    onclick={confirmEnablePush}
+                    disabled={pushBusy}
+                >
+                    {#if pushBusy}
+                        <div class="w-4 h-4 border-2 border-[#000000] border-t-transparent rounded-full animate-spin"></div>
+                    {/if}
+                    Enable
+                </button>
+            </div>
+        </div>
+    </div>
+{/if}
 
 {#if showNewCodes}
     <div class="fixed inset-0 bg-black/80 flex items-center justify-center z-50 backdrop-blur-sm p-4">

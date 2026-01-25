@@ -114,7 +114,7 @@
             description="This will invalidate keys on all enrolled devices, except this one, you will need to re-add every device again." 
             buttons={[
                 { 
-                    icon: revokingAll ? "" : "/icons/chevron-right-68.svg", 
+                    icon: "/icons/chevron-right-68.svg", 
                     color: "#FFB400", 
                     onClick: handleRevokeAllDevices,
                     loading: revokingAll 

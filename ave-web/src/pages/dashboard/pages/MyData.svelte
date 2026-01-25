@@ -74,7 +74,7 @@
         description="This package includes only metadata tied to your Ave ID. App-level data must be exported from those apps directly." 
         buttons={[
             { 
-                icon: exporting ? "" : "/icons/chevron-right-68.svg", 
+                icon: "/icons/chevron-right-68.svg", 
                 color: "#FFFFFF", 
                 onClick: handleExport,
                 loading: exporting 
