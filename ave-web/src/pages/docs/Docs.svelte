@@ -78,6 +78,11 @@
         <div class="mobile-nav-overlay mobile-scroll-container py-12 px-6">
             <div class="flex flex-col gap-4 w-full max-w-sm">
                 <a href="/" use:route class="text-white text-xl font-bold mb-4">← Back to Ave</a>
+                <div class="flex items-center gap-2 text-xs text-[#555555] mb-2">
+                    <a href="https://github.com/Lantharos/Ave" target="_blank" class="hover:text-[#999999] transition-colors">GitHub</a>
+                    <span>·</span>
+                    <a href="https://github.com/Lantharos/Ave/blob/main/LICENSE" target="_blank" class="hover:text-[#999999] transition-colors">AGPL-3.0</a>
+                </div>
                 <p class="text-[#555555] text-xs font-bold tracking-widest">OAUTH INTEGRATION</p>
                 {#each sections as section}
                     <button 
@@ -121,6 +126,12 @@
                 </svg>
                 Back to Ave
             </a>
+
+            <div class="mt-[12px] flex items-center gap-[10px] text-[13px] text-[#444444]">
+                <a href="https://github.com/Lantharos/Ave" target="_blank" class="hover:text-[#888888] transition-colors">GitHub</a>
+                <span class="opacity-60">·</span>
+                <a href="https://github.com/Lantharos/Ave/blob/main/LICENSE" target="_blank" class="hover:text-[#888888] transition-colors">AGPL-3.0</a>
+            </div>
         </div>
     </nav>
 
