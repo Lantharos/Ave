@@ -8,7 +8,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@ave-id/embed": "0.2.1",
+    "@ave-id/embed": "0.2.2",
     "@ave-id/sdk": "^0.2.0"
   },
   "devDependencies": {

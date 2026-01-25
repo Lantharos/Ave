@@ -79,6 +79,8 @@ export function openAveSheet({
   scope = "openid profile email",
   issuer = "https://aveid.net",
   theme = DEFAULT_THEME,
+  codeChallenge,
+  codeChallengeMethod,
   onSuccess,
   onError,
   onClose,
@@ -148,6 +150,13 @@ export function openAveSheet({
     embed: "1",
     theme,
   });
+  
+  if (codeChallenge) {
+    params.set("code_challenge", codeChallenge);
+  }
+  if (codeChallengeMethod) {
+    params.set("code_challenge_method", codeChallengeMethod);
+  }
 
   iframe.src = `${issuer}/signin?${params.toString()}`;
   iframe.style.cssText = `
@@ -240,6 +249,8 @@ export function openAvePopup({
   redirectUri,
   scope = "openid profile email",
   issuer = "https://aveid.net",
+  codeChallenge,
+  codeChallengeMethod,
   width = 450,
   height = 650,
   onSuccess,
@@ -252,6 +263,13 @@ export function openAvePopup({
     scope,
     embed: "1",
   });
+  
+  if (codeChallenge) {
+    params.set("code_challenge", codeChallenge);
+  }
+  if (codeChallengeMethod) {
+    params.set("code_challenge_method", codeChallengeMethod);
+  }
 
   const left = (window.innerWidth - width) / 2 + window.screenX;
   const top = (window.innerHeight - height) / 2 + window.screenY;

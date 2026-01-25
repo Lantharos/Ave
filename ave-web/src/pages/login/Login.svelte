@@ -31,7 +31,7 @@
         }
         return decoded;
     })();
-    let pendingOauth = $state<{ clientId: string; redirectUri: string; scope: string; state?: string; nonce?: string } | null>(null);
+    let pendingOauth = $state<{ clientId: string; redirectUri: string; scope: string; state?: string; nonce?: string; embed?: boolean; codeChallenge?: string; codeChallengeMethod?: string } | null>(null);
 
     
     onMount(() => {
@@ -46,6 +46,9 @@
                 scope: params.get("scope") || "openid profile email",
                 state: params.get("state") || undefined,
                 nonce: params.get("nonce") || undefined,
+                embed: params.get("embed") === "1",
+                codeChallenge: params.get("code_challenge") || undefined,
+                codeChallengeMethod: params.get("code_challenge_method") || undefined,
             };
         }
 
@@ -110,6 +113,15 @@
                 state: pendingOauth.state || "",
                 nonce: pendingOauth.nonce || "",
             });
+            if (pendingOauth.embed) {
+                params.set("embed", "1");
+            }
+            if (pendingOauth.codeChallenge) {
+                params.set("code_challenge", pendingOauth.codeChallenge);
+            }
+            if (pendingOauth.codeChallengeMethod) {
+                params.set("code_challenge_method", pendingOauth.codeChallengeMethod);
+            }
             goto(`/signin?${params.toString()}`);
             return;
         }

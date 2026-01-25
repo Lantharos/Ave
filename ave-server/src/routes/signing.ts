@@ -5,6 +5,7 @@ import { db, signingKeys, signatureRequests, identities, oauthApps, activityLogs
 import { requireAuth } from "../middleware/auth";
 import { eq, and, desc } from "drizzle-orm";
 import { verifySignature, isValidPublicKey, isValidSignature } from "../lib/signing";
+import { verifyJwt, RESOURCE_AUDIENCE } from "./oauth";
 
 const app = new Hono();
 
@@ -636,13 +637,29 @@ app.post("/verify", zValidator("json", z.object({
 
 const DEMO_CLIENT_ID = "app_4488d5deb6013090e9f84b87cda541f9";
 
-// Create a demo signature request (no client secret needed, only for demo app)
-app.post("/demo/request", requireAuth, zValidator("json", z.object({
-  identityId: z.string().uuid(),
+// Create a demo signature request using OAuth access token
+app.post("/demo/request", zValidator("json", z.object({
   payload: z.string().min(1).max(1000),
 })), async (c) => {
-  const user = c.get("user")!;
-  const { identityId, payload } = c.req.valid("json");
+  const { payload } = c.req.valid("json");
+  
+  // Verify OAuth access token
+  const authHeader = c.req.header("Authorization");
+  if (!authHeader?.startsWith("Bearer ")) {
+    return c.json({ error: "Unauthorized" }, 401);
+  }
+  
+  const token = authHeader.slice(7);
+  
+  const jwtPayload = await verifyJwt(token, RESOURCE_AUDIENCE);
+  if (!jwtPayload) {
+    return c.json({ error: "Invalid token" }, 401);
+  }
+  
+  const identityId = String(jwtPayload.sub || "");
+  if (!identityId) {
+    return c.json({ error: "Invalid token - no identity" }, 401);
+  }
   
   // Get the demo app
   const [demoApp] = await db
@@ -655,11 +672,11 @@ app.post("/demo/request", requireAuth, zValidator("json", z.object({
     return c.json({ error: "Demo app not configured" }, 500);
   }
   
-  // Verify identity belongs to user
+  // Verify identity exists
   const [identity] = await db
     .select()
     .from(identities)
-    .where(and(eq(identities.id, identityId), eq(identities.userId, user.id)))
+    .where(eq(identities.id, identityId))
     .limit(1);
   
   if (!identity) {

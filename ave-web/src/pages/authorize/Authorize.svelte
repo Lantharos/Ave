@@ -192,7 +192,8 @@
             
             // Redirect back to the app
             if (params.embed) {
-                window.parent?.postMessage({ type: "ave:success", payload: { redirectUrl } }, "*");
+                const target = window.opener ?? window.parent;
+                target?.postMessage({ type: "ave:success", payload: { redirectUrl } }, "*");
                 return;
             }
             window.location.href = redirectUrl;
@@ -301,7 +302,8 @@
             redirectUrl.searchParams.set("state", params.state);
         }
         if (params.embed) {
-            window.parent?.postMessage({ type: "ave:error", payload: { error: "access_denied" } }, "*");
+            const target = window.opener ?? window.parent;
+            target?.postMessage({ type: "ave:error", payload: { error: "access_denied" } }, "*");
             return;
         }
         window.location.href = redirectUrl.toString();
@@ -315,7 +317,8 @@
             // Build the full return URL properly - encode the entire path + search
             const returnUrl = encodeURIComponent(window.location.pathname + window.location.search);
             if (params.embed) {
-                window.parent?.postMessage({ type: "ave:auth_required" }, "*");
+                const target = window.opener ?? window.parent;
+                target?.postMessage({ type: "ave:auth_required" }, "*");
             }
             goto(`/login?return=${returnUrl}`);
             return;

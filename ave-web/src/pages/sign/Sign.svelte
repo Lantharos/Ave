@@ -92,7 +92,8 @@
             
             // Notify parent if embedded
             if (embed) {
-                window.parent?.postMessage({
+                const target = window.opener ?? window.parent;
+                target?.postMessage({
                     type: "ave:signed",
                     payload: {
                         requestId: request.id,
@@ -129,7 +130,8 @@
             
             // Notify parent if embedded
             if (embed) {
-                window.parent?.postMessage({
+                const target = window.opener ?? window.parent;
+                target?.postMessage({
                     type: "ave:denied",
                     payload: { requestId: request.id }
                 }, "*");

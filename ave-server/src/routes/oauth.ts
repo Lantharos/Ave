@@ -761,4 +761,7 @@ app.delete("/authorizations/:authId", requireAuth, async (c) => {
   return c.json({ success: true });
 });
 
+// Re-export for use in other routes
+export { verifyJwt, RESOURCE_AUDIENCE };
+
 export default app;

@@ -5,7 +5,7 @@
     "": {
       "name": "ave-demo",
       "dependencies": {
-        "@ave-id/embed": "0.2.1",
+        "@ave-id/embed": "0.2.2",
         "@ave-id/sdk": "^0.2.0",
       },
       "devDependencies": {
@@ -20,7 +20,7 @@
     },
   },
   "packages": {
-    "@ave-id/embed": ["@ave-id/embed@0.2.1", "", {}, "sha512-CpcvcU/TkbBRoMxXTlx/HTpeUe4+yGD3082VmI3Vf1Kev4fotEFX0QE8WlswrfSMR8keH5+CEOA0z2/8VIwbOg=="],
+    "@ave-id/embed": ["@ave-id/embed@0.2.2", "", {}, "sha512-+N2iECYHZQXuL1XBS0w9n5uNIq8pJ0YgY3IUUWkqI55ppSKxITAyWFy04sHEc60L+ECNhzqD1YDAZsRmEDQmDw=="],
 
     "@ave-id/sdk": ["@ave-id/sdk@0.2.0", "", {}, "sha512-uCQN4Jwe3LhPxs18pJhlGTKaYLTYtGrwIBbLL/xDJqSOSYWnB9BBnCS/bSfW/01k+ylPDKsYmhy0d8RIysLn4g=="],
 

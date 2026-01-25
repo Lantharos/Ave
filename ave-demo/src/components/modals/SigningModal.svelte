@@ -3,6 +3,7 @@
   import Modal from "./Modal.svelte";
   import { store } from "../../lib/store.svelte.js";
   import { trySheetAuth } from "../../lib/auth.js";
+  import { createDemoSigningRequest } from "../../lib/api.js";
   
   let { onclose } = $props();
   
@@ -22,48 +23,12 @@
     result = null;
     
     try {
-      // We need to get the user's identity ID - for now use the one from the auth
-      // In a real implementation, you'd let user pick which identity to sign with
-      const identityId = store.user?.identityId;
-      
-      if (!identityId) {
-        // For demo, we need to get identity from the session
-        // Let's fetch it from the API
-        const meRes = await fetch("https://api.aveid.net/api/auth/me", {
-          credentials: "include"
-        });
-        
-        if (!meRes.ok) {
-          throw new Error("Not authenticated with Ave");
-        }
-        
-        const meData = await meRes.json();
-        const identity = meData.currentIdentity || meData.identities?.[0];
-        
-        if (!identity) {
-          throw new Error("No identity found");
-        }
-        
-        store.user = { ...store.user, identityId: identity.id };
+      if (!store.user?.accessToken) {
+        throw new Error("Not authenticated");
       }
       
       // Create demo signature request
-      const createRes = await fetch("https://api.aveid.net/api/signing/demo/request", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({
-          identityId: store.user.identityId,
-          payload: message,
-        }),
-      });
-      
-      if (!createRes.ok) {
-        const err = await createRes.json();
-        throw new Error(err.error || "Failed to create request");
-      }
-      
-      const { requestId } = await createRes.json();
+      const { requestId } = await createDemoSigningRequest(store.user.accessToken, message);
       
       // Open signing sheet
       openAveSigningSheet({
