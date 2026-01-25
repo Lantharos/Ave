@@ -15,6 +15,7 @@ import {
 } from "../lib/crypto";
 import { eq, and, gt, desc } from "drizzle-orm";
 import { notifyLoginRequest } from "../lib/websocket";
+import { sendLoginRequestNotification, type PushSubscription } from "../lib/webpush";
 
 const app = new Hono();
 
@@ -355,6 +356,38 @@ app.post("/request-approval", zValidator("json", z.object({
     os: request.os,
     ipAddress: request.ipAddress,
   });
+  
+  // Send push notifications to all user's devices with push subscriptions
+  const userDevices = await db
+    .select()
+    .from(devices)
+    .where(and(eq(devices.userId, identity.userId), eq(devices.isActive, true)));
+  
+  for (const userDevice of userDevices) {
+    if (userDevice.pushSubscription) {
+      try {
+        const subscription = userDevice.pushSubscription as PushSubscription;
+        const sent = await sendLoginRequestNotification(subscription, {
+          requestId: request.id,
+          deviceName: request.deviceName || "Unknown Device",
+          deviceType: request.deviceType || "computer",
+          browser: request.browser || undefined,
+          os: request.os || undefined,
+          ipAddress: request.ipAddress || undefined,
+        });
+        
+        // If push failed (subscription invalid), remove it
+        if (!sent) {
+          await db
+            .update(devices)
+            .set({ pushSubscription: null })
+            .where(eq(devices.id, userDevice.id));
+        }
+      } catch (e) {
+        console.error(`[Push] Failed to send notification to device ${userDevice.id}:`, e);
+      }
+    }
+  }
   
   return c.json({
     requestId: request.id,
