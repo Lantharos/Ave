@@ -1,7 +1,7 @@
 <script lang="ts">
     import Text from "../../components/Text.svelte";
     import { api } from "../../lib/api";
-    import { signWithIdentityKey } from "../../lib/signing";
+    import { createSigningKeyForIdentity, signWithIdentityKey } from "../../lib/signing";
     import { isAuthenticated } from "../../stores/auth";
     import { goto } from "@mateothegreat/svelte5-router";
 
@@ -41,6 +41,10 @@
         encryptedPrivateKey: string;
     } | null>(null);
 
+    let needsSigningKey = $state(false);
+    let settingUpKey = $state(false);
+    let setupError = $state<string | null>(null);
+
     async function loadRequest() {
         if (!requestId) {
             error = "Missing request ID";
@@ -56,18 +60,43 @@
             app = data.app;
             identity = data.identity;
             signingKey = data.signingKey;
+
+            needsSigningKey = !data.signingKey;
+            setupError = null;
             
             if (request.status !== "pending") {
                 error = `This request has already been ${request.status}`;
             }
-            
-            if (!signingKey) {
-                error = "No signing key found for this identity. Please set up signing in your dashboard.";
+
+            // If the request is pending but the user has no signing key yet, show setup UI.
+            if (request.status === "pending" && !data.signingKey) {
+                error = null;
             }
         } catch (err) {
             error = err instanceof Error ? err.message : "Failed to load signature request";
         } finally {
             loading = false;
+        }
+    }
+
+    async function handleSetupSigningKey() {
+        if (!identity) return;
+        try {
+            settingUpKey = true;
+            setupError = null;
+
+            const created = await createSigningKeyForIdentity();
+            if (!created) {
+                setupError = "Couldn't create signing key. Make sure your encryption/master key is set up.";
+                return;
+            }
+
+            await api.signing.createKey(identity.id, created.publicKey, created.encryptedPrivateKey);
+            await loadRequest();
+        } catch (err) {
+            setupError = err instanceof Error ? err.message : "Failed to set up signing key";
+        } finally {
+            settingUpKey = false;
         }
     }
 
@@ -281,27 +310,55 @@
 
             <!-- Actions -->
             <div class="p-6 md:p-8 pt-0 flex flex-col gap-3">
-                <button 
-                    class="w-full py-4 bg-[#FFFFFF] text-[#000000] font-semibold rounded-2xl hover:bg-[#E0E0E0] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-3"
-                    onclick={handleSign}
-                    disabled={signing || isExpired()}
-                >
-                    {#if signing}
-                        <div class="w-5 h-5 border-2 border-[#000000] border-t-transparent rounded-full animate-spin"></div>
-                    {:else}
-                        <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                            <path d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                        </svg>
-                    {/if}
-                    Sign Message
-                </button>
-                <button 
-                    class="w-full py-4 bg-[#222222] text-[#878787] font-semibold rounded-2xl hover:bg-[#333333] hover:text-[#FFFFFF] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                    onclick={handleDeny}
-                    disabled={signing}
-                >
-                    Deny
-                </button>
+                {#if needsSigningKey}
+                    <div class="p-4 bg-[#0a0a0a] rounded-2xl border border-[#1f1f1f]">
+                        <Text type="p" size={14} color="#B9BBBE">This identity doesn’t have a signing key yet.</Text>
+                        <Text type="p" size={12} color="#666666" cclass="mt-1">We’ll generate one locally and store it encrypted.</Text>
+                        {#if setupError}
+                            <Text type="p" size={12} color="#E14747" cclass="mt-2">{setupError}</Text>
+                        {/if}
+                    </div>
+                    <button
+                        class="w-full py-4 bg-[#FFFFFF] text-[#000000] font-semibold rounded-2xl hover:bg-[#E0E0E0] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-3"
+                        onclick={handleSetupSigningKey}
+                        disabled={settingUpKey}
+                    >
+                        {#if settingUpKey}
+                            <div class="w-5 h-5 border-2 border-[#000000] border-t-transparent rounded-full animate-spin"></div>
+                        {:else}
+                            Set Up Signing Key
+                        {/if}
+                    </button>
+                    <button 
+                        class="w-full py-4 bg-[#222222] text-[#878787] font-semibold rounded-2xl hover:bg-[#333333] hover:text-[#FFFFFF] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        onclick={handleDeny}
+                        disabled={signing || settingUpKey}
+                    >
+                        Deny
+                    </button>
+                {:else}
+                    <button 
+                        class="w-full py-4 bg-[#FFFFFF] text-[#000000] font-semibold rounded-2xl hover:bg-[#E0E0E0] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-3"
+                        onclick={handleSign}
+                        disabled={signing || isExpired()}
+                    >
+                        {#if signing}
+                            <div class="w-5 h-5 border-2 border-[#000000] border-t-transparent rounded-full animate-spin"></div>
+                        {:else}
+                            <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <path d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                        {/if}
+                        Sign Message
+                    </button>
+                    <button 
+                        class="w-full py-4 bg-[#222222] text-[#878787] font-semibold rounded-2xl hover:bg-[#333333] hover:text-[#FFFFFF] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        onclick={handleDeny}
+                        disabled={signing}
+                    >
+                        Deny
+                    </button>
+                {/if}
             </div>
         {/if}
     </div>

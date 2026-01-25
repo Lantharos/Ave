@@ -683,17 +683,6 @@ app.post("/demo/request", zValidator("json", z.object({
     return c.json({ error: "Identity not found" }, 404);
   }
   
-  // Check for signing key
-  const [signingKey] = await db
-    .select()
-    .from(signingKeys)
-    .where(eq(signingKeys.identityId, identityId))
-    .limit(1);
-  
-  if (!signingKey) {
-    return c.json({ error: "No signing key for this identity. Set one up in your dashboard." }, 400);
-  }
-  
   // Create the request (expires in 5 minutes)
   const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
   
