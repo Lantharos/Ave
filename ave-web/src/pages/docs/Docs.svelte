@@ -15,6 +15,7 @@
         { id: "pkce", title: "PKCE (Public Clients)" },
         { id: "sdks", title: "SDKs & Embed" },
         { id: "e2ee", title: "End-to-End Encryption" },
+        { id: "signing", title: "Ave Signing" },
         { id: "endpoints", title: "API Endpoints" },
         { id: "user-data", title: "User Data" },
         { id: "security", title: "Security Best Practices" },
@@ -540,6 +541,115 @@ async function decryptData(key, encryptedBase64) {
   );
   
   return new TextDecoder().decode(decrypted);
+}`} />
+                </DocSec>
+
+                <DocSec title="Ave Signing" id="signing">
+                    <p class="text-[#999999] text-[17px] leading-[1.8]">
+                        Ave Signing lets users cryptographically sign messages with their Ave identity. This is useful for verifiable consent, high-integrity actions, and any workflow where you need proof that a specific identity approved a message.
+                    </p>
+
+                    <div class="mt-[24px] p-[20px] bg-[#0f0f0f] border border-[#1f1f1f] rounded-[12px]">
+                        <p class="text-[#888888] text-[15px] leading-[1.7]">
+                            Each identity has an Ed25519 keypair. The private key is generated client-side and stored on Ave encrypted with the user’s master key (Ave can’t read it).
+                        </p>
+                    </div>
+
+                    <h3 class="text-[#FFFFFF] text-[22px] font-semibold mt-[40px] mb-[20px]">How It Works</h3>
+                    <div class="flex flex-col gap-[12px]">
+                        <div class="p-[20px] bg-[#0f0f0f] rounded-[12px] border border-[#1a1a1a]">
+                            <p class="text-[#666666] text-[12px] font-bold tracking-[0.1em] mb-[6px]">1. CREATE REQUEST</p>
+                            <p class="text-[#999999] text-[15px]">Your server creates a signature request with a message payload.</p>
+                        </div>
+                        <div class="p-[20px] bg-[#0f0f0f] rounded-[12px] border border-[#1a1a1a]">
+                            <p class="text-[#666666] text-[12px] font-bold tracking-[0.1em] mb-[6px]">2. USER SIGNS</p>
+                            <p class="text-[#999999] text-[15px]">Ave shows a signing sheet and the user approves (passkey) or denies.</p>
+                        </div>
+                        <div class="p-[20px] bg-[#0f0f0f] rounded-[12px] border border-[#1a1a1a]">
+                            <p class="text-[#666666] text-[12px] font-bold tracking-[0.1em] mb-[6px]">3. VERIFY</p>
+                            <p class="text-[#999999] text-[15px]">Your app verifies the signature using the identity’s public key.</p>
+                        </div>
+                    </div>
+
+                    <h3 class="text-[#FFFFFF] text-[22px] font-semibold mt-[40px] mb-[16px]">Create a Signature Request</h3>
+                    <p class="text-[#999999] text-[16px] mb-[16px]">
+                        Signature requests are created server-side using your app credentials.
+                    </p>
+                    <CodeBlock code={`POST https://api.aveid.net/api/signing/request
+Content-Type: application/json
+
+{
+  "clientId": "YOUR_CLIENT_ID",
+  "clientSecret": "YOUR_CLIENT_SECRET",
+  "identityId": "IDENTITY_UUID",
+  "payload": "I approve transferring $100 to Example Inc.",
+  "metadata": { "action": "transfer", "amount": 100 },
+  "expiresInSeconds": 300
+}
+
+// Response
+{
+  "requestId": "REQUEST_UUID",
+  "expiresAt": "2026-01-25T12:34:56.000Z",
+  "publicKey": "BASE64_PUBLIC_KEY"
+}`} />
+
+                    <h3 class="text-[#FFFFFF] text-[22px] font-semibold mt-[40px] mb-[16px]">Open the Signing UI</h3>
+                    <CodeBlock code={`import { openAveSigningSheet, openAveSigningPopup } from "@ave-id/embed";
+
+// Mobile-friendly bottom sheet
+openAveSigningSheet({
+  requestId: "REQUEST_UUID",
+  onSigned: ({ requestId, signature, publicKey }) => {
+    console.log("Signed", requestId, signature);
+  },
+  onDenied: ({ requestId }) => {
+    console.log("Denied", requestId);
+  }
+});
+
+// Desktop popup
+openAveSigningPopup({
+  requestId: "REQUEST_UUID",
+  onSigned: ({ requestId, signature, publicKey }) => {
+    console.log("Signed", requestId, signature);
+  }
+});`} />
+
+                    <h3 class="text-[#FFFFFF] text-[22px] font-semibold mt-[40px] mb-[16px]">Poll for Status</h3>
+                    <CodeBlock code={`GET https://api.aveid.net/api/signing/request/REQUEST_UUID/status?clientId=YOUR_CLIENT_ID
+
+// Response
+{
+  "status": "pending" | "signed" | "denied" | "expired",
+  "signature": "BASE64_SIGNATURE" | null,
+  "resolvedAt": "2026-01-25T12:34:56.000Z" | null
+}`} />
+
+                    <h3 class="text-[#FFFFFF] text-[22px] font-semibold mt-[40px] mb-[16px]">Verify a Signature</h3>
+                    <CodeBlock code={`POST https://api.aveid.net/api/signing/verify
+Content-Type: application/json
+
+{
+  "message": "I approve transferring $100 to Example Inc.",
+  "signature": "BASE64_SIGNATURE",
+  "publicKey": "BASE64_PUBLIC_KEY"
+}
+
+// Response
+{ "valid": true }`} />
+
+                    <h3 class="text-[#FFFFFF] text-[22px] font-semibold mt-[40px] mb-[12px]">Get Public Key by Handle</h3>
+                    <p class="text-[#999999] text-[16px] mb-[16px]">
+                        You can also fetch the signing public key by identity handle.
+                    </p>
+                    <CodeBlock code={`GET https://api.aveid.net/api/signing/public-key/kristof
+
+// Response
+{
+  "handle": "kristof",
+  "publicKey": "BASE64_PUBLIC_KEY",
+  "createdAt": "2026-01-25T12:34:56.000Z"
 }`} />
                 </DocSec>
 
