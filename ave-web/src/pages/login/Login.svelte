@@ -10,7 +10,27 @@
 
     let currentPage = $state<"login" | "methods" | "trust-code" | "waiting">("login");
     
-    const returnUrl = new URLSearchParams(window.location.search).get("return");
+    // Get return URL and sanitize to prevent recursive redirects
+    const rawReturnUrl = new URLSearchParams(window.location.search).get("return");
+    // If return URL starts with /login, extract any valid return from it or just ignore
+    const returnUrl = (() => {
+        if (!rawReturnUrl) return null;
+        const decoded = decodeURIComponent(rawReturnUrl);
+        // Prevent redirecting to login itself (causes infinite loop)
+        if (decoded.startsWith("/login")) {
+            // Try to extract a deeper return URL if there is one
+            const innerMatch = decoded.match(/[?&]return=([^&]+)/);
+            if (innerMatch) {
+                const inner = decodeURIComponent(innerMatch[1]);
+                // Make sure the inner one isn't also login
+                if (!inner.startsWith("/login")) {
+                    return inner;
+                }
+            }
+            return null;
+        }
+        return decoded;
+    })();
     let pendingOauth = $state<{ clientId: string; redirectUri: string; scope: string; state?: string; nonce?: string } | null>(null);
 
     
@@ -91,6 +111,12 @@
                 nonce: pendingOauth.nonce || "",
             });
             goto(`/signin?${params.toString()}`);
+            return;
+        }
+
+        // If we have a return URL that goes to /authorize or /signin, use it directly
+        if (returnUrl && (returnUrl.startsWith("/authorize") || returnUrl.startsWith("/signin"))) {
+            goto(returnUrl);
             return;
         }
 

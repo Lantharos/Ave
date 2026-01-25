@@ -11,7 +11,7 @@ import {
 // Routes
 import registerRoutes from "./routes/register";
 import loginRoutes from "./routes/login";
-import devicesRoutes from "./routes/devices";
+import devicesRoutes, { startDeviceCleanupJob } from "./routes/devices";
 import identitiesRoutes from "./routes/identities";
 import securityRoutes from "./routes/security";
 import activityRoutes from "./routes/activity";
@@ -145,3 +145,6 @@ const server = Bun.serve({
 });
 
 console.log(`Ave API server running at http://localhost:${server.port}`);
+
+// Start background jobs
+startDeviceCleanupJob();

@@ -12,9 +12,6 @@ import {
   hashTrustCode, 
   generateSessionToken, 
   hashSessionToken,
-  hashSecurityAnswer,
-  generateSalt,
-  generateChallenge,
 } from "../lib/crypto";
 import { eq } from "drizzle-orm";
 
@@ -22,31 +19,6 @@ const app = new Hono();
 
 // In-memory store for registration challenges (in production, use Redis)
 const registrationChallenges = new Map<string, { challenge: string; expiresAt: number }>();
-
-// Security questions list (matches frontend)
-const SECURITY_QUESTIONS = [
-  "What was the name of your first pet?",
-  "What was the name of your elementary school?",
-  "What is your mother's maiden name?",
-  "What city were you born in?",
-  "What was your childhood nickname?",
-  "What is the name of your favorite childhood friend?",
-  "What was the make of your first car?",
-  "What is your favorite movie?",
-  "What is the middle name of your oldest sibling?",
-  "In what city did your parents meet?",
-  "What was your favorite food as a child?",
-  "What was the first concert you attended?",
-  "What was the name of your first stuffed animal?",
-  "What was the first album you purchased?",
-  "What is the name of the street you grew up on?",
-  "What was your favorite subject in high school?",
-  "What was the first video game you played?",
-  "What is your favorite book?",
-  "Who was your childhood hero?",
-  "What is the name of the hospital where you were born?",
-  "What was the first thing you learned to cook?",
-];
 
 // Schema for starting registration
 const startRegistrationSchema = z.object({
@@ -111,10 +83,6 @@ const completeRegistrationSchema = z.object({
     avatarUrl: z.string().url().optional(),
     bannerUrl: z.string().url().optional(),
   }),
-  securityQuestions: z.array(z.object({
-    questionId: z.number().min(0).max(20),
-    answer: z.string().min(1),
-  })).length(3),
   // Device info
   device: z.object({
     name: z.string().max(64),
@@ -171,23 +139,12 @@ app.post("/complete", zValidator("json", completeRegistrationSchema), async (c) 
   
   const { registrationInfo } = verification;
   
-  // Hash security question answers
-  const hashedQuestions = data.securityQuestions.map((q) => {
-    const salt = generateSalt();
-    return {
-      questionId: q.questionId,
-      answerHash: salt + ":" + hashSecurityAnswer(q.answer, salt),
-    };
-  });
-  
   // Create user, identity, passkey, device in a transaction
   const result = await db.transaction(async (tx) => {
     // Create user (no encryptedMasterKeyBackup yet - will be set after client encrypts with real trust codes)
     const [user] = await tx
       .insert(users)
-      .values({
-        securityQuestions: hashedQuestions,
-      })
+      .values({})
       .returning();
     
     // Create identity
@@ -326,10 +283,7 @@ app.get("/check-handle/:handle", async (c) => {
   return c.json({ available: existing.length === 0 });
 });
 
-// Get security questions list
-app.get("/security-questions", async (c) => {
-  return c.json({ questions: SECURITY_QUESTIONS });
-});
+
 
 // Finalize master key backup (called after client encrypts with real trust codes)
 app.post("/finalize-backup", zValidator("json", z.object({

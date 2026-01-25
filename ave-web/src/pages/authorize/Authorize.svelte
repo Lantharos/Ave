@@ -97,6 +97,20 @@
             } else {
                 selectedIdentity = authState.currentIdentity || authState.identities[0] || null;
             }
+            
+            // Auto-authorize if:
+            // 1. User has only one identity
+            // 2. App was previously authorized with this identity
+            // 3. Not an E2EE app that needs master key, OR we have the master key
+            if (
+                authState.identities.length === 1 &&
+                existingAuth &&
+                existingAuth.identityId === authState.identities[0].id &&
+                (!appData.app.supportsE2ee || hasMasterKey())
+            ) {
+                // Auto-authorize - same identity, already authorized before
+                handleAuthorize();
+            }
         } catch (err) {
             error = err instanceof Error ? err.message : "Failed to load app info";
         } finally {
@@ -175,7 +189,7 @@
             
             // Redirect back to the app
             if (params.embed) {
-                window.parent?.postMessage({ type: "ave:success", payload: { redirectUrl } }, window.location.origin);
+                window.parent?.postMessage({ type: "ave:success", payload: { redirectUrl } }, "*");
                 return;
             }
             window.location.href = redirectUrl;
@@ -284,7 +298,7 @@
             redirectUrl.searchParams.set("state", params.state);
         }
         if (params.embed) {
-            window.parent?.postMessage({ type: "ave:error", payload: { error: "access_denied" } }, window.location.origin);
+            window.parent?.postMessage({ type: "ave:error", payload: { error: "access_denied" } }, "*");
             return;
         }
         window.location.href = redirectUrl.toString();
@@ -295,9 +309,10 @@
     $effect(() => {
         if (!$isAuthenticated) {
             // Redirect to login, then come back
-            const returnUrl = encodeURIComponent(window.location.pathname) + window.location.search;
+            // Build the full return URL properly - encode the entire path + search
+            const returnUrl = encodeURIComponent(window.location.pathname + window.location.search);
             if (params.embed) {
-                window.parent?.postMessage({ type: "ave:auth_required" }, window.location.origin);
+                window.parent?.postMessage({ type: "ave:auth_required" }, "*");
             }
             goto(`/login?return=${returnUrl}`);
             return;
@@ -310,13 +325,27 @@
 <div class="bg-[#090909] min-h-screen-fixed flex flex-col md:flex-row md:items-stretch items-center gap-6 md:gap-[50px] p-6 md:p-[50px] relative overflow-auto">
     <div class="flex-1 z-10 flex flex-col items-start justify-start md:justify-between p-4 md:p-[50px] w-full">
         <div class="flex flex-row gap-4 md:gap-[20px] items-start">
-            {#if appInfo?.iconUrl}
-                <img src={appInfo.iconUrl} alt="{appInfo.name} Logo" class="w-12 h-12 md:w-[80px] md:h-[80px]"/>
-            {:else}
-                <div class="w-12 h-12 md:w-[80px] md:h-[80px] bg-[#171717] rounded-[12px] md:rounded-[16px] flex items-center justify-center">
-                    <Text type="h" size={32} color="#878787">{appInfo?.name?.[0] || "?"}</Text>
+            <!-- App icon that becomes back button on hover -->
+            <button 
+                class="group relative w-12 h-12 md:w-[80px] md:h-[80px] rounded-[12px] md:rounded-[16px] overflow-hidden cursor-pointer transition-transform hover:scale-105"
+                onclick={handleDeny}
+                disabled={authorizing}
+                title="Go back"
+            >
+                {#if appInfo?.iconUrl}
+                    <img src={appInfo.iconUrl} alt="{appInfo.name} Logo" class="w-full h-full object-cover transition-opacity group-hover:opacity-0"/>
+                {:else}
+                    <div class="w-full h-full bg-[#171717] flex items-center justify-center transition-opacity group-hover:opacity-0">
+                        <Text type="h" size={32} color="#878787">{appInfo?.name?.[0] || "?"}</Text>
+                    </div>
+                {/if}
+                <!-- Back arrow overlay on hover -->
+                <div class="absolute inset-0 bg-[#171717] flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                    <svg class="w-6 h-6 md:w-[36px] md:h-[36px]" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M19 12H5M5 12L12 19M5 12L12 5" stroke="#878787" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
                 </div>
-            {/if}
+            </button>
             <div class="flex flex-col gap-1 md:gap-[10px]">
                 <h1 class="font-poppins text-2xl md:text-[48px] text-white">
                     {appInfo?.name || "Loading..."}
@@ -481,7 +510,7 @@
                 <!-- svelte-ignore a11y_no_static_element_interactions -->
                 <div 
                     id="auth-slider"
-                    class="rounded-full bg-[#171717]/80 border-[3px] md:border-[6px] border-[#171717]/80 w-full relative h-[50px] md:h-[82px] touch-none select-none [container-type:inline-size]"
+                    class="rounded-full bg-[#171717]/80 border-[3px] md:border-[6px] border-[#171717]/80 w-full relative h-[50px] md:h-[82px] touch-none select-none"
                     onpointerdown={handleSliderStart}
                     onpointermove={handleSliderMove}
                     onpointerup={handleSliderEnd}
@@ -489,7 +518,7 @@
                 >
                     <div 
                         class="w-[44px] h-[44px] md:w-[70px] md:h-[70px] bg-white rounded-full cursor-grab flex items-center justify-center absolute top-0 left-0 z-10 pointer-events-none {sliderActive ? '' : 'transition-[transform] duration-300'}"
-                        style="transform: translateX(calc({sliderPosition} * (100cqw - 100%)));"
+                        style="transform: translateX({sliderMaxTravel > 0 ? sliderPosition * sliderMaxTravel : sliderPosition * 100}px);"
                     >
                         {#if authorizing}
                             <div class="w-5 h-5 md:w-[24px] md:h-[24px] border-2 border-[#090909] border-t-transparent rounded-full animate-spin"></div>
@@ -505,14 +534,6 @@
                     </p>
 
                 </div>
-
-                <button 
-                    class="text-[#878787] text-xs md:text-[16px] hover:text-[#E14747] transition-colors"
-                    onclick={handleDeny}
-                    disabled={authorizing}
-                >
-                    Deny Access
-                </button>
             </div>
         {/if}
     </div>

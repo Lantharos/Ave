@@ -1,6 +1,7 @@
 <script lang="ts">
     import Button from "../../../components/Button.svelte";
     import { api, type Identity } from "../../../lib/api";
+    import { goto } from "@mateothegreat/svelte5-router";
 
     let { onNext, onError } = $props<{ 
         onNext?: (data: {
@@ -13,6 +14,9 @@
         }) => void;
         onError?: (error: string) => void;
     }>();
+    
+    // Get return URL to preserve when going to register
+    const returnUrl = new URLSearchParams(window.location.search).get("return");
 
     let handle = $state("");
     let isLoading = $state(false);
@@ -73,6 +77,16 @@
                 onclick={handleContinue}
                 disabled={!handle.trim() || isLoading}
             />
+            
+            <div class="text-center mt-2 md:mt-4">
+                <span class="text-[#878787] text-sm">Don't have an account? </span>
+                <button 
+                    class="text-white hover:text-[#B9BBBE] underline text-sm transition-colors"
+                    onclick={() => goto(returnUrl ? `/register?return=${encodeURIComponent(returnUrl)}` : "/register")}
+                >
+                    Create an ID
+                </button>
+            </div>
         </div>
 
         <div class="hidden md:flex flex-col p-[25px] bg-[#171717]/80 rounded-[42px]">

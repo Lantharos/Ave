@@ -2,7 +2,6 @@
     import RegisterWelcome from "./pages/RegisterWelcome.svelte";
     import RegisterIdentity from "./pages/RegisterIdentity.svelte";
     import RegisterPasskey from "./pages/RegisterPasskey.svelte";
-    import RegisterQuestions from "./pages/RegisterQuestions.svelte";
     import RegisterCodes from "./pages/RegisterCodes.svelte";
     import RegisterLegal from "./pages/RegisterLegal.svelte";
     import RegisterFinishing from "./pages/RegisterFinishing.svelte";
@@ -24,6 +23,9 @@
     let currentPage: keyof typeof pageBg = "welcome";
     let loaded = false;
     let error = "";
+    
+    // Get return URL if we came from login/authorize
+    const returnUrl = new URLSearchParams(window.location.search).get("return");
 
     // Collected data across steps
     let identityData = {
@@ -36,7 +38,6 @@
         bannerColor: "#FFFFFF",
     };
 
-    let securityQuestions: { questionId: number; answer: string }[] = [];
     let tempUserId = "";
     let webauthnOptions: PublicKeyCredentialCreationOptions | null = null;
     let webauthnCredential: Credential | null = null;
@@ -51,7 +52,6 @@
         welcome: "/grads/reg/reg_grad_welcome.png",
         identity: "/grads/reg/reg_grad_identity.png",
         passkey: "/grads/reg/reg_grad_passkey.png",
-        questions: "/grads/reg/reg_grad_questions.png",
         codes: "/grads/reg/reg_grad_codes.png",
         legal: "/grads/reg/reg_grad_legal.png",
         setup: "/grads/reg/reg_grad_finishing.png",
@@ -119,22 +119,12 @@
             
             console.log("[Registration] Passkey registered, PRF supported:", prfSupported);
             
-            setPage("questions");
-        } catch (e: any) {
-            console.error("Passkey registration failed:", e);
-            error = "Failed to set up passkey. Please try again.";
-        }
-    }
-
-    async function handleQuestionsNext(questions: { questionId: number; answer: string }[]) {
-        securityQuestions = questions;
-        
-        // Generate master key here (before legal step)
-        try {
+            // Generate master key and go to legal step (skipping security questions)
             masterKey = await generateMasterKey();
             setPage("legal");
         } catch (e: any) {
-            error = "Failed to generate encryption keys. Please try again.";
+            console.error("Passkey registration failed:", e);
+            error = "Failed to set up passkey. Please try again.";
         }
     }
 
@@ -172,7 +162,7 @@
                     avatarUrl: identityData.avatarUrl || undefined,
                     bannerUrl: identityData.bannerUrl || undefined,
                 },
-                securityQuestions,
+
                 device: deviceInfo,
                 prfEncryptedMasterKey, // Send PRF-encrypted master key if available
             });
@@ -203,7 +193,12 @@
     }
 
     function handleEnrollmentComplete() {
-        goto("/dashboard");
+        // If we have a return URL (came from authorize flow), go back there
+        if (returnUrl) {
+            goto(returnUrl);
+        } else {
+            goto("/dashboard");
+        }
     }
 </script>
 
@@ -237,8 +232,7 @@
                 />
             {:else if currentPage === "passkey"}
                 <RegisterPasskey onNext={handlePasskeySetup} />
-            {:else if currentPage === "questions"}
-                <RegisterQuestions onNext={handleQuestionsNext} />
+
             {:else if currentPage === "codes"}
                 <RegisterCodes {trustCodes} onNext={() => setPage("enrollment")} />
             {:else if currentPage === "legal"}

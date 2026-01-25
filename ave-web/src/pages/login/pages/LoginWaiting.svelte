@@ -139,6 +139,8 @@
             masterKey
         );
 
+        // Small delay to let auth state propagate before redirect
+        await new Promise(resolve => setTimeout(resolve, 100));
         
         onSuccess?.();
     }

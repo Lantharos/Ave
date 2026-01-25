@@ -120,7 +120,6 @@ export const api = {
         avatarUrl?: string;
         bannerUrl?: string;
       };
-      securityQuestions: { questionId: number; answer: string }[];
       device: {
         name: string;
         type: "phone" | "computer" | "tablet";

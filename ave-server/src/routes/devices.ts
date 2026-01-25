@@ -3,7 +3,7 @@ import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import { db, devices, loginRequests, sessions, activityLogs } from "../db";
 import { requireAuth } from "../middleware/auth";
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, lt } from "drizzle-orm";
 import { notifyLoginRequestStatus } from "../lib/websocket";
 
 const app = new Hono();
@@ -293,5 +293,74 @@ app.delete("/:deviceId", async (c) => {
   
   return c.json({ success: true });
 });
+
+// Cleanup stale devices (not seen for over 30 days)
+// This should be called periodically (e.g., daily cron job)
+export async function cleanupStaleDevices() {
+  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+  
+  // Get all stale devices
+  const staleDevices = await db
+    .select()
+    .from(devices)
+    .where(lt(devices.lastSeenAt, thirtyDaysAgo));
+  
+  if (staleDevices.length === 0) {
+    console.log("[Cleanup] No stale devices found");
+    return { removed: 0 };
+  }
+  
+  console.log(`[Cleanup] Found ${staleDevices.length} stale devices to remove`);
+  
+  // For each stale device, delete sessions and mark as inactive
+  for (const device of staleDevices) {
+    // Delete all sessions for this device
+    await db.delete(sessions).where(eq(sessions.deviceId, device.id));
+    
+    // Mark device as inactive (soft delete)
+    await db
+      .update(devices)
+      .set({ isActive: false })
+      .where(eq(devices.id, device.id));
+    
+    // Log activity
+    await db.insert(activityLogs).values({
+      userId: device.userId,
+      action: "device_auto_removed",
+      details: { 
+        deviceId: device.id, 
+        deviceName: device.name,
+        lastSeenAt: device.lastSeenAt,
+        reason: "inactive_30_days" 
+      },
+      severity: "info",
+    });
+  }
+  
+  console.log(`[Cleanup] Removed ${staleDevices.length} stale devices`);
+  return { removed: staleDevices.length };
+}
+
+// Run cleanup on server startup and every 24 hours
+let cleanupInterval: NodeJS.Timeout | null = null;
+
+export function startDeviceCleanupJob() {
+  // Run immediately
+  cleanupStaleDevices().catch(console.error);
+  
+  // Then run every 24 hours
+  cleanupInterval = setInterval(() => {
+    cleanupStaleDevices().catch(console.error);
+  }, 24 * 60 * 60 * 1000);
+  
+  console.log("[Cleanup] Device cleanup job started (runs every 24 hours)");
+}
+
+export function stopDeviceCleanupJob() {
+  if (cleanupInterval) {
+    clearInterval(cleanupInterval);
+    cleanupInterval = null;
+  }
+}
 
 export default app;
