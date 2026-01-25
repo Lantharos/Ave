@@ -29,7 +29,7 @@
       if (!identityId) {
         // For demo, we need to get identity from the session
         // Let's fetch it from the API
-        const meRes = await fetch("https://aveid.net/api/auth/me", {
+        const meRes = await fetch("https://api.aveid.net/api/auth/me", {
           credentials: "include"
         });
         
@@ -48,7 +48,7 @@
       }
       
       // Create demo signature request
-      const createRes = await fetch("https://aveid.net/api/signing/demo/request", {
+      const createRes = await fetch("https://api.aveid.net/api/signing/demo/request", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
