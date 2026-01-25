@@ -21,6 +21,32 @@ export function isPushSupported(): boolean {
   return "Notification" in window && "serviceWorker" in navigator && hasPushManager;
 }
 
+export function getPushSupportDetails(): {
+  supported: boolean;
+  secureContext: boolean;
+  hasNotification: boolean;
+  hasServiceWorker: boolean;
+  hasPushManager: boolean;
+} {
+  const secureContext = typeof window !== "undefined" ? window.isSecureContext : false;
+  const hasNotification = typeof window !== "undefined" ? "Notification" in window : false;
+  const hasServiceWorker = typeof navigator !== "undefined" ? "serviceWorker" in navigator : false;
+  const hasPushManager =
+    typeof window !== "undefined" &&
+    (("PushManager" in window) ||
+      (typeof ServiceWorkerRegistration !== "undefined" && "pushManager" in ServiceWorkerRegistration.prototype));
+
+  const supported = secureContext && hasNotification && hasServiceWorker && hasPushManager;
+
+  return {
+    supported,
+    secureContext,
+    hasNotification,
+    hasServiceWorker,
+    hasPushManager,
+  };
+}
+
 /**
  * Check if notifications are enabled
  */
@@ -199,7 +225,7 @@ export async function getPushStatus(): Promise<{
   permission: NotificationPermission;
   subscribed: boolean;
 }> {
-  const supported = isPushSupported();
+  const supported = getPushSupportDetails().supported;
   const permission = supported ? Notification.permission : "denied";
   const subscribed = supported ? await isPushSubscribed() : false;
   

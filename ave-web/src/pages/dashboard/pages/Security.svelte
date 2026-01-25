@@ -5,7 +5,7 @@
     import { api, type Passkey as PasskeyType } from "../../../lib/api";
     import { registerPasskey, authenticateWithPasskey } from "../../../lib/webauthn";
     import { loadMasterKey, encryptMasterKeyWithPrf } from "../../../lib/crypto";
-    import { getPushStatus, subscribeToPushNotifications, unsubscribeFromPushNotifications } from "../../../lib/push";
+    import { getPushStatus, subscribeToPushNotifications, unsubscribeFromPushNotifications, getPushSupportDetails } from "../../../lib/push";
 
     let passkeys = $state<PasskeyType[]>([]);
     let trustCodesRemaining = $state(0);
@@ -175,6 +175,14 @@
         if (!pushSupported) {
             if (typeof window !== "undefined" && !window.isSecureContext) {
                 return "Push notifications require HTTPS (or localhost).";
+            }
+            const d = getPushSupportDetails();
+            const missing: string[] = [];
+            if (!d.hasNotification) missing.push("Notification API");
+            if (!d.hasServiceWorker) missing.push("Service Worker");
+            if (!d.hasPushManager) missing.push("Web Push");
+            if (missing.length) {
+                return `Push isn't available here (missing: ${missing.join(", ")}).`;
             }
             return "Push notifications aren't supported in this browser.";
         }
