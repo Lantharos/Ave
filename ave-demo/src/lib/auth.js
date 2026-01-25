@@ -9,7 +9,9 @@ export function tryPopupAuth() {
     scope: DEMO_SCOPES,
     onSuccess: (payload) => {
       console.log("Auth success:", payload);
-      store.user = { method: "popup", ...payload };
+      // The embed returns a redirectUrl - for demo purposes we just mark as logged in
+      // In a real app, you'd follow the redirect to exchange the code for tokens
+      store.user = { method: "popup", redirectUrl: payload.redirectUrl };
       store.activeDemo = null;
     },
     onError: (err) => {
@@ -28,7 +30,9 @@ export function trySheetAuth() {
     scope: DEMO_SCOPES,
     onSuccess: (payload) => {
       console.log("Auth success:", payload);
-      store.user = { method: "sheet", ...payload };
+      // The embed returns a redirectUrl - for demo purposes we just mark as logged in
+      // In a real app, you'd follow the redirect to exchange the code for tokens
+      store.user = { method: "sheet", redirectUrl: payload.redirectUrl };
       store.activeDemo = null;
     },
     onError: (err) => {

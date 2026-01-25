@@ -35,8 +35,8 @@
             <a href="/docs" use:route class="px-6 py-3 text-[#B9BBBE] text-lg" onclick={() => mobileMenuOpen = false}>
                 docs
             </a>
-            <a href="/faq" use:route class="px-6 py-3 text-[#B9BBBE] text-lg" onclick={() => mobileMenuOpen = false}>
-                faq
+            <a href="https://demo.aveid.net" class="px-6 py-3 text-[#B9BBBE] text-lg" onclick={() => mobileMenuOpen = false}>
+                demo
             </a>
             <div class="h-px w-32 bg-[#333] my-4"></div>
             <a href="/privacy" use:route class="text-[#A5A7AA] text-base" onclick={() => mobileMenuOpen = false}>
@@ -65,8 +65,8 @@
             <a href="/docs" use:route class="px-[40px] py-[20px] cursor-pointer hover:bg-[#121212] transition-colors duration-300 rounded-full flex items-center justify-center text-[#B9BBBE] text-[24px]">
                 docs
             </a>
-            <a href="/faq" use:route class="px-[40px] py-[20px] cursor-pointer hover:bg-[#121212] transition-colors duration-300 rounded-full flex items-center justify-center text-[#B9BBBE] text-[24px]">
-                faq
+            <a href="https://demo.aveid.net" class="px-[40px] py-[20px] cursor-pointer hover:bg-[#121212] transition-colors duration-300 rounded-full flex items-center justify-center text-[#B9BBBE] text-[24px]">
+                demo
             </a>
         </div>
 
