@@ -21,7 +21,8 @@ export async function generateSigningKeyPair(): Promise<{
   privateKey: string;
 }> {
   // Generate 32-byte private key
-  const privateKeyBytes = ed.utils.randomPrivateKey();
+  // noble-ed25519 v3 uses randomSecretKey()
+  const privateKeyBytes = ed.utils.randomSecretKey();
   
   // Derive public key
   const publicKeyBytes = await ed.getPublicKeyAsync(privateKeyBytes);
