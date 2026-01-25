@@ -51,7 +51,7 @@ app.use("*", async (c, next) => {
       if (origin && (origin.startsWith("http://localhost:") || origin.startsWith("http://127.0.0.1:"))) {
         return origin;
       }
-      if (origin === "https://aveid.net" || origin === "https://devs.aveid.net") {
+      if (origin === "https://aveid.net" || origin === "https://devs.aveid.net" || origin === "https://demo.aveid.net") {
         return origin;
       }
       return process.env.RP_ORIGIN || "http://localhost:5173";
