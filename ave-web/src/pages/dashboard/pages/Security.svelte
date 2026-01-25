@@ -184,7 +184,9 @@
             if (missing.length) {
                 return `Push isn't available here (missing: ${missing.join(", ")}).`;
             }
-            return "Push notifications aren't supported in this browser.";
+
+            // Fallback: show the raw capability check so we can debug odd browsers.
+            return `Push isn't available here (secure=${d.secureContext ? "yes" : "no"}, notif=${d.hasNotification ? "yes" : "no"}, sw=${d.hasServiceWorker ? "yes" : "no"}, push=${d.hasPushManager ? "yes" : "no"}).`;
         }
         if (pushSubscribed) return "Enabled for this device. We'll notify you about login approval requests.";
         if (pushPermission === "denied") return "Notifications are blocked in your browser settings for this site.";
