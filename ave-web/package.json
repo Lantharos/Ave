@@ -20,6 +20,8 @@
   },
   "dependencies": {
     "@mateothegreat/svelte5-router": "^2.16.19",
+    "@noble/ed25519": "^3.0.0",
+    "@noble/hashes": "^2.0.1",
     "@simplewebauthn/browser": "^13.0.0",
     "@tailwindcss/vite": "^4.1.14",
     "qrcode": "^1.5.4",

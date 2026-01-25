@@ -268,6 +268,58 @@ export const oauthAuthorizations = pgTable("oauth_authorizations", {
   index("oauth_authorizations_app_id_idx").on(table.appId),
 ]);
 
+// Signing keys - Ed25519 keypairs per identity for Ave Signing
+export const signingKeys = pgTable("signing_keys", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  identityId: uuid("identity_id").references(() => identities.id, { onDelete: "cascade" }).notNull().unique(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  
+  // Ed25519 public key (base64 encoded, 32 bytes)
+  publicKey: text("public_key").notNull(),
+  
+  // Private key encrypted with user's master key (base64 encoded)
+  // Only decryptable client-side
+  encryptedPrivateKey: text("encrypted_private_key").notNull(),
+}, (table) => [
+  index("signing_keys_identity_id_idx").on(table.identityId),
+]);
+
+// Signature requests - pending requests from apps for user signatures
+export const signatureRequests = pgTable("signature_requests", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  expiresAt: timestamp("expires_at").notNull(),
+  
+  // Which identity is being asked to sign
+  identityId: uuid("identity_id").references(() => identities.id, { onDelete: "cascade" }).notNull(),
+  
+  // Which app is requesting
+  appId: uuid("app_id").references(() => oauthApps.id, { onDelete: "cascade" }).notNull(),
+  
+  // What to sign - the message/payload (plaintext, shown to user)
+  payload: text("payload").notNull(),
+  
+  // Optional: structured metadata about what this signature is for
+  // e.g. { type: "consent", action: "terms_acceptance", version: "1.0" }
+  metadata: jsonb("metadata").$type<Record<string, unknown>>(),
+  
+  // Status: pending, signed, denied, expired
+  status: varchar("status", { length: 16 }).notNull().default("pending"),
+  
+  // The signature (base64 Ed25519 signature, 64 bytes) - filled when signed
+  signature: text("signature"),
+  
+  // When was it signed/denied
+  resolvedAt: timestamp("resolved_at"),
+  
+  // Device that signed it
+  deviceId: uuid("device_id").references(() => devices.id),
+}, (table) => [
+  index("signature_requests_identity_id_idx").on(table.identityId),
+  index("signature_requests_app_id_idx").on(table.appId),
+  index("signature_requests_status_idx").on(table.status),
+]);
+
 // Types for TypeScript
 export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
@@ -289,4 +341,8 @@ export type OAuthApp = typeof oauthApps.$inferSelect;
 export type OAuthAuthorization = typeof oauthAuthorizations.$inferSelect;
 export type OAuthRefreshToken = typeof oauthRefreshTokens.$inferSelect;
 export type NewOAuthRefreshToken = typeof oauthRefreshTokens.$inferInsert;
+export type SigningKey = typeof signingKeys.$inferSelect;
+export type NewSigningKey = typeof signingKeys.$inferInsert;
+export type SignatureRequest = typeof signatureRequests.$inferSelect;
+export type NewSignatureRequest = typeof signatureRequests.$inferInsert;
 

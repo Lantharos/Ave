@@ -27,3 +27,22 @@ export interface UserInfo {
   iss?: string;
   user_id?: string;
 }
+
+// Ave Signing types
+export interface SignatureRequest {
+  requestId: string;
+  expiresAt: string;
+  publicKey: string;
+}
+
+export interface SignatureResult {
+  status: "signed" | "denied" | "expired" | "pending";
+  signature?: string;
+  resolvedAt?: string;
+}
+
+export interface SigningConfig {
+  clientId: string;
+  clientSecret: string;
+  issuer?: string;
+}

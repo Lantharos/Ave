@@ -1,13 +1,21 @@
 {
   "name": "@ave-id/embed",
-  "version": "0.1.0",
+  "version": "0.2.1",
   "type": "module",
   "main": "dist/embed.js",
+  "module": "dist/embed.js",
+  "exports": {
+    ".": {
+      "import": "./dist/embed.js",
+      "default": "./dist/embed.js"
+    }
+  },
   "files": ["dist"],
   "publishConfig": {
     "access": "public"
   },
   "scripts": {
-    "build": "mkdir -p dist && cp src/embed.js dist/embed.js"
+    "build": "mkdir -p dist && cp src/embed.js dist/embed.js",
+    "prepublishOnly": "npm run build"
   }
 }

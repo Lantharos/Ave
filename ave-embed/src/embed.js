@@ -310,3 +310,210 @@ export function openAvePopup({
     },
   };
 }
+
+// ============================================
+// Ave Signing Embeds
+// ============================================
+
+/**
+ * Open Ave signing as a modal sheet overlay
+ */
+export function openAveSigningSheet({
+  requestId,
+  issuer = "https://aveid.net",
+  onSigned,
+  onDenied,
+  onClose,
+}) {
+  // Create overlay backdrop
+  const overlay = document.createElement("div");
+  overlay.style.cssText = `
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.8);
+    backdrop-filter: blur(4px);
+    z-index: 999999;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    animation: aveSheetFadeIn 0.2s ease-out;
+  `;
+
+  // Create sheet container
+  const sheet = document.createElement("div");
+  sheet.style.cssText = `
+    width: 100%;
+    max-width: 600px;
+    max-height: 90vh;
+    background: #111111;
+    border-radius: 32px 32px 0 0;
+    overflow: hidden;
+    animation: aveSheetSlideUp 0.3s ease-out;
+    position: relative;
+  `;
+
+  // Add drag handle
+  const dragHandle = document.createElement("div");
+  dragHandle.style.cssText = `
+    width: 40px;
+    height: 4px;
+    background: #333;
+    border-radius: 2px;
+    margin: 12px auto;
+  `;
+  sheet.appendChild(dragHandle);
+
+  // Create iframe
+  const iframe = document.createElement("iframe");
+  const params = new URLSearchParams({
+    requestId,
+    embed: "1",
+  });
+
+  iframe.src = `${issuer}/sign?${params.toString()}`;
+  iframe.style.cssText = `
+    width: 100%;
+    height: calc(90vh - 30px);
+    border: none;
+    background: transparent;
+  `;
+  iframe.allow = "publickey-credentials-get";
+
+  sheet.appendChild(iframe);
+  overlay.appendChild(sheet);
+
+  // Add animations (reuse if already present)
+  if (!document.getElementById("ave-sheet-styles")) {
+    const style = document.createElement("style");
+    style.id = "ave-sheet-styles";
+    style.textContent = `
+      @keyframes aveSheetFadeIn {
+        from { opacity: 0; }
+        to { opacity: 1; }
+      }
+      @keyframes aveSheetSlideUp {
+        from { transform: translateY(100%); }
+        to { transform: translateY(0); }
+      }
+      @keyframes aveSheetSlideDown {
+        from { transform: translateY(0); }
+        to { transform: translateY(100%); }
+      }
+      @keyframes aveSheetFadeOut {
+        from { opacity: 1; }
+        to { opacity: 0; }
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
+  // Close function
+  const close = () => {
+    sheet.style.animation = "aveSheetSlideDown 0.2s ease-in forwards";
+    overlay.style.animation = "aveSheetFadeOut 0.2s ease-in forwards";
+    setTimeout(() => {
+      overlay.remove();
+      window.removeEventListener("message", messageHandler);
+      onClose?.();
+    }, 200);
+  };
+
+  // Click outside to close
+  overlay.onclick = (e) => {
+    if (e.target === overlay) close();
+  };
+
+  const messageHandler = (event) => {
+    if (event.origin !== issuer) return;
+    const data = event.data || {};
+
+    if (data.type === "ave:signed") {
+      close();
+      onSigned?.(data.payload);
+    }
+
+    if (data.type === "ave:denied") {
+      close();
+      onDenied?.(data.payload);
+    }
+  };
+
+  window.addEventListener("message", messageHandler);
+
+  // Add to DOM
+  document.body.appendChild(overlay);
+
+  return {
+    close,
+    iframe,
+  };
+}
+
+/**
+ * Open Ave signing as a popup window
+ */
+export function openAveSigningPopup({
+  requestId,
+  issuer = "https://aveid.net",
+  width = 500,
+  height = 600,
+  onSigned,
+  onDenied,
+  onClose,
+}) {
+  const params = new URLSearchParams({
+    requestId,
+    embed: "1",
+  });
+
+  const left = (window.innerWidth - width) / 2 + window.screenX;
+  const top = (window.innerHeight - height) / 2 + window.screenY;
+
+  const popup = window.open(
+    `${issuer}/sign?${params.toString()}`,
+    "ave_signing",
+    `width=${width},height=${height},left=${left},top=${top},menubar=no,toolbar=no,location=no,status=no`
+  );
+
+  if (!popup) {
+    onDenied?.({ error: "popup_blocked", message: "Popup was blocked by the browser" });
+    return null;
+  }
+
+  const messageHandler = (event) => {
+    if (event.origin !== issuer) return;
+    const data = event.data || {};
+
+    if (data.type === "ave:signed") {
+      popup.close();
+      window.removeEventListener("message", messageHandler);
+      onSigned?.(data.payload);
+    }
+
+    if (data.type === "ave:denied") {
+      popup.close();
+      window.removeEventListener("message", messageHandler);
+      onDenied?.(data.payload);
+    }
+  };
+
+  window.addEventListener("message", messageHandler);
+
+  // Check if popup was closed
+  const pollTimer = setInterval(() => {
+    if (popup.closed) {
+      clearInterval(pollTimer);
+      window.removeEventListener("message", messageHandler);
+      onClose?.();
+    }
+  }, 500);
+
+  return {
+    popup,
+    close() {
+      clearInterval(pollTimer);
+      popup.close();
+      window.removeEventListener("message", messageHandler);
+    },
+  };
+}

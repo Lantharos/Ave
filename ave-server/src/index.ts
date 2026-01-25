@@ -19,6 +19,7 @@ import mydataRoutes from "./routes/mydata";
 import oauthRoutes, { oidcRoutes } from "./routes/oauth";
 import appsRoutes from "./routes/apps";
 import pushRoutes from "./routes/push";
+import signingRoutes from "./routes/signing";
 
 import uploadRoutes from "./routes/upload";
 
@@ -86,6 +87,7 @@ app.route("/api/mydata", mydataRoutes);
 app.route("/api/oauth", oauthRoutes);
 app.route("/api/apps", appsRoutes);
 app.route("/api/push", pushRoutes);
+app.route("/api/signing", signingRoutes);
 app.route("/.well-known", oidcRoutes);
 app.route("/api/upload", uploadRoutes);
 

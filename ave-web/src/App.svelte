@@ -10,7 +10,8 @@
     import PrivacyPolicy from "./pages/home/legal/PrivacyPolicy.svelte";
     import TermsOfService from "./pages/home/legal/TermsOfService.svelte";
     import Authorize from './pages/authorize/Authorize.svelte';
-    import Docs from './pages/docs/Docs.svelte';
+import Docs from './pages/docs/Docs.svelte';
+    import Sign from './pages/sign/Sign.svelte';
     import { auth, isAuthenticated, isLoading } from './stores/auth';
     import { websocket } from './stores/websocket';
 
@@ -25,7 +26,8 @@
         { path: '/terms', component: TermsOfService },
         { path: '/authorize', component: Authorize },
         { path: '/signin', component: Authorize },
-        { path: '/docs', component: Docs }
+        { path: '/docs', component: Docs },
+        { path: '/sign', component: Sign }
     ];
 
 
@@ -34,7 +36,7 @@
     };
 
     // Protected routes that require authentication
-    const protectedRoutes = ['/dashboard', '/authorize', '/signin'];
+    const protectedRoutes = ['/dashboard', '/authorize', '/signin', '/sign'];
 
 
     // Routes that should redirect to dashboard if already authenticated

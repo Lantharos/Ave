@@ -183,6 +183,92 @@ When your app has E2EE enabled, Ave provides an app-specific encryption key duri
 3. **Expecting JWT only:** Ave returns opaque + JWT tokens; use the one you need
 4. **Storing profile data locally:** User profile (avatar, name) is managed by Ave. Fetch fresh data on login or link to Ave for profile edits.
 
+## Ave Signing
+
+Ave Signing lets users cryptographically sign messages with their Ave identity. This enables verifiable consent, document signing, and any scenario where you need proof that a specific user agreed to something.
+
+### How It Works
+
+1. Each Ave identity has an Ed25519 signing keypair
+2. Your app creates a signature request with the message to sign
+3. User sees a bottom sheet showing what they're signing
+4. User approves or denies
+5. You receive the signature and can verify it with the user's public key
+
+### Server-Side: Create Signature Request
+
+```ts
+import { createSignatureRequest, getSignatureStatus } from "@ave-id/sdk";
+
+// Create a signature request (requires client credentials)
+const request = await createSignatureRequest({
+  clientId: "YOUR_CLIENT_ID",
+  clientSecret: "YOUR_CLIENT_SECRET",
+}, {
+  identityId: "USER_IDENTITY_ID",
+  payload: "I agree to the Terms of Service v2.0",
+  metadata: { type: "terms_acceptance", version: "2.0" },
+  expiresInSeconds: 300, // 5 minutes
+});
+
+// request.requestId - use this to redirect user or poll
+// request.publicKey - Ed25519 public key to verify signatures
+```
+
+### Client-Side: Open Signing UI
+
+```ts
+import { openAveSigningSheet, openAveSigningPopup } from "@ave-id/embed";
+
+// Modal sheet (mobile-friendly)
+openAveSigningSheet({
+  requestId: "REQUEST_ID_FROM_SERVER",
+  onSigned: ({ signature, publicKey }) => {
+    // Send signature to your server for verification
+  },
+  onDenied: () => {
+    // User denied the request
+  },
+});
+
+// Or popup (desktop)
+openAveSigningPopup({
+  requestId: "REQUEST_ID_FROM_SERVER",
+  onSigned: ({ signature, publicKey }) => { ... },
+  onDenied: () => { ... },
+});
+```
+
+### Verify Signature
+
+```ts
+import { verifySignature, getPublicKey } from "@ave-id/sdk";
+
+// Verify using Ave API
+const result = await verifySignature({}, {
+  message: "I agree to the Terms of Service v2.0",
+  signature: "BASE64_SIGNATURE",
+  publicKey: "BASE64_PUBLIC_KEY",
+});
+
+if (result.valid) {
+  // Signature is valid
+}
+
+// Or get a user's public key by handle
+const key = await getPublicKey({}, "username");
+// key.publicKey - Ed25519 public key
+```
+
+### Signing API Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/signing/request` | POST | Create signature request (requires client credentials) |
+| `/api/signing/request/:id/status` | GET | Poll request status |
+| `/api/signing/public-key/:handle` | GET | Get public key by handle |
+| `/api/signing/verify` | POST | Verify a signature |
+
 ## Contact
 
 Need help? Contact us at hello@lantharos.com
