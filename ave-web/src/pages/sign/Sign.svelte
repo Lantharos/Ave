@@ -9,6 +9,8 @@
     const params = new URLSearchParams(window.location.search);
     const requestId = params.get("requestId");
     const embed = params.get("embed") === "1";
+    const embedPopup = embed && !!window.opener;
+    const embedSheet = embed && !embedPopup;
 
     let loading = $state(true);
     let signing = $state(false);
@@ -207,13 +209,15 @@
     }
 </script>
 
-<div class={embed
-    ? "w-full h-full bg-transparent"
-    : "fixed inset-0 bg-black/80 flex items-end md:items-center justify-center z-50 backdrop-blur-sm"}
+<div class={embedSheet
+    ? "w-full min-h-screen bg-[#111111]"
+    : (embedPopup
+        ? "fixed inset-0 bg-black flex items-end md:items-center justify-center z-50"
+        : "fixed inset-0 bg-black/80 flex items-end md:items-center justify-center z-50 backdrop-blur-sm")}
 >
-    <!-- When embedded (sheet/popup), avoid nesting a second modal/sheet UI -->
-    <div class={embed
-        ? "w-full h-full"
+    <!-- When embedded in the signing sheet iframe, fill the sheet container (no nested modal). -->
+    <div class={embedSheet
+        ? "w-full min-h-screen"
         : "w-full max-w-[600px] bg-[#111111] rounded-t-[32px] md:rounded-[32px] overflow-hidden animate-slide-up"}
     >
         {#if loading}
