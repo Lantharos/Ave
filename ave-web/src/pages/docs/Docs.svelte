@@ -369,7 +369,7 @@ function base64UrlEncode(bytes) {
                         </div>
                         <div class="p-[20px] bg-[#0f0f0f] rounded-[14px] border border-[#1a1a1a]">
                             <p class="text-[#FFFFFF] font-semibold">@ave-id/embed</p>
-                            <p class="text-[#888888] text-[14px] mt-[6px]">Iframe embed with postMessage callbacks.</p>
+                            <p class="text-[#888888] text-[14px] mt-[6px]">Inline iframe, modal sheet, or popup sign-in (postMessage callbacks).</p>
                             <code class="block mt-[12px] text-[#ccccff]">npm install @ave-id/embed</code>
                         </div>
                     </div>
@@ -395,15 +395,30 @@ const tokens = await exchangeCodeServer({
 });`} />
                     </div>
                     <div class="mt-[24px]">
-                        <CodeBlock code={`// Embed
-import { mountAveEmbed } from "@ave-id/embed";
+                        <CodeBlock code={`// Embed (inline iframe / sheet / popup)
+ import { mountAveEmbed, openAveSheet, openAvePopup } from "@ave-id/embed";
 
-mountAveEmbed({
-  container: document.getElementById("ave-embed"),
-  clientId: "YOUR_CLIENT_ID",
-  redirectUri: "https://yourapp.com/callback",
-  onSuccess: ({ redirectUrl }) => window.location.href = redirectUrl,
-});`} />
+ // Inline iframe
+ mountAveEmbed({
+   container: document.getElementById("ave-embed"),
+   clientId: "YOUR_CLIENT_ID",
+   redirectUri: "https://yourapp.com/callback",
+   onSuccess: ({ redirectUrl }) => (window.location.href = redirectUrl),
+ });
+
+ // Modal sheet (mobile-friendly)
+ openAveSheet({
+   clientId: "YOUR_CLIENT_ID",
+   redirectUri: "https://yourapp.com/callback",
+   onSuccess: ({ redirectUrl }) => (window.location.href = redirectUrl),
+ });
+
+ // Popup (desktop)
+ openAvePopup({
+   clientId: "YOUR_CLIENT_ID",
+   redirectUri: "https://yourapp.com/callback",
+   onSuccess: ({ redirectUrl }) => (window.location.href = redirectUrl),
+ });`} />
                     </div>
                 </DocSec>
 

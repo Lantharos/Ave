@@ -73,7 +73,7 @@ https://aveid.net/signin?
 Use the official packages to cut down integration time:
 
 - **@ave-id/sdk** - PKCE helpers, token exchange, userinfo, server helpers
-- **@ave-id/embed** - Iframe sign-in with postMessage callbacks
+- **@ave-id/embed** - Inline iframe, modal sheet, or popup sign-in (postMessage callbacks)
 
 Install:
 
@@ -109,13 +109,28 @@ const tokens = await exchangeCodeServer({
 Embed:
 
 ```ts
-import { mountAveEmbed } from "@ave-id/embed";
+import { mountAveEmbed, openAveSheet, openAvePopup } from "@ave-id/embed";
 
+// Inline iframe
 mountAveEmbed({
   container: document.getElementById("ave-embed"),
   clientId: "YOUR_CLIENT_ID",
   redirectUri: "https://yourapp.com/callback",
-  onSuccess: ({ redirectUrl }) => window.location.href = redirectUrl,
+  onSuccess: ({ redirectUrl }) => (window.location.href = redirectUrl),
+});
+
+// Modal sheet (mobile-friendly)
+openAveSheet({
+  clientId: "YOUR_CLIENT_ID",
+  redirectUri: "https://yourapp.com/callback",
+  onSuccess: ({ redirectUrl }) => (window.location.href = redirectUrl),
+});
+
+// Popup (desktop)
+openAvePopup({
+  clientId: "YOUR_CLIENT_ID",
+  redirectUri: "https://yourapp.com/callback",
+  onSuccess: ({ redirectUrl }) => (window.location.href = redirectUrl),
 });
 ```
 
@@ -171,4 +186,3 @@ When your app has E2EE enabled, Ave provides an app-specific encryption key duri
 ## Contact
 
 Need help? Contact us at hello@lantharos.com
-

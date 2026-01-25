@@ -80,23 +80,52 @@
     },
   ];
 
-  onMount(async () => {
-    const params = new URLSearchParams(window.location.search);
-    if (params.get("code") && clientId) {
-      try {
-        await handleCallback({ clientId });
-        window.history.replaceState({}, document.title, "/");
-        session = loadSession();
-      } catch (err) {
-        error = err instanceof Error ? err.message : "Failed to finish sign-in";
+  onMount(() => {
+    const init = async () => {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get("code") && clientId) {
+        try {
+          await handleCallback({ clientId });
+          window.history.replaceState({}, document.title, "/");
+          session = loadSession();
+        } catch (err) {
+          error = err instanceof Error ? err.message : "Failed to finish sign-in";
+        }
       }
-    }
 
-    if (session?.accessTokenJwt) {
-      await loadApps();
-    } else {
-      loading = false;
-    }
+      if (session?.accessTokenJwt) {
+        await loadApps();
+      } else {
+        loading = false;
+      }
+    };
+
+    void init();
+
+    let resuming = false;
+    const handleResume = async () => {
+      if (document.visibilityState !== "visible" || resuming) return;
+      resuming = true;
+      try {
+        session = loadSession();
+        if (session?.accessTokenJwt) {
+          await loadApps();
+        } else {
+          apps = [];
+          loading = false;
+        }
+      } finally {
+        resuming = false;
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleResume);
+    window.addEventListener("focus", handleResume);
+
+    return () => {
+      document.removeEventListener("visibilitychange", handleResume);
+      window.removeEventListener("focus", handleResume);
+    };
   });
 
   async function loadApps() {
@@ -113,14 +142,22 @@
             apps = await fetchApps(session.accessTokenJwt);
           }
         } catch (refreshError) {
-          error = refreshError instanceof Error ? refreshError.message : "Session expired";
+          // Refresh failed - session is invalid, clear and redirect to sign in
+          handleUnauthorized();
         }
       } else {
-        error = err instanceof Error ? err.message : "Failed to load apps";
+        // No refresh token - session is invalid, clear and redirect to sign in
+        handleUnauthorized();
       }
     } finally {
       loading = false;
     }
+  }
+
+  function handleUnauthorized() {
+    logout();
+    session = null;
+    apps = [];
   }
 
   async function handleCreate() {
@@ -164,7 +201,12 @@
         allowedScopes: [...defaultScopes],
       };
     } catch (err) {
-      error = err instanceof Error ? err.message : "Failed to create app";
+      const message = err instanceof Error ? err.message : "Failed to create app";
+      if (message.toLowerCase().includes("unauthorized") || message.toLowerCase().includes("invalid token")) {
+        handleUnauthorized();
+      } else {
+        error = message;
+      }
     } finally {
       creating = false;
     }
