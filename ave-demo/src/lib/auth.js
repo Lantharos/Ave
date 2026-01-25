@@ -1,4 +1,4 @@
-import { openAveSheet, openAvePopup, openAveSigningSheet } from "@ave-id/embed";
+import { openAveSheet, openAvePopup } from "@ave-id/embed";
 import { DEMO_CLIENT_ID, DEMO_REDIRECT_URI, DEMO_SCOPES } from "./config.js";
 import { store } from "./store.svelte.js";
 
@@ -40,25 +40,6 @@ export function trySheetAuth() {
     },
     onClose: () => {
       console.log("Sheet closed");
-    }
-  });
-}
-
-export function trySigningDemo() {
-  // In a real app, you'd create the request server-side first
-  // For the demo, we'll show the UI concept
-  openAveSigningSheet({
-    requestId: "demo-request-id",
-    onSigned: (result) => {
-      store.signResult = result;
-      console.log("Signed:", result);
-    },
-    onDenied: () => {
-      store.signResult = { denied: true };
-      console.log("Denied");
-    },
-    onClose: () => {
-      console.log("Signing closed");
     }
   });
 }

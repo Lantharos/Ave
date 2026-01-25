@@ -630,4 +630,71 @@ app.post("/verify", zValidator("json", z.object({
   return c.json({ valid });
 });
 
+// ============================================
+// Demo endpoint (for Ave Playground only)
+// ============================================
+
+const DEMO_CLIENT_ID = "app_4488d5deb6013090e9f84b87cda541f9";
+
+// Create a demo signature request (no client secret needed, only for demo app)
+app.post("/demo/request", requireAuth, zValidator("json", z.object({
+  identityId: z.string().uuid(),
+  payload: z.string().min(1).max(1000),
+})), async (c) => {
+  const user = c.get("user")!;
+  const { identityId, payload } = c.req.valid("json");
+  
+  // Get the demo app
+  const [demoApp] = await db
+    .select()
+    .from(oauthApps)
+    .where(eq(oauthApps.clientId, DEMO_CLIENT_ID))
+    .limit(1);
+  
+  if (!demoApp) {
+    return c.json({ error: "Demo app not configured" }, 500);
+  }
+  
+  // Verify identity belongs to user
+  const [identity] = await db
+    .select()
+    .from(identities)
+    .where(and(eq(identities.id, identityId), eq(identities.userId, user.id)))
+    .limit(1);
+  
+  if (!identity) {
+    return c.json({ error: "Identity not found" }, 404);
+  }
+  
+  // Check for signing key
+  const [signingKey] = await db
+    .select()
+    .from(signingKeys)
+    .where(eq(signingKeys.identityId, identityId))
+    .limit(1);
+  
+  if (!signingKey) {
+    return c.json({ error: "No signing key for this identity. Set one up in your dashboard." }, 400);
+  }
+  
+  // Create the request (expires in 5 minutes)
+  const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
+  
+  const [request] = await db
+    .insert(signatureRequests)
+    .values({
+      identityId,
+      appId: demoApp.id,
+      payload,
+      metadata: { demo: true },
+      expiresAt,
+    })
+    .returning();
+  
+  return c.json({
+    requestId: request.id,
+    expiresAt: request.expiresAt,
+  });
+});
+
 export default app;
