@@ -8,7 +8,17 @@ const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:3000";
  * Check if push notifications are supported in this browser
  */
 export function isPushSupported(): boolean {
-  return "serviceWorker" in navigator && "PushManager" in window;
+  if (typeof window === "undefined") return false;
+
+  // Push requires secure context (https or localhost).
+  if (!window.isSecureContext) return false;
+
+  // Some browsers don't expose PushManager on window; check SW registration prototype too.
+  const hasPushManager =
+    ("PushManager" in window) ||
+    (typeof ServiceWorkerRegistration !== "undefined" && "pushManager" in ServiceWorkerRegistration.prototype);
+
+  return "Notification" in window && "serviceWorker" in navigator && hasPushManager;
 }
 
 /**

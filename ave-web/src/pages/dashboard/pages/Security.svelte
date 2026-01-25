@@ -172,7 +172,12 @@
     }
 
     function pushDescription(): string {
-        if (!pushSupported) return "Push notifications aren't supported in this browser.";
+        if (!pushSupported) {
+            if (typeof window !== "undefined" && !window.isSecureContext) {
+                return "Push notifications require HTTPS (or localhost).";
+            }
+            return "Push notifications aren't supported in this browser.";
+        }
         if (pushSubscribed) return "Enabled for this device. We'll notify you about login approval requests.";
         if (pushPermission === "denied") return "Notifications are blocked in your browser settings for this site.";
         return "Get a notification when another device asks to log in.";
