@@ -108,6 +108,7 @@ export interface SignatureRequest {
     id: string;
     handle: string;
     displayName: string;
+    avatarUrl?: string | null;
   };
 }
 
@@ -579,6 +580,7 @@ export const api = {
           id: string;
           handle: string;
           displayName: string;
+          avatarUrl?: string | null;
         };
         signingKey: {
           publicKey: string;

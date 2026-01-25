@@ -252,6 +252,7 @@ app.get("/requests", requireAuth, async (c) => {
         id: r.identity.id,
         handle: r.identity.handle,
         displayName: r.identity.displayName,
+        avatarUrl: r.identity.avatarUrl,
       },
     })),
   });
@@ -306,6 +307,7 @@ app.get("/requests/:requestId", requireAuth, async (c) => {
       id: result.identity.id,
       handle: result.identity.handle,
       displayName: result.identity.displayName,
+      avatarUrl: result.identity.avatarUrl,
     },
     signingKey: result.signingKey ? {
       publicKey: result.signingKey.publicKey,

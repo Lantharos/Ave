@@ -34,6 +34,7 @@
         id: string;
         handle: string;
         displayName: string;
+        avatarUrl?: string | null;
     } | null>(null);
     
     let signingKey = $state<{
@@ -206,9 +207,15 @@
     }
 </script>
 
-<div class="fixed inset-0 bg-black/80 flex items-end md:items-center justify-center z-50 backdrop-blur-sm">
-    <!-- Bottom sheet on mobile, centered modal on desktop -->
-    <div class="w-full max-w-[600px] bg-[#111111] rounded-t-[32px] md:rounded-[32px] overflow-hidden animate-slide-up">
+<div class={embed
+    ? "w-full h-full bg-transparent"
+    : "fixed inset-0 bg-black/80 flex items-end md:items-center justify-center z-50 backdrop-blur-sm"}
+>
+    <!-- When embedded (sheet/popup), avoid nesting a second modal/sheet UI -->
+    <div class={embed
+        ? "w-full h-full"
+        : "w-full max-w-[600px] bg-[#111111] rounded-t-[32px] md:rounded-[32px] overflow-hidden animate-slide-up"}
+    >
         {#if loading}
             <div class="p-8 md:p-12 flex items-center justify-center min-h-[300px]">
                 <div class="w-[48px] h-[48px] border-2 border-[#FFFFFF] border-t-transparent rounded-full animate-spin"></div>
@@ -271,9 +278,13 @@
             <div class="px-6 md:px-8 py-4 bg-[#0a0a0a]">
                 <Text type="p" size={12} color="#666666" cclass="uppercase tracking-wider mb-2">Signing as</Text>
                 <div class="flex items-center gap-3">
-                    <div class="w-8 h-8 rounded-full bg-[#222222] flex items-center justify-center">
-                        <Text type="h" size={14} color="#FFFFFF">{identity.displayName[0]}</Text>
-                    </div>
+                    {#if identity.avatarUrl}
+                        <img src={identity.avatarUrl} alt="" class="w-8 h-8 rounded-full object-cover" />
+                    {:else}
+                        <div class="w-8 h-8 rounded-full bg-[#222222] flex items-center justify-center">
+                            <Text type="h" size={14} color="#FFFFFF">{identity.displayName[0]}</Text>
+                        </div>
+                    {/if}
                     <div>
                         <Text type="p" size={16} weight="semibold">{identity.displayName}</Text>
                         <Text type="p" size={12} color="#878787">@{identity.handle}</Text>
