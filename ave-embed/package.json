@@ -4,8 +4,10 @@
   "type": "module",
   "main": "dist/embed.js",
   "module": "dist/embed.js",
+  "types": "dist/embed.d.ts",
   "exports": {
     ".": {
+      "types": "./dist/embed.d.ts",
       "import": "./dist/embed.js",
       "default": "./dist/embed.js"
     }
@@ -17,7 +19,7 @@
     "access": "public"
   },
   "scripts": {
-    "build": "mkdir -p dist && cp src/embed.js dist/embed.js",
+    "build": "mkdir -p dist && cp src/embed.js dist/embed.js && cp src/embed.d.ts dist/embed.d.ts",
     "prepublishOnly": "npm run build"
   }
 }
