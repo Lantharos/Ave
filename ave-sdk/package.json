@@ -1,6 +1,6 @@
 {
   "name": "@ave-id/sdk",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "type": "module",
   "main": "dist/index.js",
   "module": "dist/index.js",
@@ -26,7 +26,9 @@
       "default": "./dist/types.js"
     }
   },
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "tsc -p tsconfig.json"
   },

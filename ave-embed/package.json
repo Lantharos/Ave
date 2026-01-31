@@ -1,6 +1,6 @@
 {
   "name": "@ave-id/embed",
-  "version": "0.2.2",
+  "version": "0.2.4",
   "type": "module",
   "main": "dist/embed.js",
   "module": "dist/embed.js",
@@ -10,7 +10,9 @@
       "default": "./dist/embed.js"
     }
   },
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "publishConfig": {
     "access": "public"
   },
