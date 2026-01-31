@@ -3,9 +3,11 @@
     import Text from "../../components/Text.svelte";
     import { api, type Identity } from "../../lib/api";
     import { generateAppKey, encryptAppKey, exportAppKey, loadMasterKey, decryptAppKey, hasMasterKey } from "../../lib/crypto";
-    import { auth, isAuthenticated, identities as identitiesStore, currentIdentity } from "../../stores/auth";
-    import { goto } from "@mateothegreat/svelte5-router";
-    import { get } from "svelte/store";
+	import { auth, isAuthenticated, identities as identitiesStore, currentIdentity } from "../../stores/auth";
+	import { goto } from "@mateothegreat/svelte5-router";
+	import { get } from "svelte/store";
+	import StorageAccessGate from "../../components/StorageAccessGate.svelte";
+	import { supportsStorageAccessApi, hasStorageAccess, requestStorageAccess } from "../../lib/storage-access";
 
     // Parse query params from window.location
     let querystring = $state(window.location.search.slice(1));
@@ -25,16 +27,16 @@
         const codeChallenge = searchParams.get("code_challenge");
         const codeChallengeMethod = searchParams.get("code_challenge_method");
         
-        return {
-            clientId: searchParams.get("client_id") || "",
-            redirectUri: searchParams.get("redirect_uri") || "",
-            scope: searchParams.get("scope") || "openid profile email",
-            state: searchParams.get("state") || "",
-            nonce: searchParams.get("nonce") || "",
-            embed: searchParams.get("embed") === "1",
-            codeChallenge: codeChallenge || undefined,
-            codeChallengeMethod: (codeChallengeMethod === "S256" || codeChallengeMethod === "plain") ? codeChallengeMethod : undefined,
-        };
+			return {
+				clientId: searchParams.get("client_id") || "",
+				redirectUri: searchParams.get("redirect_uri") || "",
+				scope: searchParams.get("scope") || "openid profile email",
+				state: searchParams.get("state") || "",
+				nonce: searchParams.get("nonce") || "",
+				embed: searchParams.get("embed") === "1",
+				codeChallenge: codeChallenge || undefined,
+				codeChallengeMethod: (codeChallengeMethod === "S256" || codeChallengeMethod === "plain") ? codeChallengeMethod : undefined,
+			};
 
     });
 
@@ -60,9 +62,14 @@
     let autoAuthorizing = $state(false);
     let completed = $state(false);
     let error = $state<string | null>(null);
-    let sliderPosition = $state(0);
-    let sliderActive = $state(false);
-    let needsMasterKey = $state(false);
+	let sliderPosition = $state(0);
+	let sliderActive = $state(false);
+	let needsMasterKey = $state(false);
+	let needsStorageAccess = $state(false);
+	let requestingStorageAccess = $state(false);
+
+	const embedPopup = $derived.by(() => params.embed && !!window.opener);
+	const embedSheet = $derived.by(() => params.embed && !embedPopup);
 
     // Load app info
     async function loadAppInfo() {
@@ -319,24 +326,74 @@
     }
 
     // Check auth and load app info
-    $effect(() => {
-        if (!$isAuthenticated) {
-            // Redirect to login, then come back
-            // Build the full return URL properly - encode the entire path + search
-            const returnUrl = encodeURIComponent(window.location.pathname + window.location.search);
-            if (params.embed) {
-                const target = window.opener ?? window.parent;
-                target?.postMessage({ type: "ave:auth_required" }, "*");
-            }
-            goto(`/login?return=${returnUrl}`);
-            return;
-        }
+	$effect(() => {
+		if (!$isAuthenticated) {
+			if (embedSheet) {
+				needsStorageAccess = true;
+				return;
+			}
+			// Redirect to login, then come back
+			// Build the full return URL properly - encode the entire path + search
+			const returnUrl = encodeURIComponent(window.location.pathname + window.location.search);
+			if (params.embed) {
+				const target = window.opener ?? window.parent;
+				target?.postMessage({ type: "ave:auth_required" }, "*");
+			}
+			goto(`/login?return=${returnUrl}`);
+			return;
+		}
 
-        loadAppInfo();
-    });
+		loadAppInfo();
+	});
+
+	async function handleStorageAccessContinue() {
+		if (requestingStorageAccess) return;
+		requestingStorageAccess = true;
+		try {
+			if (!supportsStorageAccessApi()) {
+				const target = window.opener ?? window.parent;
+				target?.postMessage({ type: "ave:auth_required" }, "*");
+				needsStorageAccess = false;
+				completed = true;
+				return;
+			}
+
+			const alreadyHasAccess = await hasStorageAccess();
+			const granted = alreadyHasAccess || (await requestStorageAccess());
+			if (!granted) {
+				const target = window.opener ?? window.parent;
+				target?.postMessage({ type: "ave:auth_required" }, "*");
+				needsStorageAccess = false;
+				completed = true;
+				return;
+			}
+
+			await auth.init();
+			const authState = get(auth);
+			if (!authState.isAuthenticated) {
+				const target = window.opener ?? window.parent;
+				target?.postMessage({ type: "ave:auth_required" }, "*");
+				needsStorageAccess = false;
+				completed = true;
+				return;
+			}
+
+			needsStorageAccess = false;
+		} finally {
+			requestingStorageAccess = false;
+		}
+	}
 </script>
 
-{#if loading || autoAuthorizing || completed}
+{#if needsStorageAccess}
+	<StorageAccessGate
+		title="Continue"
+		message="Ave is embedded in another site. Your browser may require a one-time confirmation to access your signed-in session."
+		cta="Continue"
+		busy={requestingStorageAccess}
+		onclick={handleStorageAccessContinue}
+	/>
+{:else if loading || autoAuthorizing || completed}
     <div class="bg-[#090909] min-h-screen-fixed flex items-center justify-center p-6 md:p-[50px]">
         <div class="w-[48px] h-[48px] border-2 border-[#FFFFFF] border-t-transparent rounded-full animate-spin"></div>
     </div>

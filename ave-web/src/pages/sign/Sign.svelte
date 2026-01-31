@@ -2,8 +2,10 @@
     import Text from "../../components/Text.svelte";
     import { api } from "../../lib/api";
     import { createSigningKeyForIdentity, signWithIdentityKey } from "../../lib/signing";
-    import { isAuthenticated } from "../../stores/auth";
+    import { auth, isAuthenticated } from "../../stores/auth";
     import { goto } from "@mateothegreat/svelte5-router";
+    import StorageAccessGate from "../../components/StorageAccessGate.svelte";
+    import { supportsStorageAccessApi, hasStorageAccess, requestStorageAccess } from "../../lib/storage-access";
 
     // Get request ID from URL
     const params = new URLSearchParams(window.location.search);
@@ -16,6 +18,8 @@
     let signing = $state(false);
     let error = $state<string | null>(null);
     let authRequested = $state(false);
+    let needsStorageAccess = $state(false);
+    let requestingStorageAccess = $state(false);
     
     let request = $state<{
         id: string;
@@ -188,20 +192,51 @@
     $effect(() => {
         if (!$isAuthenticated) {
             if (embedSheet) {
-                if (!authRequested) {
-                    authRequested = true;
-                    const target = window.opener ?? window.parent;
-                    target?.postMessage({ type: "ave:auth_required" }, "*");
-                }
-                loading = true;
+                needsStorageAccess = true;
                 return;
             }
             const returnUrl = encodeURIComponent(window.location.pathname + window.location.search);
             goto(`/login?return=${returnUrl}`);
             return;
         }
+        needsStorageAccess = false;
         loadRequest();
     });
+
+    async function handleStorageAccessContinue() {
+        if (requestingStorageAccess) return;
+        requestingStorageAccess = true;
+        try {
+            if (!supportsStorageAccessApi()) {
+                if (!authRequested) {
+                    authRequested = true;
+                    const target = window.opener ?? window.parent;
+                    target?.postMessage({ type: "ave:auth_required" }, "*");
+                }
+                needsStorageAccess = false;
+                loading = true;
+                return;
+            }
+
+            const alreadyHasAccess = await hasStorageAccess();
+            const granted = alreadyHasAccess || (await requestStorageAccess());
+            if (!granted) {
+                if (!authRequested) {
+                    authRequested = true;
+                    const target = window.opener ?? window.parent;
+                    target?.postMessage({ type: "ave:auth_required" }, "*");
+                }
+                needsStorageAccess = false;
+                loading = true;
+                return;
+            }
+
+            await auth.init();
+            needsStorageAccess = false;
+        } finally {
+            requestingStorageAccess = false;
+        }
+    }
 
     function formatPayload(payload: string): string {
         // Try to parse as JSON for better display
@@ -219,6 +254,15 @@
     }
 </script>
 
+{#if needsStorageAccess}
+    <StorageAccessGate
+        title="Continue"
+        message="Ave is embedded in another site. Your browser may require a one-time confirmation to access your signed-in session."
+        cta="Continue"
+        busy={requestingStorageAccess}
+        onclick={handleStorageAccessContinue}
+    />
+{:else}
 <div class={embedSheet
     ? "w-full min-h-screen bg-[#111111]"
     : (embedPopup
@@ -388,6 +432,7 @@
         {/if}
     </div>
 </div>
+{/if}
 
 <style>
     @keyframes slide-up {
