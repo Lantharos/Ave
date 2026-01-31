@@ -53,6 +53,7 @@
     let authRequested = $state(false);
     let needsStorageAccess = $state(false);
     let requestingStorageAccess = $state(false);
+    let storageAccessError = $state<string | null>(null);
     
     let request = $state<{
         id: string;
@@ -237,12 +238,15 @@
     async function handleStorageAccessContinue() {
         if (requestingStorageAccess) return;
         requestingStorageAccess = true;
+        storageAccessError = null;
         try {
             if (!supportsStorageAccessApi()) {
                 if (!authRequested) {
                     authRequested = true;
-                    if (!openSigningPopupHere()) {
-                        postToEmbedHost({ type: "ave:auth_required" });
+                    const opened = openSigningPopupHere();
+                    if (!opened) {
+                        storageAccessError = "Popup blocked. Allow popups to continue.";
+                        return;
                     }
                 }
                 needsStorageAccess = false;
@@ -255,8 +259,10 @@
             if (!granted) {
                 if (!authRequested) {
                     authRequested = true;
-                    if (!openSigningPopupHere()) {
-                        postToEmbedHost({ type: "ave:auth_required" });
+                    const opened = openSigningPopupHere();
+                    if (!opened) {
+                        storageAccessError = "Couldn't get storage access. Allow popups to continue.";
+                        return;
                     }
                 }
                 needsStorageAccess = false;
@@ -264,7 +270,29 @@
                 return;
             }
 
-            await auth.init();
+            const initOk = (await withTimeout(auth.init(), 5000)) !== null;
+            if (!initOk) {
+                const opened = openSigningPopupHere();
+                if (!opened) {
+                    storageAccessError = "Timed out while restoring session. Allow popups to continue.";
+                    return;
+                }
+                needsStorageAccess = false;
+                loading = true;
+                return;
+            }
+            const authState = $isAuthenticated;
+            if (!authState) {
+                const opened = openSigningPopupHere();
+                if (!opened) {
+                    storageAccessError = "Storage access was granted but the session still isn't available here. Allow popups to continue.";
+                    return;
+                }
+                needsStorageAccess = false;
+                loading = true;
+                return;
+            }
+
             needsStorageAccess = false;
         } finally {
             requestingStorageAccess = false;
@@ -290,8 +318,8 @@
 {#if needsStorageAccess}
     <StorageAccessGate
         title="Continue"
-        message="Ave is embedded in another site. Your browser may require a one-time confirmation to access your signed-in session."
-        cta="Continue"
+        message={storageAccessError || "Ave is embedded in another site. Your browser may require a one-time confirmation to access your signed-in session."}
+        cta={storageAccessError ? "Open sign-in" : "Continue"}
         busy={requestingStorageAccess}
         onclick={handleStorageAccessContinue}
     />

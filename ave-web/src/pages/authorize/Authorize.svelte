@@ -100,6 +100,7 @@
 	let needsMasterKey = $state(false);
 	let needsStorageAccess = $state(false);
 	let requestingStorageAccess = $state(false);
+	let storageAccessError = $state<string | null>(null);
 
 	const embedPopup = $derived.by(() => params.embed && !!window.opener);
 	const embedSheet = $derived.by(() => params.embed && !embedPopup);
@@ -210,7 +211,6 @@
                     // Encrypt it with the user's master key
                     const encryptedAppKey = await encryptAppKey(appKey, masterKey);
                     authData.encryptedAppKey = encryptedAppKey;
-                    
                     // Export the raw app key to pass to the app
                     rawAppKey = await exportAppKey(appKey);
                 }
@@ -379,10 +379,13 @@
 	async function handleStorageAccessContinue() {
 		if (requestingStorageAccess) return;
 		requestingStorageAccess = true;
+		storageAccessError = null;
 		try {
 			if (!supportsStorageAccessApi()) {
-				if (!openAuthPopupHere()) {
-					postToEmbedHost({ type: "ave:auth_required" });
+				const opened = openAuthPopupHere();
+				if (!opened) {
+					storageAccessError = "Popup blocked. Allow popups to continue.";
+					return;
 				}
 				needsStorageAccess = false;
 				completed = true;
@@ -392,19 +395,33 @@
 			const alreadyHasAccess = (await withTimeout(hasStorageAccess(), 1200)) === true;
 			const granted = alreadyHasAccess || (await withTimeout(requestStorageAccess(), 8000)) === true;
 			if (!granted) {
-				if (!openAuthPopupHere()) {
-					postToEmbedHost({ type: "ave:auth_required" });
+				const opened = openAuthPopupHere();
+				if (!opened) {
+					storageAccessError = "Couldn't get storage access. Allow popups to continue.";
+					return;
 				}
 				needsStorageAccess = false;
 				completed = true;
 				return;
 			}
 
-			await auth.init();
+			const initOk = (await withTimeout(auth.init(), 5000)) !== null;
+			if (!initOk) {
+				const opened = openAuthPopupHere();
+				if (!opened) {
+					storageAccessError = "Timed out while restoring session. Allow popups to continue.";
+					return;
+				}
+				needsStorageAccess = false;
+				completed = true;
+				return;
+			}
 			const authState = get(auth);
 			if (!authState.isAuthenticated) {
-				if (!openAuthPopupHere()) {
-					postToEmbedHost({ type: "ave:auth_required" });
+				const opened = openAuthPopupHere();
+				if (!opened) {
+					storageAccessError = "Storage access was granted but the session still isn't available here. Allow popups to continue.";
+					return;
 				}
 				needsStorageAccess = false;
 				completed = true;
@@ -421,8 +438,8 @@
 {#if needsStorageAccess}
 	<StorageAccessGate
 		title="Continue"
-		message="Ave is embedded in another site. Your browser may require a one-time confirmation to access your signed-in session."
-		cta="Continue"
+		message={storageAccessError || "Ave is embedded in another site. Your browser may require a one-time confirmation to access your signed-in session."}
+		cta={storageAccessError ? "Open sign-in" : "Continue"}
 		busy={requestingStorageAccess}
 		onclick={handleStorageAccessContinue}
 	/>
