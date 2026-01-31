@@ -21,6 +21,8 @@ import appsRoutes from "./routes/apps";
 import pushRoutes from "./routes/push";
 import signingRoutes from "./routes/signing";
 
+import { SESSION_COOKIE_NAME } from "./lib/session-cookie";
+
 import uploadRoutes from "./routes/upload";
 
 const app = new Hono();
@@ -63,6 +65,35 @@ app.use("*", async (c, next) => {
   });
   
   return corsMiddleware(c, next);
+});
+
+app.use("*", async (c, next) => {
+  if (c.req.method === "OPTIONS") return next();
+
+  const cookieHeader = c.req.header("Cookie") || "";
+  const hasSessionCookie = cookieHeader.includes(`${SESSION_COOKIE_NAME}=`);
+  if (!hasSessionCookie) return next();
+
+  const origin = c.req.header("Origin");
+  if (!origin) {
+    if (c.req.method === "GET" || c.req.method === "HEAD") return next();
+    return c.json({ error: "origin_required" }, 403);
+  }
+
+  if (origin.startsWith("http://localhost:") || origin.startsWith("http://127.0.0.1:")) {
+    return next();
+  }
+
+  if (origin === "https://aveid.net" || origin === "https://devs.aveid.net" || origin === "https://demo.aveid.net") {
+    return next();
+  }
+
+  const rpOrigin = process.env.RP_ORIGIN;
+  if (rpOrigin && origin === rpOrigin) {
+    return next();
+  }
+
+  return c.json({ error: "origin_not_allowed" }, 403);
 });
 
 app.use("*", authMiddleware);

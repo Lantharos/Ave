@@ -44,11 +44,11 @@ function createAuthStore() {
      * Initialize auth state from storage
      */
     async init() {
-      const token = localStorage.getItem("ave_session_token");
-      
-      if (!token) {
-        update((s) => ({ ...s, isLoading: false }));
-        return;
+      let token: string | null = null;
+      try {
+        token = localStorage.getItem("ave_session_token");
+      } catch {
+        token = null;
       }
       
       try {
@@ -67,10 +67,16 @@ function createAuthStore() {
         }));
         
         // Connect WebSocket for real-time notifications
-        websocket.connectAsUser(token);
+        if (token) {
+          websocket.connectAsUser(token);
+        }
       } catch {
         // Session invalid, clear it
-        localStorage.removeItem("ave_session_token");
+        try {
+          localStorage.removeItem("ave_session_token");
+        } catch {
+          // ignore
+        }
         update((s) => ({ ...s, isLoading: false }));
       }
     },

@@ -2,6 +2,20 @@ import { Context, Next } from "hono";
 import { db, sessions, devices, users } from "../db";
 import { eq, and, gt } from "drizzle-orm";
 import { hashSessionToken } from "../lib/crypto";
+import { SESSION_COOKIE_NAME } from "../lib/session-cookie";
+
+function getCookieValue(cookieHeader: string, name: string): string | null {
+  const parts = cookieHeader.split(";");
+  for (const part of parts) {
+    const [k, ...rest] = part.trim().split("=");
+    if (!k) continue;
+    if (k === name) {
+      const v = rest.join("=");
+      return v ? decodeURIComponent(v) : "";
+    }
+  }
+  return null;
+}
 
 export type AuthUser = {
   id: string;
@@ -21,13 +35,18 @@ declare module "hono" {
  */
 export async function authMiddleware(c: Context, next: Next) {
   const authHeader = c.req.header("Authorization");
-  
-  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+  const bearerToken = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null;
+
+  const cookieHeader = c.req.header("Cookie") || "";
+  const cookieToken = cookieHeader ? getCookieValue(cookieHeader, SESSION_COOKIE_NAME) : null;
+
+  const token = bearerToken || cookieToken;
+
+  if (!token) {
     c.set("user", null);
     return next();
   }
-  
-  const token = authHeader.slice(7);
+
   const tokenHash = hashSessionToken(token);
   
   try {

@@ -237,59 +237,39 @@
 
     async function handleStorageAccessContinue() {
         if (requestingStorageAccess) return;
+        if (storageAccessError) {
+            const opened = openSigningPopupHere();
+            if (!opened) {
+                storageAccessError = "Popup blocked. Allow popups to continue.";
+                return;
+            }
+            needsStorageAccess = false;
+            loading = true;
+            return;
+        }
         requestingStorageAccess = true;
         storageAccessError = null;
         try {
             if (!supportsStorageAccessApi()) {
-                if (!authRequested) {
-                    authRequested = true;
-                    const opened = openSigningPopupHere();
-                    if (!opened) {
-                        storageAccessError = "Popup blocked. Allow popups to continue.";
-                        return;
-                    }
-                }
-                needsStorageAccess = false;
-                loading = true;
+                storageAccessError = "This browser doesn't support embedded session access. Use the popup to continue.";
                 return;
             }
 
             const alreadyHasAccess = (await withTimeout(hasStorageAccess(), 1200)) === true;
             const granted = alreadyHasAccess || (await withTimeout(requestStorageAccess(), 8000)) === true;
             if (!granted) {
-                if (!authRequested) {
-                    authRequested = true;
-                    const opened = openSigningPopupHere();
-                    if (!opened) {
-                        storageAccessError = "Couldn't get storage access. Allow popups to continue.";
-                        return;
-                    }
-                }
-                needsStorageAccess = false;
-                loading = true;
+                storageAccessError = "Couldn't access your signed-in session in the embed. Use the popup to continue.";
                 return;
             }
 
             const initOk = (await withTimeout(auth.init(), 5000)) !== null;
             if (!initOk) {
-                const opened = openSigningPopupHere();
-                if (!opened) {
-                    storageAccessError = "Timed out while restoring session. Allow popups to continue.";
-                    return;
-                }
-                needsStorageAccess = false;
-                loading = true;
+                storageAccessError = "Timed out while restoring session in the embed. Use the popup to continue.";
                 return;
             }
             const authState = $isAuthenticated;
             if (!authState) {
-                const opened = openSigningPopupHere();
-                if (!opened) {
-                    storageAccessError = "Storage access was granted but the session still isn't available here. Allow popups to continue.";
-                    return;
-                }
-                needsStorageAccess = false;
-                loading = true;
+                storageAccessError = "Storage access was granted, but Ave still can't see your session in the embed. Use the popup to continue.";
                 return;
             }
 

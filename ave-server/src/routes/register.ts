@@ -13,7 +13,9 @@ import {
   generateSessionToken, 
   hashSessionToken,
 } from "../lib/crypto";
+import { setSessionCookie } from "../lib/session-cookie";
 import { eq } from "drizzle-orm";
+import { requireAuth } from "../middleware/auth";
 
 const app = new Hono();
 
@@ -207,13 +209,14 @@ app.post("/complete", zValidator("json", completeRegistrationSchema), async (c) 
     
     // Create session
     const sessionToken = generateSessionToken();
+    const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
     const [session] = await tx
       .insert(sessions)
       .values({
         userId: user.id,
         deviceId: device.id,
         tokenHash: hashSessionToken(sessionToken),
-        expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days
+        expiresAt,
         ipAddress: c.req.header("x-forwarded-for") || c.req.header("x-real-ip"),
         userAgent: c.req.header("user-agent"),
       })
@@ -239,6 +242,8 @@ app.post("/complete", zValidator("json", completeRegistrationSchema), async (c) 
     };
   });
   
+  setSessionCookie(c, result.sessionToken, new Date(Date.now() + 30 * 24 * 60 * 60 * 1000));
+
   return c.json({
     success: true,
     sessionToken: result.sessionToken,
@@ -288,26 +293,8 @@ app.get("/check-handle/:handle", async (c) => {
 // Finalize master key backup (called after client encrypts with real trust codes)
 app.post("/finalize-backup", zValidator("json", z.object({
   encryptedMasterKeyBackup: z.string(),
-})), async (c) => {
-  // Get session token from header
-  const authHeader = c.req.header("Authorization");
-  if (!authHeader || !authHeader.startsWith("Bearer ")) {
-    return c.json({ error: "Unauthorized" }, 401);
-  }
-  
-  const token = authHeader.slice(7);
-  const tokenHash = hashSessionToken(token);
-  
-  // Find session
-  const [session] = await db
-    .select()
-    .from(sessions)
-    .where(eq(sessions.tokenHash, tokenHash))
-    .limit(1);
-  
-  if (!session) {
-    return c.json({ error: "Invalid session" }, 401);
-  }
+})), requireAuth, async (c) => {
+  const user = c.get("user")!;
   
   const { encryptedMasterKeyBackup } = c.req.valid("json");
   
@@ -315,9 +302,9 @@ app.post("/finalize-backup", zValidator("json", z.object({
   await db
     .update(users)
     .set({ encryptedMasterKeyBackup })
-    .where(eq(users.id, session.userId));
+    .where(eq(users.id, user.id));
   
-  console.log(`[Finalize Backup] Updated master key backup for user ${session.userId}`);
+  console.log(`[Finalize Backup] Updated master key backup for user ${user.id}`);
   
   return c.json({ success: true });
 });

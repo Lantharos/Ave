@@ -378,53 +378,39 @@
 
 	async function handleStorageAccessContinue() {
 		if (requestingStorageAccess) return;
+		if (storageAccessError) {
+			const opened = openAuthPopupHere();
+			if (!opened) {
+				storageAccessError = "Popup blocked. Allow popups to continue.";
+				return;
+			}
+			needsStorageAccess = false;
+			completed = true;
+			return;
+		}
 		requestingStorageAccess = true;
 		storageAccessError = null;
 		try {
 			if (!supportsStorageAccessApi()) {
-				const opened = openAuthPopupHere();
-				if (!opened) {
-					storageAccessError = "Popup blocked. Allow popups to continue.";
-					return;
-				}
-				needsStorageAccess = false;
-				completed = true;
+				storageAccessError = "This browser doesn't support embedded session access. Use the popup to continue.";
 				return;
 			}
 
 			const alreadyHasAccess = (await withTimeout(hasStorageAccess(), 1200)) === true;
 			const granted = alreadyHasAccess || (await withTimeout(requestStorageAccess(), 8000)) === true;
 			if (!granted) {
-				const opened = openAuthPopupHere();
-				if (!opened) {
-					storageAccessError = "Couldn't get storage access. Allow popups to continue.";
-					return;
-				}
-				needsStorageAccess = false;
-				completed = true;
+				storageAccessError = "Couldn't access your signed-in session in the embed. Use the popup to continue.";
 				return;
 			}
 
 			const initOk = (await withTimeout(auth.init(), 5000)) !== null;
 			if (!initOk) {
-				const opened = openAuthPopupHere();
-				if (!opened) {
-					storageAccessError = "Timed out while restoring session. Allow popups to continue.";
-					return;
-				}
-				needsStorageAccess = false;
-				completed = true;
+				storageAccessError = "Timed out while restoring session in the embed. Use the popup to continue.";
 				return;
 			}
 			const authState = get(auth);
 			if (!authState.isAuthenticated) {
-				const opened = openAuthPopupHere();
-				if (!opened) {
-					storageAccessError = "Storage access was granted but the session still isn't available here. Allow popups to continue.";
-					return;
-				}
-				needsStorageAccess = false;
-				completed = true;
+				storageAccessError = "Storage access was granted, but Ave still can't see your session in the embed. Use the popup to continue.";
 				return;
 			}
 

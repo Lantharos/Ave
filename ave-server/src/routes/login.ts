@@ -13,6 +13,7 @@ import {
   verifyTrustCode,
   hashTrustCode,
 } from "../lib/crypto";
+import { clearSessionCookie, setSessionCookie, SESSION_COOKIE_NAME } from "../lib/session-cookie";
 import { eq, and, gt, desc } from "drizzle-orm";
 import { notifyLoginRequest } from "../lib/websocket";
 import { sendLoginRequestNotification, type PushSubscription } from "../lib/webpush";
@@ -250,14 +251,17 @@ app.post("/passkey", zValidator("json", z.object({
     
     // Create session
     const sessionToken = generateSessionToken();
+    const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
     await db.insert(sessions).values({
       userId: storedChallenge.userId,
       deviceId: deviceRecord.id,
       tokenHash: hashSessionToken(sessionToken),
-      expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+      expiresAt,
       ipAddress: c.req.header("x-forwarded-for") || c.req.header("x-real-ip"),
       userAgent: c.req.header("user-agent"),
     });
+
+    setSessionCookie(c, sessionToken, expiresAt);
     
     // Log activity
     await db.insert(activityLogs).values({
@@ -442,14 +446,17 @@ app.get("/request-status/:requestId", async (c) => {
     });
     
     const sessionToken = generateSessionToken();
+    const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
     await db.insert(sessions).values({
       userId: identity.userId,
       deviceId: deviceRecord.id,
       tokenHash: hashSessionToken(sessionToken),
-      expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+      expiresAt,
       ipAddress: request.ipAddress,
       userAgent: c.req.header("user-agent"),
     });
+
+    setSessionCookie(c, sessionToken, expiresAt);
     
     // Log activity
     await db.insert(activityLogs).values({
@@ -588,14 +595,17 @@ app.post("/trust-code", zValidator("json", z.object({
   const deviceRecord = await getOrCreateDevice(identity.userId, device);
   
   const sessionToken = generateSessionToken();
+  const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
   await db.insert(sessions).values({
     userId: identity.userId,
     deviceId: deviceRecord.id,
     tokenHash: hashSessionToken(sessionToken),
-    expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+    expiresAt,
     ipAddress: c.req.header("x-forwarded-for") || c.req.header("x-real-ip"),
     userAgent: c.req.header("user-agent"),
   });
+
+  setSessionCookie(c, sessionToken, expiresAt);
   
   // Log activity
   await db.insert(activityLogs).values({
@@ -726,15 +736,25 @@ app.post("/recover-key", zValidator("json", z.object({
 // Logout
 app.post("/logout", async (c) => {
   const authHeader = c.req.header("Authorization");
-  if (!authHeader || !authHeader.startsWith("Bearer ")) {
-    return c.json({ success: true });
+  const bearerToken = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null;
+
+  const cookieHeader = c.req.header("Cookie") || "";
+  const cookieToken = cookieHeader
+    ? cookieHeader
+        .split(";")
+        .map((p) => p.trim())
+        .find((p) => p.startsWith(`${SESSION_COOKIE_NAME}=`))
+        ?.slice(`${SESSION_COOKIE_NAME}=`.length)
+    : null;
+
+  const token = bearerToken || (cookieToken ? decodeURIComponent(cookieToken) : null);
+
+  if (token) {
+    const tokenHash = hashSessionToken(token);
+    await db.delete(sessions).where(eq(sessions.tokenHash, tokenHash));
   }
-  
-  const token = authHeader.slice(7);
-  const tokenHash = hashSessionToken(token);
-  
-  await db.delete(sessions).where(eq(sessions.tokenHash, tokenHash));
-  
+
+  clearSessionCookie(c);
   return c.json({ success: true });
 });
 

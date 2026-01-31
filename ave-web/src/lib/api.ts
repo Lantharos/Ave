@@ -15,7 +15,12 @@ async function request<T>(
   endpoint: string,
   options: RequestInit = {}
 ): Promise<T> {
-  const token = localStorage.getItem("ave_session_token");
+  let token: string | null = null;
+  try {
+    token = localStorage.getItem("ave_session_token");
+  } catch {
+    token = null;
+  }
   
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
@@ -28,6 +33,7 @@ async function request<T>(
   
   const response = await fetch(`${API_BASE}${endpoint}`, {
     ...options,
+    credentials: options.credentials ?? "include",
     headers,
   });
   
@@ -425,13 +431,22 @@ export const api = {
   
   mydata: {
     export: async () => {
-      const token = localStorage.getItem("ave_session_token");
+      let token: string | null = null;
+      try {
+        token = localStorage.getItem("ave_session_token");
+      } catch {
+        token = null;
+      }
       const headers: Record<string, string> = {};
       if (token) {
         headers["Authorization"] = `Bearer ${token}`;
       }
       
-      const response = await fetch(`${API_BASE}/api/mydata/export`, { headers });
+      const response = await fetch(`${API_BASE}/api/mydata/export`, {
+        headers,
+        credentials: "include",
+      });
+      
       
       if (!response.ok) {
         const data = await response.json();
@@ -619,7 +634,12 @@ export const api = {
   
   upload: {
     avatar: async (identityId: string, file: File) => {
-      const token = localStorage.getItem("ave_session_token");
+      let token: string | null = null;
+      try {
+        token = localStorage.getItem("ave_session_token");
+      } catch {
+        token = null;
+      }
       const formData = new FormData();
       formData.append("file", file);
       formData.append("identityId", identityId);
@@ -628,6 +648,7 @@ export const api = {
         method: "POST",
         headers: token ? { Authorization: `Bearer ${token}` } : {},
         body: formData,
+        credentials: "include",
       });
       
       if (!response.ok) {
@@ -639,7 +660,12 @@ export const api = {
     },
     
     banner: async (identityId: string, file: File) => {
-      const token = localStorage.getItem("ave_session_token");
+      let token: string | null = null;
+      try {
+        token = localStorage.getItem("ave_session_token");
+      } catch {
+        token = null;
+      }
       const formData = new FormData();
       formData.append("file", file);
       formData.append("identityId", identityId);
@@ -648,6 +674,7 @@ export const api = {
         method: "POST",
         headers: token ? { Authorization: `Bearer ${token}` } : {},
         body: formData,
+        credentials: "include",
       });
       
       if (!response.ok) {
