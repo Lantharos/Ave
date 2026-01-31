@@ -31,20 +31,38 @@ const app = new Hono();
 app.use("*", logger());
 
 app.use("/api/oauth/*", cors({
-  origin: "*",
+  origin: (origin) => {
+    if (origin && (origin.startsWith("http://localhost:") || origin.startsWith("http://127.0.0.1:"))) {
+      return origin;
+    }
+    if (origin === "https://aveid.net" || origin === "https://devs.aveid.net" || origin === "https://demo.aveid.net") {
+      return origin;
+    }
+    return process.env.RP_ORIGIN || "http://localhost:5173";
+  },
+  credentials: true,
   allowMethods: ["GET", "POST", "OPTIONS"],
   allowHeaders: ["Content-Type", "Authorization"],
 }));
 
 app.use("/.well-known/*", cors({
-  origin: "*",
+  origin: (origin) => {
+    if (origin && (origin.startsWith("http://localhost:") || origin.startsWith("http://127.0.0.1:"))) {
+      return origin;
+    }
+    if (origin === "https://aveid.net" || origin === "https://devs.aveid.net" || origin === "https://demo.aveid.net") {
+      return origin;
+    }
+    return process.env.RP_ORIGIN || "http://localhost:5173";
+  },
+  credentials: true,
   allowMethods: ["GET", "OPTIONS"],
   allowHeaders: ["Content-Type", "Authorization"],
 }));
 
 
 app.use("*", async (c, next) => {
-  if (c.req.path.startsWith("/api/oauth/")) {
+  if (c.req.path.startsWith("/api/oauth/") || c.req.path.startsWith("/.well-known/")) {
     return next();
   }
   
