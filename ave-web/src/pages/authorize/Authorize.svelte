@@ -9,6 +9,39 @@
 	import StorageAccessGate from "../../components/StorageAccessGate.svelte";
 	import { supportsStorageAccessApi, hasStorageAccess, requestStorageAccess } from "../../lib/storage-access";
 
+	function postToEmbedHost(payload: unknown) {
+		const target = (window.opener && (window.opener as any).parent) ? (window.opener as any).parent : (window.opener ?? window.parent);
+		target?.postMessage(payload, "*");
+	}
+
+	function openAuthPopupHere(): boolean {
+		const width = 450;
+		const height = 650;
+		const left = (window.innerWidth - width) / 2 + window.screenX;
+		const top = (window.innerHeight - height) / 2 + window.screenY;
+		const popup = window.open(
+			window.location.href,
+			"ave_auth",
+			`width=${width},height=${height},left=${left},top=${top},menubar=no,toolbar=no,location=no,status=no`
+		);
+		popup?.focus?.();
+		return !!popup;
+	}
+
+	async function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T | null> {
+		let timer: number | undefined;
+		try {
+			return await Promise.race([
+				promise,
+				new Promise<null>((resolve) => {
+					timer = window.setTimeout(() => resolve(null), ms);
+				}),
+			]);
+		} finally {
+			if (timer !== undefined) window.clearTimeout(timer);
+		}
+	}
+
     // Parse query params from window.location
     let querystring = $state(window.location.search.slice(1));
     
@@ -196,16 +229,15 @@
             
 
             // Redirect back to the app
-            if (params.embed) {
-                const target = window.opener ?? window.parent;
-                target?.postMessage({ type: "ave:success", payload: { redirectUrl } }, "*");
-                completed = true;
-                authorizing = false;
-                if (window.opener) {
-                    setTimeout(() => window.close(), 50);
-                }
-                return;
-            }
+			if (params.embed) {
+				postToEmbedHost({ type: "ave:success", payload: { redirectUrl } });
+				completed = true;
+				authorizing = false;
+				if (window.opener) {
+					setTimeout(() => window.close(), 50);
+				}
+				return;
+			}
             window.location.href = redirectUrl;
 
         } catch (err) {
@@ -312,16 +344,15 @@
             redirectUrl.searchParams.set("state", params.state);
         }
 
-        if (params.embed) {
-            const target = window.opener ?? window.parent;
-            target?.postMessage({ type: "ave:error", payload: { error: "access_denied" } }, "*");
-            completed = true;
-            if (window.opener) {
-                setTimeout(() => window.close(), 50);
-            }
-            return;
-        }
-        window.location.href = redirectUrl.toString();
+		if (params.embed) {
+			postToEmbedHost({ type: "ave:error", payload: { error: "access_denied" } });
+			completed = true;
+			if (window.opener) {
+				setTimeout(() => window.close(), 50);
+			}
+			return;
+		}
+		window.location.href = redirectUrl.toString();
 
     }
 
@@ -336,8 +367,7 @@
 			// Build the full return URL properly - encode the entire path + search
 			const returnUrl = encodeURIComponent(window.location.pathname + window.location.search);
 			if (params.embed) {
-				const target = window.opener ?? window.parent;
-				target?.postMessage({ type: "ave:auth_required" }, "*");
+				postToEmbedHost({ type: "ave:auth_required" });
 			}
 			goto(`/login?return=${returnUrl}`);
 			return;
@@ -351,18 +381,20 @@
 		requestingStorageAccess = true;
 		try {
 			if (!supportsStorageAccessApi()) {
-				const target = window.opener ?? window.parent;
-				target?.postMessage({ type: "ave:auth_required" }, "*");
+				if (!openAuthPopupHere()) {
+					postToEmbedHost({ type: "ave:auth_required" });
+				}
 				needsStorageAccess = false;
 				completed = true;
 				return;
 			}
 
-			const alreadyHasAccess = await hasStorageAccess();
-			const granted = alreadyHasAccess || (await requestStorageAccess());
+			const alreadyHasAccess = (await withTimeout(hasStorageAccess(), 1200)) === true;
+			const granted = alreadyHasAccess || (await withTimeout(requestStorageAccess(), 8000)) === true;
 			if (!granted) {
-				const target = window.opener ?? window.parent;
-				target?.postMessage({ type: "ave:auth_required" }, "*");
+				if (!openAuthPopupHere()) {
+					postToEmbedHost({ type: "ave:auth_required" });
+				}
 				needsStorageAccess = false;
 				completed = true;
 				return;
@@ -371,8 +403,9 @@
 			await auth.init();
 			const authState = get(auth);
 			if (!authState.isAuthenticated) {
-				const target = window.opener ?? window.parent;
-				target?.postMessage({ type: "ave:auth_required" }, "*");
+				if (!openAuthPopupHere()) {
+					postToEmbedHost({ type: "ave:auth_required" });
+				}
 				needsStorageAccess = false;
 				completed = true;
 				return;

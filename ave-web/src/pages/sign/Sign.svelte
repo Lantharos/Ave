@@ -7,6 +7,39 @@
     import StorageAccessGate from "../../components/StorageAccessGate.svelte";
     import { supportsStorageAccessApi, hasStorageAccess, requestStorageAccess } from "../../lib/storage-access";
 
+    function postToEmbedHost(payload: unknown) {
+        const target = (window.opener && (window.opener as any).parent) ? (window.opener as any).parent : (window.opener ?? window.parent);
+        target?.postMessage(payload, "*");
+    }
+
+    function openSigningPopupHere(): boolean {
+        const width = 500;
+        const height = 600;
+        const left = (window.innerWidth - width) / 2 + window.screenX;
+        const top = (window.innerHeight - height) / 2 + window.screenY;
+        const popup = window.open(
+            window.location.href,
+            "ave_signing",
+            `width=${width},height=${height},left=${left},top=${top},menubar=no,toolbar=no,location=no,status=no`
+        );
+        popup?.focus?.();
+        return !!popup;
+    }
+
+    async function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T | null> {
+        let timer: number | undefined;
+        try {
+            return await Promise.race([
+                promise,
+                new Promise<null>((resolve) => {
+                    timer = window.setTimeout(() => resolve(null), ms);
+                }),
+            ]);
+        } finally {
+            if (timer !== undefined) window.clearTimeout(timer);
+        }
+    }
+
     // Get request ID from URL
     const params = new URLSearchParams(window.location.search);
     const requestId = params.get("requestId");
@@ -129,15 +162,14 @@
             
             // Notify parent if embedded
             if (embed) {
-                const target = window.opener ?? window.parent;
-                target?.postMessage({
+                postToEmbedHost({
                     type: "ave:signed",
                     payload: {
                         requestId: request.id,
                         signature,
                         publicKey: signingKey.publicKey,
                     }
-                }, "*");
+                });
                 return;
             }
             
@@ -167,11 +199,10 @@
             
             // Notify parent if embedded
             if (embed) {
-                const target = window.opener ?? window.parent;
-                target?.postMessage({
+                postToEmbedHost({
                     type: "ave:denied",
                     payload: { requestId: request.id }
-                }, "*");
+                });
                 return;
             }
             
@@ -210,21 +241,23 @@
             if (!supportsStorageAccessApi()) {
                 if (!authRequested) {
                     authRequested = true;
-                    const target = window.opener ?? window.parent;
-                    target?.postMessage({ type: "ave:auth_required" }, "*");
+                    if (!openSigningPopupHere()) {
+                        postToEmbedHost({ type: "ave:auth_required" });
+                    }
                 }
                 needsStorageAccess = false;
                 loading = true;
                 return;
             }
 
-            const alreadyHasAccess = await hasStorageAccess();
-            const granted = alreadyHasAccess || (await requestStorageAccess());
+            const alreadyHasAccess = (await withTimeout(hasStorageAccess(), 1200)) === true;
+            const granted = alreadyHasAccess || (await withTimeout(requestStorageAccess(), 8000)) === true;
             if (!granted) {
                 if (!authRequested) {
                     authRequested = true;
-                    const target = window.opener ?? window.parent;
-                    target?.postMessage({ type: "ave:auth_required" }, "*");
+                    if (!openSigningPopupHere()) {
+                        postToEmbedHost({ type: "ave:auth_required" });
+                    }
                 }
                 needsStorageAccess = false;
                 loading = true;
