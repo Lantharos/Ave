@@ -58,6 +58,7 @@
     let loading = $state(true);
     let authorizing = $state(false);
     let autoAuthorizing = $state(false);
+    let completed = $state(false);
     let error = $state<string | null>(null);
     let sliderPosition = $state(0);
     let sliderActive = $state(false);
@@ -65,6 +66,7 @@
 
     // Load app info
     async function loadAppInfo() {
+        if (completed) return;
         if (!params.clientId) {
             error = "Missing client_id parameter";
             loading = false;
@@ -89,35 +91,30 @@
                 needsMasterKey = true;
             }
 
-            // Set default selected identity
             const authState = get(auth);
+            const existingIdentity = existingAuth
+                ? authState.identities.find((i) => i.id === existingAuth!.identityId)
+                : null;
 
-            // If there's an existing auth, try to use that identity
-            if (existingAuth) {
-                const existingIdentity = authState.identities.find(i => i.id === existingAuth!.identityId);
-                selectedIdentity = existingIdentity || authState.currentIdentity || authState.identities[0] || null;
-            } else {
-                selectedIdentity = authState.currentIdentity || authState.identities[0] || null;
-            }
+            selectedIdentity = existingIdentity || authState.currentIdentity || authState.identities[0] || null;
 
-            const shouldAutoAuthorize = (
-                authState.identities.length === 1 &&
-                existingAuth &&
-                existingAuth.identityId === authState.identities[0].id &&
-                (!appData.app.supportsE2ee || hasMasterKey())
-            );
+            const shouldAutoAuthorize = !!existingAuth && !!existingIdentity && (!appData.app.supportsE2ee || hasMasterKey());
 
             if (shouldAutoAuthorize) {
                 // Keep UI in loading state while we redirect.
                 autoAuthorizing = true;
                 await handleAuthorize();
                 // If we got here, redirect failed (error set) or we're embedded.
-                autoAuthorizing = false;
+                if (!completed) {
+                    autoAuthorizing = false;
+                }
             }
         } catch (err) {
             error = err instanceof Error ? err.message : "Failed to load app info";
         } finally {
-            loading = false;
+            if (!completed) {
+                loading = false;
+            }
         }
     }
 
@@ -190,10 +187,16 @@
                 redirectUrl = url.toString();
             }
             
+
             // Redirect back to the app
             if (params.embed) {
                 const target = window.opener ?? window.parent;
                 target?.postMessage({ type: "ave:success", payload: { redirectUrl } }, "*");
+                completed = true;
+                authorizing = false;
+                if (window.opener) {
+                    setTimeout(() => window.close(), 50);
+                }
                 return;
             }
             window.location.href = redirectUrl;
@@ -301,9 +304,14 @@
         if (params.state) {
             redirectUrl.searchParams.set("state", params.state);
         }
+
         if (params.embed) {
             const target = window.opener ?? window.parent;
             target?.postMessage({ type: "ave:error", payload: { error: "access_denied" } }, "*");
+            completed = true;
+            if (window.opener) {
+                setTimeout(() => window.close(), 50);
+            }
             return;
         }
         window.location.href = redirectUrl.toString();
@@ -328,7 +336,7 @@
     });
 </script>
 
-{#if loading || autoAuthorizing}
+{#if loading || autoAuthorizing || completed}
     <div class="bg-[#090909] min-h-screen-fixed flex items-center justify-center p-6 md:p-[50px]">
         <div class="w-[48px] h-[48px] border-2 border-[#FFFFFF] border-t-transparent rounded-full animate-spin"></div>
     </div>

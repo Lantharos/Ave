@@ -6,8 +6,15 @@ import { requireAuth } from "../middleware/auth";
 import { eq, and, desc } from "drizzle-orm";
 import { verifySignature, isValidPublicKey, isValidSignature } from "../lib/signing";
 import { verifyJwt, RESOURCE_AUDIENCE } from "./oauth";
+import { hashSessionToken } from "../lib/crypto";
+import { timingSafeEqual } from "crypto";
 
 const app = new Hono();
+
+function timingSafeEqualString(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  return timingSafeEqual(Buffer.from(a), Buffer.from(b));
+}
 
 // ============================================
 // Authenticated user endpoints (manage keys)
@@ -515,11 +522,10 @@ app.post("/request", zValidator("json", z.object({
     return c.json({ error: "Invalid client_id" }, 401);
   }
   
-  // Verify client secret (using timing-safe comparison)
-  const secretHash = await Bun.password.hash(clientSecret, { algorithm: "argon2id" });
-  const isValidSecret = await Bun.password.verify(clientSecret, app.clientSecretHash);
-  
-  if (!isValidSecret) {
+  const expectedHash = app.clientSecretHash;
+  const providedHash = hashSessionToken(clientSecret);
+
+  if (!expectedHash || !timingSafeEqualString(providedHash, expectedHash)) {
     return c.json({ error: "Invalid client_secret" }, 401);
   }
   

@@ -85,6 +85,9 @@ export function openAveSheet({
   onError,
   onClose,
 }) {
+  let resolved = false;
+  let popup = null;
+
   // Create overlay backdrop
   const overlay = document.createElement("div");
   overlay.style.cssText = `
@@ -195,6 +198,9 @@ export function openAveSheet({
 
   // Close function
   const close = () => {
+    if (popup && !popup.closed) {
+      popup.close();
+    }
     sheet.style.animation = "aveSheetSlideDown 0.2s ease-in forwards";
     overlay.style.animation = "aveSheetFadeOut 0.2s ease-in forwards";
     setTimeout(() => {
@@ -215,17 +221,38 @@ export function openAveSheet({
     if (event.origin !== issuer) return;
     const data = event.data || {};
 
+    if (resolved) return;
+
+    if (data.type === "ave:auth_required") {
+      if (!popup || popup.closed) {
+        const width = 450;
+        const height = 650;
+        const left = (window.innerWidth - width) / 2 + window.screenX;
+        const top = (window.innerHeight - height) / 2 + window.screenY;
+        popup = window.open(
+          iframe.src,
+          "ave_auth",
+          `width=${width},height=${height},left=${left},top=${top},menubar=no,toolbar=no,location=no,status=no`
+        );
+      }
+      popup?.focus?.();
+      return;
+    }
+
     if (data.type === "ave:success") {
+      resolved = true;
       close();
       onSuccess?.(data.payload);
     }
 
     if (data.type === "ave:error") {
+      resolved = true;
       close();
       onError?.(data.payload);
     }
 
     if (data.type === "ave:close") {
+      resolved = true;
       close();
     }
   };
@@ -249,6 +276,7 @@ export function openAvePopup({
   redirectUri,
   scope = "openid profile email",
   issuer = "https://aveid.net",
+  theme = DEFAULT_THEME,
   codeChallenge,
   codeChallengeMethod,
   width = 450,
@@ -262,6 +290,7 @@ export function openAvePopup({
     redirect_uri: redirectUri,
     scope,
     embed: "1",
+    theme,
   });
   
   if (codeChallenge) {
