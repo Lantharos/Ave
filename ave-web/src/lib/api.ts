@@ -407,6 +407,21 @@ export const api = {
         method: "PUT",
         body: JSON.stringify({ questions }),
       }),
+
+    unlockMasterKeyStart: () =>
+      request<{ unlockSessionId: string; options: PublicKeyCredentialRequestOptions }>(
+        "/api/security/master-key/unlock/start",
+        { method: "POST" }
+      ),
+
+    unlockMasterKeyFinish: (data: { unlockSessionId: string; credential: Credential }) =>
+      request<{ prfEncryptedMasterKey: string }>(
+        "/api/security/master-key/unlock/finish",
+        {
+          method: "POST",
+          body: JSON.stringify(data),
+        }
+      ),
   },
   
   activity: {

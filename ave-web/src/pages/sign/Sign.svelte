@@ -6,6 +6,7 @@
     import { goto } from "@mateothegreat/svelte5-router";
     import StorageAccessGate from "../../components/StorageAccessGate.svelte";
     import { supportsStorageAccessApi, hasStorageAccess, requestStorageAccess } from "../../lib/storage-access";
+    import { unlockMasterKeyWithPasskey } from "../../lib/master-key-unlock";
 
     function postToEmbedHost(payload: unknown) {
         const target = (window.opener && (window.opener as any).parent) ? (window.opener as any).parent : (window.opener ?? window.parent);
@@ -54,6 +55,10 @@
     let needsStorageAccess = $state(false);
     let requestingStorageAccess = $state(false);
     let storageAccessError = $state<string | null>(null);
+
+    let needsMasterKey = $state(false);
+    let unlockingMasterKey = $state(false);
+    let masterKeyError = $state<string | null>(null);
     
     let request = $state<{
         id: string;
@@ -129,7 +134,9 @@
 
             const created = await createSigningKeyForIdentity();
             if (!created) {
-                setupError = "Couldn't create signing key. Make sure your encryption/master key is set up.";
+                needsMasterKey = true;
+                masterKeyError = null;
+                setupError = "";
                 return;
             }
 
@@ -153,7 +160,9 @@
             const signature = await signWithIdentityKey(request.payload, signingKey.encryptedPrivateKey);
             
             if (!signature) {
-                error = "Failed to sign: encryption key not available";
+                needsMasterKey = true;
+                masterKeyError = null;
+                error = "";
                 signing = false;
                 return;
             }
@@ -293,6 +302,23 @@
         if (!request) return false;
         return new Date() > new Date(request.expiresAt);
     }
+
+    async function handleUnlockMasterKey() {
+        if (unlockingMasterKey) return;
+        unlockingMasterKey = true;
+        masterKeyError = null;
+        try {
+            const result = await unlockMasterKeyWithPasskey();
+            if (!result.ok) {
+                masterKeyError = result.error;
+                return;
+            }
+            needsMasterKey = false;
+            await loadRequest();
+        } finally {
+            unlockingMasterKey = false;
+        }
+    }
 </script>
 
 {#if needsStorageAccess}
@@ -303,6 +329,41 @@
         busy={requestingStorageAccess}
         onclick={handleStorageAccessContinue}
     />
+{:else if needsMasterKey}
+    <div class={embedSheet
+        ? "w-full min-h-screen bg-[#111111]"
+        : (embedPopup
+            ? "fixed inset-0 bg-black flex items-end md:items-center justify-center z-50"
+            : "fixed inset-0 bg-black/80 flex items-end md:items-center justify-center z-50 backdrop-blur-sm")}
+    >
+        <div class={embedSheet
+            ? "w-full min-h-screen"
+            : "w-full max-w-[600px] bg-[#111111] rounded-t-[32px] md:rounded-[32px] overflow-hidden animate-slide-up"}
+        >
+            <div class="p-8 md:p-12 flex flex-col items-center justify-center min-h-[300px] gap-6">
+                <div class="w-[80px] h-[80px] rounded-full bg-[#E14747]/20 flex items-center justify-center">
+                    <svg width="40" height="40" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M12 2L4 7V12C4 16.4183 7.58172 20 12 20C16.4183 20 20 16.4183 20 12V7L12 2Z" stroke="#E14747" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        <path d="M12 8V12M12 16H12.01" stroke="#E14747" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                </div>
+                <div class="text-center">
+                    <Text type="h" size={24} color="#FFFFFF">Encryption Key Required</Text>
+                    <Text type="p" size={16} color="#878787">Unlock your encryption key to continue.</Text>
+                </div>
+                {#if masterKeyError}
+                    <Text type="p" size={14} color="#E14747">{masterKeyError}</Text>
+                {/if}
+                <button
+                    class="w-full max-w-[350px] py-[18px] bg-[#FFFFFF] text-[#090909] font-semibold rounded-[16px] hover:bg-[#E0E0E0] transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                    disabled={unlockingMasterKey}
+                    onclick={handleUnlockMasterKey}
+                >
+                    {unlockingMasterKey ? "Unlocking…" : "Unlock with Passkey"}
+                </button>
+            </div>
+        </div>
+    </div>
 {:else}
 <div class={embedSheet
     ? "w-full min-h-screen bg-[#111111]"

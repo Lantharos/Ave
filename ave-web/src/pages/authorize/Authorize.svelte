@@ -8,6 +8,7 @@
 	import { get } from "svelte/store";
 	import StorageAccessGate from "../../components/StorageAccessGate.svelte";
 	import { supportsStorageAccessApi, hasStorageAccess, requestStorageAccess } from "../../lib/storage-access";
+	import { unlockMasterKeyWithPasskey } from "../../lib/master-key-unlock";
 
 	function postToEmbedHost(payload: unknown) {
 		const target = (window.opener && (window.opener as any).parent) ? (window.opener as any).parent : (window.opener ?? window.parent);
@@ -98,6 +99,8 @@
 	let sliderPosition = $state(0);
 	let sliderActive = $state(false);
 	let needsMasterKey = $state(false);
+	let unlockingMasterKey = $state(false);
+	let masterKeyError = $state<string | null>(null);
 	let needsStorageAccess = $state(false);
 	let requestingStorageAccess = $state(false);
 	let storageAccessError = $state<string | null>(null);
@@ -159,8 +162,8 @@
         }
     }
 
-    async function handleAuthorize() {
-        if (!selectedIdentity || !appInfo) return;
+	async function handleAuthorize() {
+		if (!selectedIdentity || !appInfo) return;
 
         try {
             authorizing = true;
@@ -186,14 +189,15 @@
             // For E2EE apps, handle app-specific encryption key
             let rawAppKey: string | null = null;
             
-            if (appInfo.supportsE2ee) {
-                const masterKey = await loadMasterKey();
-                if (!masterKey) {
-                    needsMasterKey = true;
-                    authorizing = false;
-                    sliderPosition = 0;
-                    return;
-                }
+			if (appInfo.supportsE2ee) {
+				const masterKey = await loadMasterKey();
+				if (!masterKey) {
+					needsMasterKey = true;
+					masterKeyError = null;
+					authorizing = false;
+					sliderPosition = 0;
+					return;
+				}
                 
                 // Check if we have an existing authorization with an encrypted app key
                 // AND it's for the same identity we're authorizing with
@@ -240,7 +244,7 @@
 			}
             window.location.href = redirectUrl;
 
-        } catch (err) {
+		} catch (err) {
             error = err instanceof Error ? err.message : "Authorization failed";
             authorizing = false;
             sliderPosition = 0;
@@ -419,6 +423,23 @@
 			requestingStorageAccess = false;
 		}
 	}
+
+	async function handleUnlockMasterKey() {
+		if (unlockingMasterKey) return;
+		unlockingMasterKey = true;
+		masterKeyError = null;
+		try {
+			const result = await unlockMasterKeyWithPasskey();
+			if (!result.ok) {
+				masterKeyError = result.error;
+				return;
+			}
+			needsMasterKey = false;
+			await handleAuthorize();
+		} finally {
+			unlockingMasterKey = false;
+		}
+	}
 </script>
 
 {#if needsStorageAccess}
@@ -516,6 +537,16 @@
                     </p>
                 </div>
                 <div class="flex flex-col gap-[15px] w-full max-w-[350px]">
+					{#if masterKeyError}
+						<p class="text-[#E14747] text-[14px] text-center">{masterKeyError}</p>
+					{/if}
+					<button
+						class="w-full py-[18px] bg-[#FFFFFF] text-[#090909] font-semibold rounded-[16px] hover:bg-[#E0E0E0] transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+						disabled={unlockingMasterKey}
+						onclick={handleUnlockMasterKey}
+					>
+						{unlockingMasterKey ? "Unlocking…" : "Unlock with Passkey"}
+					</button>
                     <button 
                         class="w-full py-[18px] bg-[#FFFFFF] text-[#090909] font-semibold rounded-[16px] hover:bg-[#E0E0E0] transition-colors"
                         onclick={() => goto("/login?return=" + encodeURIComponent(window.location.pathname) + window.location.search)}

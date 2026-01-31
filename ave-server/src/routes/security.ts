@@ -13,7 +13,10 @@ import { eq, and, desc } from "drizzle-orm";
 import {
   generateRegistrationOptions,
   verifyRegistrationResponse,
+  generateAuthenticationOptions,
+  verifyAuthenticationResponse,
 } from "@simplewebauthn/server";
+import { isAllowedWebauthnOrigin } from "../lib/webauthn-origin";
 
 const app = new Hono();
 
@@ -22,6 +25,11 @@ app.use("*", requireAuth);
 
 // In-memory store for passkey registration challenges
 const passkeyRegistrationChallenges = new Map<string, { challenge: string; expiresAt: number }>();
+
+const passkeyUnlockChallenges = new Map<
+  string,
+  { userId: string; challenge: string; expiresAt: number }
+>();
 
 // Get security overview
 app.get("/", async (c) => {
@@ -84,7 +92,7 @@ app.post("/passkeys/register", async (c) => {
     attestationType: "none",
     excludeCredentials: existingPasskeys.map((pk) => ({
       id: pk.id,
-      transports: pk.transports as AuthenticatorTransport[] | undefined,
+      transports: pk.transports as any,
     })),
     authenticatorSelection: {
       residentKey: "required",
@@ -229,6 +237,128 @@ app.patch("/passkeys/:passkeyId", zValidator("json", z.object({
   
   return c.json({ success: true });
 });
+
+app.post("/master-key/unlock/start", async (c) => {
+  const user = c.get("user")!;
+
+  const rpId = process.env.RP_ID || "localhost";
+
+  const userPasskeys = await db
+    .select()
+    .from(passkeys)
+    .where(eq(passkeys.userId, user.id))
+    .orderBy(desc(passkeys.createdAt));
+
+  const prfPasskeys = userPasskeys.filter((pk) => !!pk.prfEncryptedMasterKey);
+  if (prfPasskeys.length === 0) {
+    return c.json({ error: "no_prf_passkey" }, 400);
+  }
+
+  const options = await generateAuthenticationOptions({
+    rpID: rpId,
+    userVerification: "required",
+    allowCredentials: prfPasskeys.map((pk) => ({
+      id: pk.id,
+      transports: pk.transports as any,
+    })),
+  });
+
+  const unlockSessionId = crypto.randomUUID();
+  passkeyUnlockChallenges.set(unlockSessionId, {
+    userId: user.id,
+    challenge: options.challenge,
+    expiresAt: Date.now() + 5 * 60 * 1000,
+  });
+
+  return c.json({ unlockSessionId, options });
+});
+
+app.post(
+  "/master-key/unlock/finish",
+  zValidator(
+    "json",
+    z.object({
+      unlockSessionId: z.string().min(1),
+      credential: z.any(),
+    })
+  ),
+  async (c) => {
+    const user = c.get("user")!;
+    const { unlockSessionId, credential } = c.req.valid("json");
+
+    const storedChallenge = passkeyUnlockChallenges.get(unlockSessionId);
+    if (!storedChallenge || Date.now() > storedChallenge.expiresAt) {
+      return c.json({ error: "unlock_session_expired" }, 400);
+    }
+
+    if (storedChallenge.userId !== user.id) {
+      return c.json({ error: "forbidden" }, 403);
+    }
+
+    const rpId = process.env.RP_ID || "localhost";
+
+    let expectedOrigin: string;
+    try {
+      const clientDataJSON = JSON.parse(
+        Buffer.from(credential.response.clientDataJSON, "base64url").toString("utf-8")
+      );
+      expectedOrigin = clientDataJSON.origin;
+      if (!isAllowedWebauthnOrigin(expectedOrigin)) {
+        return c.json({ error: "invalid_origin" }, 400);
+      }
+    } catch {
+      return c.json({ error: "invalid_credential_format" }, 400);
+    }
+
+    const [passkey] = await db
+      .select()
+      .from(passkeys)
+      .where(and(eq(passkeys.id, credential.id), eq(passkeys.userId, user.id)))
+      .limit(1);
+
+    if (!passkey) {
+      return c.json({ error: "passkey_not_found" }, 404);
+    }
+
+    try {
+      const verification = await verifyAuthenticationResponse({
+        response: credential,
+        expectedChallenge: storedChallenge.challenge,
+        expectedOrigin,
+        expectedRPID: rpId,
+        credential: {
+          id: passkey.id,
+          publicKey: Buffer.from(passkey.publicKey, "base64"),
+          counter: passkey.counter,
+          transports: passkey.transports as any,
+        },
+      });
+
+      if (!verification.verified) {
+        return c.json({ error: "passkey_verification_failed" }, 400);
+      }
+
+      passkeyUnlockChallenges.delete(unlockSessionId);
+
+      await db
+        .update(passkeys)
+        .set({
+          counter: verification.authenticationInfo.newCounter,
+          lastUsedAt: new Date(),
+        })
+        .where(eq(passkeys.id, passkey.id));
+
+      if (!passkey.prfEncryptedMasterKey) {
+        return c.json({ error: "no_prf_master_key" }, 400);
+      }
+
+      return c.json({ prfEncryptedMasterKey: passkey.prfEncryptedMasterKey });
+    } catch (error) {
+      console.error("Passkey unlock verification error:", error);
+      return c.json({ error: "passkey_verification_failed" }, 400);
+    }
+  }
+);
 
 // Delete passkey
 app.delete("/passkeys/:passkeyId", async (c) => {
