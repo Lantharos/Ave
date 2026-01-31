@@ -372,6 +372,9 @@ export function openAveSigningSheet({
   onDenied,
   onClose,
 }) {
+  let resolved = false;
+  let popup = null;
+
   // Create overlay backdrop
   const overlay = document.createElement("div");
   overlay.style.cssText = `
@@ -456,6 +459,9 @@ export function openAveSigningSheet({
 
   // Close function
   const close = () => {
+    if (popup && !popup.closed) {
+      popup.close();
+    }
     sheet.style.animation = "aveSheetSlideDown 0.2s ease-in forwards";
     overlay.style.animation = "aveSheetFadeOut 0.2s ease-in forwards";
     setTimeout(() => {
@@ -474,12 +480,32 @@ export function openAveSigningSheet({
     if (event.origin !== issuer) return;
     const data = event.data || {};
 
+    if (resolved) return;
+
+    if (data.type === "ave:auth_required") {
+      if (!popup || popup.closed) {
+        const width = 500;
+        const height = 600;
+        const left = (window.innerWidth - width) / 2 + window.screenX;
+        const top = (window.innerHeight - height) / 2 + window.screenY;
+        popup = window.open(
+          iframe.src,
+          "ave_signing",
+          `width=${width},height=${height},left=${left},top=${top},menubar=no,toolbar=no,location=no,status=no`
+        );
+      }
+      popup?.focus?.();
+      return;
+    }
+
     if (data.type === "ave:signed") {
+      resolved = true;
       close();
       onSigned?.(data.payload);
     }
 
     if (data.type === "ave:denied") {
+      resolved = true;
       close();
       onDenied?.(data.payload);
     }

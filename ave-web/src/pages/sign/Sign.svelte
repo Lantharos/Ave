@@ -15,6 +15,7 @@
     let loading = $state(true);
     let signing = $state(false);
     let error = $state<string | null>(null);
+    let authRequested = $state(false);
     
     let request = $state<{
         id: string;
@@ -186,6 +187,15 @@
     // Check auth and load request
     $effect(() => {
         if (!$isAuthenticated) {
+            if (embedSheet) {
+                if (!authRequested) {
+                    authRequested = true;
+                    const target = window.opener ?? window.parent;
+                    target?.postMessage({ type: "ave:auth_required" }, "*");
+                }
+                loading = true;
+                return;
+            }
             const returnUrl = encodeURIComponent(window.location.pathname + window.location.search);
             goto(`/login?return=${returnUrl}`);
             return;
