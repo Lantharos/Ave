@@ -134,6 +134,24 @@ openAvePopup({
 });
 ```
 
+## Convex Custom Auth (Using Ave as Provider)
+
+Convex supports custom auth providers. You can use Ave as the issuer and pass the Ave JWT access token to Convex.
+
+High-level steps:
+
+1. Complete the Ave OAuth flow in your app.
+2. Use the `access_token_jwt` returned by Ave as your Convex auth token.
+3. Configure Convex Custom Auth with:
+   - Issuer: from Ave OIDC discovery
+   - JWKS URL: from Ave OIDC discovery
+
+Resources:
+```
+https://docs.convex.dev/auth/advanced/custom-auth
+https://api.aveid.net/.well-known/openid-configuration
+```
+
 ## PKCE (Public Clients)
 
 For single-page applications (SPAs), mobile apps, or any client that can't securely store a client secret, use PKCE (Proof Key for Code Exchange). This is the recommended approach for most modern apps.

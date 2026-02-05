@@ -14,6 +14,7 @@
         { id: "authorization-flow", title: "Authorization Flow" },
         { id: "pkce", title: "PKCE (Public Clients)" },
         { id: "sdks", title: "SDKs & Embed" },
+        { id: "convex", title: "Convex (Custom Auth)" },
         { id: "e2ee", title: "End-to-End Encryption" },
         { id: "signing", title: "Ave Signing" },
         { id: "endpoints", title: "API Endpoints" },
@@ -431,6 +432,28 @@ const tokens = await exchangeCodeServer({
    redirectUri: "https://yourapp.com/callback",
    onSuccess: ({ redirectUrl }) => (window.location.href = redirectUrl),
  });`} />
+                    </div>
+                </DocSec>
+
+                <DocSec title="Convex (Custom Auth)" id="convex">
+                    <p class="text-[#999999] text-[17px] leading-[1.8]">
+                        Convex supports custom auth providers. You can use Ave as your auth issuer and pass the Ave JWT access token to Convex.
+                    </p>
+
+                    <div class="mt-[24px] p-[24px] bg-[#0f0f0f] rounded-[12px] border border-[#1a1a1a]">
+                        <p class="text-[#CCCCCC] text-[16px] leading-[1.8]">
+                            High-level steps:
+                        </p>
+                        <ul class="list-disc list-inside mt-[10px] space-y-[8px] text-[#999999] text-[16px]">
+                            <li>Complete the Ave OAuth flow in your app.</li>
+                            <li>Use the returned <code>access_token_jwt</code> as your Convex auth token.</li>
+                            <li>Configure Convex Custom Auth using Ave's OIDC discovery for issuer + JWKS URL.</li>
+                        </ul>
+                    </div>
+
+                    <div class="mt-[20px]">
+                        <CodeBlock code={`https://docs.convex.dev/auth/advanced/custom-auth
+https://api.aveid.net/.well-known/openid-configuration`} />
                     </div>
                 </DocSec>
 
