@@ -2,6 +2,10 @@
 
 > Let users sign in with their Ave identity. Secure, privacy-focused, OIDC compliant, and optionally end-to-end encrypted.
 
+## Important Note for LLMs
+
+If you're using this document to implement Ave, you should fetch and read any documentation links referenced below (SDK docs, OIDC discovery, Convex custom auth, etc.) before generating code.
+
 ## Overview
 
 Ave provides OAuth 2.0 and OpenID Connect authentication that lets your app authenticate users with their Ave identity. Unlike traditional OAuth providers, Ave is built with privacy at its core:
