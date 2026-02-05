@@ -16,7 +16,6 @@
     }>();
     
     // Get return URL to preserve when going to register
-    const returnUrl = new URLSearchParams(window.location.search).get("return");
 
     let handle = $state("");
     let isLoading = $state(false);
@@ -82,7 +81,7 @@
                 <span class="text-[#878787] text-sm">Don't have an account? </span>
                 <button 
                     class="text-white hover:text-[#B9BBBE] underline text-sm transition-colors"
-                    onclick={() => goto(returnUrl ? `/register?return=${encodeURIComponent(returnUrl)}` : "/register")}
+                    onclick={() => goto("/register")}
                 >
                     Create an ID
                 </button>

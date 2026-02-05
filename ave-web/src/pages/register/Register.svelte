@@ -17,6 +17,7 @@
     } from "../../lib/crypto";
     import { registerPasskey, getDeviceInfo } from "../../lib/webauthn";
     import { auth, isAuthenticated } from "../../stores/auth";
+    import { getReturnUrl, clearReturnUrl } from "../../util/return-url";
     import { goto } from "@mateothegreat/svelte5-router";
 
     // Registration state
@@ -24,9 +25,6 @@
     let loaded = false;
     let error = "";
     
-    // Get return URL if we came from login/authorize
-    const returnUrl = new URLSearchParams(window.location.search).get("return");
-
     // Collected data across steps
     let identityData = {
         displayName: "",
@@ -193,12 +191,14 @@
     }
 
     function handleEnrollmentComplete() {
-        // If we have a return URL (came from authorize flow), go back there
+        // If we have a return URL (stored for this session), go back there
+        const returnUrl = getReturnUrl();
         if (returnUrl) {
+            clearReturnUrl();
             goto(returnUrl);
-        } else {
-            goto("/dashboard");
+            return;
         }
+        goto("/dashboard");
     }
 </script>
 

@@ -132,7 +132,8 @@
                     <Text type="hd" size={16} color="#878787">NAME *</Text>
                     <input 
                         type="text" 
-                        class="w-full bg-transparent border-b border-[#333333] mt-2 md:mt-[10px] pb-[5px] text-white placeholder:text-[#555] focus:outline-none text-base md:text-inherit" 
+                        class="w-full bg-transparent border-b border-[#333333] mt-2 md:mt-[10px] pb-[5px] text-white caret-white placeholder:text-[#555] focus:outline-none text-base md:text-inherit appearance-none"
+                        style="color: #FFFFFF; caret-color: #FFFFFF;"
                         placeholder="Enter your name"
                         bind:value={displayName}
                         maxlength={64}
@@ -149,7 +150,8 @@
                     </div>
                     <input 
                         type="text" 
-                        class="w-full bg-transparent border-b mt-2 md:mt-[10px] pb-[5px] text-white placeholder:text-[#555] focus:outline-none text-base md:text-inherit {handleError ? 'border-red-500' : 'border-[#333333]'}" 
+                        class="w-full bg-transparent border-b mt-2 md:mt-[10px] pb-[5px] text-white caret-white placeholder:text-[#555] focus:outline-none text-base md:text-inherit appearance-none {handleError ? 'border-red-500' : 'border-[#333333]'}" 
+                        style="color: #FFFFFF; caret-color: #FFFFFF;"
                         placeholder="Enter your handle"
                         value={handle}
                         oninput={onHandleChange}
@@ -165,7 +167,8 @@
                     <Text type="hd" size={16} color="#878787">EMAIL</Text>
                     <input 
                         type="email" 
-                        class="w-full bg-transparent border-b border-[#333333] mt-2 md:mt-[10px] pb-[5px] text-white placeholder:text-[#555] focus:outline-none text-base md:text-inherit" 
+                        class="w-full bg-transparent border-b border-[#333333] mt-2 md:mt-[10px] pb-[5px] text-white caret-white placeholder:text-[#555] focus:outline-none text-base md:text-inherit appearance-none" 
+                        style="color: #FFFFFF; caret-color: #FFFFFF;"
                         placeholder="Enter your email (optional)"
                         bind:value={email}
                     />
@@ -174,7 +177,8 @@
                     <Text type="hd" size={16} color="#878787">BIRTHDAY</Text>
                     <input 
                         type="date" 
-                        class="w-full bg-transparent border-b border-[#333333] mt-2 md:mt-[10px] pb-[5px] text-white placeholder:text-[#555] focus:outline-none text-base md:text-inherit"
+                        class="w-full bg-transparent border-b border-[#333333] mt-2 md:mt-[10px] pb-[5px] text-white caret-white placeholder:text-[#555] focus:outline-none text-base md:text-inherit appearance-none"
+                        style="color: #FFFFFF; caret-color: #FFFFFF;"
                         bind:value={birthday}
                     />
                 </div>

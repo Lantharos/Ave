@@ -5,32 +5,13 @@
     import LoginWaiting from "./pages/LoginWaiting.svelte";
     import { goto } from "@mateothegreat/svelte5-router";
     import { auth, isAuthenticated } from "../../stores/auth";
+    import { getReturnUrl, clearReturnUrl } from "../../util/return-url";
     import type { Identity, Device } from "../../lib/api";
     import { onMount } from "svelte";
 
     let currentPage = $state<"login" | "methods" | "trust-code" | "waiting">("login");
     
-    // Get return URL and sanitize to prevent recursive redirects
-    const rawReturnUrl = new URLSearchParams(window.location.search).get("return");
-    // If return URL starts with /login, extract any valid return from it or just ignore
-    const returnUrl = (() => {
-        if (!rawReturnUrl) return null;
-        const decoded = decodeURIComponent(rawReturnUrl);
-        // Prevent redirecting to login itself (causes infinite loop)
-        if (decoded.startsWith("/login")) {
-            // Try to extract a deeper return URL if there is one
-            const innerMatch = decoded.match(/[?&]return=([^&]+)/);
-            if (innerMatch) {
-                const inner = decodeURIComponent(innerMatch[1]);
-                // Make sure the inner one isn't also login
-                if (!inner.startsWith("/login")) {
-                    return inner;
-                }
-            }
-            return null;
-        }
-        return decoded;
-    })();
+    const returnUrl = getReturnUrl();
     let pendingOauth = $state<{ clientId: string; redirectUri: string; scope: string; state?: string; nonce?: string; embed?: boolean; codeChallenge?: string; codeChallengeMethod?: string } | null>(null);
 
     
@@ -53,7 +34,12 @@
         }
 
         if ($isAuthenticated) {
-            goto(returnUrl || (pendingOauth ? "/signin" : "/dashboard"));
+            if (returnUrl) {
+                clearReturnUrl();
+                goto(returnUrl);
+                return;
+            }
+            goto(pendingOauth ? "/signin" : "/dashboard");
         }
     });
 
@@ -126,13 +112,13 @@
             return;
         }
 
-        // If we have a return URL that goes to /authorize or /signin, use it directly
-        if (returnUrl && (returnUrl.startsWith("/authorize") || returnUrl.startsWith("/signin"))) {
+        if (returnUrl) {
+            clearReturnUrl();
             goto(returnUrl);
             return;
         }
 
-        goto(returnUrl || "/dashboard");
+        goto("/dashboard");
     }
 
 

@@ -4,6 +4,7 @@
     import { api, type Identity } from "../../lib/api";
     import { generateAppKey, encryptAppKey, exportAppKey, loadMasterKey, decryptAppKey, hasMasterKey } from "../../lib/crypto";
 	import { auth, isAuthenticated, identities as identitiesStore, currentIdentity } from "../../stores/auth";
+	import { setReturnUrl } from "../../util/return-url";
 	import { goto } from "@mateothegreat/svelte5-router";
 	import { get } from "svelte/store";
 	import StorageAccessGate from "../../components/StorageAccessGate.svelte";
@@ -364,57 +365,75 @@
 	$effect(() => {
 		if (!$isAuthenticated) {
 			if (embedSheet) {
-				needsStorageAccess = true;
+				needsStorageAccess = false;
+				handleStorageAccessAuto();
 				return;
 			}
 			// Redirect to login, then come back
-			// Build the full return URL properly - encode the entire path + search
-			const returnUrl = encodeURIComponent(window.location.pathname + window.location.search);
+			setReturnUrl(window.location.pathname + window.location.search);
 			if (params.embed) {
 				postToEmbedHost({ type: "ave:auth_required" });
 			}
-			goto(`/login?return=${returnUrl}`);
+			goto("/login");
 			return;
 		}
 
 		loadAppInfo();
 	});
 
-	async function handleStorageAccessContinue() {
+	async function handleStorageAccessAuto() {
 		if (requestingStorageAccess) return;
-		if (storageAccessError) {
-			const opened = openAuthPopupHere();
-			if (!opened) {
-				storageAccessError = "Popup blocked. Allow popups to continue.";
-				return;
-			}
-			needsStorageAccess = false;
-			completed = true;
-			return;
-		}
 		requestingStorageAccess = true;
 		storageAccessError = null;
 		try {
 			if (!supportsStorageAccessApi()) {
-				storageAccessError = "This browser doesn't support embedded session access. Use the popup to continue.";
+				const opened = openAuthPopupHere();
+				if (!opened) {
+					storageAccessError = "Popup blocked. Allow popups to continue.";
+					needsStorageAccess = true;
+					return;
+				}
+				needsStorageAccess = false;
+				completed = true;
 				return;
 			}
 
 			const alreadyHasAccess = (await withTimeout(hasStorageAccess(), 1200)) === true;
 			const granted = alreadyHasAccess || (await withTimeout(requestStorageAccess(), 8000)) === true;
 			if (!granted) {
-				storageAccessError = "Couldn't access your signed-in session in the embed. Use the popup to continue.";
+				const opened = openAuthPopupHere();
+				if (!opened) {
+					storageAccessError = "Popup blocked. Allow popups to continue.";
+					needsStorageAccess = true;
+					return;
+				}
+				needsStorageAccess = false;
+				completed = true;
 				return;
 			}
 
 			const initOk = (await withTimeout(auth.init(), 5000)) !== null;
 			if (!initOk) {
-				storageAccessError = "Timed out while restoring session in the embed. Use the popup to continue.";
+				const opened = openAuthPopupHere();
+				if (!opened) {
+					storageAccessError = "Popup blocked. Allow popups to continue.";
+					needsStorageAccess = true;
+					return;
+				}
+				needsStorageAccess = false;
+				completed = true;
 				return;
 			}
 			const authState = get(auth);
 			if (!authState.isAuthenticated) {
-				storageAccessError = "Storage access was granted, but Ave still can't see your session in the embed. Use the popup to continue.";
+				const opened = openAuthPopupHere();
+				if (!opened) {
+					storageAccessError = "Popup blocked. Allow popups to continue.";
+					needsStorageAccess = true;
+					return;
+				}
+				needsStorageAccess = false;
+				completed = true;
 				return;
 			}
 
@@ -422,6 +441,17 @@
 		} finally {
 			requestingStorageAccess = false;
 		}
+	}
+
+	function handleStorageAccessContinue() {
+		const opened = openAuthPopupHere();
+		if (!opened) {
+			storageAccessError = "Popup blocked. Allow popups to continue.";
+			needsStorageAccess = true;
+			return;
+		}
+		needsStorageAccess = false;
+		completed = true;
 	}
 
 	async function handleUnlockMasterKey() {
@@ -444,9 +474,9 @@
 
 {#if needsStorageAccess}
 	<StorageAccessGate
-		title="Continue"
-		message={storageAccessError || "Ave is embedded in another site. Your browser may require a one-time confirmation to access your signed-in session."}
-		cta={storageAccessError ? "Open sign-in" : "Continue"}
+		title="Open sign-in"
+		message={storageAccessError || "We couldn't open the sign-in popup. Please allow popups and try again."}
+		cta="Open sign-in"
 		busy={requestingStorageAccess}
 		onclick={handleStorageAccessContinue}
 	/>
@@ -549,7 +579,10 @@
 					</button>
                     <button 
                         class="w-full py-[18px] bg-[#FFFFFF] text-[#090909] font-semibold rounded-[16px] hover:bg-[#E0E0E0] transition-colors"
-                        onclick={() => goto("/login?return=" + encodeURIComponent(window.location.pathname) + window.location.search)}
+                        onclick={() => {
+                            setReturnUrl(window.location.pathname + window.location.search);
+                            goto("/login");
+                        }}
                     >
                         Sign In with Trust Code
                     </button>
