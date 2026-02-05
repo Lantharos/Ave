@@ -5,6 +5,7 @@
     import { auth, isAuthenticated } from "../../stores/auth";
     import { setReturnUrl } from "../../util/return-url";
     import { goto } from "@mateothegreat/svelte5-router";
+    import { safeGoto } from "../../util/safe-goto";
     import StorageAccessGate from "../../components/StorageAccessGate.svelte";
     import { supportsStorageAccessApi, hasStorageAccess, requestStorageAccess } from "../../lib/storage-access";
     import { unlockMasterKeyWithPasskey } from "../../lib/master-key-unlock";
@@ -54,6 +55,7 @@
     let error = $state<string | null>(null);
     let authRequested = $state(false);
     let needsStorageAccess = $state(false);
+    let redirectingToLogin = $state(false);
     let requestingStorageAccess = $state(false);
     let storageAccessError = $state<string | null>(null);
 
@@ -233,13 +235,15 @@
     // Check auth and load request
     $effect(() => {
         if (!$isAuthenticated) {
+            if (redirectingToLogin) return;
             if (embedSheet) {
                 needsStorageAccess = false;
                 handleStorageAccessAuto();
                 return;
             }
             setReturnUrl(window.location.pathname + window.location.search);
-            goto("/login");
+            redirectingToLogin = true;
+            safeGoto(goto, "/login");
             return;
         }
         needsStorageAccess = false;

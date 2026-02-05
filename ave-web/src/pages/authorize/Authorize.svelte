@@ -6,6 +6,7 @@
 	import { auth, isAuthenticated, identities as identitiesStore, currentIdentity } from "../../stores/auth";
 	import { setReturnUrl } from "../../util/return-url";
 	import { goto } from "@mateothegreat/svelte5-router";
+	import { safeGoto } from "../../util/safe-goto";
 	import { get } from "svelte/store";
 	import StorageAccessGate from "../../components/StorageAccessGate.svelte";
 	import { supportsStorageAccessApi, hasStorageAccess, requestStorageAccess } from "../../lib/storage-access";
@@ -103,6 +104,7 @@
 	let unlockingMasterKey = $state(false);
 	let masterKeyError = $state<string | null>(null);
 	let needsStorageAccess = $state(false);
+	let redirectingToLogin = $state(false);
 	let requestingStorageAccess = $state(false);
 	let storageAccessError = $state<string | null>(null);
 
@@ -364,6 +366,7 @@
     // Check auth and load app info
 	$effect(() => {
 		if (!$isAuthenticated) {
+			if (redirectingToLogin) return;
 			if (embedSheet) {
 				needsStorageAccess = false;
 				handleStorageAccessAuto();
@@ -371,10 +374,11 @@
 			}
 			// Redirect to login, then come back
 			setReturnUrl(window.location.pathname + window.location.search);
+			redirectingToLogin = true;
 			if (params.embed) {
 				postToEmbedHost({ type: "ave:auth_required" });
 			}
-			goto("/login");
+			safeGoto(goto, "/login");
 			return;
 		}
 
@@ -581,7 +585,7 @@
                         class="w-full py-[18px] bg-[#FFFFFF] text-[#090909] font-semibold rounded-[16px] hover:bg-[#E0E0E0] transition-colors"
                         onclick={() => {
                             setReturnUrl(window.location.pathname + window.location.search);
-                            goto("/login");
+                            safeGoto(goto, "/login");
                         }}
                     >
                         Sign In with Trust Code

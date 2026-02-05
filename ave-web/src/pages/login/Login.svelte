@@ -4,6 +4,7 @@
     import LoginTrustCode from "./pages/LoginTrustCode.svelte";
     import LoginWaiting from "./pages/LoginWaiting.svelte";
     import { goto } from "@mateothegreat/svelte5-router";
+    import { safeGoto } from "../../util/safe-goto";
     import { auth, isAuthenticated } from "../../stores/auth";
     import { getReturnUrl, clearReturnUrl } from "../../util/return-url";
     import type { Identity, Device } from "../../lib/api";
@@ -36,10 +37,10 @@
         if ($isAuthenticated) {
             if (returnUrl) {
                 clearReturnUrl();
-                goto(returnUrl);
+                safeGoto(goto, returnUrl);
                 return;
             }
-            goto(pendingOauth ? "/signin" : "/dashboard");
+            safeGoto(goto, pendingOauth ? "/signin" : "/dashboard");
         }
     });
 
@@ -114,11 +115,11 @@
 
         if (returnUrl) {
             clearReturnUrl();
-            goto(returnUrl);
+            safeGoto(goto, returnUrl);
             return;
         }
 
-        goto("/dashboard");
+        safeGoto(goto, "/dashboard");
     }
 
 
