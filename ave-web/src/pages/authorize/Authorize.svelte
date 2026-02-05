@@ -248,8 +248,12 @@
             completed = true;
             window.location.href = redirectUrl;
 
-		} catch (err) {
-            error = err instanceof Error ? err.message : "Authorization failed";
+		} catch (err: any) {
+            if (err?.message === "Request timed out") {
+                error = "Signing in is taking too long. Please try again.";
+            } else {
+                error = err instanceof Error ? err.message : "Authorization failed";
+            }
             authorizing = false;
             sliderPosition = 0;
         }

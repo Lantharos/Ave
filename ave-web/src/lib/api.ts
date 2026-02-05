@@ -13,7 +13,7 @@ class ApiError extends Error {
 
 async function request<T>(
   endpoint: string,
-  options: RequestInit = {}
+  options: (RequestInit & { timeoutMs?: number }) = {}
 ): Promise<T> {
   let token: string | null = null;
   try {
@@ -31,11 +31,39 @@ async function request<T>(
     headers["Authorization"] = `Bearer ${token}`;
   }
   
-  const response = await fetch(`${API_BASE}${endpoint}`, {
-    ...options,
-    credentials: options.credentials ?? "include",
-    headers,
-  });
+  const { timeoutMs, ...fetchOptions } = options;
+  let controller: AbortController | null = null;
+  let timeoutId: number | null = null;
+  let signal = fetchOptions.signal;
+
+  if (!signal) {
+    controller = new AbortController();
+    signal = controller.signal;
+  }
+
+  const effectiveTimeout = timeoutMs ?? 15000;
+  if (controller && effectiveTimeout > 0) {
+    timeoutId = window.setTimeout(() => controller?.abort(), effectiveTimeout);
+  }
+
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE}${endpoint}`, {
+      ...fetchOptions,
+      credentials: fetchOptions.credentials ?? "include",
+      headers,
+      signal,
+    });
+  } catch (err: any) {
+    if (err?.name === "AbortError") {
+      throw new ApiError(408, "Request timed out");
+    }
+    throw err;
+  } finally {
+    if (timeoutId !== null) {
+      window.clearTimeout(timeoutId);
+    }
+  }
   
   const data = await response.json();
   
