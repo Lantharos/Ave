@@ -3,6 +3,7 @@
     import { goto } from "@mateothegreat/svelte5-router";
     import Text from "../../components/Text.svelte";
     import SidebarButton from "./components/SidebarButton.svelte";
+    import AuroraBackdrop from "../../components/AuroraBackdrop.svelte";
     import Identity from "./pages/Identity.svelte";
     import Security from "./pages/Security.svelte";
     import MyData from "./pages/MyData.svelte";
@@ -194,6 +195,7 @@
         {/if}
     </div>
 
-    <img src="/grads/dashboard/dashboard_grad_tr.png" alt="gradient" class="absolute top-0 right-0 max-h-full pointer-events-none select-none" />
-    <img src="/grads/dashboard/dashboard_grad_bl.png" alt="gradient" class="absolute inset-x-0 bottom-0 max-h-full max-w-[80%] pointer-events-none select-none"/>
+    <AuroraBackdrop preset="dashboard-tr" cclass="absolute top-0 right-0 w-[70%] pointer-events-none select-none" />
+    <AuroraBackdrop preset="dashboard-bl" cclass="absolute bottom-0 left-0 w-[80%] pointer-events-none select-none" />
+
 </div>

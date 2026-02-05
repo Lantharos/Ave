@@ -1,4 +1,5 @@
 <script lang="ts">
+    import AuroraBackdrop from "../../components/AuroraBackdrop.svelte";
     import Text from "../../components/Text.svelte";
     import { goto, route } from "@mateothegreat/svelte5-router";
 
@@ -94,5 +95,5 @@
         </p>
     </div>
 
-    <img src="/grads/home_grad.png" class="absolute bottom-0 left-0 w-full h-auto pointer-events-none select-none" alt="gradient"/>
+    <AuroraBackdrop preset="home" cclass="absolute bottom-0 left-0 w-full pointer-events-none select-none" />
 </div>

@@ -1,4 +1,5 @@
 <script lang="ts">
+    import AuroraBackdrop from "../../components/AuroraBackdrop.svelte";
     import { route } from "@mateothegreat/svelte5-router";
 </script>
 
@@ -12,5 +13,5 @@
     <p class="text-[#878787] text-[24px] max-w-[80%] text-center">
         It seems you've ventured into uncharted territory. Don't worry, you can head back to the <a href="/" use:route class="underline hover:text-[#FFFFFF]">home page</a> or explore our <a href="/faq" use:route class="underline hover:text-[#FFFFFF]">FAQ</a> for more information.
     </p>
-    <img src="/grads/home_grad.png" class="absolute bottom-0 left-0 w-full h-auto pointer-events-none select-none" alt="gradient"/>
+    <AuroraBackdrop preset="not-found" cclass="absolute bottom-0 left-0 w-full pointer-events-none select-none" />
 </div>

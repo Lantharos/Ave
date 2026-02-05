@@ -3,6 +3,7 @@
     import LoginStart from "./pages/LoginStart.svelte";
     import LoginTrustCode from "./pages/LoginTrustCode.svelte";
     import LoginWaiting from "./pages/LoginWaiting.svelte";
+    import AuroraBackdrop from "../../components/AuroraBackdrop.svelte";
     import { goto } from "@mateothegreat/svelte5-router";
     import { safeGoto } from "../../util/safe-goto";
     import { auth, isAuthenticated } from "../../stores/auth";
@@ -175,5 +176,5 @@
         />
     {/if}
 
-    <img src="/grads/login_grad.png" class="absolute bottom-0 left-0 w-full h-auto pointer-events-none select-none" alt="gradient"/>
+    <AuroraBackdrop preset="login" cclass="absolute bottom-0 left-0 w-full pointer-events-none select-none" />
 </div>

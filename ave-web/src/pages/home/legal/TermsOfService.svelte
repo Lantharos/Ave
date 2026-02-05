@@ -1,16 +1,17 @@
 <script lang="ts">
+    import AuroraBackdrop from "../../../components/AuroraBackdrop.svelte";
     import Text from "../../../components/Text.svelte";
     import LegalSec from "./components/LegalSec.svelte";
 </script>
 
-<div class="bg-[#090909] w-full min-h-screen-fixed flex flex-col">
-    <img src="/grads/terms_grad.png" alt="gradient" class="absolute top-0 left-0 w-full h-auto pointer-events-none select-none" />
-    <div class="self-center mt-12 md:mt-[100px] px-6 md:px-0 text-center">
+<div class="bg-[#090909] w-full min-h-screen-fixed flex flex-col relative overflow-hidden">
+    <AuroraBackdrop preset="terms" cclass="absolute top-0 left-0 w-full pointer-events-none select-none z-0" />
+    <div class="self-center mt-12 md:mt-[100px] px-6 md:px-0 text-center relative z-10">
         <h1 class="font-bold text-white text-4xl md:text-[96px]">Your Responsibilities</h1>
         <p class="font-medium text-[#D3D3D3] text-lg md:text-[36px] mt-2 md:mt-0">Here's what you agree to when using Ave</p>
     </div>
 
-    <div class="w-full md:w-[60%] self-center flex flex-col gap-12 md:gap-[80px] mt-16 md:mt-[120px] mb-12 md:mb-[100px] px-6 md:px-0">
+    <div class="w-full md:w-[60%] self-center flex flex-col gap-12 md:gap-[80px] mt-16 md:mt-[120px] mb-12 md:mb-[100px] px-6 md:px-0 relative z-10">
         <LegalSec title="Introduction">
             By using Ave, you agree to these terms. Ave is a secure identity platform provided by Lantharos to help you manage authentication across applications while maintaining full control over your data.
         </LegalSec>

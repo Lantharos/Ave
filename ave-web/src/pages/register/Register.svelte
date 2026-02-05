@@ -6,8 +6,8 @@
     import RegisterLegal from "./pages/RegisterLegal.svelte";
     import RegisterFinishing from "./pages/RegisterFinishing.svelte";
     import RegisterEnrollment from "./pages/RegisterEnrollment.svelte";
+    import AuroraBackdrop from "../../components/AuroraBackdrop.svelte";
     import { onMount } from "svelte";
-    import { preloadImages } from "../../util/helper";
     import { api } from "../../lib/api";
     import { 
         generateMasterKey, 
@@ -47,17 +47,17 @@
     let prfOutput: ArrayBuffer | null = null;
 
     const pageBg = {
-        welcome: "/grads/reg/reg_grad_welcome.png",
-        identity: "/grads/reg/reg_grad_identity.png",
-        passkey: "/grads/reg/reg_grad_passkey.png",
-        codes: "/grads/reg/reg_grad_codes.png",
-        legal: "/grads/reg/reg_grad_legal.png",
-        setup: "/grads/reg/reg_grad_finishing.png",
-        enrollment: "/grads/reg/reg_grad_enrollment.png",
+        welcome: "reg-welcome",
+        identity: "reg-identity",
+        passkey: "reg-passkey",
+        codes: "reg-codes",
+        legal: "reg-legal",
+        setup: "reg-finishing",
+        enrollment: "reg-enrollment",
     } as const;
 
-    let bgA: string = pageBg[currentPage];
-    let bgB = "";
+    let bgA: typeof pageBg[keyof typeof pageBg] = pageBg[currentPage];
+    let bgB: typeof pageBg[keyof typeof pageBg] | "" = "";
     let showA = true;
 
     function setPage(page: keyof typeof pageBg) {
@@ -76,7 +76,7 @@
             return;
         }
         
-        await preloadImages(Object.values(pageBg));
+        // No image preloads needed for blob backdrops
         loaded = true;
     });
 
@@ -204,16 +204,14 @@
 
 {#if loaded}
     <div class="relative w-full min-h-screen-fixed overflow-y-auto scroll-smooth bg-[#090909]">
-        <div
-                class="absolute bottom-0 inset-x-0 h-[700px] bg-center bg-cover transition-opacity duration-300 will-change-[opacity] select-none pointer-events-none transform-gpu"
-                style={`background-image:url(${bgA})`}
-                class:opacity-0={!showA}
-        ></div>
-        <div
-                class="absolute bottom-0 inset-x-0 h-[700px] bg-center bg-cover transition-opacity duration-300 will-change-[opacity] select-none pointer-events-none transform-gpu"
-                style={`background-image:url(${bgB})`}
-                class:opacity-0={showA}
-        ></div>
+        <AuroraBackdrop
+                preset={bgA}
+                cclass={`absolute bottom-0 inset-x-0 h-[700px] transition-opacity duration-300 will-change-[opacity] select-none pointer-events-none transform-gpu ${!showA ? "opacity-0" : ""}`}
+        />
+        <AuroraBackdrop
+                preset={bgB || bgA}
+                cclass={`absolute bottom-0 inset-x-0 h-[700px] transition-opacity duration-300 will-change-[opacity] select-none pointer-events-none transform-gpu ${showA ? "opacity-0" : ""}`}
+        />
 
         <div class="relative z-10">
             {#if error}
