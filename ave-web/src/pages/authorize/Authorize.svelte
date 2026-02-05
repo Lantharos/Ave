@@ -484,7 +484,29 @@
 		busy={requestingStorageAccess}
 		onclick={handleStorageAccessContinue}
 	/>
-{:else if loading || autoAuthorizing || completed}
+{:else if autoAuthorizing}
+    <div class="bg-[#090909] min-h-screen-fixed flex items-center justify-center p-6 md:p-[50px]">
+        <div class="w-full max-w-[520px] rounded-[28px] md:rounded-[36px] bg-[#0F0F0F]/80 border border-[#1B1B1B] backdrop-blur-xl p-8 md:p-12 relative overflow-hidden">
+            <div class="absolute inset-0 pointer-events-none">
+                <div class="absolute -top-24 -left-24 w-[220px] h-[220px] bg-[#FFFFFF]/5 blur-[60px] rounded-full"></div>
+                <div class="absolute -bottom-24 -right-24 w-[260px] h-[260px] bg-[#FFFFFF]/4 blur-[80px] rounded-full"></div>
+            </div>
+            <div class="relative flex flex-col items-center text-center gap-5">
+                <div class="relative w-[72px] h-[72px]">
+                    <div class="absolute inset-0 rounded-full border border-[#FFFFFF]/15"></div>
+                    <div class="absolute inset-0 rounded-full border border-[#FFFFFF]/40 animate-spin" style="border-top-color: transparent; animation-duration: 1.1s;"></div>
+                    <div class="absolute inset-[12px] rounded-full bg-[#FFFFFF]/5"></div>
+                </div>
+                <div>
+                    <Text type="h" size={22} color="#FFFFFF">Signing you in</Text>
+                    <p class="text-[#8A8A8A] text-[15px] mt-[8px]">
+                        Trusted authorization found. Finishing securely…
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+{:else if loading || completed}
     <div class="bg-[#090909] min-h-screen-fixed flex items-center justify-center p-6 md:p-[50px]">
         <div class="w-[48px] h-[48px] border-2 border-[#FFFFFF] border-t-transparent rounded-full animate-spin"></div>
     </div>
