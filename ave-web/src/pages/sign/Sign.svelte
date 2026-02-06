@@ -58,6 +58,7 @@
     let redirectingToLogin = $state(false);
     let requestingStorageAccess = $state(false);
     let storageAccessError = $state<string | null>(null);
+    let storageAccessAttempted = $state(false);
 
     let needsMasterKey = $state(false);
     let unlockingMasterKey = $state(false);
@@ -237,8 +238,12 @@
         if (!$isAuthenticated) {
             if (redirectingToLogin) return;
             if (embedSheet) {
-                needsStorageAccess = false;
-                handleStorageAccessAuto();
+                if (!storageAccessAttempted) {
+                    needsStorageAccess = false;
+                    handleStorageAccessAuto();
+                } else {
+                    needsStorageAccess = true;
+                }
                 return;
             }
             setReturnUrl(window.location.pathname + window.location.search);
@@ -252,6 +257,7 @@
 
     async function handleStorageAccessAuto() {
         if (requestingStorageAccess) return;
+        storageAccessAttempted = true;
         requestingStorageAccess = true;
         storageAccessError = null;
         try {
@@ -262,6 +268,7 @@
                     needsStorageAccess = true;
                     return;
                 }
+                redirectingToLogin = true;
                 needsStorageAccess = false;
                 loading = true;
                 return;
@@ -276,6 +283,7 @@
                     needsStorageAccess = true;
                     return;
                 }
+                redirectingToLogin = true;
                 needsStorageAccess = false;
                 loading = true;
                 return;
@@ -289,6 +297,7 @@
                     needsStorageAccess = true;
                     return;
                 }
+                redirectingToLogin = true;
                 needsStorageAccess = false;
                 loading = true;
                 return;
@@ -301,6 +310,7 @@
                     needsStorageAccess = true;
                     return;
                 }
+                redirectingToLogin = true;
                 needsStorageAccess = false;
                 loading = true;
                 return;
@@ -319,6 +329,7 @@
             needsStorageAccess = true;
             return;
         }
+        redirectingToLogin = true;
         needsStorageAccess = false;
         loading = true;
     }

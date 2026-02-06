@@ -107,6 +107,7 @@
 	let redirectingToLogin = $state(false);
 	let requestingStorageAccess = $state(false);
 	let storageAccessError = $state<string | null>(null);
+	let storageAccessAttempted = $state(false);
 
 	const embedPopup = $derived.by(() => params.embed && !!window.opener);
 	const embedSheet = $derived.by(() => params.embed && !embedPopup);
@@ -370,11 +371,16 @@
 
     // Check auth and load app info
 	$effect(() => {
+		if (completed) return;
 		if (!$isAuthenticated) {
 			if (redirectingToLogin) return;
 			if (embedSheet) {
-				needsStorageAccess = false;
-				handleStorageAccessAuto();
+				if (!storageAccessAttempted) {
+					needsStorageAccess = false;
+					handleStorageAccessAuto();
+				} else {
+					needsStorageAccess = true;
+				}
 				return;
 			}
 			// Redirect to login, then come back
@@ -392,6 +398,7 @@
 
 	async function handleStorageAccessAuto() {
 		if (requestingStorageAccess) return;
+		storageAccessAttempted = true;
 		requestingStorageAccess = true;
 		storageAccessError = null;
 		try {
@@ -402,6 +409,7 @@
 					needsStorageAccess = true;
 					return;
 				}
+				redirectingToLogin = true;
 				needsStorageAccess = false;
 				completed = true;
 				return;
@@ -416,6 +424,7 @@
 					needsStorageAccess = true;
 					return;
 				}
+				redirectingToLogin = true;
 				needsStorageAccess = false;
 				completed = true;
 				return;
@@ -429,6 +438,7 @@
 					needsStorageAccess = true;
 					return;
 				}
+				redirectingToLogin = true;
 				needsStorageAccess = false;
 				completed = true;
 				return;
@@ -441,6 +451,7 @@
 					needsStorageAccess = true;
 					return;
 				}
+				redirectingToLogin = true;
 				needsStorageAccess = false;
 				completed = true;
 				return;
@@ -459,6 +470,7 @@
 			needsStorageAccess = true;
 			return;
 		}
+		redirectingToLogin = true;
 		needsStorageAccess = false;
 		completed = true;
 	}
