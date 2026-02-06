@@ -27,34 +27,49 @@ import uploadRoutes from "./routes/upload";
 
 const app = new Hono();
 
+function isAllowedOrigin(origin: string | null | undefined): boolean {
+  if (!origin) return false;
+
+  if (origin.startsWith("http://localhost:") || origin.startsWith("http://127.0.0.1:")) {
+    return true;
+  }
+
+  try {
+    const url = new URL(origin);
+    if (url.protocol === "https:" && (url.hostname === "aveid.net" || url.hostname.endsWith(".aveid.net"))) {
+      return true;
+    }
+  } catch {
+    return false;
+  }
+
+  const rpOrigin = process.env.RP_ORIGIN;
+  if (rpOrigin && origin === rpOrigin) {
+    return true;
+  }
+
+  return false;
+}
+
+function resolveCorsOrigin(origin: string | undefined): string {
+  if (isAllowedOrigin(origin)) {
+    return origin!;
+  }
+  return "https://aveid.net";
+}
+
 // Middleware
 app.use("*", logger());
 
 app.use("/api/oauth/*", cors({
-  origin: (origin) => {
-    if (origin && (origin.startsWith("http://localhost:") || origin.startsWith("http://127.0.0.1:"))) {
-      return origin;
-    }
-    if (origin === "https://aveid.net" || origin === "https://devs.aveid.net" || origin === "https://demo.aveid.net") {
-      return origin;
-    }
-    return process.env.RP_ORIGIN || "http://localhost:5173";
-  },
+  origin: (origin) => resolveCorsOrigin(origin),
   credentials: true,
   allowMethods: ["GET", "POST", "OPTIONS"],
   allowHeaders: ["Content-Type", "Authorization"],
 }));
 
 app.use("/.well-known/*", cors({
-  origin: (origin) => {
-    if (origin && (origin.startsWith("http://localhost:") || origin.startsWith("http://127.0.0.1:"))) {
-      return origin;
-    }
-    if (origin === "https://aveid.net" || origin === "https://devs.aveid.net" || origin === "https://demo.aveid.net") {
-      return origin;
-    }
-    return process.env.RP_ORIGIN || "http://localhost:5173";
-  },
+  origin: (origin) => resolveCorsOrigin(origin),
   credentials: true,
   allowMethods: ["GET", "OPTIONS"],
   allowHeaders: ["Content-Type", "Authorization"],
@@ -67,15 +82,7 @@ app.use("*", async (c, next) => {
   }
   
   const corsMiddleware = cors({
-    origin: (origin) => {
-      if (origin && (origin.startsWith("http://localhost:") || origin.startsWith("http://127.0.0.1:"))) {
-        return origin;
-      }
-      if (origin === "https://aveid.net" || origin === "https://devs.aveid.net" || origin === "https://demo.aveid.net") {
-        return origin;
-      }
-      return process.env.RP_ORIGIN || "http://localhost:5173";
-    },
+    origin: (origin) => resolveCorsOrigin(origin),
 
     credentials: true,
     allowMethods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
@@ -98,16 +105,7 @@ app.use("*", async (c, next) => {
     return c.json({ error: "origin_required" }, 403);
   }
 
-  if (origin.startsWith("http://localhost:") || origin.startsWith("http://127.0.0.1:")) {
-    return next();
-  }
-
-  if (origin === "https://aveid.net" || origin === "https://devs.aveid.net" || origin === "https://demo.aveid.net") {
-    return next();
-  }
-
-  const rpOrigin = process.env.RP_ORIGIN;
-  if (rpOrigin && origin === rpOrigin) {
+  if (isAllowedOrigin(origin)) {
     return next();
   }
 
