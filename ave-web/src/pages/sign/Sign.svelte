@@ -238,6 +238,7 @@
         if (!$isAuthenticated) {
             if (redirectingToLogin) return;
             if (embedSheet) {
+                if (requestingStorageAccess) return;
                 if (!storageAccessAttempted) {
                     needsStorageAccess = false;
                     handleStorageAccessAuto();
@@ -259,6 +260,7 @@
         if (requestingStorageAccess) return;
         storageAccessAttempted = true;
         requestingStorageAccess = true;
+        needsStorageAccess = false;
         storageAccessError = null;
         try {
             if (!supportsStorageAccessApi()) {
