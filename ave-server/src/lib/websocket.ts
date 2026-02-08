@@ -5,7 +5,7 @@
  * - Login approval status updates to requesting device
  */
 
-import { db, sessions, loginRequests, identities } from "../db";
+import { db, sessions, identities } from "../db";
 import { eq, and, gt } from "drizzle-orm";
 import { hashSessionToken } from "./crypto";
 
@@ -14,25 +14,6 @@ const connectedClients = new Map<string, Set<WebSocket>>();
 
 // Store login request subscribers (requestId -> WebSocket)
 const loginRequestSubscribers = new Map<string, WebSocket>();
-
-export function handleWebSocketUpgrade(request: Request, server: any): Response | undefined {
-  const url = new URL(request.url);
-  
-  if (url.pathname === "/ws") {
-    const upgraded = server.upgrade(request, {
-      data: {
-        authToken: url.searchParams.get("token"),
-        requestId: url.searchParams.get("requestId"),
-      },
-    });
-    
-    if (upgraded) {
-      return undefined; // Bun handles the upgrade
-    }
-  }
-  
-  return new Response("WebSocket upgrade failed", { status: 400 });
-}
 
 export async function handleWebSocketOpen(ws: WebSocket, data: { authToken?: string; requestId?: string }) {
   // If subscribing to a login request (for the requesting device)

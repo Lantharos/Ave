@@ -341,26 +341,4 @@ export async function cleanupStaleDevices() {
   return { removed: staleDevices.length };
 }
 
-// Run cleanup on server startup and every 24 hours
-let cleanupInterval: NodeJS.Timeout | null = null;
-
-export function startDeviceCleanupJob() {
-  // Run immediately
-  cleanupStaleDevices().catch(console.error);
-  
-  // Then run every 24 hours
-  cleanupInterval = setInterval(() => {
-    cleanupStaleDevices().catch(console.error);
-  }, 24 * 60 * 60 * 1000);
-  
-  console.log("[Cleanup] Device cleanup job started (runs every 24 hours)");
-}
-
-export function stopDeviceCleanupJob() {
-  if (cleanupInterval) {
-    clearInterval(cleanupInterval);
-    cleanupInterval = null;
-  }
-}
-
 export default app;

@@ -5,7 +5,7 @@
 import { writable, get } from "svelte/store";
 import type { LoginRequest } from "../lib/api";
 
-const WS_URL = import.meta.env.VITE_WS_URL || "ws://api.aveid.net/ws";
+const WS_URL = import.meta.env.VITE_WS_URL || "wss://api.aveid.net/ws";
 
 interface WebSocketState {
   connected: boolean;

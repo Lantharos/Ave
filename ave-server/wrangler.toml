@@ -1,0 +1,15 @@
+name = "ave-api"
+main = "src/index.ts"
+compatibility_date = "2026-02-08"
+compatibility_flags = ["nodejs_compat"]
+
+[[durable_objects.bindings]]
+name = "API_APP"
+class_name = "ApiAppDurableObject"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["ApiAppDurableObject"]
+
+[triggers]
+crons = ["0 3 * * *"]

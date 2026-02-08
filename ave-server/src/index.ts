@@ -11,7 +11,7 @@ import {
 // Routes
 import registerRoutes from "./routes/register";
 import loginRoutes from "./routes/login";
-import devicesRoutes, { startDeviceCleanupJob } from "./routes/devices";
+import devicesRoutes, { cleanupStaleDevices } from "./routes/devices";
 import identitiesRoutes from "./routes/identities";
 import securityRoutes from "./routes/security";
 import activityRoutes from "./routes/activity";
@@ -25,7 +25,10 @@ import { SESSION_COOKIE_NAME } from "./lib/session-cookie";
 
 import uploadRoutes from "./routes/upload";
 
-const app = new Hono();
+type Bindings = {
+  API_APP: DurableObjectNamespace;
+  INTERNAL_API_TOKEN?: string;
+};
 
 function isAllowedOrigin(origin: string | null | undefined): boolean {
   if (!origin) return false;
@@ -58,144 +61,189 @@ function resolveCorsOrigin(origin: string | undefined): string {
   return "https://aveid.net";
 }
 
-// Middleware
-app.use("*", logger());
+function buildApp() {
+  const app = new Hono<{ Bindings: Bindings }>();
 
-app.use("/api/oauth/*", cors({
-  origin: (origin) => resolveCorsOrigin(origin),
-  credentials: true,
-  allowMethods: ["GET", "POST", "OPTIONS"],
-  allowHeaders: ["Content-Type", "Authorization"],
-}));
+  // Middleware
+  app.use("*", logger());
 
-app.use("/.well-known/*", cors({
-  origin: (origin) => resolveCorsOrigin(origin),
-  credentials: true,
-  allowMethods: ["GET", "OPTIONS"],
-  allowHeaders: ["Content-Type", "Authorization"],
-}));
-
-
-app.use("*", async (c, next) => {
-  if (c.req.path.startsWith("/api/oauth/") || c.req.path.startsWith("/.well-known/")) {
-    return next();
-  }
-  
-  const corsMiddleware = cors({
+  app.use("/api/oauth/*", cors({
     origin: (origin) => resolveCorsOrigin(origin),
-
     credentials: true,
-    allowMethods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowMethods: ["GET", "POST", "OPTIONS"],
     allowHeaders: ["Content-Type", "Authorization"],
-  });
-  
-  return corsMiddleware(c, next);
-});
+  }));
 
-app.use("*", async (c, next) => {
-  if (c.req.method === "OPTIONS") return next();
+  app.use("/.well-known/*", cors({
+    origin: (origin) => resolveCorsOrigin(origin),
+    credentials: true,
+    allowMethods: ["GET", "OPTIONS"],
+    allowHeaders: ["Content-Type", "Authorization"],
+  }));
 
-  const cookieHeader = c.req.header("Cookie") || "";
-  const hasSessionCookie = cookieHeader.includes(`${SESSION_COOKIE_NAME}=`);
-  if (!hasSessionCookie) return next();
-
-  const origin = c.req.header("Origin");
-  if (!origin) {
-    if (c.req.method === "GET" || c.req.method === "HEAD") return next();
-    return c.json({ error: "origin_required" }, 403);
-  }
-
-  if (isAllowedOrigin(origin)) {
-    return next();
-  }
-
-  return c.json({ error: "origin_not_allowed" }, 403);
-});
-
-app.use("*", authMiddleware);
-
-// Health check
-app.get("/", (c) => {
-  return c.json({ 
-    name: "Ave API",
-    version: "1.0.0",
-    status: "ok",
-  });
-});
-
-// API routes
-app.route("/api/register", registerRoutes);
-app.route("/api/login", loginRoutes);
-app.route("/api/devices", devicesRoutes);
-app.route("/api/identities", identitiesRoutes);
-app.route("/api/security", securityRoutes);
-app.route("/api/activity", activityRoutes);
-app.route("/api/mydata", mydataRoutes);
-app.route("/api/oauth", oauthRoutes);
-app.route("/api/apps", appsRoutes);
-app.route("/api/push", pushRoutes);
-app.route("/api/signing", signingRoutes);
-app.route("/.well-known", oidcRoutes);
-app.route("/api/upload", uploadRoutes);
-
-
-// 404 handler
-app.notFound((c) => {
-  return c.json({ error: "Not Found" }, 404);
-});
-
-// Error handler
-app.onError((err, c) => {
-  console.error("Server error:", err);
-  return c.json({ error: "Internal Server Error" }, 500);
-});
-
-// Start server
-const port = Number(process.env.PORT) || 3000;
-
-console.log(`Ave API server starting on port ${port}...`);
-
-// Bun server with WebSocket support
-const server = Bun.serve({
-  port,
-  fetch(request, server) {
-    const url = new URL(request.url);
-    
-    // Handle WebSocket upgrade for /ws path
-    if (url.pathname === "/ws") {
-      const authToken = url.searchParams.get("token") || undefined;
-      const requestId = url.searchParams.get("requestId") || undefined;
-      
-      const upgraded = server.upgrade(request, {
-        data: { authToken, requestId },
-      });
-      
-      if (upgraded) {
-        return undefined;
-      }
-      
-      return new Response("WebSocket upgrade failed", { status: 400 });
+  app.use("*", async (c, next) => {
+    if (c.req.path.startsWith("/api/oauth/") || c.req.path.startsWith("/.well-known/")) {
+      return next();
     }
-    
-    // Handle all other requests with Hono
-    return app.fetch(request);
-  },
-  websocket: {
-    open(ws) {
-      const data = (ws as any).data as { authToken?: string; requestId?: string };
-      handleWebSocketOpen(ws, data);
-    },
-    close(ws) {
-      handleWebSocketClose(ws);
-    },
-    message(ws, message) {
-      const msg = typeof message === "string" ? message : message.toString();
-      handleWebSocketMessage(ws, msg);
-    },
-  },
-});
 
-console.log(`Ave API server running at http://localhost:${server.port}`);
+    const corsMiddleware = cors({
+      origin: (origin) => resolveCorsOrigin(origin),
+      credentials: true,
+      allowMethods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+      allowHeaders: ["Content-Type", "Authorization"],
+    });
 
-// Start background jobs
-startDeviceCleanupJob();
+    return corsMiddleware(c, next);
+  });
+
+  app.use("*", async (c, next) => {
+    if (c.req.method === "OPTIONS") return next();
+
+    const cookieHeader = c.req.header("Cookie") || "";
+    const hasSessionCookie = cookieHeader.includes(`${SESSION_COOKIE_NAME}=`);
+    if (!hasSessionCookie) return next();
+
+    const origin = c.req.header("Origin");
+    if (!origin) {
+      if (c.req.method === "GET" || c.req.method === "HEAD") return next();
+      return c.json({ error: "origin_required" }, 403);
+    }
+
+    if (isAllowedOrigin(origin)) {
+      return next();
+    }
+
+    return c.json({ error: "origin_not_allowed" }, 403);
+  });
+
+  app.use("*", authMiddleware);
+
+  // Health check
+  app.get("/", (c) => {
+    return c.json({ 
+      name: "Ave API",
+      version: "1.0.0",
+      status: "ok",
+    });
+  });
+
+  // API routes
+  app.route("/api/register", registerRoutes);
+  app.route("/api/login", loginRoutes);
+  app.route("/api/devices", devicesRoutes);
+  app.route("/api/identities", identitiesRoutes);
+  app.route("/api/security", securityRoutes);
+  app.route("/api/activity", activityRoutes);
+  app.route("/api/mydata", mydataRoutes);
+  app.route("/api/oauth", oauthRoutes);
+  app.route("/api/apps", appsRoutes);
+  app.route("/api/push", pushRoutes);
+  app.route("/api/signing", signingRoutes);
+  app.route("/.well-known", oidcRoutes);
+  app.route("/api/upload", uploadRoutes);
+
+  // 404 handler
+  app.notFound((c) => {
+    return c.json({ error: "Not Found" }, 404);
+  });
+
+  // Error handler
+  app.onError((err, c) => {
+    console.error("Server error:", err);
+    return c.json({ error: "Internal Server Error" }, 500);
+  });
+
+  return app;
+}
+
+const app = buildApp();
+
+function isWebSocketUpgrade(request: Request): boolean {
+  return request.headers.get("Upgrade")?.toLowerCase() === "websocket";
+}
+
+function createWebSocketResponse(request: Request): Response {
+  const url = new URL(request.url);
+  const authToken = url.searchParams.get("token") || undefined;
+  const requestId = url.searchParams.get("requestId") || undefined;
+
+  const webSocketPair = new WebSocketPair();
+  const client = webSocketPair[0];
+  const server = webSocketPair[1];
+  server.accept();
+
+  void handleWebSocketOpen(server as unknown as WebSocket, { authToken, requestId });
+
+  server.addEventListener("message", (event) => {
+    const msg = typeof event.data === "string" ? event.data : String(event.data);
+    void handleWebSocketMessage(server as unknown as WebSocket, msg);
+  });
+
+  server.addEventListener("close", () => {
+    handleWebSocketClose(server as unknown as WebSocket);
+  });
+
+  return new Response(null, {
+    status: 101,
+    webSocket: client,
+  });
+}
+
+export class ApiAppDurableObject {
+  constructor(
+    _: DurableObjectState,
+    private readonly env: Bindings
+  ) {}
+
+  async fetch(request: Request): Promise<Response> {
+    const url = new URL(request.url);
+
+    if (url.pathname === "/ws" && isWebSocketUpgrade(request)) {
+      return createWebSocketResponse(request);
+    }
+
+    if (url.pathname === "/__internal/cleanup" && request.method === "POST") {
+      const expectedToken = this.env.INTERNAL_API_TOKEN;
+      const providedToken = request.headers.get("x-internal-token");
+      if (expectedToken && expectedToken !== providedToken) {
+        return new Response("Forbidden", { status: 403 });
+      }
+
+      const result = await cleanupStaleDevices();
+      return Response.json({ success: true, ...result });
+    }
+
+    return app.fetch(request, this.env);
+  }
+}
+
+export default {
+  async fetch(request: Request, env: Bindings): Promise<Response> {
+    const url = new URL(request.url);
+    if (url.pathname.startsWith("/__internal/")) {
+      return new Response("Not Found", { status: 404 });
+    }
+
+    const id = env.API_APP.idFromName("primary");
+    const stub = env.API_APP.get(id);
+    return stub.fetch(request);
+  },
+
+  async scheduled(_: ScheduledController, env: Bindings, ctx: ExecutionContext): Promise<void> {
+    const id = env.API_APP.idFromName("primary");
+    const stub = env.API_APP.get(id);
+    const headers = new Headers();
+    if (env.INTERNAL_API_TOKEN) {
+      headers.set("x-internal-token", env.INTERNAL_API_TOKEN);
+    }
+
+    ctx.waitUntil(
+      stub.fetch("https://internal/__internal/cleanup", {
+        method: "POST",
+        headers,
+      }).catch((err) => {
+        console.error("[Cron] Device cleanup failed:", err);
+      })
+    );
+  },
+};
