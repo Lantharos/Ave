@@ -19,3 +19,36 @@ new_sqlite_classes = ["ApiAppDurableObject"]
 
 [triggers]
 crons = ["0 3 * * *"]
+
+# Non-secret runtime vars (mirrors Cloudflare dashboard plaintext vars)
+[vars]
+DEV_PORTAL_CLIENT_ID = "app_baca6051065b203e594c6dc020c22c7d"
+OIDC_DISCOVERY_BASE = "https://api.aveid.net"
+OIDC_ISSUER = "https://api.aveid.net"
+OIDC_PUBLIC_KEY_PEM = """-----BEGIN PUBLIC KEY-----
+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAwxGPnw24+LgRdFflk5/b
+vC4JiY/+wxjuWR/EQeVPh+FYqrIaQc38xHcG6Rh0FiTPuudfcKwzD1xSxzg0TPFU
+czuH2HT6ATet4A8kVcfnR+XUwMhtYBSwLUOl9lnnJUnF/4R8d3Ole8teAPN7Iz3u
+YZPsoqgJZENsqkOF57uN9E0f1MWKHpz6MVzog2xiZgd1oCteVTrgS6CYXLASMr3U
+Cb5F04hLsbDhnGXKCzUD/mHWwHgqCW1Ptq/yD9CMy770FGLHbRW7ZkiDpAOXXAIg
+r8x0bddlxRJ3lbpAIOj2husbjhC+BebvJF5VhpsysuRAL+9jJoAvLkWGTkxJ2VtJ
+QwIDAQAB
+-----END PUBLIC KEY-----"""
+OIDC_RESOURCE_AUDIENCE = "https://api.aveid.net"
+PORT = "3000"
+R2_ACCESS_KEY_ID = "512a49d5cc0ed42a7ba949f8d9d622ae"
+R2_ACCOUNT_ID = "2e3bfcbc9512a7ab1ea3a9cb9a474b30"
+R2_BUCKET_NAME = "ave-avatars"
+R2_PUBLIC_URL = "https://assets.aveid.net"
+RP_ID = "aveid.net"
+RP_NAME = "Ave"
+RP_ORIGIN = "https://aveid.net"
+VAPID_PUBLIC_KEY = "BHG45kIltRlb8J3fIIPnTFyAGkMIEvb94XT1kHt5pmvyEJxTen32RQx1Q3XHXGeu34S1NOa-5nk8A3oTx-ldJ3M"
+VAPID_SUBJECT = "mailto:hello@lantharos.com"
+
+# Keep these as Cloudflare secrets (do NOT commit to wrangler.toml):
+# DATABASE_URL
+# OIDC_PRIVATE_KEY_PEM
+# R2_SECRET_ACCESS_KEY
+# SESSION_SECRET
+# VAPID_PRIVATE_KEY
