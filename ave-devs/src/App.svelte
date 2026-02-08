@@ -17,6 +17,7 @@
     deleteApp,
     rotateSecret,
     checkSession,
+    logoutSession,
     type DevApp,
   } from "./lib/api";
   import { defaultScopes } from "./lib/types";
@@ -79,11 +80,23 @@
   }
 
   function handleSignIn() {
-    window.location.href = "https://aveid.net/signin?redirect=" + encodeURIComponent(window.location.origin);
+    window.location.href = "https://aveid.net/login";
   }
 
-  function handleSignOut() {
-    window.location.href = "https://aveid.net/signout?redirect=" + encodeURIComponent(window.location.origin);
+  async function handleSignOut() {
+    try {
+      await logoutSession();
+    } catch {
+      error = "Failed to sign out";
+      return;
+    }
+
+    authenticated = false;
+    apps = [];
+    selectedApp = null;
+    deleteTarget = null;
+    newSecret = null;
+    activeView = "overview";
   }
 
   function navigate(view: View) {

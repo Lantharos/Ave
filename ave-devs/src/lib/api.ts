@@ -110,4 +110,10 @@ export async function checkSession(): Promise<boolean> {
   }
 }
 
+export async function logoutSession(): Promise<void> {
+  await request<{ success: boolean }>("/api/login/logout", {
+    method: "POST",
+  });
+}
+
 export { ApiError };
