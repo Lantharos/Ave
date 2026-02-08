@@ -1,6 +1,5 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
-import { logger } from "hono/logger";
 import { authMiddleware } from "./middleware/auth";
 import { 
   handleWebSocketOpen, 
@@ -63,9 +62,6 @@ function resolveCorsOrigin(origin: string | undefined): string {
 
 function buildApp() {
   const app = new Hono<{ Bindings: Bindings }>();
-
-  // Middleware
-  app.use("*", logger());
 
   app.use("/api/oauth/*", cors({
     origin: (origin) => resolveCorsOrigin(origin),
@@ -226,7 +222,26 @@ export default {
 
     const id = env.API_APP.idFromName("primary");
     const stub = env.API_APP.get(id);
-    return stub.fetch(request);
+
+    // WebSocket upgrades must be forwarded as-is.
+    if (isWebSocketUpgrade(request)) {
+      return stub.fetch(request);
+    }
+
+    const headers = new Headers(request.headers);
+    let body: ArrayBuffer | undefined;
+    if (request.method !== "GET" && request.method !== "HEAD") {
+      body = await request.arrayBuffer();
+    }
+
+    const forwardedRequest = new Request(request.url, {
+      method: request.method,
+      headers,
+      body,
+      redirect: request.redirect,
+    });
+
+    return stub.fetch(forwardedRequest);
   },
 
   async scheduled(_: ScheduledController, env: Bindings, ctx: ExecutionContext): Promise<void> {
