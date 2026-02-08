@@ -1,7 +1,13 @@
-name = "ave-api"
+name = "ave-server"
 main = "src/index.ts"
 compatibility_date = "2026-02-08"
 compatibility_flags = ["nodejs_compat"]
+
+[observability]
+
+[observability.logs]
+enabled = true
+invocation_logs = true
 
 [[durable_objects.bindings]]
 name = "API_APP"
