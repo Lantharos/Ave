@@ -1,25 +1,4 @@
 const API_BASE = import.meta.env.VITE_API_URL || "https://api.aveid.net";
-const TOKEN_URL = `${API_BASE}/api/oauth/token`;
-const USERINFO_URL = `${API_BASE}/api/oauth/userinfo`;
-
-export interface TokenResponse {
-  access_token: string;
-  access_token_jwt: string;
-  refresh_token?: string;
-  id_token?: string;
-  expires_in: number;
-  scope: string;
-}
-
-export interface UserInfo {
-  sub: string;
-  name?: string;
-  preferred_username?: string;
-  email?: string;
-  picture?: string;
-  iss?: string;
-  user_id?: string;
-}
 
 export interface DevApp {
   id: string;
@@ -50,149 +29,85 @@ export interface CreateAppPayload {
   allowUserIdScope?: boolean;
 }
 
-export async function exchangeCode(payload: {
-  code: string;
-  codeVerifier: string;
-  clientId: string;
-  redirectUri: string;
-}): Promise<TokenResponse> {
-  const response = await fetch(TOKEN_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      grantType: "authorization_code",
-      code: payload.code,
-      redirectUri: payload.redirectUri,
-      clientId: payload.clientId,
-      codeVerifier: payload.codeVerifier,
-    }),
-  });
-
-  if (!response.ok) {
-    const data = await response.json();
-    throw new Error(data.error || "Failed to exchange token");
+class ApiError extends Error {
+  constructor(
+    public status: number,
+    message: string,
+  ) {
+    super(message);
+    this.name = "ApiError";
   }
-
-  return response.json();
 }
 
-export async function refreshToken(payload: {
-  refreshToken: string;
-  clientId: string;
-}): Promise<TokenResponse> {
-  const response = await fetch(TOKEN_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      grantType: "refresh_token",
-      refreshToken: payload.refreshToken,
-      clientId: payload.clientId,
-    }),
+async function request<T>(
+  endpoint: string,
+  options: RequestInit = {},
+): Promise<T> {
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    ...((options.headers as Record<string, string>) || {}),
+  };
+
+  const response = await fetch(`${API_BASE}${endpoint}`, {
+    ...options,
+    credentials: "include",
+    headers,
   });
-
-  if (!response.ok) {
-    const data = await response.json();
-    throw new Error(data.error || "Failed to refresh token");
-  }
-
-  return response.json();
-}
-
-export async function fetchUserInfo(accessToken: string): Promise<UserInfo> {
-  const response = await fetch(USERINFO_URL, {
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-    },
-  });
-
-  if (!response.ok) {
-    const data = await response.json();
-    throw new Error(data.error || "Failed to fetch user info");
-  }
-
-  return response.json();
-}
-
-export async function fetchApps(accessTokenJwt: string): Promise<DevApp[]> {
-  const response = await fetch(`${API_BASE}/api/apps`, {
-    headers: {
-      Authorization: `Bearer ${accessTokenJwt}`,
-    },
-  });
-
-  if (!response.ok) {
-    const data = await response.json();
-    throw new Error(data.error || "Failed to load apps");
-  }
 
   const data = await response.json();
-  return data.apps as DevApp[];
+
+  if (!response.ok) {
+    throw new ApiError(response.status, data.error || "Request failed");
+  }
+
+  return data as T;
 }
 
-export async function createApp(accessTokenJwt: string, payload: CreateAppPayload): Promise<{ app: DevApp; clientSecret: string }> {
-  const response = await fetch(`${API_BASE}/api/apps`, {
+export async function fetchApps(): Promise<DevApp[]> {
+  const data = await request<{ apps: DevApp[] }>("/api/apps");
+  return data.apps;
+}
+
+export async function createApp(
+  payload: CreateAppPayload,
+): Promise<{ app: DevApp; clientSecret: string }> {
+  return request("/api/apps", {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${accessTokenJwt}`,
-    },
     body: JSON.stringify(payload),
   });
-
-  if (!response.ok) {
-    const data = await response.json();
-    throw new Error(data.error || "Failed to create app");
-  }
-
-  return response.json();
 }
 
-export async function rotateSecret(accessTokenJwt: string, appId: string): Promise<{ clientSecret: string }> {
-  const response = await fetch(`${API_BASE}/api/apps/${appId}/rotate-secret`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${accessTokenJwt}`,
-    },
-  });
-
-  if (!response.ok) {
-    const data = await response.json();
-    throw new Error(data.error || "Failed to rotate secret");
-  }
-
-  return response.json();
-}
-
-export async function updateApp(accessTokenJwt: string, appId: string, payload: Partial<CreateAppPayload>): Promise<{ app: DevApp }> {
-  const response = await fetch(`${API_BASE}/api/apps/${appId}`, {
+export async function updateApp(
+  appId: string,
+  payload: Partial<CreateAppPayload>,
+): Promise<{ app: DevApp }> {
+  return request(`/api/apps/${appId}`, {
     method: "PATCH",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${accessTokenJwt}`,
-    },
     body: JSON.stringify(payload),
   });
-
-  if (!response.ok) {
-    const data = await response.json();
-    throw new Error(data.error || "Failed to update app");
-  }
-
-  return response.json();
 }
 
-export async function deleteApp(accessTokenJwt: string, appId: string): Promise<{ success: boolean }> {
-  const response = await fetch(`${API_BASE}/api/apps/${appId}`, {
+export async function deleteApp(appId: string): Promise<{ success: boolean }> {
+  return request(`/api/apps/${appId}`, {
     method: "DELETE",
-    headers: {
-      Authorization: `Bearer ${accessTokenJwt}`,
-    },
   });
-
-  if (!response.ok) {
-    const data = await response.json();
-    throw new Error(data.error || "Failed to delete app");
-  }
-
-  return response.json();
 }
+
+export async function rotateSecret(
+  appId: string,
+): Promise<{ clientSecret: string }> {
+  return request(`/api/apps/${appId}/rotate-secret`, {
+    method: "POST",
+  });
+}
+
+export async function checkSession(): Promise<boolean> {
+  try {
+    await request<{ apps: DevApp[] }>("/api/apps");
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export { ApiError };

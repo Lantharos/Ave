@@ -1,34 +1,113 @@
-@import url("https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap");
+@import "tailwindcss";
 
-:root {
-  font-family: "Poppins", sans-serif;
-  background-color: #090909;
-  color: #ffffff;
-  color-scheme: dark;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+@theme {
+  --font-sans: "Poppins", sans-serif;
+  --color-surface-0: #090909;
+  --color-surface-1: #0c0c0c;
+  --color-surface-2: #111111;
+  --color-surface-3: #171717;
+  --color-surface-4: #202020;
+  --color-border: rgba(255, 255, 255, 0.08);
+  --color-border-hover: rgba(255, 255, 255, 0.2);
+  --color-border-focus: rgba(255, 255, 255, 0.35);
+  --color-text-primary: #ffffff;
+  --color-text-secondary: #d3d3d3;
+  --color-text-muted: #878787;
+  --color-text-nav: #b9bbbe;
+  --color-accent: #b9bbbe;
+  --color-danger: #e14747;
+  --color-success: #32a94c;
 }
 
-*, *::before, *::after {
-  box-sizing: border-box;
-}
+@layer base {
+  @font-face {
+    font-family: "Poppins";
+    font-style: normal;
+    font-display: swap;
+    src: url("https://fonts.gstatic.com/s/poppins/v22/pxiEyp8kv8JHgFVrJJfecg.woff2")
+      format("woff2");
+    font-weight: 400;
+  }
 
-body {
-  margin: 0;
-  background-color: #090909;
-  min-height: 100vh;
-}
+  @font-face {
+    font-family: "Poppins";
+    font-style: normal;
+    font-display: swap;
+    src: url("https://fonts.gstatic.com/s/poppins/v22/pxiByp8kv8JHgFVrLGT9Z1xlFQ.woff2")
+      format("woff2");
+    font-weight: 500;
+  }
 
-#app {
-  min-height: 100vh;
-}
+  @font-face {
+    font-family: "Poppins";
+    font-style: normal;
+    font-display: swap;
+    src: url("https://fonts.gstatic.com/s/poppins/v22/pxiByp8kv8JHgFVrLEj6Z1xlFQ.woff2")
+      format("woff2");
+    font-weight: 600;
+  }
 
-a {
-  color: inherit;
-  text-decoration: none;
-}
+  @font-face {
+    font-family: "Poppins";
+    font-style: normal;
+    font-display: swap;
+    src: url("https://fonts.gstatic.com/s/poppins/v22/pxiByp8kv8JHgFVrLDz8Z1xlFQ.woff2")
+      format("woff2");
+    font-weight: 700;
+  }
 
-button {
-  font-family: inherit;
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+  }
+
+  :root {
+    color-scheme: dark;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    margin: 0;
+    background-color: var(--color-surface-0);
+    color: var(--color-text-primary);
+    font-family: var(--font-sans);
+    min-height: 100vh;
+  }
+
+  #app {
+    min-height: 100vh;
+  }
+
+  a {
+    color: inherit;
+    text-decoration: none;
+  }
+
+  button {
+    font-family: inherit;
+  }
+
+  ::selection {
+    background: rgba(185, 187, 190, 0.3);
+  }
+
+  ::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 3px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.2);
+  }
 }

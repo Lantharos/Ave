@@ -6,6 +6,12 @@ import { eq, and } from "drizzle-orm";
 import { generateRandomId, hashSessionToken } from "../lib/crypto";
 import { verifyJwt, getResourceAudience } from "../lib/oidc";
 
+declare module "hono" {
+  interface ContextVariableMap {
+    devUserId: string;
+  }
+}
+
 const app = new Hono();
 
 function getDevPortalClientId(): string | undefined {
@@ -27,37 +33,36 @@ const baseAppSchema = z.object({
   allowUserIdScope: z.boolean().optional(),
 });
 
-async function requireOidcUser(c: any, next: any) {
+async function requireDevUser(c: any, next: any) {
   const authHeader = c.req.header("Authorization");
-  if (!authHeader?.startsWith("Bearer ")) {
-    return c.json({ error: "Unauthorized" }, 401);
+
+  if (authHeader?.startsWith("Bearer ")) {
+    const token = authHeader.slice(7);
+    const payload = await verifyJwt(token, getResourceAudience());
+
+    if (payload) {
+      const devPortalClientId = getDevPortalClientId();
+
+      if (devPortalClientId && payload.cid === devPortalClientId) {
+        const userId = (payload.uid || payload.sid) as string | undefined;
+        if (userId) {
+          c.set("devUserId", userId);
+          return next();
+        }
+      }
+    }
   }
 
-  const token = authHeader.slice(7);
-  const payload = await verifyJwt(token, getResourceAudience());
-  if (!payload) {
-    return c.json({ error: "Unauthorized" }, 401);
+  const sessionUser = c.get("user");
+  if (sessionUser?.id) {
+    c.set("devUserId", sessionUser.id);
+    return next();
   }
 
-  const devPortalClientId = getDevPortalClientId();
-  if (!devPortalClientId) {
-    return c.json({ error: "DEV_PORTAL_CLIENT_ID not configured" }, 500);
-  }
-
-  if (payload.cid !== devPortalClientId) {
-    return c.json({ error: "Forbidden" }, 403);
-  }
-
-  const userId = (payload.uid || payload.sid) as string | undefined;
-  if (!userId) {
-    return c.json({ error: "User ID unavailable" }, 403);
-  }
-
-  c.set("devUserId", userId);
-  return next();
+  return c.json({ error: "Unauthorized" }, 401);
 }
 
-app.use("*", requireOidcUser);
+app.use("*", requireDevUser);
 
 app.get("/", async (c) => {
   const userId = c.get("devUserId") as string;

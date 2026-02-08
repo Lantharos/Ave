@@ -1,25 +1,18 @@
 <script lang="ts">
-  export let value: string | number = "";
-  export let placeholder = "";
-  export let type = "text";
+  interface Props {
+    value?: string | number;
+    placeholder?: string;
+    type?: string;
+    oninput?: (e: Event) => void;
+  }
+
+  let { value = $bindable(""), placeholder = "", type = "text", oninput }: Props = $props();
 </script>
 
-<input class="input" bind:value {placeholder} {type} />
-
-<style>
-  .input {
-    width: 100%;
-    background: rgba(255, 255, 255, 0.04);
-    border: 0;
-    border-radius: 14px;
-    padding: 12px 14px;
-    color: #ffffff;
-    font-family: inherit;
-    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
-  }
-
-  .input:focus {
-    outline: none;
-    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.35);
-  }
-</style>
+<input
+  class="w-full bg-white/[0.04] border-0 rounded-[14px] px-4 py-3 text-white text-sm font-[inherit] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.08)] placeholder:text-[#555] outline-none focus:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.35)] transition-shadow duration-200"
+  bind:value
+  {placeholder}
+  {type}
+  {oninput}
+/>

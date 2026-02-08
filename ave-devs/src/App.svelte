@@ -1,119 +1,47 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import Button from "./components/Button.svelte";
-  import Card from "./components/Card.svelte";
-  import Input from "./components/Input.svelte";
-  import Textarea from "./components/Textarea.svelte";
-  import Toggle from "./components/Toggle.svelte";
-  import { createApp, fetchApps, rotateSecret, updateApp, deleteApp, type DevApp } from "./lib/api";
-  import { handleCallback, refreshSession, startLogin, logout } from "./lib/auth";
-  import { loadSession } from "./lib/storage";
+  import Sidebar from "./components/Sidebar.svelte";
+  import SecretBanner from "./components/SecretBanner.svelte";
+  import DeleteModal from "./components/DeleteModal.svelte";
+  import SignInPage from "./pages/SignInPage.svelte";
+  import OverviewPage from "./pages/OverviewPage.svelte";
+  import AppsPage from "./pages/AppsPage.svelte";
+  import CreateAppPage from "./pages/CreateAppPage.svelte";
+  import AppDetailPage from "./pages/AppDetailPage.svelte";
+  import ActivityPage from "./pages/ActivityPage.svelte";
+  import SettingsPage from "./pages/SettingsPage.svelte";
+  import {
+    fetchApps,
+    createApp,
+    updateApp,
+    deleteApp,
+    rotateSecret,
+    checkSession,
+    type DevApp,
+  } from "./lib/api";
   import { defaultScopes } from "./lib/types";
 
   type View = "overview" | "apps" | "create" | "activity" | "settings" | "app";
 
-  const clientId = import.meta.env.VITE_DEV_PORTAL_CLIENT_ID as string | undefined;
-
-  let activeView: View = "overview";
-  let apps: DevApp[] = [];
-  let selectedApp: (DevApp & { redirectUrisText?: string }) | null = null;
-  let deleteTarget: DevApp | null = null;
-  let loading = true;
-  let error = "";
-  let session = loadSession();
-  let newSecret: string | null = null;
-  let creating = false;
-
-  let form = {
-    name: "",
-    description: "",
-    websiteUrl: "",
-    iconUrl: "",
-    redirectUris: "",
-    supportsE2ee: false,
-    allowUserIdScope: true,
-    accessTokenTtlSeconds: 3600,
-    refreshTokenTtlSeconds: 30 * 24 * 60 * 60,
-    allowedScopes: [...defaultScopes],
-  };
-
-  const stats = [
-    { label: "Apps", value: () => apps.length },
-    { label: "Redirects", value: () => apps.reduce((sum, app) => sum + app.redirectUris.length, 0) },
-    { label: "E2EE", value: () => apps.filter((app) => app.supportsE2ee).length },
-  ];
-
-  const resources = [
-    {
-      title: "OIDC Discovery",
-      detail: "https://api.aveid.net/.well-known/openid-configuration",
-    },
-    {
-      title: "JWKS",
-      detail: "https://api.aveid.net/.well-known/jwks.json",
-    },
-    {
-      title: "Token Endpoint",
-      detail: "https://api.aveid.net/api/oauth/token",
-    },
-    {
-      title: "Userinfo",
-      detail: "https://api.aveid.net/api/oauth/userinfo",
-    },
-  ];
-
-  const quickStarts = [
-    {
-      title: "Web apps (PKCE)",
-      description: "Use the Ave SDK for SPA-friendly OAuth + OIDC.",
-      href: "https://aveid.net/docs#pkce",
-    },
-    {
-      title: "Server apps",
-      description: "Exchange tokens server-side with client secret.",
-      href: "https://aveid.net/docs#endpoints",
-    },
-    {
-      title: "Embed sign-in",
-      description: "Drop in the Ave iframe widget with postMessage events.",
-      href: "https://aveid.net/docs#sdks",
-    },
-  ];
+  let activeView: View = $state("overview");
+  let apps: DevApp[] = $state([]);
+  let selectedApp: (DevApp & { redirectUrisText?: string }) | null = $state(null);
+  let deleteTarget: DevApp | null = $state(null);
+  let loading = $state(true);
+  let error = $state("");
+  let authenticated = $state(false);
+  let newSecret: string | null = $state(null);
+  let creating = $state(false);
 
   onMount(() => {
-    const init = async () => {
-      const params = new URLSearchParams(window.location.search);
-      if (params.get("code") && clientId) {
-        try {
-          await handleCallback({ clientId });
-          window.history.replaceState({}, document.title, "/");
-          session = loadSession();
-        } catch (err) {
-          error = err instanceof Error ? err.message : "Failed to finish sign-in";
-        }
-      }
-
-      if (session?.accessTokenJwt) {
-        await loadApps();
-      } else {
-        loading = false;
-      }
-    };
-
-    void init();
+    init();
 
     let resuming = false;
     const handleResume = async () => {
       if (document.visibilityState !== "visible" || resuming) return;
       resuming = true;
       try {
-        session = loadSession();
-        if (session?.accessTokenJwt) {
-          await loadApps();
-        } else {
-          apps = [];
-          loading = false;
-        }
+        if (authenticated) await loadApps();
       } finally {
         resuming = false;
       }
@@ -128,40 +56,61 @@
     };
   });
 
+  async function init() {
+    loading = true;
+    const hasSession = await checkSession();
+    authenticated = hasSession;
+    if (hasSession) {
+      await loadApps();
+    }
+    loading = false;
+  }
+
   async function loadApps() {
-    if (!session?.accessTokenJwt) return;
     loading = true;
     try {
-      apps = await fetchApps(session.accessTokenJwt);
-    } catch (err) {
-      if (session?.refreshToken) {
-        try {
-          await refreshSession();
-          session = loadSession();
-          if (session?.accessTokenJwt) {
-            apps = await fetchApps(session.accessTokenJwt);
-          }
-        } catch (refreshError) {
-          // Refresh failed - session is invalid, clear and redirect to sign in
-          handleUnauthorized();
-        }
-      } else {
-        // No refresh token - session is invalid, clear and redirect to sign in
-        handleUnauthorized();
-      }
+      apps = await fetchApps();
+    } catch {
+      authenticated = false;
+      apps = [];
     } finally {
       loading = false;
     }
   }
 
-  function handleUnauthorized() {
-    logout();
-    session = null;
-    apps = [];
+  function handleSignIn() {
+    window.location.href = "https://aveid.net/signin?redirect=" + encodeURIComponent(window.location.origin);
   }
 
-  async function handleCreate() {
-    if (!session?.accessTokenJwt) return;
+  function handleSignOut() {
+    window.location.href = "https://aveid.net/signout?redirect=" + encodeURIComponent(window.location.origin);
+  }
+
+  function navigate(view: View) {
+    activeView = view;
+    newSecret = null;
+  }
+
+  function openApp(app: DevApp) {
+    selectedApp = {
+      ...app,
+      redirectUrisText: app.redirectUris.join("\n"),
+    };
+    activeView = "app";
+  }
+
+  async function handleCreate(form: {
+    name: string;
+    description: string;
+    websiteUrl: string;
+    iconUrl: string;
+    redirectUris: string;
+    supportsE2ee: boolean;
+    allowUserIdScope: boolean;
+    accessTokenTtlSeconds: number;
+    refreshTokenTtlSeconds: number;
+    allowedScopes: string[];
+  }) {
     creating = true;
     error = "";
     newSecret = null;
@@ -172,7 +121,7 @@
         .map((uri) => uri.trim())
         .filter(Boolean);
 
-      const result = await createApp(session.accessTokenJwt, {
+      const result = await createApp({
         name: form.name,
         description: form.description || undefined,
         websiteUrl: form.websiteUrl || undefined,
@@ -188,90 +137,61 @@
       apps = [result.app, ...apps];
       newSecret = result.clientSecret;
       activeView = "apps";
-      form = {
-        name: "",
-        description: "",
-        websiteUrl: "",
-        iconUrl: "",
-        redirectUris: "",
-        supportsE2ee: false,
-        allowUserIdScope: true,
-        accessTokenTtlSeconds: 3600,
-        refreshTokenTtlSeconds: 30 * 24 * 60 * 60,
-        allowedScopes: [...defaultScopes],
-      };
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Failed to create app";
-      if (message.toLowerCase().includes("unauthorized") || message.toLowerCase().includes("invalid token")) {
-        handleUnauthorized();
-      } else {
-        error = message;
-      }
+      error = err instanceof Error ? err.message : "Failed to create app";
     } finally {
       creating = false;
     }
   }
 
-  async   function handleRotateSecret(appId: string) {
-    if (!session?.accessTokenJwt) return;
+  async function handleRotateSecret(appId: string) {
     error = "";
     try {
-      const result = await rotateSecret(session.accessTokenJwt, appId);
+      const result = await rotateSecret(appId);
       newSecret = result.clientSecret;
     } catch (err) {
       error = err instanceof Error ? err.message : "Failed to rotate secret";
     }
   }
 
-  function openApp(app: DevApp) {
-    selectedApp = { ...app, redirectUrisText: app.redirectUris.join("\n") } as DevApp & { redirectUrisText: string };
-    activeView = "app";
-  }
-
-  async function saveApp() {
-    if (!session?.accessTokenJwt || !selectedApp) return;
+  async function handleSaveApp() {
+    if (!selectedApp) return;
     error = "";
-    const app = selectedApp as DevApp & { redirectUrisText?: string };
     try {
       const payload = {
-        name: app.name,
-        description: app.description || undefined,
-        websiteUrl: app.websiteUrl || undefined,
-        iconUrl: app.iconUrl || undefined,
-        redirectUris: (app.redirectUrisText || "")
+        name: selectedApp.name,
+        description: selectedApp.description || undefined,
+        websiteUrl: selectedApp.websiteUrl || undefined,
+        iconUrl: selectedApp.iconUrl || undefined,
+        redirectUris: (selectedApp.redirectUrisText || "")
           .split("\n")
           .map((uri) => uri.trim())
           .filter(Boolean),
-        supportsE2ee: app.supportsE2ee,
-        allowedScopes: app.allowedScopes,
-        accessTokenTtlSeconds: app.accessTokenTtlSeconds,
-        refreshTokenTtlSeconds: app.refreshTokenTtlSeconds,
-        allowUserIdScope: app.allowUserIdScope,
+        supportsE2ee: selectedApp.supportsE2ee,
+        allowedScopes: selectedApp.allowedScopes,
+        accessTokenTtlSeconds: selectedApp.accessTokenTtlSeconds,
+        refreshTokenTtlSeconds: selectedApp.refreshTokenTtlSeconds,
+        allowUserIdScope: selectedApp.allowUserIdScope,
       };
 
-      const result = await updateApp(session.accessTokenJwt, selectedApp.id, payload);
-      apps = apps.map((app) => (app.id === result.app.id ? result.app : app));
-      selectedApp = { ...result.app, redirectUrisText: result.app.redirectUris.join("\n") } as DevApp & { redirectUrisText: string };
+      const result = await updateApp(selectedApp.id, payload);
+      apps = apps.map((a) => (a.id === result.app.id ? result.app : a));
+      selectedApp = {
+        ...result.app,
+        redirectUrisText: result.app.redirectUris.join("\n"),
+      };
     } catch (err) {
       error = err instanceof Error ? err.message : "Failed to update app";
     }
   }
 
-  function requestDelete(app: DevApp) {
-    deleteTarget = app;
-  }
-
-  function cancelDelete() {
-    deleteTarget = null;
-  }
-
-  async function confirmDelete() {
-    if (!session?.accessTokenJwt || !deleteTarget) return;
+  async function handleConfirmDelete() {
+    if (!deleteTarget) return;
     error = "";
     const target = deleteTarget;
     try {
-      await deleteApp(session.accessTokenJwt, target.id);
-      apps = apps.filter((app) => app.id !== target.id);
+      await deleteApp(target.id);
+      apps = apps.filter((a) => a.id !== target.id);
       if (selectedApp?.id === target.id) {
         activeView = "apps";
         selectedApp = null;
@@ -285,616 +205,77 @@
   async function handleCopy(text: string) {
     try {
       await navigator.clipboard.writeText(text);
-    } catch (err) {
-      error = err instanceof Error ? err.message : "Failed to copy";
+    } catch {
+      error = "Failed to copy to clipboard";
     }
-  }
-
-
-  function startDevLogin() {
-    if (!clientId) {
-      error = "VITE_DEV_PORTAL_CLIENT_ID is not configured";
-      return;
-    }
-    startLogin({ clientId });
-  }
-
-  function handleLogout() {
-    logout();
-    session = null;
-    apps = [];
   }
 </script>
 
-<div class="layout">
-  <aside class="sidebar">
-    <div class="brand">
-      <img src="/icon.png" alt="Ave" />
-    </div>
+<div class="flex min-h-screen text-white max-[900px]:flex-col">
+  <Sidebar
+    {activeView}
+    {authenticated}
+    onnavigate={navigate}
+    onsignin={handleSignIn}
+    onsignout={handleSignOut}
+  />
 
-    {#if session?.accessTokenJwt}
-      <nav class="nav">
-        <button class:active={activeView === "overview"} on:click={() => (activeView = "overview")}>Overview</button>
-        <button class:active={activeView === "apps"} on:click={() => (activeView = "apps")}>Apps</button>
-        <button class:active={activeView === "create"} on:click={() => (activeView = "create")}>Create app</button>
-        <button class:active={activeView === "activity"} on:click={() => (activeView = "activity")}>Activity</button>
-        <button class:active={activeView === "settings"} on:click={() => (activeView = "settings")}>Settings</button>
-      </nav>
-      <div class="sidebar__footer">
-        <Button variant="ghost" on:click={handleLogout}>Sign out</Button>
-      </div>
-    {:else}
-      <div class="sidebar__footer sidebar__footer--center">
-        <Button variant="primary" on:click={startDevLogin}>Sign in</Button>
-      </div>
-    {/if}
-  </aside>
-
-  <main class="content">
-    {#if !session?.accessTokenJwt}
-      <div class="signin">
-        <div class="signin__content">
-          <h1>Sign in to manage your Ave apps.</h1>
-          <p>Access credentials, redirect URIs, and OIDC scopes for every project.</p>
-          {#if error}
-            <div class="alert">{error}</div>
-          {/if}
-          <Button variant="primary" on:click={startDevLogin}>Sign in with Ave</Button>
-        </div>
-      </div>
+  <main class="flex-1 px-[clamp(20px,4vw,56px)] py-9 pb-20 flex flex-col gap-7 max-w-5xl">
+    {#if !authenticated}
+      <SignInPage onsignin={handleSignIn} {error} />
     {:else}
       {#if deleteTarget}
-        <div class="modal-backdrop">
-          <div class="modal">
-            <h3>Delete {deleteTarget.name}?</h3>
-            <p>This will permanently delete the app and its credentials.</p>
-            <div class="action-row">
-              <Button variant="ghost" on:click={cancelDelete}>Cancel</Button>
-              <Button variant="outline" on:click={confirmDelete}>Delete app</Button>
-            </div>
-          </div>
-        </div>
+        <DeleteModal
+          appName={deleteTarget.name}
+          onconfirm={handleConfirmDelete}
+          oncancel={() => (deleteTarget = null)}
+        />
       {/if}
 
-      <header class="hero">
-        <div>
-          <p class="eyebrow">Ave Developer Portal</p>
-          <h1>Build with Ave identity.</h1>
-          <p>Control OAuth + OIDC apps, credentials, and security posture.</p>
-        </div>
-        <div class="hero__actions">
-          <Button variant="ghost" on:click={() => window.open("https://aveid.net/docs", "_blank")}>View docs</Button>
-          <Button variant="outline" on:click={() => window.location.href = "mailto:hello@lantharos.com"}>Contact support</Button>
-        </div>
-      </header>
-
       {#if error}
-        <div class="alert">{error}</div>
+        <div class="bg-[#e14747]/10 border border-[#e14747]/20 rounded-2xl px-4 py-3 text-[13px] text-[#e14747]">
+          {error}
+          <button
+            class="ml-3 text-[#e14747]/60 hover:text-[#e14747] border-0 bg-transparent cursor-pointer text-[12px] underline"
+            onclick={() => (error = "")}
+          >dismiss</button>
+        </div>
       {/if}
 
       {#if newSecret}
-        <div class="secret">
-          <div>
-            <h3>New client secret</h3>
-            <p>Copy this secret now. You won't see it again.</p>
-          </div>
-          <code>{newSecret}</code>
-        </div>
+        <SecretBanner secret={newSecret} ondismiss={() => (newSecret = null)} />
       {/if}
 
       {#if activeView === "overview"}
-        <section class="section">
-          <div class="stat-grid">
-            {#each stats as stat}
-              <Card>
-                <p>{stat.label}</p>
-                <h2>{stat.value()}</h2>
-              </Card>
-            {/each}
-          </div>
-        </section>
-
-        <section class="section">
-          <div class="section__header">
-            <div>
-              <h2>Quick start</h2>
-              <p>Pick a path and ship sign-in fast.</p>
-            </div>
-          </div>
-          <div class="grid">
-              {#each quickStarts as item}
-              <Card>
-                <h3>{item.title}</h3>
-                <p>{item.description}</p>
-                <Button variant="outline" on:click={() => window.open(item.href, "_blank")}>View guide</Button>
-              </Card>
-            {/each}
-
-          </div>
-        </section>
-
-        <section class="section">
-          <Card tone="soft">
-            <div class="section__header">
-              <div>
-                <h2>Live endpoints</h2>
-                <p>Reference the current Ave OIDC endpoints and key sets.</p>
-              </div>
-              <Button variant="ghost" on:click={() => window.open("https://aveid.net/docs#endpoints", "_blank")}>Open API reference</Button>
-            </div>
-            <div class="stack">
-              {#each resources as item}
-                <div class="row">
-                  <div>
-                    <h4>{item.title}</h4>
-                    <p>{item.detail}</p>
-                  </div>
-                  <Button variant="outline" on:click={() => handleCopy(item.detail)}>Copy URL</Button>
-                </div>
-              {/each}
-            </div>
-          </Card>
-        </section>
+        <OverviewPage {apps} oncreate={() => navigate("create")} />
       {:else if activeView === "apps"}
-        <section class="section">
-          <div class="section__header">
-            <div>
-              <h2>Your apps</h2>
-              <p>Manage apps tied to your Ave user account.</p>
-            </div>
-            <Button variant="primary" on:click={() => (activeView = "create")} disabled={!session?.accessTokenJwt}>Create new app</Button>
-          </div>
-
-          {#if loading}
-            <Card>Loading apps...</Card>
-          {:else if apps.length === 0}
-            <Card>No apps yet. Create your first app.</Card>
-          {:else}
-            <div class="stack">
-              {#each apps as app}
-                <Card>
-                  <div class="app-row">
-                    <div>
-                      <h3>{app.name}</h3>
-                      <p>Client ID: {app.clientId}</p>
-                      <p>Redirects: {app.redirectUris.length}</p>
-                      <p>Scopes: {app.allowedScopes.join(", ")}</p>
-                    </div>
-                    <div class="app-actions">
-                      <Button variant="ghost" on:click={() => openApp(app)}>Manage</Button>
-                      <Button variant="outline" on:click={() => handleRotateSecret(app.id)}>Rotate secret</Button>
-                    </div>
-                  </div>
-                </Card>
-              {/each}
-            </div>
-          {/if}
-        </section>
+        <AppsPage
+          {apps}
+          {loading}
+          oncreate={() => navigate("create")}
+          onselect={openApp}
+          onrotate={handleRotateSecret}
+        />
       {:else if activeView === "create"}
-        <section class="section">
-          <Card>
-            <div class="section__header">
-              <div>
-                <h2>Create app</h2>
-                <p>Configure redirect URIs, scopes, and token lifetimes.</p>
-              </div>
-              <Button variant="ghost" on:click={() => (activeView = "apps")}>Cancel</Button>
-            </div>
-            <div class="form__grid">
-              <label>
-                App name
-                <Input bind:value={form.name} placeholder="My App" />
-              </label>
-              <label>
-                Description
-                <Input bind:value={form.description} placeholder="Short description" />
-              </label>
-              <label>
-                Website URL
-                <Input bind:value={form.websiteUrl} placeholder="https://" />
-              </label>
-              <label>
-                Icon URL
-                <Input bind:value={form.iconUrl} placeholder="https://" />
-              </label>
-              <label>
-                Redirect URIs (one per line)
-                <Textarea bind:value={form.redirectUris} rows={4} />
-              </label>
-              <label>
-                Access token TTL (seconds)
-                <Input type="number" bind:value={form.accessTokenTtlSeconds} />
-              </label>
-              <label>
-                Refresh token TTL (seconds)
-                <Input type="number" bind:value={form.refreshTokenTtlSeconds} />
-              </label>
-              <div class="toggle-row">
-                <Toggle bind:checked={form.supportsE2ee} label="Enable E2EE" />
-                <Toggle bind:checked={form.allowUserIdScope} label="Allow user_id scope (discouraged)" />
-              </div>
-            </div>
-            <div class="form__actions">
-              <Button variant="primary" on:click={handleCreate} disabled={creating || !form.name || !form.redirectUris}>Create app</Button>
-            </div>
-          </Card>
-        </section>
+        <CreateAppPage
+          oncreate={handleCreate}
+          oncancel={() => navigate("apps")}
+          {creating}
+        />
       {:else if activeView === "app" && selectedApp}
-        {@const app = selectedApp}
-        <section class="section">
-          <Card>
-            <div class="section__header">
-              <div>
-                <h2>{app.name}</h2>
-                <p>Manage credentials, redirects, and scopes.</p>
-              </div>
-              <div class="action-row">
-                <Button variant="ghost" on:click={() => handleCopy(app.clientId)}>Copy client ID</Button>
-                <Button variant="outline" on:click={() => handleRotateSecret(app.id)}>Rotate secret</Button>
-                <Button variant="outline" on:click={() => requestDelete(app)}>Delete app</Button>
-                <Button variant="ghost" on:click={() => (activeView = "apps")}>Back to apps</Button>
-              </div>
-            </div>
-            <div class="form__grid">
-              <label>
-                App name
-                <Input bind:value={app.name} placeholder="App name" />
-              </label>
-              <label>
-                Description
-                <Input bind:value={app.description} placeholder="Description" />
-              </label>
-              <label>
-                Website URL
-                <Input bind:value={app.websiteUrl} placeholder="https://" />
-              </label>
-              <label>
-                Icon URL
-                <Input bind:value={app.iconUrl} placeholder="https://" />
-              </label>
-              <label>
-                Redirect URIs (one per line)
-                <Textarea bind:value={app.redirectUrisText} rows={4} />
-              </label>
-              <label>
-                Access token TTL (seconds)
-                <Input type="number" bind:value={app.accessTokenTtlSeconds} />
-              </label>
-              <label>
-                Refresh token TTL (seconds)
-                <Input type="number" bind:value={app.refreshTokenTtlSeconds} />
-              </label>
-              <div class="toggle-row">
-                <Toggle bind:checked={app.supportsE2ee} label="Enable E2EE" />
-                <Toggle bind:checked={app.allowUserIdScope} label="Allow user_id scope (discouraged)" />
-              </div>
-            </div>
-            <div class="form__actions">
-              <Button variant="primary" on:click={saveApp}>Save changes</Button>
-            </div>
-          </Card>
-        </section>
+        <AppDetailPage
+          bind:app={selectedApp}
+          onsave={handleSaveApp}
+          onrotate={handleRotateSecret}
+          ondelete={(app) => (deleteTarget = app)}
+          onback={() => navigate("apps")}
+          oncopy={handleCopy}
+        />
       {:else if activeView === "activity"}
-        <section class="section">
-          <Card>
-            <div class="section__header">
-              <div>
-                <h2>Activity</h2>
-                <p>Recent app changes and credential updates.</p>
-              </div>
-              <Button variant="outline">Export logs</Button>
-            </div>
-            <p>No activity yet. Create an app to start logging events.</p>
-          </Card>
-        </section>
+        <ActivityPage />
       {:else if activeView === "settings"}
-        <section class="section">
-          <div class="grid">
-            <Card>
-              <h3>Default scopes</h3>
-              <p>{defaultScopes.join(", ")}</p>
-              <Button variant="outline">Edit defaults</Button>
-            </Card>
-            <Card>
-              <h3>Notifications</h3>
-              <p>Control security alerts for credential changes.</p>
-              <Button variant="outline">Configure</Button>
-            </Card>
-          </div>
-        </section>
+        <SettingsPage />
       {/if}
     {/if}
   </main>
 </div>
-
-<style>
-  :global(body) {
-    background-color: #090909;
-  }
-
-  .layout {
-    display: grid;
-    grid-template-columns: 240px 1fr;
-    min-height: 100vh;
-    color: #ffffff;
-  }
-
-  .sidebar {
-    height: 100vh;
-    position: sticky;
-    top: 0;
-    padding: 28px 20px;
-    display: flex;
-    flex-direction: column;
-    gap: 24px;
-    background: #0c0c0c;
-  }
-
-  .brand {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    font-weight: 600;
-  }
-
-  .brand img {
-    width: 28px;
-    height: 28px;
-  }
-
-  .nav {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-  }
-
-  .nav button {
-    background: transparent;
-    border: 0;
-    color: #b9bbbe;
-    padding: 10px 12px;
-    border-radius: 12px;
-    text-align: left;
-    font-size: 14px;
-    cursor: pointer;
-  }
-
-  .nav button.active,
-  .nav button:hover {
-    color: #ffffff;
-    background: rgba(255, 255, 255, 0.06);
-  }
-
-  .sidebar__footer {
-    margin-top: auto;
-  }
-
-  .sidebar__footer--center {
-    margin-top: auto;
-    display: flex;
-    justify-content: center;
-  }
-
-  .content {
-    padding: 36px clamp(24px, 4vw, 56px) 72px;
-    display: flex;
-    flex-direction: column;
-    gap: 28px;
-  }
-
-  .hero {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    gap: 24px;
-    flex-wrap: wrap;
-  }
-
-  .eyebrow {
-    text-transform: uppercase;
-    letter-spacing: 0.2em;
-    color: #777777;
-    font-size: 12px;
-  }
-
-  .hero h1 {
-    margin: 6px 0 8px;
-    font-size: clamp(28px, 3vw, 42px);
-  }
-
-  .hero__actions {
-    display: flex;
-    gap: 12px;
-    flex-wrap: wrap;
-    margin-top: 12px;
-  }
-
-  p {
-    margin: 0;
-    color: #9b9b9b;
-    font-size: 15px;
-    line-height: 1.6;
-  }
-
-  .section {
-    display: flex;
-    flex-direction: column;
-    gap: 20px;
-  }
-
-  .section__header {
-    display: flex;
-    justify-content: space-between;
-    gap: 16px;
-    flex-wrap: wrap;
-    margin-bottom: 18px;
-  }
-
-  h2 {
-    margin: 0 0 6px;
-    font-size: 22px;
-  }
-
-  h3 {
-    margin: 0 0 8px;
-  }
-
-  .stat-grid {
-    display: grid;
-    gap: 16px;
-    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-  }
-
-  .grid {
-    display: grid;
-    gap: 16px;
-    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  }
-
-  .stack {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-  }
-
-  .row {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 16px;
-    padding: 14px 0;
-  }
-
-  .app-row {
-    display: flex;
-    justify-content: space-between;
-    gap: 16px;
-    flex-wrap: wrap;
-  }
-
-  .app-actions {
-    display: flex;
-    gap: 10px;
-    flex-wrap: wrap;
-  }
-
-  .alert {
-    background: rgba(255, 71, 71, 0.12);
-    padding: 14px 18px;
-    border-radius: 16px;
-  }
-
-  .secret {
-    background: rgba(255, 255, 255, 0.04);
-    padding: 18px;
-    border-radius: 18px;
-    display: flex;
-    gap: 18px;
-    align-items: center;
-    justify-content: space-between;
-    flex-wrap: wrap;
-  }
-
-  .secret code {
-    background: rgba(255, 255, 255, 0.08);
-    padding: 10px 14px;
-    border-radius: 12px;
-    color: #e0e0ff;
-    font-size: 13px;
-  }
-
-  .form__grid {
-    display: flex;
-    flex-direction: column;
-    gap: 16px;
-  }
-
-  label {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    color: #bbbbbb;
-    font-size: 13px;
-  }
-
-  .toggle-row {
-    display: flex;
-    gap: 18px;
-    flex-wrap: wrap;
-    margin-top: 6px;
-  }
-
-  .form__actions {
-    margin-top: 24px;
-    display: flex;
-    justify-content: flex-end;
-    align-items: center;
-  }
-
-  .action-row {
-    display: flex;
-    gap: 12px;
-    flex-wrap: wrap;
-    align-items: center;
-  }
-
-  .signin {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    min-height: calc(100vh - 80px);
-  }
-
-  .signin__content {
-    display: flex;
-    flex-direction: column;
-    gap: 14px;
-    max-width: 420px;
-  }
-
-  .modal-backdrop {
-    position: fixed;
-    inset: 0;
-    background: rgba(0, 0, 0, 0.6);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 50;
-  }
-
-  .modal {
-    background: #0f0f0f;
-    border-radius: 20px;
-    padding: 24px;
-    max-width: 420px;
-    width: calc(100% - 32px);
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-  }
-
-  @media (max-width: 900px) {
-    .layout {
-      grid-template-columns: 1fr;
-    }
-
-    .sidebar {
-      position: relative;
-      height: auto;
-      flex-direction: row;
-      align-items: center;
-      justify-content: space-between;
-      padding: 20px;
-    }
-
-    .nav {
-      flex-direction: row;
-      gap: 6px;
-      flex-wrap: wrap;
-    }
-
-    .signin {
-      min-height: 60vh;
-    }
-  }
-</style>
