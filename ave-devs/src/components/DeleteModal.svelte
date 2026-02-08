@@ -5,9 +5,10 @@
     appName: string;
     onconfirm: () => void;
     oncancel: () => void;
+    deleting: boolean;
   }
 
-  let { appName, onconfirm, oncancel }: Props = $props();
+  let { appName, onconfirm, oncancel, deleting }: Props = $props();
 </script>
 
 <div
@@ -23,8 +24,8 @@
       <p class="text-[14px] md:text-[16px] text-[#878787] m-0 font-medium">This will permanently delete the app and all its credentials.</p>
     </div>
     <div class="flex justify-end gap-3 pt-2">
-      <Button variant="ghost" onclick={oncancel}>Cancel</Button>
-      <Button variant="danger" onclick={onconfirm}>Delete app</Button>
+      <Button variant="ghost" onclick={oncancel} disabled={deleting}>Cancel</Button>
+      <Button variant="danger" onclick={onconfirm} disabled={deleting}>{deleting ? "Deleting..." : "Delete app"}</Button>
     </div>
   </div>
 </div>

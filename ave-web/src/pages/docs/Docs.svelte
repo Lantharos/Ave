@@ -33,7 +33,14 @@
     }
 
     onMount(() => {
-        // Scroll spy to update active section
+        const hash = window.location.hash.slice(1);
+        if (hash) {
+            requestAnimationFrame(() => {
+                const target = document.getElementById(hash);
+                if (target) target.scrollIntoView({ behavior: "smooth" });
+            });
+        }
+
         const observer = new IntersectionObserver(
             (entries) => {
                 entries.forEach((entry) => {

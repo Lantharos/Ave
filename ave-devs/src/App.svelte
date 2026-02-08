@@ -31,6 +31,7 @@
   let authenticated = $state(false);
   let newSecret: string | null = $state(null);
   let creating = $state(false);
+  let deleting = $state(false);
   let saveState: "idle" | "saving" | "saved" = $state("idle");
   let rotatingAppId: string | null = $state(null);
   let rotatedAppId: string | null = $state(null);
@@ -206,6 +207,7 @@
   async function handleConfirmDelete() {
     if (!deleteTarget) return;
     error = "";
+    deleting = true;
     const target = deleteTarget;
     try {
       await deleteApp(target.id);
@@ -217,6 +219,8 @@
       deleteTarget = null;
     } catch (err) {
       error = err instanceof Error ? err.message : "Failed to delete app";
+    } finally {
+      deleting = false;
     }
   }
 
@@ -247,7 +251,10 @@
         <DeleteModal
           appName={deleteTarget.name}
           onconfirm={handleConfirmDelete}
-          oncancel={() => (deleteTarget = null)}
+          oncancel={() => {
+            if (!deleting) deleteTarget = null;
+          }}
+          {deleting}
         />
       {/if}
 
@@ -273,9 +280,6 @@
           {loading}
           oncreate={() => navigate("create")}
           onselect={openApp}
-          onrotate={handleRotateSecret}
-          {rotatingAppId}
-          {rotatedAppId}
         />
       {:else if activeView === "create"}
         <CreateAppPage

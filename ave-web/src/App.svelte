@@ -28,7 +28,7 @@
         { path: "/terms", component: TermsOfService },
         { path: "/authorize", component: Authorize },
         { path: "/signin", component: Authorize },
-        { path: "/docs", component: Docs },
+        { path: "/docs(#.*)?", component: Docs },
         { path: "/sign", component: Sign },
     ];
 
