@@ -9,7 +9,7 @@
 </script>
 
 <textarea
-  class="w-full bg-white/[0.04] border-0 rounded-[14px] px-4 py-3 text-white text-sm font-[inherit] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.08)] placeholder:text-[#555] outline-none focus:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.35)] transition-shadow duration-200 resize-y"
+  class="w-full bg-[#090909]/50 border-0 rounded-[24px] px-5 py-3.5 md:px-6 md:py-4 text-white text-[15px] md:text-[16px] font-[inherit] placeholder:text-[#555] outline-none focus:ring-2 focus:ring-[#B9BBBE] transition-all duration-300 resize-y"
   bind:value
   {rows}
   {placeholder}

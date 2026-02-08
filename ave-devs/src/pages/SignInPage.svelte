@@ -3,36 +3,34 @@
 
   interface Props {
     onsignin: () => void;
-    error?: string;
+    loading?: boolean;
   }
 
-  let { onsignin, error = "" }: Props = $props();
+  let { onsignin, loading = false }: Props = $props();
 </script>
 
-<div class="flex items-center justify-center min-h-[calc(100vh-80px)]">
-  <div class="flex flex-col items-center gap-8 max-w-md text-center px-6">
-    <div class="flex flex-col items-center gap-5">
-      <div class="w-16 h-16 rounded-2xl bg-white/[0.04] border border-white/[0.06] flex items-center justify-center">
-        <img src="/icon.png" alt="Ave" class="w-8 h-8" />
-      </div>
-      <div>
-        <h1 class="text-[clamp(24px,3vw,32px)] font-bold m-0 mb-2 tracking-tight">Ave Developer Portal</h1>
-        <p class="text-[15px] text-[#888] m-0 leading-relaxed max-w-sm mx-auto">
-          Sign in to manage your OAuth apps, credentials, and OIDC configuration.
-        </p>
-      </div>
+<div class="bg-[#090909] min-h-screen flex items-center justify-center px-6">
+  {#if loading}
+    <div class="flex flex-col items-center gap-6">
+      <div class="w-8 h-8 border-2 border-[#B9BBBE]/20 border-t-[#B9BBBE]/60 rounded-full animate-spin"></div>
     </div>
-
-    {#if error}
-      <div class="w-full bg-[#e14747]/10 border border-[#e14747]/20 rounded-2xl px-4 py-3 text-[13px] text-[#e14747]">
-        {error}
+  {:else}
+    <div class="flex flex-col items-center gap-10 max-w-lg text-center">
+      <div class="flex flex-col items-center gap-6">
+        <img src="/icon.png" alt="Ave" class="w-14 h-14 md:w-20 md:h-20" />
+        <div class="flex flex-col gap-3">
+          <h1 class="text-[32px] md:text-[48px] font-black m-0 tracking-tight text-white leading-tight">Developer Portal</h1>
+          <p class="text-[16px] md:text-[20px] text-[#878787] m-0 leading-relaxed font-medium">
+            Manage your OAuth apps, credentials, and OIDC configuration.
+          </p>
+        </div>
       </div>
-    {/if}
 
-    <Button variant="primary" onclick={onsignin}>Sign in with Ave</Button>
+      <Button variant="primary" onclick={onsignin}>Sign in with Ave</Button>
 
-    <p class="text-[12px] text-[#555] m-0">
-      Don't have an account? <a href="https://aveid.net" class="text-[#999] hover:text-white transition-colors underline underline-offset-2">Create one at aveid.net</a>
-    </p>
-  </div>
+      <p class="text-[14px] text-[#878787] m-0">
+        Don't have an account? <a href="https://aveid.net" class="text-[#B9BBBE] hover:text-white transition-colors duration-300 underline underline-offset-4">Create one at aveid.net</a>
+      </p>
+    </div>
+  {/if}
 </div>

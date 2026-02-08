@@ -11,9 +11,9 @@
   let { apps, oncreate }: Props = $props();
 
   const stats = $derived([
-    { label: "Total apps", value: apps.length, icon: "M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" },
-    { label: "Redirect URIs", value: apps.reduce((sum, app) => sum + app.redirectUris.length, 0), icon: "M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" },
-    { label: "E2EE enabled", value: apps.filter((app) => app.supportsE2ee).length, icon: "M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" },
+    { label: "Total apps", value: apps.length },
+    { label: "Redirect URIs", value: apps.reduce((sum, app) => sum + app.redirectUris.length, 0) },
+    { label: "E2EE enabled", value: apps.filter((app) => app.supportsE2ee).length },
   ]);
 
   const quickStarts = [
@@ -50,68 +50,61 @@
   }
 </script>
 
-<div class="flex flex-col gap-8">
+<div class="flex flex-col gap-10 md:gap-14">
   <header class="flex justify-between items-start gap-6 flex-wrap">
-    <div>
-      <p class="uppercase tracking-[0.2em] text-[#555] text-[11px] font-medium m-0 mb-2">Developer Portal</p>
-      <h1 class="text-[clamp(26px,3vw,38px)] font-bold m-0 mb-2 tracking-tight">Build with Ave identity.</h1>
-      <p class="text-[15px] text-[#888] m-0 max-w-md">Manage OAuth + OIDC apps, credentials, and security posture from one place.</p>
+    <div class="flex flex-col gap-3">
+      <h1 class="text-[28px] md:text-[40px] font-black m-0 tracking-tight text-white leading-tight">Build with Ave identity.</h1>
+      <p class="text-[16px] md:text-[20px] text-[#878787] m-0 max-w-lg font-medium">Manage OAuth + OIDC apps, credentials, and security posture from one place.</p>
     </div>
-    <div class="flex gap-3 flex-wrap mt-3">
+    <div class="flex gap-3 flex-wrap">
       <Button variant="ghost" size="sm" onclick={() => window.open("https://aveid.net/docs", "_blank")}>Docs</Button>
       <Button variant="primary" size="sm" onclick={oncreate}>Create app</Button>
     </div>
   </header>
 
-  <section class="grid gap-4 grid-cols-[repeat(auto-fit,minmax(160px,1fr))]">
+  <section class="grid gap-4 grid-cols-1 sm:grid-cols-3">
     {#each stats as stat}
       <Card>
-        <div class="flex items-start gap-3">
-          <div class="w-9 h-9 rounded-xl bg-white/[0.06] flex items-center justify-center shrink-0">
-            <svg class="w-4.5 h-4.5 text-[#888]" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
-              <path stroke-linecap="round" stroke-linejoin="round" d={stat.icon} />
-            </svg>
-          </div>
-          <div>
-            <p class="text-[12px] text-[#666] m-0 mb-1 font-medium">{stat.label}</p>
-            <p class="text-2xl font-bold m-0 text-white">{stat.value}</p>
-          </div>
+        <div class="flex flex-col gap-2">
+          <p class="text-[14px] md:text-[16px] text-[#878787] m-0 font-medium">{stat.label}</p>
+          <p class="text-[32px] md:text-[40px] font-black m-0 text-white">{stat.value}</p>
         </div>
       </Card>
     {/each}
   </section>
 
-  <section>
-    <h2 class="text-lg font-semibold m-0 mb-4">Quick start</h2>
-    <div class="grid gap-4 grid-cols-[repeat(auto-fit,minmax(220px,1fr))]">
+  <section class="flex flex-col gap-6">
+    <h2 class="text-[24px] font-black m-0 text-[#878787]">QUICK START</h2>
+    <div class="grid gap-4 grid-cols-1 sm:grid-cols-3">
       {#each quickStarts as item}
         <Card>
-          <h3 class="text-[15px] font-semibold m-0 mb-2">{item.title}</h3>
-          <p class="text-[13px] text-[#888] m-0 mb-4 leading-relaxed">{item.description}</p>
-          <Button variant="outline" size="sm" onclick={() => window.open(item.href, "_blank")}>View guide</Button>
+          <div class="flex flex-col gap-3">
+            <h3 class="text-[18px] md:text-[20px] font-black m-0 text-white">{item.title}</h3>
+            <p class="text-[14px] md:text-[16px] text-[#878787] m-0 leading-relaxed font-medium">{item.description}</p>
+            <div class="pt-2">
+              <Button variant="outline" size="sm" onclick={() => window.open(item.href, "_blank")}>View guide</Button>
+            </div>
+          </div>
         </Card>
       {/each}
     </div>
   </section>
 
-  <section>
-    <Card tone="soft">
-      <div class="flex justify-between items-start gap-4 flex-wrap mb-5">
-        <div>
-          <h2 class="text-lg font-semibold m-0 mb-1">Live endpoints</h2>
-          <p class="text-[13px] text-[#888] m-0">Current Ave OIDC endpoints and key sets.</p>
-        </div>
-        <Button variant="ghost" size="sm" onclick={() => window.open("https://aveid.net/docs#endpoints", "_blank")}>API reference</Button>
-      </div>
+  <section class="flex flex-col gap-6">
+    <div class="flex justify-between items-center gap-4 flex-wrap">
+      <h2 class="text-[24px] font-black m-0 text-[#878787]">LIVE ENDPOINTS</h2>
+      <Button variant="ghost" size="sm" onclick={() => window.open("https://aveid.net/docs#endpoints", "_blank")}>API reference</Button>
+    </div>
+    <Card>
       <div class="flex flex-col divide-y divide-white/[0.06]">
         {#each endpoints as item}
-          <div class="flex justify-between items-center gap-4 py-3.5">
+          <div class="flex justify-between items-center gap-4 py-4 md:py-5">
             <div class="min-w-0">
-              <h4 class="text-sm font-medium m-0 mb-0.5">{item.title}</h4>
-              <p class="text-[12px] text-[#666] m-0 truncate font-mono">{item.url}</p>
+              <h4 class="text-[16px] md:text-[18px] font-medium m-0 mb-1 text-white">{item.title}</h4>
+              <p class="text-[13px] md:text-[14px] text-[#878787] m-0 truncate font-mono">{item.url}</p>
             </div>
             <button
-              class="text-[12px] text-[#888] hover:text-white px-2.5 py-1 rounded-lg hover:bg-white/[0.06] transition-all duration-200 border-0 bg-transparent cursor-pointer font-medium shrink-0"
+              class="text-[14px] text-[#878787] hover:text-white px-4 py-2 rounded-full hover:bg-[#202020] transition-colors duration-300 border-0 bg-transparent cursor-pointer font-medium shrink-0"
               onclick={() => copyUrl(item.url)}
             >
               {copiedUrl === item.url ? "Copied" : "Copy"}

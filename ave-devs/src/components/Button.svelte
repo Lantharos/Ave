@@ -11,28 +11,25 @@
 
   let { variant = "primary", disabled = false, onclick, size = "md", children, ...rest }: Props = $props();
 
-  const base =
-    "inline-flex items-center justify-center whitespace-nowrap font-semibold rounded-full cursor-pointer transition-all duration-200 ease-out border-0 select-none";
-
   const sizes: Record<string, string> = {
-    sm: "px-3.5 py-1.5 text-xs",
-    md: "px-5 py-2 text-sm",
+    sm: "px-5 py-2.5 text-[14px] md:px-[25px] md:py-[12px] md:text-[16px]",
+    md: "px-6 py-3 text-[15px] md:px-[30px] md:py-[15px] md:text-[18px]",
   };
 
   const variants: Record<string, string> = {
     primary:
-      "bg-white text-[#090909] hover:bg-[#e2e2e2] hover:-translate-y-px active:translate-y-0",
+      "bg-[#B9BBBE] text-[#090909] font-black hover:bg-[#A1A1A1]",
     ghost:
-      "bg-white/[0.06] text-[#cfcfcf] hover:bg-white/[0.12] hover:text-white",
+      "bg-transparent text-[#878787] hover:bg-[#202020] hover:text-[#A8A8A8] font-medium",
     outline:
-      "bg-white/[0.02] text-white shadow-[inset_0_0_0_1px_rgba(255,255,255,0.15)] hover:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.4)]",
+      "bg-transparent text-[#878787] font-medium shadow-[inset_0_0_0_1px_rgba(255,255,255,0.1)] hover:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.25)] hover:text-white",
     danger:
-      "bg-[#e14747]/10 text-[#e14747] hover:bg-[#e14747]/20",
+      "bg-[#E14747]/10 text-[#E14747] font-medium hover:bg-[#E14747]/20",
   };
 </script>
 
 <button
-  class="{base} {sizes[size]} {variants[variant]} {disabled ? 'opacity-40 pointer-events-none' : ''}"
+  class="inline-flex items-center justify-center whitespace-nowrap rounded-full cursor-pointer transition-colors duration-300 border-0 select-none {sizes[size]} {variants[variant]} {disabled ? 'opacity-50 cursor-not-allowed pointer-events-none' : ''}"
   {disabled}
   onclick={onclick}
   {...rest}

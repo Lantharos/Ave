@@ -2,21 +2,6 @@
 
 @theme {
   --font-sans: "Poppins", sans-serif;
-  --color-surface-0: #090909;
-  --color-surface-1: #0c0c0c;
-  --color-surface-2: #111111;
-  --color-surface-3: #171717;
-  --color-surface-4: #202020;
-  --color-border: rgba(255, 255, 255, 0.08);
-  --color-border-hover: rgba(255, 255, 255, 0.2);
-  --color-border-focus: rgba(255, 255, 255, 0.35);
-  --color-text-primary: #ffffff;
-  --color-text-secondary: #d3d3d3;
-  --color-text-muted: #878787;
-  --color-text-nav: #b9bbbe;
-  --color-accent: #b9bbbe;
-  --color-danger: #e14747;
-  --color-success: #32a94c;
 }
 
 @layer base {
@@ -56,6 +41,24 @@
     font-weight: 700;
   }
 
+  @font-face {
+    font-family: "Poppins";
+    font-style: normal;
+    font-display: swap;
+    src: url("https://fonts.gstatic.com/s/poppins/v22/pxiByp8kv8JHgFVrLBAhZ1xlFQ.woff2")
+      format("woff2");
+    font-weight: 800;
+  }
+
+  @font-face {
+    font-family: "Poppins";
+    font-style: normal;
+    font-display: swap;
+    src: url("https://fonts.gstatic.com/s/poppins/v22/pxiByp8kv8JHgFVrLBT5Z1xlFQ.woff2")
+      format("woff2");
+    font-weight: 900;
+  }
+
   *,
   *::before,
   *::after {
@@ -71,9 +74,9 @@
 
   body {
     margin: 0;
-    background-color: var(--color-surface-0);
-    color: var(--color-text-primary);
-    font-family: var(--font-sans);
+    background-color: #090909;
+    color: #ffffff;
+    font-family: "Poppins", sans-serif;
     min-height: 100vh;
   }
 

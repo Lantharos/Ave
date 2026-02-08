@@ -224,19 +224,17 @@
   }
 </script>
 
-<div class="flex min-h-screen text-white max-[900px]:flex-col">
-  <Sidebar
-    {activeView}
-    {authenticated}
-    onnavigate={navigate}
-    onsignin={handleSignIn}
-    onsignout={handleSignOut}
-  />
+{#if !authenticated}
+  <SignInPage onsignin={handleSignIn} {loading} />
+{:else}
+  <div class="bg-[#090909] relative w-full min-h-screen flex flex-col md:flex-row px-3 md:px-[120px] py-4 md:py-[100px] gap-4 md:gap-[100px]">
+    <Sidebar
+      {activeView}
+      onnavigate={navigate}
+      onsignout={handleSignOut}
+    />
 
-  <main class="flex-1 px-[clamp(20px,4vw,56px)] py-9 pb-20 flex flex-col gap-7 max-w-5xl">
-    {#if !authenticated}
-      <SignInPage onsignin={handleSignIn} {error} />
-    {:else}
+    <main class="w-full md:w-[75%] flex flex-col gap-8">
       {#if deleteTarget}
         <DeleteModal
           appName={deleteTarget.name}
@@ -246,10 +244,10 @@
       {/if}
 
       {#if error}
-        <div class="bg-[#e14747]/10 border border-[#e14747]/20 rounded-2xl px-4 py-3 text-[13px] text-[#e14747]">
-          {error}
+        <div class="bg-[#e14747]/10 rounded-full px-6 py-3 text-[16px] text-[#e14747] flex items-center justify-between gap-4">
+          <span>{error}</span>
           <button
-            class="ml-3 text-[#e14747]/60 hover:text-[#e14747] border-0 bg-transparent cursor-pointer text-[12px] underline"
+            class="text-[#e14747]/60 hover:text-[#e14747] border-0 bg-transparent cursor-pointer text-[14px] underline"
             onclick={() => (error = "")}
           >dismiss</button>
         </div>
@@ -289,6 +287,6 @@
       {:else if activeView === "settings"}
         <SettingsPage />
       {/if}
-    {/if}
-  </main>
-</div>
+    </main>
+  </div>
+{/if}
