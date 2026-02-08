@@ -1,10 +1,16 @@
 import { createHash } from "crypto";
 
-const ISSUER = process.env.OIDC_ISSUER || "https://api.aveid.net";
-const RESOURCE_AUDIENCE = process.env.OIDC_RESOURCE_AUDIENCE || "https://api.aveid.net";
-const JWT_KID = process.env.OIDC_KID || "ave-oidc-v1";
-const JWT_PRIVATE_KEY_PEM = process.env.OIDC_PRIVATE_KEY_PEM;
-const JWT_PUBLIC_KEY_PEM = process.env.OIDC_PUBLIC_KEY_PEM;
+function getJwtKid(): string {
+  return process.env.OIDC_KID || "ave-oidc-v1";
+}
+
+function getJwtPrivateKeyPem(): string | undefined {
+  return process.env.OIDC_PRIVATE_KEY_PEM;
+}
+
+function getJwtPublicKeyPem(): string | undefined {
+  return process.env.OIDC_PUBLIC_KEY_PEM;
+}
 
 function base64UrlDecode(input: string): Uint8Array {
   return Uint8Array.from(Buffer.from(input, "base64url"));
@@ -15,15 +21,16 @@ function base64UrlEncode(input: Uint8Array): string {
 }
 
 export function getIssuer(): string {
-  return ISSUER;
+  return process.env.OIDC_ISSUER || "https://api.aveid.net";
 }
 
 export function getResourceAudience(): string {
-  return RESOURCE_AUDIENCE;
+  return process.env.OIDC_RESOURCE_AUDIENCE || "https://api.aveid.net";
 }
 
 export async function signJwt(payload: Record<string, unknown>): Promise<string> {
-  if (!JWT_PRIVATE_KEY_PEM) {
+  const privateKeyPem = getJwtPrivateKeyPem();
+  if (!privateKeyPem) {
     throw new Error("OIDC_PRIVATE_KEY_PEM is not configured");
   }
 
@@ -31,7 +38,7 @@ export async function signJwt(payload: Record<string, unknown>): Promise<string>
   const header = {
     alg: "RS256",
     typ: "JWT",
-    kid: JWT_KID,
+    kid: getJwtKid(),
   };
 
   const headerSegment = base64UrlEncode(encoder.encode(JSON.stringify(header)));
@@ -39,7 +46,7 @@ export async function signJwt(payload: Record<string, unknown>): Promise<string>
   const data = `${headerSegment}.${payloadSegment}`;
 
   const keyData = Buffer.from(
-    JWT_PRIVATE_KEY_PEM.replace(/-----\w+ PRIVATE KEY-----/g, "").replace(/\s+/g, ""),
+    privateKeyPem.replace(/-----\w+ PRIVATE KEY-----/g, "").replace(/\s+/g, ""),
     "base64"
   );
 
@@ -61,12 +68,13 @@ export async function signJwt(payload: Record<string, unknown>): Promise<string>
 }
 
 export async function getJwtPublicJwk(): Promise<Record<string, string>> {
-  if (!JWT_PUBLIC_KEY_PEM) {
+  const publicKeyPem = getJwtPublicKeyPem();
+  if (!publicKeyPem) {
     throw new Error("OIDC_PUBLIC_KEY_PEM is not configured");
   }
 
   const keyData = Buffer.from(
-    JWT_PUBLIC_KEY_PEM.replace(/-----\w+ PUBLIC KEY-----/g, "").replace(/\s+/g, ""),
+    publicKeyPem.replace(/-----\w+ PUBLIC KEY-----/g, "").replace(/\s+/g, ""),
     "base64"
   );
 
@@ -84,14 +92,15 @@ export async function getJwtPublicJwk(): Promise<Record<string, string>> {
     kty: jwk.kty || "RSA",
     use: "sig",
     alg: "RS256",
-    kid: JWT_KID,
+    kid: getJwtKid(),
     n: jwk.n || "",
     e: jwk.e || "AQAB",
   };
 }
 
 export async function verifyJwt(token: string, audience?: string): Promise<Record<string, unknown> | null> {
-  if (!JWT_PUBLIC_KEY_PEM) {
+  const publicKeyPem = getJwtPublicKeyPem();
+  if (!publicKeyPem) {
     return null;
   }
 
@@ -109,7 +118,7 @@ export async function verifyJwt(token: string, audience?: string): Promise<Recor
   const data = `${headerSegment}.${payloadSegment}`;
 
   const keyData = Buffer.from(
-    JWT_PUBLIC_KEY_PEM.replace(/-----\w+ PUBLIC KEY-----/g, "").replace(/\s+/g, ""),
+    publicKeyPem.replace(/-----\w+ PUBLIC KEY-----/g, "").replace(/\s+/g, ""),
     "base64"
   );
 
@@ -133,7 +142,7 @@ export async function verifyJwt(token: string, audience?: string): Promise<Recor
     return null;
   }
 
-  if (payload.iss !== ISSUER) {
+  if (payload.iss !== getIssuer()) {
     return null;
   }
 

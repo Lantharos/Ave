@@ -8,8 +8,10 @@ import { verifyJwt, getResourceAudience } from "../lib/oidc";
 
 const app = new Hono();
 
-const DEV_PORTAL_CLIENT_ID = process.env.DEV_PORTAL_CLIENT_ID || process.env.VITE_DEV_PORTAL_CLIENT_ID;
-const RESOURCE_AUDIENCE = getResourceAudience();
+function getDevPortalClientId(): string | undefined {
+  return process.env.DEV_PORTAL_CLIENT_ID || process.env.VITE_DEV_PORTAL_CLIENT_ID;
+}
+
 const allowedScopes = ["openid", "profile", "email", "offline_access", "user_id"] as const;
 
 const baseAppSchema = z.object({
@@ -32,16 +34,17 @@ async function requireOidcUser(c: any, next: any) {
   }
 
   const token = authHeader.slice(7);
-  const payload = await verifyJwt(token, RESOURCE_AUDIENCE);
+  const payload = await verifyJwt(token, getResourceAudience());
   if (!payload) {
     return c.json({ error: "Unauthorized" }, 401);
   }
 
-  if (!DEV_PORTAL_CLIENT_ID) {
+  const devPortalClientId = getDevPortalClientId();
+  if (!devPortalClientId) {
     return c.json({ error: "DEV_PORTAL_CLIENT_ID not configured" }, 500);
   }
 
-  if (payload.cid !== DEV_PORTAL_CLIENT_ID) {
+  if (payload.cid !== devPortalClientId) {
     return c.json({ error: "Forbidden" }, 403);
   }
 

@@ -23,7 +23,7 @@ oidcRoutes.get("/webfinger", (c) => {
     links: [
       {
         rel: "http://openid.net/specs/connect/1.0/issuer",
-        href: ISSUER,
+        href: getIssuer(),
       },
     ],
   });
@@ -45,8 +45,9 @@ const authorizationCodes = new Map<string, {
 }>();
 
 
-const ISSUER = getIssuer();
-const RESOURCE_AUDIENCE = getResourceAudience();
+function getDiscoveryBase(): string {
+  return process.env.OIDC_DISCOVERY_BASE || "https://api.aveid.net";
+}
 
 // In-memory access token store (replace with Redis in production)
 const accessTokens = new Map<string, {
@@ -344,7 +345,7 @@ app.post("/token", zValidator("json", z.discriminatedUnion("grantType", [
     const expiresAt = issuedAt + accessTokenTtl;
 
     const idToken = await signJwt({
-      iss: ISSUER,
+      iss: getIssuer(),
       sub: storedRefresh.identityId,
       aud: oauthApp.clientId,
       exp: expiresAt,
@@ -359,9 +360,9 @@ app.post("/token", zValidator("json", z.discriminatedUnion("grantType", [
     });
 
     const jwtAccessToken = await signJwt({
-      iss: ISSUER,
+      iss: getIssuer(),
       sub: storedRefresh.identityId,
-      aud: RESOURCE_AUDIENCE,
+      aud: getResourceAudience(),
       exp: expiresAt,
       iat: issuedAt,
       scope: storedRefresh.scope,
@@ -503,9 +504,9 @@ app.post("/token", zValidator("json", z.discriminatedUnion("grantType", [
   };
 
   const jwtAccessToken = await signJwt({
-    iss: ISSUER,
+    iss: getIssuer(),
     sub: subject,
-    aud: RESOURCE_AUDIENCE,
+    aud: getResourceAudience(),
     exp: expiresAt,
     iat: issuedAt,
     scope: authCode.scope,
@@ -523,7 +524,7 @@ app.post("/token", zValidator("json", z.discriminatedUnion("grantType", [
 
   if (hasScope(authCode.scope, "openid")) {
     const idToken = await signJwt({
-      iss: ISSUER,
+      iss: getIssuer(),
       sub: subject,
       aud: oauthApp.clientId,
       exp: expiresAt,
@@ -562,16 +563,15 @@ app.post("/token", zValidator("json", z.discriminatedUnion("grantType", [
 });
 
 
-// OIDC discovery
-const DISCOVERY_BASE = process.env.OIDC_DISCOVERY_BASE || "https://api.aveid.net";
-
 oidcRoutes.get("/openid-configuration", (c) => {
+  const issuer = getIssuer();
+  const discoveryBase = getDiscoveryBase();
   return c.json({
-    issuer: ISSUER,
-    authorization_endpoint: `${ISSUER}/signin`,
-    token_endpoint: `${DISCOVERY_BASE}/api/oauth/token`,
-    userinfo_endpoint: `${DISCOVERY_BASE}/api/oauth/userinfo`,
-    jwks_uri: `${DISCOVERY_BASE}/.well-known/jwks.json`,
+    issuer,
+    authorization_endpoint: `${issuer}/signin`,
+    token_endpoint: `${discoveryBase}/api/oauth/token`,
+    userinfo_endpoint: `${discoveryBase}/api/oauth/userinfo`,
+    jwks_uri: `${discoveryBase}/.well-known/jwks.json`,
     scopes_supported: ["openid", "profile", "email", "offline_access", "user_id"],
     response_types_supported: ["code"],
     grant_types_supported: ["authorization_code", "refresh_token"],
@@ -600,7 +600,7 @@ app.get("/userinfo", async (c) => {
   let record = accessTokens.get(token);
 
   if (!record) {
-    const jwtPayload = await verifyJwt(token, RESOURCE_AUDIENCE);
+    const jwtPayload = await verifyJwt(token, getResourceAudience());
     if (!jwtPayload) {
       return c.json({ error: "invalid_token" }, 401);
     }
@@ -656,7 +656,7 @@ app.get("/userinfo", async (c) => {
     }
   }
 
-  response.iss = ISSUER;
+  response.iss = getIssuer();
 
   return c.json(response);
 });
@@ -760,8 +760,5 @@ app.delete("/authorizations/:authId", requireAuth, async (c) => {
   
   return c.json({ success: true });
 });
-
-// Re-export for use in other routes
-export { verifyJwt, RESOURCE_AUDIENCE };
 
 export default app;

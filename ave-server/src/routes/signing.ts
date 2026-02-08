@@ -5,7 +5,7 @@ import { db, signingKeys, signatureRequests, identities, oauthApps, activityLogs
 import { requireAuth } from "../middleware/auth";
 import { eq, and, desc } from "drizzle-orm";
 import { verifySignature, isValidPublicKey, isValidSignature } from "../lib/signing";
-import { verifyJwt, RESOURCE_AUDIENCE } from "./oauth";
+import { verifyJwt, getResourceAudience } from "../lib/oidc";
 import { hashSessionToken } from "../lib/crypto";
 import { timingSafeEqual } from "crypto";
 
@@ -659,7 +659,7 @@ app.post("/demo/request", zValidator("json", z.object({
   
   const token = authHeader.slice(7);
   
-  const jwtPayload = await verifyJwt(token, RESOURCE_AUDIENCE);
+  const jwtPayload = await verifyJwt(token, getResourceAudience());
   if (!jwtPayload) {
     return c.json({ error: "Invalid token" }, 401);
   }

@@ -6,22 +6,49 @@ import { S3Client, PutObjectCommand, DeleteObjectCommand } from "@aws-sdk/client
 
 const app = new Hono();
 
-// R2 Configuration
-const R2_ACCOUNT_ID = process.env.R2_ACCOUNT_ID!;
-const R2_ACCESS_KEY_ID = process.env.R2_ACCESS_KEY_ID!;
-const R2_SECRET_ACCESS_KEY = process.env.R2_SECRET_ACCESS_KEY!;
-const R2_BUCKET_NAME = process.env.R2_BUCKET_NAME || "ave-uploads";
-const R2_PUBLIC_URL = process.env.R2_PUBLIC_URL!; // e.g., https://uploads.ave.id or https://pub-xxx.r2.dev
+type R2Config = {
+  accountId: string;
+  accessKeyId: string;
+  secretAccessKey: string;
+  bucketName: string;
+  publicUrl: string;
+};
 
-// Initialize S3 client for R2
-const s3Client = new S3Client({
-  region: "auto",
-  endpoint: `https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
-  credentials: {
-    accessKeyId: R2_ACCESS_KEY_ID,
-    secretAccessKey: R2_SECRET_ACCESS_KEY,
-  },
-});
+let r2Client: S3Client | null = null;
+let r2ClientCacheKey = "";
+
+function getR2Config(): R2Config {
+  const accountId = process.env.R2_ACCOUNT_ID;
+  const accessKeyId = process.env.R2_ACCESS_KEY_ID;
+  const secretAccessKey = process.env.R2_SECRET_ACCESS_KEY;
+  const bucketName = process.env.R2_BUCKET_NAME || "ave-uploads";
+  const publicUrl = process.env.R2_PUBLIC_URL;
+
+  if (!accountId || !accessKeyId || !secretAccessKey || !publicUrl) {
+    throw new Error("R2 configuration is incomplete");
+  }
+
+  return { accountId, accessKeyId, secretAccessKey, bucketName, publicUrl };
+}
+
+function getR2Client(): { client: S3Client; config: R2Config } {
+  const config = getR2Config();
+  const cacheKey = `${config.accountId}:${config.accessKeyId}:${config.bucketName}`;
+
+  if (!r2Client || r2ClientCacheKey !== cacheKey) {
+    r2Client = new S3Client({
+      region: "auto",
+      endpoint: `https://${config.accountId}.r2.cloudflarestorage.com`,
+      credentials: {
+        accessKeyId: config.accessKeyId,
+        secretAccessKey: config.secretAccessKey,
+      },
+    });
+    r2ClientCacheKey = cacheKey;
+  }
+
+  return { client: r2Client, config };
+}
 
 // Generate unique filename
 function generateFilename(originalName: string): string {
@@ -68,9 +95,10 @@ async function uploadToR2(
   key: string,
   contentType: string
 ): Promise<string> {
-  await s3Client.send(
+  const { client, config } = getR2Client();
+  await client.send(
     new PutObjectCommand({
-      Bucket: R2_BUCKET_NAME,
+      Bucket: config.bucketName,
       Key: key,
       Body: buffer,
       ContentType: contentType,
@@ -78,15 +106,16 @@ async function uploadToR2(
     })
   );
 
-  return `${R2_PUBLIC_URL}/${key}`;
+  return `${config.publicUrl}/${key}`;
 }
 
 // Delete from R2
 async function deleteFromR2(key: string): Promise<void> {
   try {
-    await s3Client.send(
+    const { client, config } = getR2Client();
+    await client.send(
       new DeleteObjectCommand({
-        Bucket: R2_BUCKET_NAME,
+        Bucket: config.bucketName,
         Key: key,
       })
     );
@@ -98,10 +127,11 @@ async function deleteFromR2(key: string): Promise<void> {
 
 // Extract key from URL
 function getKeyFromUrl(url: string): string | null {
-  if (!url.startsWith(R2_PUBLIC_URL)) {
+  const { publicUrl } = getR2Config();
+  if (!url.startsWith(publicUrl)) {
     return null;
   }
-  return url.replace(`${R2_PUBLIC_URL}/`, "");
+  return url.replace(`${publicUrl}/`, "");
 }
 
 // Upload avatar

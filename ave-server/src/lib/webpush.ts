@@ -5,18 +5,34 @@
 
 import webpush from "web-push";
 
-// VAPID keys should be stored in environment variables
-// Generate them once with: npx web-push generate-vapid-keys
-const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY || "";
-const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY || "";
-const VAPID_SUBJECT = process.env.VAPID_SUBJECT || "mailto:support@aveid.net";
+type PushConfig = {
+  publicKey: string;
+  privateKey: string;
+  subject: string;
+};
 
-// Configure web-push if keys are available
-if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) {
-  webpush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
-  console.log("[WebPush] Configured with VAPID keys");
-} else {
-  console.warn("[WebPush] VAPID keys not configured - push notifications disabled");
+let configuredFingerprint = "";
+
+function getPushConfig(): PushConfig {
+  return {
+    publicKey: process.env.VAPID_PUBLIC_KEY || "",
+    privateKey: process.env.VAPID_PRIVATE_KEY || "",
+    subject: process.env.VAPID_SUBJECT || "mailto:support@aveid.net",
+  };
+}
+
+function isConfigured(config: PushConfig): boolean {
+  return !!(config.publicKey && config.privateKey);
+}
+
+function ensureConfigured(config: PushConfig): void {
+  if (!isConfigured(config)) return;
+
+  const fingerprint = `${config.subject}|${config.publicKey}|${config.privateKey}`;
+  if (configuredFingerprint === fingerprint) return;
+
+  webpush.setVapidDetails(config.subject, config.publicKey, config.privateKey);
+  configuredFingerprint = fingerprint;
 }
 
 export interface PushSubscription {
@@ -46,14 +62,15 @@ export interface PushPayload {
  * Get the public VAPID key for client subscription
  */
 export function getVapidPublicKey(): string | null {
-  return VAPID_PUBLIC_KEY || null;
+  const config = getPushConfig();
+  return config.publicKey || null;
 }
 
 /**
  * Check if push notifications are configured
  */
 export function isPushConfigured(): boolean {
-  return !!(VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY);
+  return isConfigured(getPushConfig());
 }
 
 /**
@@ -63,10 +80,12 @@ export async function sendPushNotification(
   subscription: PushSubscription,
   payload: PushPayload
 ): Promise<boolean> {
-  if (!isPushConfigured()) {
+  const config = getPushConfig();
+  if (!isConfigured(config)) {
     console.warn("[WebPush] Cannot send notification - VAPID not configured");
     return false;
   }
+  ensureConfigured(config);
 
   try {
     await webpush.sendNotification(
