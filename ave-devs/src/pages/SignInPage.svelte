@@ -1,4 +1,5 @@
 <script lang="ts">
+  import AuroraBackdrop from "../components/AuroraBackdrop.svelte";
   import Button from "../components/Button.svelte";
 
   interface Props {
@@ -9,13 +10,15 @@
   let { onsignin, loading = false }: Props = $props();
 </script>
 
-<div class="bg-[#090909] min-h-screen flex items-center justify-center px-6">
+<div class="bg-[#090909] min-h-screen flex items-center justify-center px-6 relative overflow-hidden">
+  <AuroraBackdrop preset="login" cclass="absolute bottom-0 left-0 w-full pointer-events-none select-none" />
+
   {#if loading}
-    <div class="flex flex-col items-center gap-6">
+    <div class="flex flex-col items-center gap-6 relative z-10">
       <div class="w-8 h-8 border-2 border-[#B9BBBE]/20 border-t-[#B9BBBE]/60 rounded-full animate-spin"></div>
     </div>
   {:else}
-    <div class="flex flex-col items-center gap-10 max-w-lg text-center">
+    <div class="flex flex-col items-center gap-10 max-w-lg text-center relative z-10">
       <div class="flex flex-col items-center gap-6">
         <img src="/icon.png" alt="Ave" class="w-14 h-14 md:w-20 md:h-20" />
         <div class="flex flex-col gap-3">

@@ -1,5 +1,5 @@
 <script lang="ts">
-  type View = "overview" | "apps" | "create" | "activity" | "settings" | "app";
+  type View = "overview" | "apps" | "create" | "app";
 
   interface Props {
     activeView: View;
@@ -15,33 +15,12 @@
     { view: "create", label: "Create App" },
   ];
 
-  const accountItems: { view: View; label: string }[] = [
-    { view: "activity", label: "Activity" },
-    { view: "settings", label: "Settings" },
-  ];
 </script>
 
 <div class="flex flex-col gap-[40px] w-[20%] z-10 max-md:hidden">
   <div class="flex flex-col gap-[10px]">
     <span class="text-[24px] font-black text-[#878787]">APPS</span>
     {#each navItems as item}
-      <button
-        class="w-full px-[25px] py-[15px] rounded-full flex items-center text-[24px] font-medium border-0 cursor-pointer transition-colors duration-300
-          {activeView === item.view
-          ? 'bg-[#B9BBBE]/20 text-[#A8A8A8]'
-          : 'bg-transparent text-[#878787] hover:bg-[#202020]'}"
-        onclick={() => onnavigate(item.view)}
-      >
-        {item.label}
-      </button>
-    {/each}
-  </div>
-
-  <div class="h-px bg-[#878787]/20 w-full"></div>
-
-  <div class="flex flex-col gap-[10px]">
-    <span class="text-[24px] font-black text-[#878787]">ACCOUNT</span>
-    {#each accountItems as item}
       <button
         class="w-full px-[25px] py-[15px] rounded-full flex items-center text-[24px] font-medium border-0 cursor-pointer transition-colors duration-300
           {activeView === item.view
@@ -81,24 +60,6 @@
   <div class="flex flex-col gap-4">
     <span class="text-[14px] font-black text-[#878787]">APPS</span>
     {#each navItems as item}
-      <button
-        class="w-full px-4 py-2 rounded-full flex items-center text-[16px] font-medium border-0 cursor-pointer transition-colors duration-300
-          {activeView === item.view
-          ? 'bg-[#B9BBBE]/20 text-[#A8A8A8]'
-          : 'bg-transparent text-[#878787] hover:bg-[#202020]'}"
-        onclick={() => {
-          onnavigate(item.view);
-          document.getElementById("mobile-nav")?.classList.add("hidden");
-        }}
-      >
-        {item.label}
-      </button>
-    {/each}
-
-    <div class="h-px bg-[#878787]/20 w-full my-1"></div>
-
-    <span class="text-[14px] font-black text-[#878787]">ACCOUNT</span>
-    {#each accountItems as item}
       <button
         class="w-full px-4 py-2 rounded-full flex items-center text-[16px] font-medium border-0 cursor-pointer transition-colors duration-300
           {activeView === item.view

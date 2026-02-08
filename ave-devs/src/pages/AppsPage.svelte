@@ -9,9 +9,11 @@
     oncreate: () => void;
     onselect: (app: DevApp) => void;
     onrotate: (appId: string) => void;
+    rotatingAppId: string | null;
+    rotatedAppId: string | null;
   }
 
-  let { apps, loading, oncreate, onselect, onrotate }: Props = $props();
+  let { apps, loading, oncreate, onselect, onrotate, rotatingAppId, rotatedAppId }: Props = $props();
 
   function formatDate(iso: string): string {
     return new Date(iso).toLocaleDateString("en-US", {
@@ -77,7 +79,14 @@
             </div>
             <div class="flex gap-3 shrink-0">
               <Button variant="ghost" size="sm" onclick={() => onselect(app)}>Manage</Button>
-              <Button variant="outline" size="sm" onclick={() => onrotate(app.id)}>Rotate secret</Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onclick={() => onrotate(app.id)}
+                disabled={rotatingAppId === app.id}
+              >
+                {rotatingAppId === app.id ? "Rotating..." : rotatedAppId === app.id ? "Rotated" : "Rotate secret"}
+              </Button>
             </div>
           </div>
         </Card>

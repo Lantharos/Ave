@@ -30,7 +30,7 @@
     {
       title: "Embed sign-in",
       description: "Drop in the Ave iframe widget with postMessage.",
-      href: "https://aveid.net/docs#sdks",
+      href: "https://aveid.net/docs",
     },
   ];
 

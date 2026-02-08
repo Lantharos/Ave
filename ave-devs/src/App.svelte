@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import Sidebar from "./components/Sidebar.svelte";
+  import AuroraBackdrop from "./components/AuroraBackdrop.svelte";
   import SecretBanner from "./components/SecretBanner.svelte";
   import DeleteModal from "./components/DeleteModal.svelte";
   import SignInPage from "./pages/SignInPage.svelte";
@@ -8,8 +9,6 @@
   import AppsPage from "./pages/AppsPage.svelte";
   import CreateAppPage from "./pages/CreateAppPage.svelte";
   import AppDetailPage from "./pages/AppDetailPage.svelte";
-  import ActivityPage from "./pages/ActivityPage.svelte";
-  import SettingsPage from "./pages/SettingsPage.svelte";
   import {
     fetchApps,
     createApp,
@@ -20,9 +19,8 @@
     logoutSession,
     type DevApp,
   } from "./lib/api";
-  import { defaultScopes } from "./lib/types";
 
-  type View = "overview" | "apps" | "create" | "activity" | "settings" | "app";
+  type View = "overview" | "apps" | "create" | "app";
 
   let activeView: View = $state("overview");
   let apps: DevApp[] = $state([]);
@@ -33,27 +31,30 @@
   let authenticated = $state(false);
   let newSecret: string | null = $state(null);
   let creating = $state(false);
+  let saveState: "idle" | "saving" | "saved" = $state("idle");
+  let rotatingAppId: string | null = $state(null);
+  let rotatedAppId: string | null = $state(null);
+  let notice: { tone: "info" | "success"; text: string } | null = $state(null);
+
+  let noticeTimer: ReturnType<typeof setTimeout> | null = null;
+  let saveStateTimer: ReturnType<typeof setTimeout> | null = null;
+  let rotateStateTimer: ReturnType<typeof setTimeout> | null = null;
+
+  function showNotice(tone: "info" | "success", text: string, duration = 2200) {
+    notice = { tone, text };
+    if (noticeTimer) clearTimeout(noticeTimer);
+    noticeTimer = setTimeout(() => {
+      notice = null;
+    }, duration);
+  }
 
   onMount(() => {
     init();
 
-    let resuming = false;
-    const handleResume = async () => {
-      if (document.visibilityState !== "visible" || resuming) return;
-      resuming = true;
-      try {
-        if (authenticated) await loadApps();
-      } finally {
-        resuming = false;
-      }
-    };
-
-    document.addEventListener("visibilitychange", handleResume);
-    window.addEventListener("focus", handleResume);
-
     return () => {
-      document.removeEventListener("visibilitychange", handleResume);
-      window.removeEventListener("focus", handleResume);
+      if (noticeTimer) clearTimeout(noticeTimer);
+      if (saveStateTimer) clearTimeout(saveStateTimer);
+      if (rotateStateTimer) clearTimeout(rotateStateTimer);
     };
   });
 
@@ -150,6 +151,7 @@
       apps = [result.app, ...apps];
       newSecret = result.clientSecret;
       activeView = "apps";
+      showNotice("success", "App created.");
     } catch (err) {
       error = err instanceof Error ? err.message : "Failed to create app";
     } finally {
@@ -159,17 +161,29 @@
 
   async function handleRotateSecret(appId: string) {
     error = "";
+    rotatingAppId = appId;
+    rotatedAppId = null;
     try {
       const result = await rotateSecret(appId);
       newSecret = result.clientSecret;
+      rotatedAppId = appId;
+      showNotice("success", "Secret rotated.");
+      if (rotateStateTimer) clearTimeout(rotateStateTimer);
+      rotateStateTimer = setTimeout(() => {
+        rotatedAppId = null;
+      }, 1800);
     } catch (err) {
       error = err instanceof Error ? err.message : "Failed to rotate secret";
+    } finally {
+      rotatingAppId = null;
     }
   }
 
   async function handleSaveApp() {
     if (!selectedApp) return;
     error = "";
+    saveState = "saving";
+    showNotice("info", "Saving changes...", 1200);
     try {
       const payload = {
         name: selectedApp.name,
@@ -193,7 +207,14 @@
         ...result.app,
         redirectUrisText: result.app.redirectUris.join("\n"),
       };
+      saveState = "saved";
+      showNotice("success", "Changes saved.");
+      if (saveStateTimer) clearTimeout(saveStateTimer);
+      saveStateTimer = setTimeout(() => {
+        saveState = "idle";
+      }, 1800);
     } catch (err) {
+      saveState = "idle";
       error = err instanceof Error ? err.message : "Failed to update app";
     }
   }
@@ -210,6 +231,7 @@
         selectedApp = null;
       }
       deleteTarget = null;
+      showNotice("success", "App deleted.");
     } catch (err) {
       error = err instanceof Error ? err.message : "Failed to delete app";
     }
@@ -228,13 +250,16 @@
   <SignInPage onsignin={handleSignIn} {loading} />
 {:else}
   <div class="bg-[#090909] relative w-full min-h-screen flex flex-col md:flex-row px-3 md:px-[120px] py-4 md:py-[100px] gap-4 md:gap-[100px]">
+    <AuroraBackdrop preset="dashboard-tr" cclass="absolute top-0 right-0 w-[70%] pointer-events-none select-none" />
+    <AuroraBackdrop preset="dashboard-bl" cclass="absolute bottom-0 left-0 w-[80%] pointer-events-none select-none" />
+
     <Sidebar
       {activeView}
       onnavigate={navigate}
       onsignout={handleSignOut}
     />
 
-    <main class="w-full md:w-[75%] flex flex-col gap-8">
+    <main class="w-full md:w-[75%] relative z-10 flex flex-col gap-8">
       {#if deleteTarget}
         <DeleteModal
           appName={deleteTarget.name}
@@ -253,6 +278,16 @@
         </div>
       {/if}
 
+      {#if notice}
+        <div class="rounded-full px-6 py-3 text-[16px] flex items-center justify-between gap-4 {notice.tone === 'success' ? 'bg-[#B9BBBE]/15 text-[#B9BBBE]' : 'bg-[#B9BBBE]/10 text-[#A8A8A8]'}">
+          <span>{notice.text}</span>
+          <button
+            class="text-current/60 hover:text-current border-0 bg-transparent cursor-pointer text-[14px] underline"
+            onclick={() => (notice = null)}
+          >dismiss</button>
+        </div>
+      {/if}
+
       {#if newSecret}
         <SecretBanner secret={newSecret} ondismiss={() => (newSecret = null)} />
       {/if}
@@ -266,6 +301,8 @@
           oncreate={() => navigate("create")}
           onselect={openApp}
           onrotate={handleRotateSecret}
+          {rotatingAppId}
+          {rotatedAppId}
         />
       {:else if activeView === "create"}
         <CreateAppPage
@@ -281,11 +318,11 @@
           ondelete={(app) => (deleteTarget = app)}
           onback={() => navigate("apps")}
           oncopy={handleCopy}
+          saving={saveState === "saving"}
+          saved={saveState === "saved"}
+          rotating={rotatingAppId === selectedApp.id}
+          rotated={rotatedAppId === selectedApp.id}
         />
-      {:else if activeView === "activity"}
-        <ActivityPage />
-      {:else if activeView === "settings"}
-        <SettingsPage />
       {/if}
     </main>
   </div>

@@ -13,9 +13,24 @@
     ondelete: (app: DevApp) => void;
     onback: () => void;
     oncopy: (text: string) => void;
+    saving: boolean;
+    saved: boolean;
+    rotating: boolean;
+    rotated: boolean;
   }
 
-  let { app = $bindable(), onsave, onrotate, ondelete, onback, oncopy }: Props = $props();
+  let {
+    app = $bindable(),
+    onsave,
+    onrotate,
+    ondelete,
+    onback,
+    oncopy,
+    saving,
+    saved,
+    rotating,
+    rotated,
+  }: Props = $props();
 
   let copiedField = $state<string | null>(null);
 
@@ -104,10 +119,14 @@
 
     <div class="flex justify-between items-center pt-8 mt-4 border-t border-white/[0.06]">
       <div class="flex gap-3">
-        <Button variant="outline" size="sm" onclick={() => onrotate(app.id)}>Rotate secret</Button>
+        <Button variant="outline" size="sm" onclick={() => onrotate(app.id)} disabled={rotating}>
+          {rotating ? "Rotating..." : rotated ? "Rotated" : "Rotate secret"}
+        </Button>
         <Button variant="danger" size="sm" onclick={() => ondelete(app)}>Delete</Button>
       </div>
-      <Button variant="primary" onclick={onsave}>Save changes</Button>
+      <Button variant="primary" onclick={onsave} disabled={saving}>
+        {saving ? "Saving..." : saved ? "Saved" : "Save changes"}
+      </Button>
     </div>
   </Card>
 </div>
