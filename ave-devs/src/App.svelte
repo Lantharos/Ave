@@ -34,25 +34,13 @@
   let saveState: "idle" | "saving" | "saved" = $state("idle");
   let rotatingAppId: string | null = $state(null);
   let rotatedAppId: string | null = $state(null);
-  let notice: { tone: "info" | "success"; text: string } | null = $state(null);
-
-  let noticeTimer: ReturnType<typeof setTimeout> | null = null;
   let saveStateTimer: ReturnType<typeof setTimeout> | null = null;
   let rotateStateTimer: ReturnType<typeof setTimeout> | null = null;
-
-  function showNotice(tone: "info" | "success", text: string, duration = 2200) {
-    notice = { tone, text };
-    if (noticeTimer) clearTimeout(noticeTimer);
-    noticeTimer = setTimeout(() => {
-      notice = null;
-    }, duration);
-  }
 
   onMount(() => {
     init();
 
     return () => {
-      if (noticeTimer) clearTimeout(noticeTimer);
       if (saveStateTimer) clearTimeout(saveStateTimer);
       if (rotateStateTimer) clearTimeout(rotateStateTimer);
     };
@@ -151,7 +139,6 @@
       apps = [result.app, ...apps];
       newSecret = result.clientSecret;
       activeView = "apps";
-      showNotice("success", "App created.");
     } catch (err) {
       error = err instanceof Error ? err.message : "Failed to create app";
     } finally {
@@ -167,7 +154,6 @@
       const result = await rotateSecret(appId);
       newSecret = result.clientSecret;
       rotatedAppId = appId;
-      showNotice("success", "Secret rotated.");
       if (rotateStateTimer) clearTimeout(rotateStateTimer);
       rotateStateTimer = setTimeout(() => {
         rotatedAppId = null;
@@ -183,7 +169,6 @@
     if (!selectedApp) return;
     error = "";
     saveState = "saving";
-    showNotice("info", "Saving changes...", 1200);
     try {
       const payload = {
         name: selectedApp.name,
@@ -208,7 +193,6 @@
         redirectUrisText: result.app.redirectUris.join("\n"),
       };
       saveState = "saved";
-      showNotice("success", "Changes saved.");
       if (saveStateTimer) clearTimeout(saveStateTimer);
       saveStateTimer = setTimeout(() => {
         saveState = "idle";
@@ -231,7 +215,6 @@
         selectedApp = null;
       }
       deleteTarget = null;
-      showNotice("success", "App deleted.");
     } catch (err) {
       error = err instanceof Error ? err.message : "Failed to delete app";
     }
@@ -274,16 +257,6 @@
           <button
             class="text-[#e14747]/60 hover:text-[#e14747] border-0 bg-transparent cursor-pointer text-[14px] underline"
             onclick={() => (error = "")}
-          >dismiss</button>
-        </div>
-      {/if}
-
-      {#if notice}
-        <div class="rounded-full px-6 py-3 text-[16px] flex items-center justify-between gap-4 {notice.tone === 'success' ? 'bg-[#B9BBBE]/15 text-[#B9BBBE]' : 'bg-[#B9BBBE]/10 text-[#A8A8A8]'}">
-          <span>{notice.text}</span>
-          <button
-            class="text-current/60 hover:text-current border-0 bg-transparent cursor-pointer text-[14px] underline"
-            onclick={() => (notice = null)}
           >dismiss</button>
         </div>
       {/if}

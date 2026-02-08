@@ -14,10 +14,6 @@ declare module "hono" {
 
 const app = new Hono();
 
-function getDevPortalClientId(): string | undefined {
-  return process.env.DEV_PORTAL_CLIENT_ID || process.env.VITE_DEV_PORTAL_CLIENT_ID;
-}
-
 const allowedScopes = ["openid", "profile", "email", "offline_access", "user_id"] as const;
 
 const baseAppSchema = z.object({
@@ -37,20 +33,18 @@ async function requireDevUser(c: any, next: any) {
   const authHeader = c.req.header("Authorization");
 
   if (authHeader?.startsWith("Bearer ")) {
-    const token = authHeader.slice(7);
-    const payload = await verifyJwt(token, getResourceAudience());
+    try {
+      const token = authHeader.slice(7);
+      const payload = await verifyJwt(token, getResourceAudience());
 
-    if (payload) {
-      const devPortalClientId = getDevPortalClientId();
-
-      if (devPortalClientId && payload.cid === devPortalClientId) {
+      if (payload) {
         const userId = (payload.uid || payload.sid) as string | undefined;
         if (userId) {
           c.set("devUserId", userId);
           return next();
         }
       }
-    }
+    } catch {}
   }
 
   const sessionUser = c.get("user");
