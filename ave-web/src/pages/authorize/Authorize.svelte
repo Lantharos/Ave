@@ -45,6 +45,15 @@
 		}
 	}
 
+	function isCustomSchemeRedirect(url: string): boolean {
+		try {
+			const protocol = new URL(url).protocol;
+			return protocol !== "http:" && protocol !== "https:";
+		} catch {
+			return /^[a-zA-Z][a-zA-Z\d+\-.]*:/.test(url) && !url.startsWith("http://") && !url.startsWith("https://");
+		}
+	}
+
     // Parse query params from window.location
     let querystring = $state(window.location.search.slice(1));
     
@@ -108,6 +117,7 @@
 	let requestingStorageAccess = $state(false);
 	let storageAccessError = $state<string | null>(null);
 	let storageAccessAttempted = $state(false);
+	let launchedExternalApp = $state(false);
 
 	const embedPopup = $derived.by(() => params.embed && !!window.opener);
 	const embedSheet = $derived.by(() => params.embed && !embedPopup);
@@ -133,6 +143,7 @@
 
             appInfo = appData.app;
             existingAuth = authData.authorization;
+            launchedExternalApp = false;
 
             // Check if this is an E2EE app and we don't have the master key
             if (appData.app.supportsE2ee && !hasMasterKey()) {
@@ -234,18 +245,17 @@
                 url.hash = `app_key=${rawAppKey}`;
                 redirectUrl = url.toString();
             }
-            
-
             // Redirect back to the app
-			if (params.embed) {
-				postToEmbedHost({ type: "ave:success", payload: { redirectUrl } });
-				completed = true;
-				authorizing = false;
-				if (window.opener) {
-					setTimeout(() => window.close(), 50);
-				}
-				return;
-			}
+            if (params.embed) {
+                postToEmbedHost({ type: "ave:success", payload: { redirectUrl } });
+                completed = true;
+                authorizing = false;
+                if (window.opener) {
+                    setTimeout(() => window.close(), 50);
+                }
+                return;
+            }
+            launchedExternalApp = isCustomSchemeRedirect(redirectUrl);
             completed = true;
             window.location.href = redirectUrl;
 
@@ -503,21 +513,43 @@
 		busy={requestingStorageAccess}
 		onclick={handleStorageAccessContinue}
 	/>
-{:else if autoAuthorizing}
-    <div class="bg-[#090909] min-h-screen-fixed flex items-center justify-center p-6 md:p-[50px]">
-        <div class="flex flex-col items-center text-center gap-4">
-            <div class="w-[52px] h-[52px] border-2 border-[#FFFFFF] border-t-transparent rounded-full animate-spin"></div>
-            <div>
-                <Text type="h" size={22} color="#FFFFFF">Signing you in</Text>
-                <p class="text-[#7B7B7B] text-[15px] mt-[6px]">Finishing securely…</p>
-            </div>
-        </div>
-    </div>
-{:else if loading || completed}
-    <div class="bg-[#090909] min-h-screen-fixed flex items-center justify-center p-6 md:p-[50px]">
-        <div class="w-[48px] h-[48px] border-2 border-[#FFFFFF] border-t-transparent rounded-full animate-spin"></div>
-    </div>
-{:else}
+	{:else if autoAuthorizing}
+	    <div class="bg-[#090909] min-h-screen-fixed flex items-center justify-center p-6 md:p-[50px]">
+	        <div class="flex flex-col items-center text-center gap-4">
+				{#if launchedExternalApp}
+					<div class="w-[52px] h-[52px] border-2 border-[#FFFFFF] rounded-full flex items-center justify-center">
+						<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+							<path d="M20 7L9 18L4 13" stroke="#FFFFFF" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+						</svg>
+					</div>
+				{:else}
+	            	<div class="w-[52px] h-[52px] border-2 border-[#FFFFFF] border-t-transparent rounded-full animate-spin"></div>
+				{/if}
+	            <div>
+	                <Text type="h" size={22} color="#FFFFFF">{launchedExternalApp ? "Opened your app" : "Signing you in"}</Text>
+	                <p class="text-[#7B7B7B] text-[15px] mt-[6px]">{launchedExternalApp ? "You can continue there now." : "Finishing securely…"}</p>
+	            </div>
+	        </div>
+	    </div>
+	{:else if loading || completed}
+	    <div class="bg-[#090909] min-h-screen-fixed flex items-center justify-center p-6 md:p-[50px]">
+			{#if completed && launchedExternalApp}
+				<div class="flex flex-col items-center text-center gap-4">
+					<div class="w-[52px] h-[52px] border-2 border-[#FFFFFF] rounded-full flex items-center justify-center">
+						<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+							<path d="M20 7L9 18L4 13" stroke="#FFFFFF" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+						</svg>
+					</div>
+					<div>
+						<Text type="h" size={22} color="#FFFFFF">Opened your app</Text>
+						<p class="text-[#7B7B7B] text-[15px] mt-[6px]">You can continue there now.</p>
+					</div>
+				</div>
+			{:else}
+	        	<div class="w-[48px] h-[48px] border-2 border-[#FFFFFF] border-t-transparent rounded-full animate-spin"></div>
+			{/if}
+	    </div>
+	{:else}
 <div class="bg-[#090909] min-h-screen-fixed flex flex-col md:flex-row md:items-stretch items-center gap-6 md:gap-[50px] p-6 md:p-[50px] relative overflow-auto">
     <div class="flex-1 z-10 flex flex-col items-start justify-start md:justify-between p-4 md:p-[50px] w-full">
         <div class="flex flex-row gap-4 md:gap-[20px] items-start">
