@@ -14,7 +14,11 @@ app.get("/export", async (c) => {
   
   // Get all user's data
   const [userData] = await db
-    .select()
+    .select({
+      id: users.id,
+      createdAt: users.createdAt,
+      updatedAt: users.updatedAt,
+    })
     .from(users)
     .where(eq(users.id, user.id))
     .limit(1);
@@ -107,7 +111,7 @@ app.get("/export", async (c) => {
       id: userData.id,
       createdAt: userData.createdAt,
       updatedAt: userData.updatedAt,
-      hasSecurityQuestions: !!(userData.securityQuestions && (userData.securityQuestions as unknown[]).length > 0),
+      hasSecurityQuestions: false,
     },
     identities: userIdentities,
     passkeys: userPasskeys,

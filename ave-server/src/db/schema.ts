@@ -9,12 +9,6 @@ export const users = sqliteTable("users", {
   // E2EE: encrypted master key backup (only decryptable with trust codes)
   // The server stores this but cannot decrypt it
   encryptedMasterKeyBackup: text("encrypted_master_key_backup"),
-  
-  // Security questions (hashed answers for account recovery)
-  securityQuestions: text("security_questions", { mode: "json" }).$type<{
-    questionId: number;
-    answerHash: string;
-  }[]>(),
 });
 
 // Identities - users can have multiple identities (up to 5)

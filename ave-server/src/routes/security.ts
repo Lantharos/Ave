@@ -1,13 +1,11 @@
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
-import { db, users, passkeys, trustCodes, activityLogs } from "../db";
+import { db, passkeys, trustCodes, activityLogs } from "../db";
 import { requireAuth } from "../middleware/auth";
 import { 
   generateTrustCode, 
-  hashTrustCode, 
-  hashSecurityAnswer, 
-  generateSalt 
+  hashTrustCode
 } from "../lib/crypto";
 import { eq, and, desc } from "drizzle-orm";
 import {
@@ -41,15 +39,6 @@ app.get("/", async (c) => {
     .from(trustCodes)
     .where(eq(trustCodes.userId, user.id));
   
-  // Get user's security questions (just the question IDs)
-  const [userData] = await db
-    .select()
-    .from(users)
-    .where(eq(users.id, user.id))
-    .limit(1);
-  
-  const questions = (userData?.securityQuestions as { questionId: number }[] | null) || [];
-  
   return c.json({
     passkeys: userPasskeys.map((pk) => ({
       id: pk.id,
@@ -59,7 +48,7 @@ app.get("/", async (c) => {
       deviceType: pk.deviceType,
     })),
     trustCodesRemaining: userTrustCodes.length,
-    securityQuestionIds: questions.map((q) => q.questionId),
+    securityQuestionIds: [],
   });
 });
 
@@ -438,42 +427,15 @@ app.post("/trust-codes/regenerate", async (c) => {
   return c.json({ codes });
 });
 
-// Update security questions
+// Security questions were removed from Ave.
 app.put("/questions", zValidator("json", z.object({
   questions: z.array(z.object({
     questionId: z.number().min(0).max(20),
     answer: z.string().min(1),
   })).length(3),
 })), async (c) => {
-  const user = c.get("user")!;
-  const { questions } = c.req.valid("json");
-  
-  // Hash answers
-  const hashedQuestions = questions.map((q) => {
-    const salt = generateSalt();
-    return {
-      questionId: q.questionId,
-      answerHash: salt + ":" + hashSecurityAnswer(q.answer, salt),
-    };
-  });
-  
-  await db
-    .update(users)
-    .set({ securityQuestions: hashedQuestions, updatedAt: new Date() })
-    .where(eq(users.id, user.id));
-  
-  // Log activity
-  await db.insert(activityLogs).values({
-    userId: user.id,
-    action: "security_questions_updated",
-    details: { questionIds: questions.map((q) => q.questionId) },
-    deviceId: user.deviceId,
-    ipAddress: c.req.header("x-forwarded-for") || c.req.header("x-real-ip"),
-    userAgent: c.req.header("user-agent"),
-    severity: "info",
-  });
-  
-  return c.json({ success: true });
+  c.req.valid("json");
+  return c.json({ error: "security_questions_removed" }, 410);
 });
 
 export default app;

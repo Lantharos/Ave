@@ -591,7 +591,7 @@ app.post("/trust-code", zValidator("json", z.object({
   
   // Get user for encrypted master key backup
   const [user] = await db
-    .select()
+    .select({ encryptedMasterKeyBackup: users.encryptedMasterKeyBackup })
     .from(users)
     .where(eq(users.id, identity.userId))
     .limit(1);
@@ -713,7 +713,7 @@ app.post("/recover-key", zValidator("json", z.object({
   
   // Get user for encrypted master key backup
   const [user] = await db
-    .select()
+    .select({ encryptedMasterKeyBackup: users.encryptedMasterKeyBackup })
     .from(users)
     .where(eq(users.id, identity.userId))
     .limit(1);
