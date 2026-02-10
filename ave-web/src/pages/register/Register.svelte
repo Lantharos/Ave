@@ -41,6 +41,7 @@
     let webauthnCredential: Credential | null = null;
     let masterKey: CryptoKey | null = null;
     let trustCodes: string[] = [];
+    let isCompletingRegistration = false;
     
     // PRF extension data for encrypting master key with passkey
     let prfSupported = false;
@@ -127,6 +128,8 @@
     }
 
     async function handleLegalAccept() {
+        if (isCompletingRegistration) return;
+        isCompletingRegistration = true;
         setPage("setup");
         await completeRegistration();
     }
@@ -187,6 +190,8 @@
         } catch (e: any) {
             error = e.message || "Registration failed. Please try again.";
             setPage("legal");
+        } finally {
+            isCompletingRegistration = false;
         }
     }
 
@@ -234,7 +239,7 @@
             {:else if currentPage === "codes"}
                 <RegisterCodes {trustCodes} onNext={() => setPage("enrollment")} />
             {:else if currentPage === "legal"}
-                <RegisterLegal onNext={handleLegalAccept} />
+                <RegisterLegal onNext={handleLegalAccept} disabled={isCompletingRegistration} />
             {:else if currentPage === "setup"}
                 <RegisterFinishing />
             {:else if currentPage === "enrollment"}

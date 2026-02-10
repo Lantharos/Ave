@@ -9,7 +9,15 @@ interface DurableObjectNamespace {
   get(id: DurableObjectId): DurableObjectStub;
 }
 
-interface DurableObjectState {}
+interface DurableObjectStorage {
+  get<T = unknown>(key: string): Promise<T | undefined>;
+  put<T = unknown>(key: string, value: T): Promise<void>;
+  delete(key: string): Promise<boolean>;
+}
+
+interface DurableObjectState {
+  readonly storage: DurableObjectStorage;
+}
 
 interface ScheduledController {
   readonly cron: string;

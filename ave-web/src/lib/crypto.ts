@@ -50,7 +50,7 @@ export async function importMasterKey(keyData: ArrayBuffer): Promise<CryptoKey> 
  */
 export async function deriveKeyFromTrustCode(code: string): Promise<CryptoKey> {
   // Normalize the code
-  const normalized = code.toUpperCase().replace(/-/g, "");
+  const normalized = code.toUpperCase().replace(/[^A-Z0-9]/g, "");
   const encoder = new TextEncoder();
   
   // Use PBKDF2 to derive a key

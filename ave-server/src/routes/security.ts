@@ -17,19 +17,12 @@ import {
   verifyAuthenticationResponse,
 } from "@simplewebauthn/server";
 import { isAllowedWebauthnOrigin } from "../lib/webauthn-origin";
+import { deleteChallenge, getChallenge, setChallenge } from "../lib/challenge-store";
 
 const app = new Hono();
 
 // All routes require authentication
 app.use("*", requireAuth);
-
-// In-memory store for passkey registration challenges
-const passkeyRegistrationChallenges = new Map<string, { challenge: string; expiresAt: number }>();
-
-const passkeyUnlockChallenges = new Map<
-  string,
-  { userId: string; challenge: string; expiresAt: number }
->();
 
 // Get security overview
 app.get("/", async (c) => {
@@ -101,10 +94,12 @@ app.post("/passkeys/register", async (c) => {
   });
   
   // Store challenge
-  passkeyRegistrationChallenges.set(user.id, {
-    challenge: options.challenge,
-    expiresAt: Date.now() + 5 * 60 * 1000,
-  });
+  await setChallenge(
+    "security-passkey-register",
+    user.id,
+    { challenge: options.challenge },
+    5 * 60 * 1000
+  );
   
   return c.json({ options });
 });
@@ -120,8 +115,11 @@ app.post("/passkeys/complete", zValidator("json", z.object({
   
   console.log("[Security] Passkey registration - prfEncryptedMasterKey received:", prfEncryptedMasterKey ? `${prfEncryptedMasterKey.substring(0, 50)}...` : "undefined");
   
-  const storedChallenge = passkeyRegistrationChallenges.get(user.id);
-  if (!storedChallenge || Date.now() > storedChallenge.expiresAt) {
+  const storedChallenge = await getChallenge<{ challenge: string }>(
+    "security-passkey-register",
+    user.id
+  );
+  if (!storedChallenge) {
     return c.json({ error: "Registration session expired" }, 400);
   }
   
@@ -158,7 +156,7 @@ app.post("/passkeys/complete", zValidator("json", z.object({
       return c.json({ error: "Passkey verification failed" }, 400);
     }
     
-    passkeyRegistrationChallenges.delete(user.id);
+    await deleteChallenge("security-passkey-register", user.id);
     
     const { registrationInfo } = verification;
     
@@ -264,11 +262,15 @@ app.post("/master-key/unlock/start", async (c) => {
   });
 
   const unlockSessionId = crypto.randomUUID();
-  passkeyUnlockChallenges.set(unlockSessionId, {
-    userId: user.id,
-    challenge: options.challenge,
-    expiresAt: Date.now() + 5 * 60 * 1000,
-  });
+  await setChallenge(
+    "security-unlock",
+    unlockSessionId,
+    {
+      userId: user.id,
+      challenge: options.challenge,
+    },
+    5 * 60 * 1000
+  );
 
   return c.json({ unlockSessionId, options });
 });
@@ -286,8 +288,11 @@ app.post(
     const user = c.get("user")!;
     const { unlockSessionId, credential } = c.req.valid("json");
 
-    const storedChallenge = passkeyUnlockChallenges.get(unlockSessionId);
-    if (!storedChallenge || Date.now() > storedChallenge.expiresAt) {
+    const storedChallenge = await getChallenge<{ userId: string; challenge: string }>(
+      "security-unlock",
+      unlockSessionId
+    );
+    if (!storedChallenge) {
       return c.json({ error: "unlock_session_expired" }, 400);
     }
 
@@ -338,7 +343,7 @@ app.post(
         return c.json({ error: "passkey_verification_failed" }, 400);
       }
 
-      passkeyUnlockChallenges.delete(unlockSessionId);
+      await deleteChallenge("security-unlock", unlockSessionId);
 
       await db
         .update(passkeys)

@@ -34,8 +34,8 @@ export function generateTrustCode(): string {
 
 // Hash a trust code for storage (we don't store plaintext)
 export function hashTrustCode(code: string): string {
-  // Normalize: uppercase, remove dashes
-  const normalized = code.toUpperCase().replace(/-/g, "");
+  // Normalize: uppercase and strip separators/whitespace/non-alphanumeric chars
+  const normalized = code.toUpperCase().replace(/[^A-Z0-9]/g, "");
   return createHash("sha256").update(normalized).digest("hex");
 }
 

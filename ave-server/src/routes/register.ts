@@ -16,11 +16,9 @@ import {
 import { setSessionCookie } from "../lib/session-cookie";
 import { eq } from "drizzle-orm";
 import { requireAuth } from "../middleware/auth";
+import { deleteChallenge, getChallenge, setChallenge } from "../lib/challenge-store";
 
 const app = new Hono();
-
-// In-memory store for registration challenges (in production, use Redis)
-const registrationChallenges = new Map<string, { challenge: string; expiresAt: number }>();
 
 // Schema for starting registration
 const startRegistrationSchema = z.object({
@@ -62,10 +60,12 @@ app.post("/start", zValidator("json", startRegistrationSchema), async (c) => {
   });
   
   // Store challenge temporarily
-  registrationChallenges.set(tempUserId, {
-    challenge: options.challenge,
-    expiresAt: Date.now() + 5 * 60 * 1000, // 5 minutes
-  });
+  await setChallenge(
+    "registration",
+    tempUserId,
+    { challenge: options.challenge },
+    15 * 60 * 1000
+  );
   
   return c.json({
     options,
@@ -102,8 +102,8 @@ app.post("/complete", zValidator("json", completeRegistrationSchema), async (c) 
   const data = c.req.valid("json");
   
   // Verify challenge
-  const storedChallenge = registrationChallenges.get(data.tempUserId);
-  if (!storedChallenge || Date.now() > storedChallenge.expiresAt) {
+  const storedChallenge = await getChallenge<{ challenge: string }>("registration", data.tempUserId);
+  if (!storedChallenge) {
     return c.json({ error: "Registration session expired" }, 400);
   }
   
@@ -135,9 +135,6 @@ app.post("/complete", zValidator("json", completeRegistrationSchema), async (c) 
   if (!verification.verified || !verification.registrationInfo) {
     return c.json({ error: "Passkey verification failed" }, 400);
   }
-  
-  // Clean up challenge
-  registrationChallenges.delete(data.tempUserId);
   
   const { registrationInfo } = verification;
   
@@ -241,6 +238,9 @@ app.post("/complete", zValidator("json", completeRegistrationSchema), async (c) 
       trustCodes: codes,
     };
   });
+
+  // Clean up challenge after successful registration
+  await deleteChallenge("registration", data.tempUserId);
   
   setSessionCookie(c, result.sessionToken, new Date(Date.now() + 30 * 24 * 60 * 60 * 1000));
 

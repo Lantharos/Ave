@@ -17,11 +17,9 @@ import { clearSessionCookie, setSessionCookie, SESSION_COOKIE_NAME } from "../li
 import { eq, and, gt, desc } from "drizzle-orm";
 import { notifyLoginRequest } from "../lib/websocket";
 import { sendLoginRequestNotification, type PushSubscription } from "../lib/webpush";
+import { deleteChallenge, getChallenge, setChallenge } from "../lib/challenge-store";
 
 const app = new Hono();
-
-// In-memory store for auth challenges (in production, use Redis)
-const authChallenges = new Map<string, { challenge: string; userId: string; expiresAt: number }>();
 
 /**
  * Get or create a device for a user
@@ -135,11 +133,15 @@ app.post("/start", zValidator("json", z.object({
       userVerification: "preferred",
     });
     
-    authChallenges.set(authSessionId, {
-      challenge: authOptions.challenge,
-      userId: identity.userId,
-      expiresAt: Date.now() + 5 * 60 * 1000,
-    });
+    await setChallenge(
+      "login-auth",
+      authSessionId,
+      {
+        challenge: authOptions.challenge,
+        userId: identity.userId,
+      },
+      10 * 60 * 1000
+    );
   }
   
   return c.json({
@@ -171,8 +173,11 @@ app.post("/passkey", zValidator("json", z.object({
 })), async (c) => {
   const { authSessionId, credential, device } = c.req.valid("json");
   
-  const storedChallenge = authChallenges.get(authSessionId);
-  if (!storedChallenge || Date.now() > storedChallenge.expiresAt) {
+  const storedChallenge = await getChallenge<{ challenge: string; userId: string }>(
+    "login-auth",
+    authSessionId
+  );
+  if (!storedChallenge) {
     return c.json({ error: "Login session expired" }, 400);
   }
   
@@ -244,7 +249,7 @@ app.post("/passkey", zValidator("json", z.object({
       })
       .where(eq(passkeys.id, passkey.id));
     
-    authChallenges.delete(authSessionId);
+    await deleteChallenge("login-auth", authSessionId);
     
     // Get or create device (reuses existing device if browser/OS matches)
     const deviceRecord = await getOrCreateDevice(storedChallenge.userId, device);

@@ -22,6 +22,7 @@ import signingRoutes from "./routes/signing";
 
 import { SESSION_COOKIE_NAME } from "./lib/session-cookie";
 import { initDb, runWithDb } from "./db";
+import { initChallengeStorage } from "./lib/challenge-store";
 
 import uploadRoutes from "./routes/upload";
 
@@ -147,6 +148,10 @@ function buildApp() {
 
   // Error handler
   app.onError((err, c) => {
+    if (err instanceof SyntaxError && /JSON|Unexpected end of JSON input/i.test(err.message)) {
+      return c.json({ error: "Invalid JSON body" }, 400);
+    }
+
     console.error("Server error:", err);
     return c.json({ error: "Internal Server Error" }, 500);
   });
@@ -176,19 +181,31 @@ function createWebSocketResponse(request: Request, requestDatabase: D1Database |
 
   void runWithDb(requestDatabase, () =>
     handleWebSocketOpen(server as unknown as WebSocket, { authToken, requestId })
-  );
+  ).catch((error) => {
+    console.error("WebSocket open handler failed:", error);
+  });
 
   server.addEventListener("message", (event) => {
     const msg = typeof event.data === "string" ? event.data : String(event.data);
     void runWithDb(requestDatabase, () =>
       handleWebSocketMessage(server as unknown as WebSocket, msg)
-    );
+    ).catch((error) => {
+      console.error("WebSocket message handler failed:", error);
+    });
   });
 
   server.addEventListener("close", () => {
-    void runWithDb(requestDatabase, () =>
-      handleWebSocketClose(server as unknown as WebSocket)
-    );
+    try {
+      runWithDb(requestDatabase, () =>
+        handleWebSocketClose(server as unknown as WebSocket)
+      );
+    } catch (error) {
+      console.error("WebSocket close handler failed:", error);
+    }
+  });
+
+  server.addEventListener("error", (event) => {
+    console.warn("WebSocket error event:", event);
   });
 
   return new Response(null, {
@@ -199,9 +216,11 @@ function createWebSocketResponse(request: Request, requestDatabase: D1Database |
 
 export class ApiAppDurableObject {
   constructor(
-    _: DurableObjectState,
+    state: DurableObjectState,
     private readonly env: Bindings
-  ) {}
+  ) {
+    initChallengeStorage(state.storage);
+  }
 
   async fetch(request: Request): Promise<Response> {
     initDb(this.env.DB);

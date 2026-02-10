@@ -3,7 +3,7 @@
     import Button from "../../../components/Button.svelte";
     import IdentityCard from "../../../components/IdentityCard.svelte";
 
-    let { onNext } = $props<{ onNext?: () => void }>();
+    let { onNext, disabled = false } = $props<{ onNext?: () => void; disabled?: boolean }>();
     function goNext() {
         onNext?.();
     }
@@ -39,6 +39,6 @@
            </p>
        </div>
 
-       <Button text="I AGREE" onclick={() => onNext()} icon="/icons/checkbk-32.svg" />
+       <Button text={disabled ? "PROCESSING..." : "I AGREE"} onclick={() => onNext?.()} icon="/icons/checkbk-32.svg" {disabled} />
    </div>
 </div>

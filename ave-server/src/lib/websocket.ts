@@ -15,22 +15,38 @@ const connectedClients = new Map<string, Set<WebSocket>>();
 // Store login request subscribers (requestId -> WebSocket)
 const loginRequestSubscribers = new Map<string, WebSocket>();
 
-export async function handleWebSocketOpen(ws: WebSocket, data: { authToken?: string; requestId?: string }) {
-  // If subscribing to a login request (for the requesting device)
-  if (data.requestId) {
-    loginRequestSubscribers.set(data.requestId, ws);
-    return;
-  }
-  
-  // Otherwise, authenticate the user
-  if (!data.authToken) {
-    ws.close(1008, "Authentication required");
-    return;
-  }
-  
-  const tokenHash = hashSessionToken(data.authToken);
-  
+function safeClose(ws: WebSocket, code: number, reason: string): void {
   try {
+    ws.close(code, reason);
+  } catch (error) {
+    console.warn("WebSocket close failed:", error);
+  }
+}
+
+function safeSend(ws: WebSocket, payload: string): void {
+  try {
+    ws.send(payload);
+  } catch (error) {
+    console.warn("WebSocket send failed:", error);
+  }
+}
+
+export async function handleWebSocketOpen(ws: WebSocket, data: { authToken?: string; requestId?: string }) {
+  try {
+    // If subscribing to a login request (for the requesting device)
+    if (data.requestId) {
+      loginRequestSubscribers.set(data.requestId, ws);
+      return;
+    }
+
+    // Otherwise, authenticate the user
+    if (!data.authToken) {
+      safeClose(ws, 1008, "Authentication required");
+      return;
+    }
+
+    const tokenHash = hashSessionToken(data.authToken);
+
     const [session] = await db
       .select()
       .from(sessions)
@@ -43,7 +59,7 @@ export async function handleWebSocketOpen(ws: WebSocket, data: { authToken?: str
       .limit(1);
     
     if (!session) {
-      ws.close(1008, "Invalid session");
+      safeClose(ws, 1008, "Invalid session");
       return;
     }
     
@@ -57,10 +73,10 @@ export async function handleWebSocketOpen(ws: WebSocket, data: { authToken?: str
     (ws as any).userId = session.userId;
     
     // Send connected confirmation
-    ws.send(JSON.stringify({ type: "connected" }));
+    safeSend(ws, JSON.stringify({ type: "connected" }));
   } catch (error) {
     console.error("WebSocket auth error:", error);
-    ws.close(1011, "Authentication error");
+    safeClose(ws, 1011, "Authentication error");
   }
 }
 
@@ -91,7 +107,7 @@ export async function handleWebSocketMessage(ws: WebSocket, message: string) {
     
     switch (data.type) {
       case "ping":
-        ws.send(JSON.stringify({ type: "pong" }));
+        safeSend(ws, JSON.stringify({ type: "pong" }));
         break;
       
       default:
@@ -130,7 +146,7 @@ export async function notifyLoginRequest(handle: string, request: {
   
   for (const socket of userSockets) {
     try {
-      socket.send(message);
+      safeSend(socket, message);
     } catch (error) {
       console.error("Failed to send login request notification:", error);
     }
@@ -150,7 +166,7 @@ export function notifyLoginRequestStatus(requestId: string, status: "approved" |
   if (!socket) return;
   
   try {
-    socket.send(JSON.stringify({
+    safeSend(socket, JSON.stringify({
       type: "login_request_status",
       status,
       ...data,
