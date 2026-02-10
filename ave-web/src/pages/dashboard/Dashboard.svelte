@@ -17,6 +17,7 @@
     let selectedPage = $state<string>("");
     let pendingApprovals = $state(0);
     let mobileSidebarOpen = $state(false);
+    let isLoggingOut = $state(false);
 
     let identities = $derived($identitiesStore);
 
@@ -43,8 +44,14 @@
     });
 
     async function handleLogout() {
-        await auth.logout();
-        goto("/login");
+        if (isLoggingOut) return;
+        isLoggingOut = true;
+        try {
+            await auth.logout();
+            goto("/login");
+        } finally {
+            isLoggingOut = false;
+        }
     }
 
     async function handleNewIdentity() {
@@ -123,7 +130,12 @@
                 <SidebarButton text="Activity Log" bind:currentlySelected={selectedPage} onclick={() => selectPage("Activity Log")} />
                 
                 <div class="h-px bg-[#878787]/20 w-full my-1"></div>
-                <SidebarButton text="Logout" bind:currentlySelected={selectedPage} onclick={handleLogout} />
+                <SidebarButton
+                    text={isLoggingOut ? "Logging out..." : "Logout"}
+                    bind:currentlySelected={selectedPage}
+                    onclick={handleLogout}
+                    disabled={isLoggingOut}
+                />
             </div>
         </div>
     {/if}
@@ -170,7 +182,12 @@
             <SidebarButton text="Activity Log" bind:currentlySelected={selectedPage} onclick={() => { selectedPage = "Activity Log"; }} />
         </div>
         <div class="h-[1px] bg-[#878787]/20 w-full"></div>
-        <SidebarButton text="Logout" bind:currentlySelected={selectedPage} onclick={handleLogout} />
+        <SidebarButton
+            text={isLoggingOut ? "Logging out..." : "Logout"}
+            bind:currentlySelected={selectedPage}
+            onclick={handleLogout}
+            disabled={isLoggingOut}
+        />
     </div>
 
     <div class="flex flex-col w-full md:w-[75%] z-10 mt-10 md:mt-0">

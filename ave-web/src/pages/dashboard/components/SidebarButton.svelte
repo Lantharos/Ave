@@ -3,10 +3,14 @@
     export let text: string;
     export let currentlySelected: string;
     export let image: string = "";
+    export let disabled: boolean = false;
 </script>
 
-<button class="w-full min-w-0 {image !== '' ? 'px-2.5 md:px-[15px] py-2 md:py-[15px]' : 'px-4 md:px-[25px] py-2 md:py-[15px]' } {currentlySelected === text ? 'bg-[#B9BBBE]/20' : 'bg-transparent hover:bg-[#202020] transition-colors duration-300 cursor-pointer'} rounded-full flex flex-row items-center gap-2 md:gap-[15px]"
-        onclick={onclick}>
+<button
+    class="w-full min-w-0 {image !== '' ? 'px-2.5 md:px-[15px] py-2 md:py-[15px]' : 'px-4 md:px-[25px] py-2 md:py-[15px]' } {currentlySelected === text ? 'bg-[#B9BBBE]/20' : 'bg-transparent'} {!disabled ? 'hover:bg-[#202020] transition-colors duration-300 cursor-pointer' : 'opacity-70 cursor-not-allowed'} rounded-full flex flex-row items-center gap-2 md:gap-[15px]"
+    onclick={onclick}
+    {disabled}
+>
     {#if image !== ""}
         <img src={image} alt="{text} icon" class="aspect-square h-6 md:h-[40px] w-auto object-contain rounded-full" />
     {/if}
