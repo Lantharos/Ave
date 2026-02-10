@@ -1,20 +1,44 @@
-import { drizzle } from "drizzle-orm/neon-http";
-import { neon } from "@neondatabase/serverless";
+import { drizzle } from "drizzle-orm/d1";
+import { AsyncLocalStorage } from "node:async_hooks";
 import * as schema from "./schema";
 
-let dbInstance: ReturnType<typeof drizzle> | null = null;
+type DrizzleDb = ReturnType<typeof drizzle>;
 
-function getDbInstance(): ReturnType<typeof drizzle> {
-  if (dbInstance) return dbInstance;
+let baseDbInstance: DrizzleDb | null = null;
+let baseBoundDatabase: unknown = null;
+const dbScope = new AsyncLocalStorage<DrizzleDb>();
 
-  const connectionString = process.env.DATABASE_URL;
-  if (!connectionString) {
-    throw new Error("DATABASE_URL environment variable is not set");
+function createDb(database: unknown): DrizzleDb {
+  if (!database) {
+    throw new Error("DB binding is not configured");
   }
 
-  const sql = neon(connectionString);
-  dbInstance = drizzle(sql, { schema });
-  return dbInstance;
+  return drizzle(database as any, { schema });
+}
+
+export function initDb(database: unknown): void {
+  if (baseDbInstance && baseBoundDatabase === database) {
+    return;
+  }
+
+  baseDbInstance = createDb(database);
+  baseBoundDatabase = database;
+}
+
+export function runWithDb<T>(database: unknown, callback: () => T): T {
+  const scopedDb = createDb(database);
+  return dbScope.run(scopedDb, callback);
+}
+
+function getDbInstance(): DrizzleDb {
+  const scoped = dbScope.getStore();
+  if (scoped) return scoped;
+
+  if (!baseDbInstance) {
+    throw new Error("DB is not initialized. Call initDb(env.DB) before using db.");
+  }
+
+  return baseDbInstance;
 }
 
 // Lazily initialize database connection at request/runtime, not module import time.

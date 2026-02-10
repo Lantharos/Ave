@@ -3,7 +3,7 @@ import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import { db, oauthApps, oauthAuthorizations, oauthRefreshTokens, identities, activityLogs } from "../db";
 import { requireAuth } from "../middleware/auth";
-import { eq, and, inArray } from "drizzle-orm";
+import { eq, and, inArray, isNull } from "drizzle-orm";
 import { randomUUID } from "crypto";
 import { hashSessionToken } from "../lib/crypto";
 import { getIssuer, getResourceAudience, getJwtPublicJwk, signJwt, verifyJwt, hashToken } from "../lib/oidc";
@@ -289,7 +289,7 @@ app.post("/token", zValidator("json", z.discriminatedUnion("grantType", [
     if (!storedRefresh) {
       await db.update(oauthRefreshTokens)
         .set({ reuseDetectedAt: new Date() })
-        .where(and(eq(oauthRefreshTokens.appId, oauthApp.id), eq(oauthRefreshTokens.revokedAt, null)));
+        .where(and(eq(oauthRefreshTokens.appId, oauthApp.id), isNull(oauthRefreshTokens.revokedAt)));
       return c.json({ error: "invalid_grant", error_description: "Refresh token not found" }, 400);
     }
 

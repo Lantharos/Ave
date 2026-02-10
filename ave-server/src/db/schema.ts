@@ -1,42 +1,32 @@
-import {
-  pgTable,
-  text,
-  timestamp,
-  boolean,
-  integer,
-  jsonb,
-  uuid,
-  varchar,
-  index,
-} from "drizzle-orm/pg-core";
+import { index, integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
 
 // Users table - core account (not identity)
-export const users = pgTable("users", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+export const users = sqliteTable("users", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull().$defaultFn(() => new Date()),
+  updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull().$defaultFn(() => new Date()),
   
   // E2EE: encrypted master key backup (only decryptable with trust codes)
   // The server stores this but cannot decrypt it
   encryptedMasterKeyBackup: text("encrypted_master_key_backup"),
   
   // Security questions (hashed answers for account recovery)
-  securityQuestions: jsonb("security_questions").$type<{
+  securityQuestions: text("security_questions", { mode: "json" }).$type<{
     questionId: number;
     answerHash: string;
   }[]>(),
 });
 
 // Identities - users can have multiple identities (up to 5)
-export const identities = pgTable("identities", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  userId: uuid("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+export const identities = sqliteTable("identities", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  userId: text("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
+  createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull().$defaultFn(() => new Date()),
+  updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull().$defaultFn(() => new Date()),
   
   // Identity info (encrypted on client, stored as ciphertext)
   displayName: text("display_name").notNull(), // encrypted
-  handle: varchar("handle", { length: 32 }).notNull().unique(), // plaintext for lookup
+  handle: text("handle").notNull().unique(), // plaintext for lookup
   email: text("email"), // encrypted
   birthday: text("birthday"), // encrypted
   
@@ -45,28 +35,28 @@ export const identities = pgTable("identities", {
   bannerUrl: text("banner_url"),
   
   // Is this the primary identity?
-  isPrimary: boolean("is_primary").default(false).notNull(),
+  isPrimary: integer("is_primary", { mode: "boolean" }).default(false).notNull(),
 }, (table) => [
   index("identities_user_id_idx").on(table.userId),
   index("identities_handle_idx").on(table.handle),
 ]);
 
 // Passkeys (WebAuthn credentials)
-export const passkeys = pgTable("passkeys", {
+export const passkeys = sqliteTable("passkeys", {
   id: text("id").primaryKey(), // credential ID from WebAuthn
-  userId: uuid("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-  lastUsedAt: timestamp("last_used_at"),
+  userId: text("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
+  createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull().$defaultFn(() => new Date()),
+  lastUsedAt: integer("last_used_at", { mode: "timestamp_ms" }),
   
   // WebAuthn credential data
   publicKey: text("public_key").notNull(), // base64 encoded
   counter: integer("counter").notNull().default(0),
-  deviceType: varchar("device_type", { length: 32 }), // platform, cross-platform
-  backedUp: boolean("backed_up").default(false),
-  transports: jsonb("transports").$type<string[]>(),
+  deviceType: text("device_type"), // platform, cross-platform
+  backedUp: integer("backed_up", { mode: "boolean" }).default(false),
+  transports: text("transports", { mode: "json" }).$type<string[]>(),
   
   // User-friendly name
-  name: varchar("name", { length: 64 }),
+  name: text("name"),
   
   // PRF extension support - master key encrypted with PRF output
   // This allows decrypting the master key during passkey login without needing trust codes
@@ -78,44 +68,44 @@ export const passkeys = pgTable("passkeys", {
 ]);
 
 // Trusted devices - devices that have the master key
-export const devices = pgTable("devices", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  userId: uuid("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-  lastSeenAt: timestamp("last_seen_at").defaultNow().notNull(),
+export const devices = sqliteTable("devices", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  userId: text("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
+  createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull().$defaultFn(() => new Date()),
+  lastSeenAt: integer("last_seen_at", { mode: "timestamp_ms" }).notNull().$defaultFn(() => new Date()),
   
   // Device info
-  name: varchar("name", { length: 64 }).notNull(),
-  type: varchar("type", { length: 32 }).notNull(), // phone, computer, tablet
-  browser: varchar("browser", { length: 64 }),
-  os: varchar("os", { length: 64 }),
+  name: text("name").notNull(),
+  type: text("type").notNull(), // phone, computer, tablet
+  browser: text("browser"),
+  os: text("os"),
   
   // Unique fingerprint for this device/browser combination (stored in client localStorage)
-  fingerprint: varchar("fingerprint", { length: 64 }),
+  fingerprint: text("fingerprint"),
   
   // For push notifications / real-time
-  pushSubscription: jsonb("push_subscription"),
+  pushSubscription: text("push_subscription", { mode: "json" }),
   
   // Is this device currently active in a session?
-  isActive: boolean("is_active").default(true).notNull(),
+  isActive: integer("is_active", { mode: "boolean" }).default(true).notNull(),
 }, (table) => [
   index("devices_user_id_idx").on(table.userId),
   index("devices_fingerprint_idx").on(table.fingerprint),
 ]);
 
 // Sessions - active login sessions
-export const sessions = pgTable("sessions", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  userId: uuid("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
-  deviceId: uuid("device_id").references(() => devices.id, { onDelete: "cascade" }),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-  expiresAt: timestamp("expires_at").notNull(),
+export const sessions = sqliteTable("sessions", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  userId: text("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
+  deviceId: text("device_id").references(() => devices.id, { onDelete: "cascade" }),
+  createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull().$defaultFn(() => new Date()),
+  expiresAt: integer("expires_at", { mode: "timestamp_ms" }).notNull(),
   
   // Session token (hashed)
   tokenHash: text("token_hash").notNull().unique(),
   
   // IP and location info for activity log
-  ipAddress: varchar("ip_address", { length: 90 }),
+  ipAddress: text("ip_address"),
   userAgent: text("user_agent"),
 }, (table) => [
   index("sessions_user_id_idx").on(table.userId),
@@ -123,34 +113,34 @@ export const sessions = pgTable("sessions", {
 ]);
 
 // Login requests - pending login attempts that need approval
-export const loginRequests = pgTable("login_requests", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-  expiresAt: timestamp("expires_at").notNull(),
+export const loginRequests = sqliteTable("login_requests", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull().$defaultFn(() => new Date()),
+  expiresAt: integer("expires_at", { mode: "timestamp_ms" }).notNull(),
   
   // Who is trying to log in
-  handle: varchar("handle", { length: 32 }).notNull(),
+  handle: text("handle").notNull(),
   
   // Device info of the requesting device
-  deviceName: varchar("device_name", { length: 64 }),
-  deviceType: varchar("device_type", { length: 32 }),
-  browser: varchar("browser", { length: 64 }),
-  os: varchar("os", { length: 64 }),
-  fingerprint: varchar("fingerprint", { length: 64 }),
-  ipAddress: varchar("ip_address", { length: 90 }),
+  deviceName: text("device_name"),
+  deviceType: text("device_type"),
+  browser: text("browser"),
+  os: text("os"),
+  fingerprint: text("fingerprint"),
+  ipAddress: text("ip_address"),
   
   // Ephemeral key exchange for E2EE key transfer
   // The requesting device generates a keypair, stores private locally, sends public here
   requesterPublicKey: text("requester_public_key").notNull(),
   
   // Status
-  status: varchar("status", { length: 16 }).notNull().default("pending"), // pending, approved, denied, expired
+  status: text("status").notNull().default("pending"), // pending, approved, denied, expired
   
   // When approved, the approving device encrypts the master key with requester's public key
   encryptedMasterKey: text("encrypted_master_key"),
   
   // Which device approved it
-  approvedByDeviceId: uuid("approved_by_device_id").references(() => devices.id),
+  approvedByDeviceId: text("approved_by_device_id").references(() => devices.id),
   approverPublicKey: text("approver_public_key"),
 }, (table) => [
   index("login_requests_handle_idx").on(table.handle),
@@ -158,93 +148,95 @@ export const loginRequests = pgTable("login_requests", {
 ]);
 
 // Trust codes - backup codes for account recovery
-export const trustCodes = pgTable("trust_codes", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  userId: uuid("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
+export const trustCodes = sqliteTable("trust_codes", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  userId: text("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
+  createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull().$defaultFn(() => new Date()),
   
   // Hashed code (the actual code is only shown once to user)
   codeHash: text("code_hash").notNull(),
   
   // Has this code been used?
-  usedAt: timestamp("used_at"),
+  usedAt: integer("used_at", { mode: "timestamp_ms" }),
 }, (table) => [
   index("trust_codes_user_id_idx").on(table.userId),
 ]);
 
 // Activity log - audit trail
-export const activityLogs = pgTable("activity_logs", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  userId: uuid("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
+export const activityLogs = sqliteTable("activity_logs", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  userId: text("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
+  createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull().$defaultFn(() => new Date()),
   
   // What happened
-  action: varchar("action", { length: 64 }).notNull(),
+  action: text("action").notNull(),
   // login, logout, login_denied, device_added, device_removed, 
   // passkey_added, passkey_removed, identity_created, identity_updated,
   // security_questions_updated, trust_codes_regenerated, account_recovered
   
   // Additional context
-  details: jsonb("details").$type<Record<string, unknown>>(),
+  details: text("details", { mode: "json" }).$type<Record<string, unknown>>(),
   
   // Where it happened from
-  deviceId: uuid("device_id").references(() => devices.id),
-  ipAddress: varchar("ip_address", { length: 90 }),
+  deviceId: text("device_id").references(() => devices.id),
+  ipAddress: text("ip_address"),
   userAgent: text("user_agent"),
   
   // Color coding for UI
-  severity: varchar("severity", { length: 16 }).default("info"), // info, warning, danger
+  severity: text("severity").default("info"), // info, warning, danger
 }, (table) => [
   index("activity_logs_user_id_idx").on(table.userId),
   index("activity_logs_created_at_idx").on(table.createdAt),
 ]);
 
 // OAuth applications (third-party apps using Ave for auth)
-export const oauthApps = pgTable("oauth_apps", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
+export const oauthApps = sqliteTable("oauth_apps", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull().$defaultFn(() => new Date()),
   
   // App info
-  name: varchar("name", { length: 64 }).notNull(),
+  name: text("name").notNull(),
   description: text("description"),
   iconUrl: text("icon_url"),
   websiteUrl: text("website_url"),
   
   // OAuth credentials
-  clientId: varchar("client_id", { length: 64 }).notNull().unique(),
+  clientId: text("client_id").notNull().unique(),
   clientSecretHash: text("client_secret_hash").notNull(),
-  redirectUris: jsonb("redirect_uris").$type<string[]>().notNull(),
+  redirectUris: text("redirect_uris", { mode: "json" }).$type<string[]>().notNull(),
   
   // OIDC settings
-  allowedScopes: jsonb("allowed_scopes").$type<string[]>().default(["openid", "profile", "email", "offline_access"]),
+  allowedScopes: text("allowed_scopes", { mode: "json" })
+    .$type<string[]>()
+    .$defaultFn(() => ["openid", "profile", "email", "offline_access"]),
   accessTokenTtlSeconds: integer("access_token_ttl_seconds").default(3600).notNull(),
   refreshTokenTtlSeconds: integer("refresh_token_ttl_seconds").default(30 * 24 * 60 * 60).notNull(),
-  allowUserIdScope: boolean("allow_user_id_scope").default(false).notNull(),
+  allowUserIdScope: integer("allow_user_id_scope", { mode: "boolean" }).default(false).notNull(),
   
   // Does this app support E2EE?
-  supportsE2ee: boolean("supports_e2ee").default(false),
+  supportsE2ee: integer("supports_e2ee", { mode: "boolean" }).default(false),
   
   // Developer who owns this app
-  ownerId: uuid("owner_id").references(() => users.id),
+  ownerId: text("owner_id").references(() => users.id),
 });
 
 // OAuth refresh tokens
-export const oauthRefreshTokens = pgTable("oauth_refresh_tokens", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-  revokedAt: timestamp("revoked_at"),
-  expiresAt: timestamp("expires_at").notNull(),
+export const oauthRefreshTokens = sqliteTable("oauth_refresh_tokens", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull().$defaultFn(() => new Date()),
+  revokedAt: integer("revoked_at", { mode: "timestamp_ms" }),
+  expiresAt: integer("expires_at", { mode: "timestamp_ms" }).notNull(),
   
   // Who + app
-  userId: uuid("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
-  identityId: uuid("identity_id").references(() => identities.id, { onDelete: "cascade" }).notNull(),
-  appId: uuid("app_id").references(() => oauthApps.id, { onDelete: "cascade" }).notNull(),
+  userId: text("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
+  identityId: text("identity_id").references(() => identities.id, { onDelete: "cascade" }).notNull(),
+  appId: text("app_id").references(() => oauthApps.id, { onDelete: "cascade" }).notNull(),
   
   // Token info
   tokenHash: text("token_hash").notNull().unique(),
   scope: text("scope").notNull(),
-  rotatedFromId: uuid("rotated_from_id"),
-  reuseDetectedAt: timestamp("reuse_detected_at"),
+  rotatedFromId: text("rotated_from_id"),
+  reuseDetectedAt: integer("reuse_detected_at", { mode: "timestamp_ms" }),
 }, (table) => [
   index("oauth_refresh_tokens_user_id_idx").on(table.userId),
   index("oauth_refresh_tokens_app_id_idx").on(table.appId),
@@ -253,12 +245,12 @@ export const oauthRefreshTokens = pgTable("oauth_refresh_tokens", {
 ]);
 
 // OAuth authorizations - which apps a user has authorized
-export const oauthAuthorizations = pgTable("oauth_authorizations", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  userId: uuid("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
-  appId: uuid("app_id").references(() => oauthApps.id, { onDelete: "cascade" }).notNull(),
-  identityId: uuid("identity_id").references(() => identities.id, { onDelete: "cascade" }).notNull(),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
+export const oauthAuthorizations = sqliteTable("oauth_authorizations", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  userId: text("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
+  appId: text("app_id").references(() => oauthApps.id, { onDelete: "cascade" }).notNull(),
+  identityId: text("identity_id").references(() => identities.id, { onDelete: "cascade" }).notNull(),
+  createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull().$defaultFn(() => new Date()),
   
   // E2EE: encrypted keys for this app (encrypted with user's master key)
   // Each app gets its own encryption key that the user controls
@@ -269,10 +261,10 @@ export const oauthAuthorizations = pgTable("oauth_authorizations", {
 ]);
 
 // Signing keys - Ed25519 keypairs per identity for Ave Signing
-export const signingKeys = pgTable("signing_keys", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  identityId: uuid("identity_id").references(() => identities.id, { onDelete: "cascade" }).notNull().unique(),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
+export const signingKeys = sqliteTable("signing_keys", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  identityId: text("identity_id").references(() => identities.id, { onDelete: "cascade" }).notNull().unique(),
+  createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull().$defaultFn(() => new Date()),
   
   // Ed25519 public key (base64 encoded, 32 bytes)
   publicKey: text("public_key").notNull(),
@@ -285,35 +277,35 @@ export const signingKeys = pgTable("signing_keys", {
 ]);
 
 // Signature requests - pending requests from apps for user signatures
-export const signatureRequests = pgTable("signature_requests", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-  expiresAt: timestamp("expires_at").notNull(),
+export const signatureRequests = sqliteTable("signature_requests", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull().$defaultFn(() => new Date()),
+  expiresAt: integer("expires_at", { mode: "timestamp_ms" }).notNull(),
   
   // Which identity is being asked to sign
-  identityId: uuid("identity_id").references(() => identities.id, { onDelete: "cascade" }).notNull(),
+  identityId: text("identity_id").references(() => identities.id, { onDelete: "cascade" }).notNull(),
   
   // Which app is requesting
-  appId: uuid("app_id").references(() => oauthApps.id, { onDelete: "cascade" }).notNull(),
+  appId: text("app_id").references(() => oauthApps.id, { onDelete: "cascade" }).notNull(),
   
   // What to sign - the message/payload (plaintext, shown to user)
   payload: text("payload").notNull(),
   
   // Optional: structured metadata about what this signature is for
   // e.g. { type: "consent", action: "terms_acceptance", version: "1.0" }
-  metadata: jsonb("metadata").$type<Record<string, unknown>>(),
+  metadata: text("metadata", { mode: "json" }).$type<Record<string, unknown>>(),
   
   // Status: pending, signed, denied, expired
-  status: varchar("status", { length: 16 }).notNull().default("pending"),
+  status: text("status").notNull().default("pending"),
   
   // The signature (base64 Ed25519 signature, 64 bytes) - filled when signed
   signature: text("signature"),
   
   // When was it signed/denied
-  resolvedAt: timestamp("resolved_at"),
+  resolvedAt: integer("resolved_at", { mode: "timestamp_ms" }),
   
   // Device that signed it
-  deviceId: uuid("device_id").references(() => devices.id),
+  deviceId: text("device_id").references(() => devices.id),
 }, (table) => [
   index("signature_requests_identity_id_idx").on(table.identityId),
   index("signature_requests_app_id_idx").on(table.appId),
@@ -345,4 +337,3 @@ export type SigningKey = typeof signingKeys.$inferSelect;
 export type NewSigningKey = typeof signingKeys.$inferInsert;
 export type SignatureRequest = typeof signatureRequests.$inferSelect;
 export type NewSignatureRequest = typeof signatureRequests.$inferInsert;
-

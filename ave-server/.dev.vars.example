@@ -1,5 +1,4 @@
 # Core
-DATABASE_URL=postgres://user:pass@host:5432/dbname
 RP_ID=aveid.net
 RP_NAME=Ave
 RP_ORIGIN=https://aveid.net

@@ -13,6 +13,12 @@ invocation_logs = true
 name = "API_APP"
 class_name = "ApiAppDurableObject"
 
+[[d1_databases]]
+binding = "DB"
+database_name = "ave"
+database_id = "bbf9cbc0-9bdd-443e-80c9-470d229bd99c"
+migrations_dir = "drizzle"
+
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["ApiAppDurableObject"]
@@ -47,7 +53,6 @@ VAPID_PUBLIC_KEY = "BHG45kIltRlb8J3fIIPnTFyAGkMIEvb94XT1kHt5pmvyEJxTen32RQx1Q3XH
 VAPID_SUBJECT = "mailto:hello@lantharos.com"
 
 # Keep these as Cloudflare secrets (do NOT commit to wrangler.toml):
-# DATABASE_URL
 # OIDC_PRIVATE_KEY_PEM
 # R2_SECRET_ACCESS_KEY
 # SESSION_SECRET

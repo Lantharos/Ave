@@ -7,12 +7,12 @@
       "dependencies": {
         "@aws-sdk/client-s3": "^3.985.0",
         "@hono/zod-validator": "^0.7.6",
-        "@neondatabase/serverless": "^1.0.2",
         "@noble/ed25519": "^3.0.0",
         "@noble/hashes": "^2.0.1",
         "@simplewebauthn/server": "^13.2.2",
         "drizzle-orm": "^0.45.1",
         "hono": "^4.11.9",
+        "postgres": "^3.4.7",
         "web-push": "^3.6.7",
         "zod": "^4.3.6",
       },
@@ -467,6 +467,8 @@
     "pg-protocol": ["pg-protocol@1.11.0", "", {}, "sha512-pfsxk2M9M3BuGgDOfuy37VNRRX3jmKgMjcvAcWqNDpZSf4cUmv8HSOl5ViRQFsfARFn0KuUQTgLxVMbNq5NW3g=="],
 
     "pg-types": ["pg-types@2.2.0", "", { "dependencies": { "pg-int8": "1.0.1", "postgres-array": "~2.0.0", "postgres-bytea": "~1.0.0", "postgres-date": "~1.0.4", "postgres-interval": "^1.1.0" } }, "sha512-qTAAlrEsl8s4OiEQY69wDvcMIdQN6wdz5ojQiOy6YRMuynxenON0O5oCpJI6lshc6scgAY8qvJ2On/p+CXY0GA=="],
+
+    "postgres": ["postgres@3.4.8", "", {}, "sha512-d+JFcLM17njZaOLkv6SCev7uoLaBtfK86vMUXhW1Z4glPWh4jozno9APvW/XKFJ3CCxVoC7OL38BqRydtu5nGg=="],
 
     "postgres-array": ["postgres-array@2.0.0", "", {}, "sha512-VpZrUqU5A69eQyW2c5CA1jtLecCsN2U/bD6VilrFDWq5+5UIEVO7nazS3TEcHf1zuPYO/sqGvUvW62g86RXZuA=="],
 

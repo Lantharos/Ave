@@ -21,11 +21,13 @@ import pushRoutes from "./routes/push";
 import signingRoutes from "./routes/signing";
 
 import { SESSION_COOKIE_NAME } from "./lib/session-cookie";
+import { initDb, runWithDb } from "./db";
 
 import uploadRoutes from "./routes/upload";
 
 type Bindings = {
   API_APP: DurableObjectNamespace;
+  DB: D1Database;
   INTERNAL_API_TOKEN?: string;
 };
 
@@ -158,7 +160,11 @@ function isWebSocketUpgrade(request: Request): boolean {
   return request.headers.get("Upgrade")?.toLowerCase() === "websocket";
 }
 
-function createWebSocketResponse(request: Request): Response {
+function createRequestDatabase(db: D1Database): D1Database | D1DatabaseSession {
+  return db.withSession("first-primary");
+}
+
+function createWebSocketResponse(request: Request, requestDatabase: D1Database | D1DatabaseSession): Response {
   const url = new URL(request.url);
   const authToken = url.searchParams.get("token") || undefined;
   const requestId = url.searchParams.get("requestId") || undefined;
@@ -168,15 +174,21 @@ function createWebSocketResponse(request: Request): Response {
   const server = webSocketPair[1];
   server.accept();
 
-  void handleWebSocketOpen(server as unknown as WebSocket, { authToken, requestId });
+  void runWithDb(requestDatabase, () =>
+    handleWebSocketOpen(server as unknown as WebSocket, { authToken, requestId })
+  );
 
   server.addEventListener("message", (event) => {
     const msg = typeof event.data === "string" ? event.data : String(event.data);
-    void handleWebSocketMessage(server as unknown as WebSocket, msg);
+    void runWithDb(requestDatabase, () =>
+      handleWebSocketMessage(server as unknown as WebSocket, msg)
+    );
   });
 
   server.addEventListener("close", () => {
-    handleWebSocketClose(server as unknown as WebSocket);
+    void runWithDb(requestDatabase, () =>
+      handleWebSocketClose(server as unknown as WebSocket)
+    );
   });
 
   return new Response(null, {
@@ -192,29 +204,36 @@ export class ApiAppDurableObject {
   ) {}
 
   async fetch(request: Request): Promise<Response> {
-    const url = new URL(request.url);
+    initDb(this.env.DB);
+    const requestDatabase = createRequestDatabase(this.env.DB);
 
-    if (url.pathname === "/ws" && isWebSocketUpgrade(request)) {
-      return createWebSocketResponse(request);
-    }
+    return runWithDb(requestDatabase, async () => {
+      const url = new URL(request.url);
 
-    if (url.pathname === "/__internal/cleanup" && request.method === "POST") {
-      const expectedToken = this.env.INTERNAL_API_TOKEN;
-      const providedToken = request.headers.get("x-internal-token");
-      if (expectedToken && expectedToken !== providedToken) {
-        return new Response("Forbidden", { status: 403 });
+      if (url.pathname === "/ws" && isWebSocketUpgrade(request)) {
+        return createWebSocketResponse(request, requestDatabase);
       }
 
-      const result = await cleanupStaleDevices();
-      return Response.json({ success: true, ...result });
-    }
+      if (url.pathname === "/__internal/cleanup" && request.method === "POST") {
+        const expectedToken = this.env.INTERNAL_API_TOKEN;
+        const providedToken = request.headers.get("x-internal-token");
+        if (expectedToken && expectedToken !== providedToken) {
+          return new Response("Forbidden", { status: 403 });
+        }
 
-    return app.fetch(request, this.env);
+        const result = await cleanupStaleDevices();
+        return Response.json({ success: true, ...result });
+      }
+
+      return app.fetch(request, this.env);
+    });
   }
 }
 
 export default {
   async fetch(request: Request, env: Bindings): Promise<Response> {
+    initDb(env.DB);
+
     const url = new URL(request.url);
     if (url.pathname.startsWith("/__internal/")) {
       return new Response("Not Found", { status: 404 });

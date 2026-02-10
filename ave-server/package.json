@@ -8,19 +8,22 @@
     "deploy": "wrangler deploy",
     "check": "tsc --noEmit",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "drizzle-kit migrate",
-    "db:push": "drizzle-kit push",
-    "db:studio": "drizzle-kit studio"
+    "db:migrate": "npm run db:migrate:local",
+    "db:migrate:local": "wrangler d1 migrations apply ave --local",
+    "db:migrate:remote": "wrangler d1 migrations apply ave --remote",
+    "db:export:neon": "node ./scripts/export-neon-to-d1.mjs",
+    "db:import:data:local": "wrangler d1 execute ave --local --file ./tmp/neon-data.sql",
+    "db:import:data:remote": "wrangler d1 execute ave --remote --file ./tmp/neon-data.sql"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.985.0",
     "@hono/zod-validator": "^0.7.6",
-    "@neondatabase/serverless": "^1.0.2",
     "@noble/ed25519": "^3.0.0",
     "@noble/hashes": "^2.0.1",
     "@simplewebauthn/server": "^13.2.2",
     "drizzle-orm": "^0.45.1",
     "hono": "^4.11.9",
+    "postgres": "^3.4.7",
     "web-push": "^3.6.7",
     "zod": "^4.3.6"
   },
