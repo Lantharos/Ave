@@ -2,7 +2,7 @@
     import IdentityCard from "../../components/IdentityCard.svelte";
     import Text from "../../components/Text.svelte";
     import { api, type Identity } from "../../lib/api";
-    import { generateAppKey, encryptAppKey, exportAppKey, loadMasterKey, decryptAppKey, hasMasterKey } from "../../lib/crypto";
+    import { generateAppKey, encryptAppKey, exportAppKey, loadMasterKey, decryptAppKey, hasMasterKey, clearMasterKey } from "../../lib/crypto";
 	import { auth, isAuthenticated, identities as identitiesStore, currentIdentity } from "../../stores/auth";
 	import { setReturnUrl } from "../../util/return-url";
 	import { goto } from "@mateothegreat/svelte5-router";
@@ -220,9 +220,21 @@
                     existingAuth.identityId === selectedIdentity.id;
                 
                 if (hasExistingKeyForIdentity && existingAuth) {
-                    // Decrypt the existing app key
-                    const appKey = await decryptAppKey(existingAuth.encryptedAppKey!, masterKey);
-                    rawAppKey = await exportAppKey(appKey);
+                    try {
+                        // Reuse existing key when decryptable with current master key.
+                        const appKey = await decryptAppKey(existingAuth.encryptedAppKey!, masterKey);
+                        rawAppKey = await exportAppKey(appKey);
+                    } catch (keyError) {
+                        // Existing app key could not be decrypted with the local master key.
+                        // Do not rotate silently; user may lose access to existing app data.
+                        console.warn("[Authorize] Existing encrypted app key could not be decrypted.", keyError);
+                        clearMasterKey();
+                        needsMasterKey = true;
+                        masterKeyError = "Your local encryption key doesn't match this account. Recover your key with passkey unlock or a trust code.";
+                        authorizing = false;
+                        sliderPosition = 0;
+                        return;
+                    }
                 } else {
                     // Generate a new app key for first-time authorization or new identity
                     const appKey = await generateAppKey();
@@ -262,6 +274,11 @@
 		} catch (err: any) {
             if (err?.message === "Request timed out") {
                 error = "Signing in is taking too long. Please try again.";
+            } else if (
+                err instanceof Error &&
+                /operation-specific reason|OperationError/i.test(err.message)
+            ) {
+                error = "Could not process app encryption for this sign-in. Please try again.";
             } else {
                 error = err instanceof Error ? err.message : "Authorization failed";
             }
