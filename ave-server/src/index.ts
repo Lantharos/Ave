@@ -149,6 +149,12 @@ function buildApp() {
   // Error handler
   app.onError((err, c) => {
     if (err instanceof SyntaxError && /JSON|Unexpected end of JSON input/i.test(err.message)) {
+      console.warn("Invalid JSON body", {
+        path: c.req.path,
+        method: c.req.method,
+        contentType: c.req.header("content-type"),
+        contentLength: c.req.header("content-length"),
+      });
       return c.json({ error: "Invalid JSON body" }, 400);
     }
 
@@ -266,20 +272,8 @@ export default {
       return stub.fetch(request);
     }
 
-    const headers = new Headers(request.headers);
-    let body: ArrayBuffer | undefined;
-    if (request.method !== "GET" && request.method !== "HEAD") {
-      body = await request.arrayBuffer();
-    }
-
-    const forwardedRequest = new Request(request.url, {
-      method: request.method,
-      headers,
-      body,
-      redirect: request.redirect,
-    });
-
-    return stub.fetch(forwardedRequest);
+    // Forward the original request directly to preserve streaming body integrity.
+    return stub.fetch(request);
   },
 
   async scheduled(_: ScheduledController, env: Bindings, ctx: ExecutionContext): Promise<void> {
