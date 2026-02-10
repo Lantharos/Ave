@@ -266,8 +266,12 @@ app.delete("/:identityId", async (c) => {
   if (!identity) {
     return c.json({ error: "Identity not found" }, 404);
   }
+
+  if (identity.isPrimary) {
+    return c.json({ error: "Cannot delete primary identity. Set another identity as primary first." }, 400);
+  }
   
-  // Can't delete primary identity if it's the only one
+  // Can't delete the only identity
   const allIdentities = await db
     .select()
     .from(identities)
@@ -278,22 +282,6 @@ app.delete("/:identityId", async (c) => {
   }
   
   await db.delete(identities).where(eq(identities.id, identityId));
-  
-  // If we deleted the primary, make another one primary
-  if (identity.isPrimary) {
-    const [remaining] = await db
-      .select()
-      .from(identities)
-      .where(eq(identities.userId, user.id))
-      .limit(1);
-    
-    if (remaining) {
-      await db
-        .update(identities)
-        .set({ isPrimary: true })
-        .where(eq(identities.id, remaining.id));
-    }
-  }
   
   // Log activity
   await db.insert(activityLogs).values({

@@ -138,16 +138,27 @@ app.post("/complete", zValidator("json", completeRegistrationSchema), async (c) 
   
   const { registrationInfo } = verification;
   
-  // Create user, identity, passkey, device in a transaction
-  const result = await db.transaction(async (tx) => {
+  // D1 in this runtime path does not support SQL BEGIN/COMMIT from Drizzle transactions.
+  // Execute writes sequentially and best-effort rollback user row on failure.
+  let createdUserId: string | null = null;
+  let result: {
+    user: typeof users.$inferSelect;
+    identity: typeof identities.$inferSelect;
+    device: typeof devices.$inferSelect;
+    sessionToken: string;
+    trustCodes: string[];
+  };
+
+  try {
     // Create user (no encryptedMasterKeyBackup yet - will be set after client encrypts with real trust codes)
-    const [user] = await tx
+    const [user] = await db
       .insert(users)
       .values({})
       .returning();
-    
+    createdUserId = user.id;
+
     // Create identity
-    const [identity] = await tx
+    const [identity] = await db
       .insert(identities)
       .values({
         userId: user.id,
@@ -160,10 +171,10 @@ app.post("/complete", zValidator("json", completeRegistrationSchema), async (c) 
         isPrimary: true,
       })
       .returning();
-    
+
     // Create passkey
     // Note: registrationInfo.credential.id is already a base64url string from @simplewebauthn
-    await tx.insert(passkeys).values({
+    await db.insert(passkeys).values({
       id: registrationInfo.credential.id,
       userId: user.id,
       publicKey: Buffer.from(registrationInfo.credential.publicKey).toString("base64"),
@@ -175,9 +186,9 @@ app.post("/complete", zValidator("json", completeRegistrationSchema), async (c) 
       // Store PRF-encrypted master key if provided (for passkeys that support PRF extension)
       prfEncryptedMasterKey: data.prfEncryptedMasterKey,
     });
-    
+
     // Create device
-    const [device] = await tx
+    const [device] = await db
       .insert(devices)
       .values({
         userId: user.id,
@@ -188,7 +199,7 @@ app.post("/complete", zValidator("json", completeRegistrationSchema), async (c) 
         fingerprint: data.device.fingerprint,
       })
       .returning();
-    
+
     // Generate trust codes (2 codes)
     const codes: string[] = [];
     for (let i = 0; i < 2; i++) {
@@ -196,18 +207,18 @@ app.post("/complete", zValidator("json", completeRegistrationSchema), async (c) 
       codes.push(code);
       const hash = hashTrustCode(code);
       console.log(`[Registration] Generated trust code ${i + 1}: ${code} -> hash: ${hash.substring(0, 10)}...`);
-      await tx.insert(trustCodes).values({
+      await db.insert(trustCodes).values({
         userId: user.id,
         codeHash: hash,
       });
     }
-    
+
     console.log(`[Registration] Created ${codes.length} trust codes for user ${user.id}`);
-    
+
     // Create session
     const sessionToken = generateSessionToken();
     const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
-    const [session] = await tx
+    await db
       .insert(sessions)
       .values({
         userId: user.id,
@@ -218,9 +229,9 @@ app.post("/complete", zValidator("json", completeRegistrationSchema), async (c) 
         userAgent: c.req.header("user-agent"),
       })
       .returning();
-    
+
     // Log activity
-    await tx.insert(activityLogs).values({
+    await db.insert(activityLogs).values({
       userId: user.id,
       action: "account_created",
       details: { handle: data.identity.handle },
@@ -229,15 +240,24 @@ app.post("/complete", zValidator("json", completeRegistrationSchema), async (c) 
       userAgent: c.req.header("user-agent"),
       severity: "info",
     });
-    
-    return {
+
+    result = {
       user,
       identity,
       device,
       sessionToken,
       trustCodes: codes,
     };
-  });
+  } catch (error) {
+    if (createdUserId) {
+      try {
+        await db.delete(users).where(eq(users.id, createdUserId));
+      } catch (cleanupError) {
+        console.error("[Registration] Cleanup failed after write error:", cleanupError);
+      }
+    }
+    throw error;
+  }
 
   // Clean up challenge after successful registration
   await deleteChallenge("registration", data.tempUserId);
@@ -258,6 +278,7 @@ app.post("/complete", zValidator("json", completeRegistrationSchema), async (c) 
       email: result.identity.email,
       avatarUrl: result.identity.avatarUrl,
       bannerUrl: result.identity.bannerUrl,
+      isPrimary: result.identity.isPrimary,
     },
     device: {
       id: result.device.id,
