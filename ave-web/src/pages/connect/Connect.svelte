@@ -59,7 +59,13 @@
       resources = (appData.resources || []).filter((resource) => resource.status === "active");
 
       if (resources.length === 0) {
-        error = "This app has no available connector resources.";
+        if (!params.resource) {
+          error = "This app has no available connector resources.";
+          return;
+        }
+        selectedResourceKey = params.resource;
+        selectedScope = params.scope || "resource.access";
+        communicationMode = params.mode;
         return;
       }
 
@@ -157,20 +163,28 @@
 
         <label class="block">
           <p class="text-[#B0B0B0] mb-2 text-[14px] md:text-[16px]">Target resource</p>
-          <select class="w-full bg-[#151515] border border-[#2A2A2A] rounded-[14px] px-4 py-3 text-white" bind:value={selectedResourceKey}>
-            {#each resources as resource}
-              <option value={resource.resourceKey}>{resource.displayName} ({resource.resourceKey})</option>
-            {/each}
-          </select>
+          {#if resources.length > 0}
+            <select class="w-full bg-[#151515] border border-[#2A2A2A] rounded-[14px] px-4 py-3 text-white" bind:value={selectedResourceKey}>
+              {#each resources as resource}
+                <option value={resource.resourceKey}>{resource.displayName} ({resource.resourceKey})</option>
+              {/each}
+            </select>
+          {:else}
+            <input class="w-full bg-[#151515] border border-[#2A2A2A] rounded-[14px] px-4 py-3 text-white" value={selectedResourceKey} readonly />
+          {/if}
         </label>
 
         <label class="block">
           <p class="text-[#B0B0B0] mb-2 text-[14px] md:text-[16px]">Permission scope</p>
-          <select class="w-full bg-[#151515] border border-[#2A2A2A] rounded-[14px] px-4 py-3 text-white" bind:value={selectedScope}>
-            {#each (resources.find((r) => r.resourceKey === selectedResourceKey)?.scopes || []) as scope}
-              <option value={scope}>{scope}</option>
-            {/each}
-          </select>
+          {#if resources.length > 0}
+            <select class="w-full bg-[#151515] border border-[#2A2A2A] rounded-[14px] px-4 py-3 text-white" bind:value={selectedScope}>
+              {#each (resources.find((r) => r.resourceKey === selectedResourceKey)?.scopes || []) as scope}
+                <option value={scope}>{scope}</option>
+              {/each}
+            </select>
+          {:else}
+            <input class="w-full bg-[#151515] border border-[#2A2A2A] rounded-[14px] px-4 py-3 text-white" value={selectedScope} readonly />
+          {/if}
           <p class="text-[#7A7A7A] text-[13px] mt-2">
             Scopes are resource-defined by the target app and can be revoked anytime from your dashboard.
           </p>
