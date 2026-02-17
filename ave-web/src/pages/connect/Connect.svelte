@@ -75,7 +75,7 @@
       }
 
       if (!params.resource) {
-        error = "Missing resource parameter. This connector link must target a specific resource.";
+        error = "Missing resource parameter.";
         return;
       }
 
@@ -124,7 +124,9 @@
       });
 
       if (params.embed) {
-        const target = (window.opener && (window.opener as any).parent) ? (window.opener as any).parent : (window.opener ?? window.parent);
+        const target = (window.opener && (window.opener as any).parent)
+          ? (window.opener as any).parent
+          : (window.opener ?? window.parent);
         target?.postMessage({ type: "ave:success", payload: { redirectUrl: response.redirectUrl } }, "*");
         if (window.opener) {
           setTimeout(() => window.close(), 50);
@@ -140,7 +142,9 @@
 
   function handleCancel() {
     if (params.embed) {
-      const target = (window.opener && (window.opener as any).parent) ? (window.opener as any).parent : (window.opener ?? window.parent);
+      const target = (window.opener && (window.opener as any).parent)
+        ? (window.opener as any).parent
+        : (window.opener ?? window.parent);
       target?.postMessage({ type: "ave:close" }, "*");
       if (window.opener) {
         setTimeout(() => window.close(), 50);
@@ -157,7 +161,9 @@
   $effect(() => {
     if (!$isAuthenticated) {
       if (params.embed) {
-        const target = (window.opener && (window.opener as any).parent) ? (window.opener as any).parent : (window.opener ?? window.parent);
+        const target = (window.opener && (window.opener as any).parent)
+          ? (window.opener as any).parent
+          : (window.opener ?? window.parent);
         target?.postMessage({ type: "ave:auth_required" }, "*");
       }
       setReturnUrl(window.location.pathname + window.location.search);
@@ -172,31 +178,25 @@
   <AuroraBackdrop preset="dashboard-tr" cclass="absolute top-0 right-0 w-[70%] pointer-events-none select-none" />
   <AuroraBackdrop preset="dashboard-bl" cclass="absolute bottom-0 left-0 w-[80%] pointer-events-none select-none" />
 
-  <div class="max-w-[1350px] mx-auto relative z-10">
+  <div class="max-w-[1240px] mx-auto relative z-10">
     {#if loading}
-      <div class="panel-shell py-20 text-center text-[#8A8A8A]">Loading connector details...</div>
+      <div class="shell"><p class="state-copy">Loading connector details...</p></div>
     {:else if error}
-      <div class="panel-shell p-4 rounded-[14px] bg-[#2A1111] border border-[#502222] text-[#E57272]">{error}</div>
+      <div class="shell shell-error"><p>{error}</p></div>
     {:else if appInfo && targetResource}
-      <div class="panel-shell panel-grid">
-        <section class="hero-pane">
-          <p class="eyebrow">Ave Connector</p>
-          <h1>
-            <span>{appInfo.name}</span>
-            <small>wants to use</small>
-            <span>{targetResource.ownerAppName}</span>
-          </h1>
-          <p class="hero-copy">
-            This is a separate connector grant on top of sign-in. The requesting app cannot change this request from this screen.
-          </p>
+      <div class="shell shell-grid">
+        <section class="hero">
+          <p class="hero-eyebrow">Ave Connector</p>
+          <h1>{appInfo.name} wants to connect with {targetResource.ownerAppName}</h1>
+          <p class="hero-sub">Review access and approve.</p>
 
-          <div class="flow-card" aria-label="Connector direction">
+          <div class="flow">
             <div class="flow-app">
-              <div class="app-icon-wrap">
+              <div class="icon-wrap">
                 {#if appInfo.iconUrl}
-                  <img src={appInfo.iconUrl} alt="{appInfo.name} icon" class="app-icon" />
+                  <img src={appInfo.iconUrl} alt="{appInfo.name} icon" class="icon icon-fill" />
                 {:else}
-                  <div class="app-fallback">{appInitial(appInfo.name)}</div>
+                  <div class="icon-fallback">{appInitial(appInfo.name)}</div>
                 {/if}
               </div>
               <strong>{appInfo.name}</strong>
@@ -204,19 +204,17 @@
             </div>
 
             <div class="flow-arrow" aria-hidden="true">
-              <span></span>
-              <svg width="38" height="38" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M4 12h16M13 5l7 7-7 7" stroke="#C9CBCE" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+              <svg width="34" height="34" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M4 12h16M13 5l7 7-7 7" stroke="#BFC2C5" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
               </svg>
-              <span></span>
             </div>
 
             <div class="flow-app">
-              <div class="app-icon-wrap">
+              <div class="icon-wrap">
                 {#if targetResource.ownerAppIconUrl}
-                  <img src={targetResource.ownerAppIconUrl} alt="{targetResource.ownerAppName} icon" class="app-icon" />
+                  <img src={targetResource.ownerAppIconUrl} alt="{targetResource.ownerAppName} icon" class="icon icon-target" />
                 {:else}
-                  <div class="app-fallback">{appInitial(targetResource.ownerAppName)}</div>
+                  <div class="icon-fallback">{appInitial(targetResource.ownerAppName)}</div>
                 {/if}
               </div>
               <strong>{targetResource.ownerAppName}</strong>
@@ -224,38 +222,23 @@
             </div>
           </div>
 
-          <div class="grant-card">
-            <p class="eyebrow">Connector request</p>
-            <div class="grant-item"><span class="grant-key">Resource</span><span class="grant-value">{targetResource.displayName} ({targetResource.resourceKey})</span></div>
-            <div class="grant-item"><span class="grant-key">Scope</span><span class="grant-value">{selectedScope}</span></div>
-            <div class="grant-item"><span class="grant-key">Mode</span><span class="grant-value">{requestedCommunicationMode === "background" ? "Background" : "User present"}</span></div>
-            <div class="grant-item"><span class="grant-key">Revocation</span><span class="grant-value">Any time from dashboard</span></div>
+          <div class="meta">
+            <div><span class="meta-key">Resource</span><span>{targetResource.displayName}</span></div>
+            <div><span class="meta-key">Scope</span><span>{selectedScope}</span></div>
           </div>
         </section>
 
-        <section class="consent-pane">
-          <h2>Approve connector grant</h2>
+        <section class="consent">
+          <h2>Approve access</h2>
           <p>
-            Approving lets <strong>{appInfo.name}</strong> call <strong>{targetResource.ownerAppName}</strong> on your behalf within the scope above.
+            This will let <strong>{appInfo.name}</strong> use <strong>{targetResource.ownerAppName}</strong> for this feature.
           </p>
 
-          <div class="note-card">
-            If connector secrets are required, Ave may request passkey confirmation during connector runtime so protected material can be used securely in your browser session.
-          </div>
-
-          <div class="consent-lock">
-            <span>Request is app-defined and locked on this screen.</span>
-          </div>
-
-          <div class="consent-actions">
-            <button
-              class="primary-btn"
-              disabled={connecting}
-              onclick={handleConnect}
-            >
-              {connecting ? "Creating connector grant..." : "Approve and continue"}
+          <div class="actions">
+            <button class="btn-primary" disabled={connecting} onclick={handleConnect}>
+              {connecting ? "Approving..." : "Approve and continue"}
             </button>
-            <button class="secondary-btn" onclick={handleCancel}>Cancel</button>
+            <button class="btn-secondary" onclick={handleCancel}>Cancel</button>
           </div>
         </section>
       </div>
@@ -264,297 +247,265 @@
 </div>
 
 <style>
-  .panel-shell {
+  .shell {
     border-radius: 52px;
-    border: 1px solid #1f1f1f;
-    background: linear-gradient(180deg, rgba(16, 16, 16, 0.85), rgba(10, 10, 10, 0.9));
+    background: #11111199;
     backdrop-filter: blur(20px);
-    padding: 28px;
+    padding: 24px;
+    min-height: 280px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
 
-  .panel-grid {
+  .shell-error {
+    background: #2a1111;
+    color: #e57272;
+    justify-content: flex-start;
+    min-height: 0;
+  }
+
+  .state-copy {
+    margin: 0;
+    color: #8a8a8a;
+    font-size: 18px;
+  }
+
+  .shell-grid {
     display: grid;
-    grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
-    gap: 22px;
+    grid-template-columns: minmax(0, 1.2fr) minmax(0, 0.8fr);
+    gap: 20px;
+    align-items: stretch;
+    justify-content: initial;
   }
 
-  .hero-pane,
-  .consent-pane {
+  .hero,
+  .consent {
     border-radius: 36px;
-    border: 1px solid #252525;
-    background: rgba(12, 12, 12, 0.78);
+    background: #101010;
     padding: 34px;
   }
 
-  .eyebrow {
+  .hero-eyebrow {
     margin: 0;
+    font-size: 12px;
     text-transform: uppercase;
-    letter-spacing: 0.09em;
-    color: #6f6f6f;
-    font-size: 11px;
-    font-weight: 600;
+    letter-spacing: 0.08em;
+    color: #7a7a7a;
   }
 
-  h1 {
-    margin: 12px 0 0;
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    color: #f5f5f5;
-    font-size: clamp(34px, 4.7vw, 56px);
+  .hero h1 {
+    margin: 10px 0 0;
+    color: #f4f4f4;
+    font-size: clamp(34px, 4.8vw, 56px);
     line-height: 1.03;
     font-weight: 700;
+    max-width: 15ch;
   }
 
-  h1 small {
-    font-size: clamp(16px, 2vw, 21px);
-    color: #8a8a8a;
-    font-weight: 500;
-    line-height: 1.2;
+  .hero-sub {
+    margin: 14px 0 0;
+    color: #8e8e8e;
+    font-size: 18px;
   }
 
-  .hero-copy {
-    margin: 16px 0 0;
-    color: #8f8f8f;
-    font-size: 16px;
-    line-height: 1.52;
-    max-width: 680px;
-  }
-
-  .flow-card,
-  .grant-card {
-    margin-top: 22px;
-    border: 1px solid #262626;
-    background: #101010;
-    border-radius: 24px;
-    padding: 18px;
-  }
-
-  .flow-card {
+  .flow {
+    margin-top: 24px;
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    gap: 14px;
     align-items: center;
-    gap: 16px;
   }
 
   .flow-app {
-    text-align: center;
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 4px;
+    text-align: center;
   }
 
-  .flow-app strong {
-    color: #f4f4f4;
-    font-size: 22px;
-    line-height: 1.1;
-  }
-
-  .flow-app span {
-    color: #838383;
-    font-size: 12px;
-  }
-
-  .app-icon-wrap {
-    width: 86px;
-    height: 86px;
-    border-radius: 26px;
-    border: 1px solid #2b2b2b;
-    background: #151515;
+  .icon-wrap {
+    width: 88px;
+    height: 88px;
+    border-radius: 24px;
+    background: #171717;
     display: flex;
     align-items: center;
     justify-content: center;
     overflow: hidden;
+    padding: 0;
   }
 
-  .app-icon {
+  .icon {
+    display: block;
+  }
+
+  .icon-fill {
     width: 100%;
     height: 100%;
     object-fit: cover;
   }
 
-  .app-fallback {
+  .icon-target {
+    height: 100%;
+    width: auto;
+    max-width: 100%;
+    object-fit: contain;
+  }
+
+  .icon-fallback {
+    color: #d0d0d0;
     font-size: 34px;
     font-weight: 700;
-    color: #d4d4d4;
+  }
+
+  .flow-app strong {
+    margin-top: 10px;
+    color: #f5f5f5;
+    font-size: 22px;
+    line-height: 1.1;
+  }
+
+  .flow-app span {
+    color: #888;
+    font-size: 12px;
+    margin-top: 3px;
   }
 
   .flow-arrow {
+    color: #bfc2c5;
     display: flex;
     align-items: center;
-    gap: 8px;
-    min-width: 150px;
+    justify-content: center;
   }
 
-  .flow-arrow span {
-    flex: 1;
-    height: 1px;
-    background: linear-gradient(90deg, transparent, #3a3a3a, transparent);
-  }
-
-  .grant-card {
-    display: flex;
-    flex-direction: column;
+  .meta {
+    margin-top: 24px;
+    display: grid;
     gap: 10px;
   }
 
-  .grant-item {
-    display: grid;
-    grid-template-columns: 120px minmax(0, 1fr);
-    align-items: center;
-    gap: 12px;
-    border: 1px solid #252525;
+  .meta div {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 10px;
+    background: #161616;
     border-radius: 14px;
-    padding: 10px 12px;
-    background: #0f0f0f;
+    padding: 12px 14px;
   }
 
-  .grant-key {
-    color: #8d8d8d;
+  .meta-key {
+    color: #8b8b8b;
     font-size: 13px;
   }
 
-  .grant-value {
-    color: #f1f1f1;
+  .meta span {
+    color: #f2f2f2;
     font-size: 15px;
     font-weight: 600;
-    text-align: right;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
   }
 
-  .consent-pane {
+  .consent {
     display: flex;
     flex-direction: column;
   }
 
-  .consent-pane h2 {
+  .consent h2 {
     margin: 0;
-    font-size: 42px;
-    color: #f6f6f6;
-    line-height: 1.04;
+    color: #f3f3f3;
+    font-size: clamp(32px, 4vw, 46px);
+    line-height: 1.05;
   }
 
-  .consent-pane p {
+  .consent p {
     margin: 14px 0 0;
-    color: #8f8f8f;
-    line-height: 1.52;
-    font-size: 16px;
-  }
-
-  .consent-pane p strong {
-    color: #dfdfdf;
-  }
-
-  .note-card {
-    margin-top: 20px;
-    border-radius: 18px;
-    border: 1px solid #274067;
-    background: #111822;
-    color: #9eb5cd;
-    font-size: 14px;
+    color: #8e8e8e;
+    font-size: 18px;
     line-height: 1.5;
-    padding: 16px;
   }
 
-  .consent-lock {
-    margin-top: 14px;
-    border-radius: 14px;
-    border: 1px solid #2f2f2f;
-    background: #141414;
-    color: #9d9d9d;
-    font-size: 13px;
-    padding: 12px;
+  .consent strong {
+    color: #f0f0f0;
   }
 
-  .consent-actions {
+  .actions {
     margin-top: auto;
-    padding-top: 22px;
+    padding-top: 28px;
     display: grid;
     gap: 10px;
   }
 
-  .primary-btn,
-  .secondary-btn {
+  .btn-primary,
+  .btn-secondary {
     width: 100%;
     border-radius: 999px;
     padding: 14px 18px;
-    font-size: 23px;
-    line-height: 1;
+    font-size: 22px;
     font-weight: 600;
-    transition: all 0.15s ease;
+    line-height: 1;
   }
 
-  .primary-btn {
-    border: 1px solid transparent;
+  .btn-primary {
+    border: 0;
     background: #f2f2f2;
     color: #090909;
   }
 
-  .primary-btn:hover:not(:disabled) {
-    background: #ffffff;
+  .btn-primary:hover:not(:disabled) {
+    background: #fff;
   }
 
-  .primary-btn:disabled {
-    opacity: 0.6;
-    cursor: default;
+  .btn-primary:disabled {
+    opacity: 0.65;
   }
 
-  .secondary-btn {
-    border: 1px solid #3b3b3b;
-    background: transparent;
-    color: #a9a9a9;
+  .btn-secondary {
+    border: 0;
+    background: #181818;
+    color: #b0b0b0;
   }
 
-  .secondary-btn:hover {
-    color: #e4e4e4;
-    border-color: #636363;
+  .btn-secondary:hover {
+    color: #e2e2e2;
+    background: #232323;
   }
 
   @media (max-width: 1080px) {
-    .panel-shell {
-      border-radius: 32px;
-      padding: 16px;
+    .shell {
+      border-radius: 28px;
+      padding: 14px;
     }
 
-    .panel-grid {
+    .shell-grid {
       grid-template-columns: 1fr;
-      gap: 14px;
+      gap: 12px;
     }
 
-    .hero-pane,
-    .consent-pane {
-      border-radius: 24px;
+    .hero,
+    .consent {
+      border-radius: 22px;
       padding: 20px;
     }
 
-    h1 {
-      font-size: clamp(30px, 11vw, 48px);
+    .hero h1 {
+      font-size: clamp(30px, 10vw, 46px);
+      max-width: none;
     }
 
-    .consent-pane h2 {
-      font-size: clamp(28px, 9vw, 44px);
+    .consent h2 {
+      font-size: clamp(28px, 9vw, 40px);
     }
 
-    .flow-card {
+    .flow {
       grid-template-columns: 1fr;
-      gap: 14px;
+      gap: 10px;
     }
 
-    .flow-arrow {
-      min-width: 0;
-      width: 100%;
-    }
-
-    .grant-item {
-      grid-template-columns: 1fr;
+    .meta div {
+      flex-direction: column;
+      align-items: flex-start;
       gap: 4px;
-    }
-
-    .grant-value {
-      text-align: left;
     }
   }
 </style>
