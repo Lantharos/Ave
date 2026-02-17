@@ -1,6 +1,7 @@
 <script lang="ts">
   import { goto } from "@mateothegreat/svelte5-router";
   import { get } from "svelte/store";
+  import AuroraBackdrop from "../../components/AuroraBackdrop.svelte";
   import { api } from "../../lib/api";
   import { auth, isAuthenticated } from "../../stores/auth";
   import { setReturnUrl } from "../../util/return-url";
@@ -38,6 +39,12 @@
   let selectedScope = $state("");
   let selectedIdentityId = $state("");
   let requestedCommunicationMode = $state<"user_present" | "background">("user_present");
+
+  let sliderPosition = $state(0);
+  let sliderActive = $state(false);
+  let sliderPointerId: number | null = null;
+  let sliderRef: HTMLElement | null = null;
+  let sliderMaxTravel = $state(0);
 
   const params = $derived.by(() => {
     const p = new URLSearchParams(window.location.search);
@@ -136,6 +143,7 @@
     } catch (e: any) {
       error = e?.message || "Connector authorization failed.";
       connecting = false;
+      sliderPosition = 0;
     }
   }
 
@@ -157,6 +165,75 @@
     return name?.[0]?.toUpperCase() || "?";
   }
 
+  function getButtonWidth() {
+    return typeof window !== "undefined" && window.innerWidth < 768 ? 44 : 70;
+  }
+
+  function cleanupSlider() {
+    sliderActive = false;
+
+    if (sliderRef && sliderPointerId !== null) {
+      try {
+        sliderRef.releasePointerCapture(sliderPointerId);
+      } catch {}
+    }
+
+    sliderPointerId = null;
+    sliderRef = null;
+    document.removeEventListener("pointermove", handleSliderMove);
+    document.removeEventListener("pointerup", handleSliderEnd);
+    document.removeEventListener("pointercancel", handleSliderEnd);
+  }
+
+  function handleSliderStart(e: PointerEvent) {
+    if (connecting) return;
+    e.preventDefault();
+
+    sliderActive = true;
+    sliderPointerId = e.pointerId;
+    sliderRef = document.getElementById("connect-slider");
+    if (sliderRef) {
+      const rect = sliderRef.getBoundingClientRect();
+      sliderMaxTravel = rect.width - getButtonWidth();
+      try {
+        sliderRef.setPointerCapture(e.pointerId);
+      } catch {
+        document.addEventListener("pointermove", handleSliderMove);
+        document.addEventListener("pointerup", handleSliderEnd);
+        document.addEventListener("pointercancel", handleSliderEnd);
+      }
+    }
+  }
+
+  function handleSliderMove(e: PointerEvent) {
+    if (!sliderActive) return;
+    if (sliderPointerId !== null && e.pointerId !== sliderPointerId) return;
+
+    e.preventDefault();
+    if (!sliderRef || sliderMaxTravel <= 0) return;
+
+    const rect = sliderRef.getBoundingClientRect();
+    const buttonWidth = getButtonWidth();
+    const relativeX = e.clientX - rect.left - buttonWidth / 2;
+    const position = Math.max(0, Math.min(1, relativeX / sliderMaxTravel));
+    sliderPosition = position;
+
+    if (position >= 0.95) {
+      cleanupSlider();
+      handleConnect();
+    }
+  }
+
+  function handleSliderEnd(e: PointerEvent) {
+    if (!sliderActive) return;
+    if (sliderPointerId !== null && e.pointerId !== sliderPointerId) return;
+
+    cleanupSlider();
+    if (sliderPosition < 0.95) {
+      sliderPosition = 0;
+    }
+  }
+
   $effect(() => {
     if (!$isAuthenticated) {
       if (params.embed) {
@@ -174,12 +251,16 @@
 </script>
 
 {#if loading}
-  <div class="bg-[#090909] min-h-screen-fixed flex items-center justify-center p-6 md:p-[50px]">
-    <div class="w-[48px] h-[48px] border-2 border-[#FFFFFF] border-t-transparent rounded-full animate-spin"></div>
+  <div class="bg-[#090909] min-h-screen-fixed flex items-center justify-center p-6 md:p-[50px] relative overflow-hidden">
+    <AuroraBackdrop preset="dashboard-tr" cclass="absolute top-0 right-0 w-[70%] pointer-events-none select-none" />
+    <AuroraBackdrop preset="dashboard-bl" cclass="absolute bottom-0 left-0 w-[80%] pointer-events-none select-none" />
+    <div class="w-[48px] h-[48px] border-2 border-[#FFFFFF] border-t-transparent rounded-full animate-spin z-10"></div>
   </div>
 {:else if error}
-  <div class="bg-[#090909] min-h-screen-fixed flex items-center justify-center p-6 md:p-[50px]">
-    <div class="w-full max-w-[560px] rounded-[28px] bg-[#151515] p-6 md:p-10 text-center">
+  <div class="bg-[#090909] min-h-screen-fixed flex items-center justify-center p-6 md:p-[50px] relative overflow-hidden">
+    <AuroraBackdrop preset="dashboard-tr" cclass="absolute top-0 right-0 w-[70%] pointer-events-none select-none" />
+    <AuroraBackdrop preset="dashboard-bl" cclass="absolute bottom-0 left-0 w-[80%] pointer-events-none select-none" />
+    <div class="w-full max-w-[560px] rounded-[28px] bg-[#151515] p-6 md:p-10 text-center z-10">
       <p class="text-[#E57272] text-[16px] md:text-[20px]">{error}</p>
       <button
         class="mt-6 px-6 py-3 rounded-full bg-[#FFFFFF] text-[#090909] font-semibold hover:bg-[#EAEAEA] transition-colors"
@@ -191,28 +272,17 @@
   </div>
 {:else if appInfo && targetResource}
   <div class="bg-[#090909] min-h-screen-fixed flex flex-col md:flex-row md:items-stretch items-center gap-6 md:gap-[50px] p-6 md:p-[50px] relative overflow-auto">
-    <div class="flex-1 z-10 flex flex-col items-start justify-start md:justify-between p-4 md:p-[50px] w-full">
-      <div class="flex flex-row gap-4 md:gap-[20px] items-start">
-        <button
-          class="w-12 h-12 md:w-[80px] md:h-[80px] rounded-[12px] md:rounded-[16px] overflow-hidden bg-[#171717] flex items-center justify-center"
-          onclick={handleCancel}
-          title="Go back"
-        >
-          {#if appInfo.iconUrl}
-            <img src={appInfo.iconUrl} alt="{appInfo.name} logo" class="w-full h-full object-cover" />
-          {:else}
-            <span class="text-[#878787] text-[18px] md:text-[30px] font-bold">{appInitial(appInfo.name)}</span>
-          {/if}
-        </button>
+    <AuroraBackdrop preset="dashboard-tr" cclass="absolute top-0 right-0 w-[70%] pointer-events-none select-none" />
+    <AuroraBackdrop preset="dashboard-bl" cclass="absolute bottom-0 left-0 w-[80%] pointer-events-none select-none" />
 
-        <div class="flex flex-col gap-1 md:gap-[10px]">
-          <h1 class="font-poppins text-2xl md:text-[48px] text-white leading-[1.05]">
-            Connect {appInfo.name} to {targetResource.ownerAppName}
-          </h1>
-          <p class="font-poppins text-[14px] md:text-[22px] text-[#878787]">
-            Approve to continue.
-          </p>
-        </div>
+    <div class="flex-1 z-10 flex flex-col items-start justify-start md:justify-between p-4 md:p-[50px] w-full">
+      <div class="flex flex-col gap-1 md:gap-[8px]">
+        <h1 class="font-poppins text-[34px] md:text-[42px] text-white leading-[1.05]">
+          Connect {appInfo.name} to {targetResource.ownerAppName}
+        </h1>
+        <p class="font-poppins text-[14px] md:text-[18px] text-[#878787]">
+          Approve to continue.
+        </p>
       </div>
 
       <div class="mt-8 md:mt-0 w-full max-w-[760px] bg-[#111111]/80 rounded-[20px] md:rounded-[32px] p-4 md:p-6">
@@ -225,7 +295,7 @@
                 <span class="text-[#CFCFCF] text-[20px] md:text-[34px] font-bold">{appInitial(appInfo.name)}</span>
               {/if}
             </div>
-            <p class="mt-2 text-white text-[16px] md:text-[24px] font-semibold">{appInfo.name}</p>
+            <p class="mt-2 text-white text-[16px] md:text-[22px] font-semibold">{appInfo.name}</p>
           </div>
 
           <svg class="text-[#BFC2C5] shrink-0" width="30" height="30" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -240,7 +310,7 @@
                 <span class="text-[#CFCFCF] text-[20px] md:text-[34px] font-bold">{appInitial(targetResource.ownerAppName)}</span>
               {/if}
             </div>
-            <p class="mt-2 text-white text-[16px] md:text-[24px] font-semibold">{targetResource.ownerAppName}</p>
+            <p class="mt-2 text-white text-[16px] md:text-[22px] font-semibold">{targetResource.ownerAppName}</p>
           </div>
         </div>
 
@@ -258,24 +328,43 @@
     </div>
 
     <div class="flex-1 w-full md:min-h-full px-4 md:px-[75px] z-10 py-5 md:py-[70px] flex flex-col justify-between rounded-[24px] md:rounded-[64px] bg-[#111111]/60 backdrop-blur-xl">
-      <div class="flex flex-col gap-3 md:gap-[20px]">
-        <h2 class="text-white text-2xl md:text-[52px] font-bold font-poppins leading-[1.02]">Approve access</h2>
-        <p class="font-poppins text-[14px] md:text-[24px] text-[#878787] leading-[1.45]">
+      <div class="flex flex-col gap-3 md:gap-[12px]">
+        <h2 class="text-white text-2xl md:text-[42px] font-bold font-poppins leading-[1.02]">Approve access</h2>
+        <p class="font-poppins text-[14px] md:text-[18px] text-[#878787] leading-[1.45]">
           This allows <span class="text-white font-semibold">{appInfo.name}</span> to use <span class="text-white font-semibold">{targetResource.ownerAppName}</span> for this feature.
         </p>
       </div>
 
-      <div class="flex flex-col gap-3 md:gap-[20px] mt-8 md:mt-0">
-        <button
-          class="w-full py-3 md:py-[20px] bg-[#FFFFFF] text-[#090909] text-[18px] md:text-[40px] font-semibold rounded-full hover:bg-[#EAEAEA] transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
-          disabled={connecting}
-          onclick={handleConnect}
+      <div class="flex flex-col gap-3 md:gap-[18px] mt-8 md:mt-0">
+        <!-- svelte-ignore a11y_no_static_element_interactions -->
+        <div
+          id="connect-slider"
+          class="rounded-full bg-[#171717]/80 border-[3px] md:border-[6px] border-[#171717]/80 w-full relative h-[50px] md:h-[82px] touch-none select-none"
+          onpointerdown={handleSliderStart}
+          onpointermove={handleSliderMove}
+          onpointerup={handleSliderEnd}
+          onpointercancel={handleSliderEnd}
         >
-          {connecting ? "Approving..." : "Approve and continue"}
-        </button>
+          <div
+            class="w-[44px] h-[44px] md:w-[70px] md:h-[70px] bg-white rounded-full flex items-center justify-center absolute top-0 left-0 z-10 pointer-events-none {sliderActive ? '' : 'transition-[transform] duration-300'}"
+            style="transform: translateX({sliderMaxTravel > 0 ? sliderPosition * sliderMaxTravel : sliderPosition * 100}px);"
+          >
+            {#if connecting}
+              <div class="w-5 h-5 md:w-[24px] md:h-[24px] border-2 border-[#090909] border-t-transparent rounded-full animate-spin"></div>
+            {:else}
+              <svg class="w-5 h-5 md:w-[35px] md:h-[35px]" viewBox="0 0 35 35" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M11 30L23 18L11 6" stroke="#090909" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            {/if}
+          </div>
+
+          <p class="text-[#878787] text-sm md:text-[18px] font-poppins font-normal absolute top-0 bottom-0 left-0 right-0 text-center flex items-center justify-center pointer-events-none">
+            {connecting ? "Approving..." : "Swipe to Approve"}
+          </p>
+        </div>
 
         <button
-          class="w-full py-3 md:py-[20px] bg-[#171717] text-[#A8A8A8] text-[18px] md:text-[40px] font-semibold rounded-full hover:bg-[#222222] hover:text-[#E5E5E5] transition-colors"
+          class="w-full py-3 md:py-[14px] bg-[#171717] text-[#A8A8A8] text-[18px] md:text-[32px] font-semibold rounded-full hover:bg-[#222222] hover:text-[#E5E5E5] transition-colors"
           onclick={handleCancel}
         >
           Cancel
