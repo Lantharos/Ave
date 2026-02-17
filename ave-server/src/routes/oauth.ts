@@ -137,6 +137,36 @@ app.get("/app/:clientId", async (c) => {
   return c.json({ app: oauthApp, resources });
 });
 
+// Public: Get connector resource info by resource key (for connector UX)
+app.get("/resource/:resourceKey", async (c) => {
+  const resourceKey = c.req.param("resourceKey");
+
+  const [resource] = await db
+    .select({
+      resourceKey: oauthResources.resourceKey,
+      displayName: oauthResources.displayName,
+      description: oauthResources.description,
+      scopes: oauthResources.scopes,
+      audience: oauthResources.audience,
+      status: oauthResources.status,
+      ownerAppClientId: oauthApps.clientId,
+      ownerAppName: oauthApps.name,
+      ownerAppDescription: oauthApps.description,
+      ownerAppIconUrl: oauthApps.iconUrl,
+      ownerAppWebsiteUrl: oauthApps.websiteUrl,
+    })
+    .from(oauthResources)
+    .innerJoin(oauthApps, eq(oauthResources.ownerAppId, oauthApps.id))
+    .where(and(eq(oauthResources.resourceKey, resourceKey), eq(oauthResources.status, "active")))
+    .limit(1);
+
+  if (!resource) {
+    return c.json({ error: "Resource not found" }, 404);
+  }
+
+  return c.json({ resource });
+});
+
 // Authorization endpoint - user grants access
 app.post("/authorize", requireAuth, zValidator("json", z.object({
   clientId: z.string(),

@@ -526,6 +526,23 @@ export const api = {
           status: string;
         }[];
       }>(`/api/oauth/app/${encodeURIComponent(clientId)}`),
+
+    getResource: (resourceKey: string) =>
+      request<{
+        resource: {
+          resourceKey: string;
+          displayName: string;
+          description?: string;
+          scopes: string[];
+          audience: string;
+          status: string;
+          ownerAppClientId: string;
+          ownerAppName: string;
+          ownerAppDescription?: string;
+          ownerAppIconUrl?: string;
+          ownerAppWebsiteUrl?: string;
+        };
+      }>(`/api/oauth/resource/${encodeURIComponent(resourceKey)}`),
     
     authorize: (data: {
       clientId: string;

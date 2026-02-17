@@ -38,6 +38,11 @@ const resourceSchema = z.object({
   status: z.enum(["active", "disabled"]).optional(),
 });
 
+function isResourceKeyUniqueViolation(error: unknown): boolean {
+  const message = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase();
+  return message.includes("unique") && message.includes("oauth_resources.resource_key");
+}
+
 async function requireDevUser(c: any, next: any) {
   const authHeader = c.req.header("Authorization");
 
@@ -296,18 +301,36 @@ app.post("/:appId/resources", zValidator("json", resourceSchema), async (c) => {
     return c.json({ error: "App not found" }, 404);
   }
 
-  const [created] = await db
-    .insert(oauthResources)
-    .values({
-      ownerAppId: appId,
-      resourceKey: data.resourceKey,
-      displayName: data.displayName,
-      description: data.description || null,
-      scopes: data.scopes,
-      audience: data.audience,
-      status: data.status || "active",
-    })
-    .returning();
+  const [resourceWithSameKey] = await db
+    .select({ id: oauthResources.id })
+    .from(oauthResources)
+    .where(eq(oauthResources.resourceKey, data.resourceKey))
+    .limit(1);
+
+  if (resourceWithSameKey) {
+    return c.json({ error: "Resource key already exists" }, 409);
+  }
+
+  let created: typeof oauthResources.$inferSelect;
+  try {
+    [created] = await db
+      .insert(oauthResources)
+      .values({
+        ownerAppId: appId,
+        resourceKey: data.resourceKey,
+        displayName: data.displayName,
+        description: data.description || null,
+        scopes: data.scopes,
+        audience: data.audience,
+        status: data.status || "active",
+      })
+      .returning();
+  } catch (error) {
+    if (isResourceKeyUniqueViolation(error)) {
+      return c.json({ error: "Resource key already exists" }, 409);
+    }
+    throw error;
+  }
 
   return c.json({ resource: created });
 });
@@ -338,19 +361,38 @@ app.patch("/:appId/resources/:resourceId", zValidator("json", resourceSchema.par
     return c.json({ error: "Resource not found" }, 404);
   }
 
-  const [updated] = await db
-    .update(oauthResources)
-    .set({
-      resourceKey: data.resourceKey ?? resource.resourceKey,
-      displayName: data.displayName ?? resource.displayName,
-      description: data.description ?? resource.description,
-      scopes: data.scopes ?? (resource.scopes as string[]),
-      audience: data.audience ?? resource.audience,
-      status: data.status ?? resource.status,
-      updatedAt: new Date(),
-    })
-    .where(eq(oauthResources.id, resourceId))
-    .returning();
+  const nextResourceKey = data.resourceKey ?? resource.resourceKey;
+  const [resourceWithSameKey] = await db
+    .select({ id: oauthResources.id })
+    .from(oauthResources)
+    .where(eq(oauthResources.resourceKey, nextResourceKey))
+    .limit(1);
+
+  if (resourceWithSameKey && resourceWithSameKey.id !== resourceId) {
+    return c.json({ error: "Resource key already exists" }, 409);
+  }
+
+  let updated: typeof oauthResources.$inferSelect;
+  try {
+    [updated] = await db
+      .update(oauthResources)
+      .set({
+        resourceKey: nextResourceKey,
+        displayName: data.displayName ?? resource.displayName,
+        description: data.description ?? resource.description,
+        scopes: data.scopes ?? (resource.scopes as string[]),
+        audience: data.audience ?? resource.audience,
+        status: data.status ?? resource.status,
+        updatedAt: new Date(),
+      })
+      .where(eq(oauthResources.id, resourceId))
+      .returning();
+  } catch (error) {
+    if (isResourceKeyUniqueViolation(error)) {
+      return c.json({ error: "Resource key already exists" }, 409);
+    }
+    throw error;
+  }
 
   return c.json({ resource: updated });
 });
