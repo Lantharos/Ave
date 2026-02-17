@@ -1,0 +1,35 @@
+{
+  "name": "ave-mobile",
+  "version": "1.0.0",
+  "private": true,
+  "main": "expo/AppEntry",
+  "scripts": {
+    "start": "node ./node_modules/expo/bin/cli start",
+    "android": "node ./node_modules/expo/bin/cli run:android",
+    "ios": "node ./node_modules/expo/bin/cli run:ios",
+    "web": "node ./node_modules/expo/bin/cli start --web",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@noble/ciphers": "^2.1.1",
+    "@noble/curves": "^2.0.1",
+    "@noble/hashes": "^2.0.1",
+    "@react-native-async-storage/async-storage": "^2.2.0",
+    "buffer": "^6.0.3",
+    "expo": "~54.0.33",
+    "expo-camera": "~17.0.10",
+    "expo-constants": "~18.0.13",
+    "expo-status-bar": "~3.0.9",
+    "nativewind": "^4.2.1",
+    "react": "19.1.0",
+    "react-native": "0.81.5",
+    "react-native-get-random-values": "~1.11.0",
+    "react-native-safe-area-context": "5.6.2"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.29.0",
+    "@types/react": "~19.1.10",
+    "tailwindcss": "^3.4.17",
+    "typescript": "~5.9.3"
+  }
+}

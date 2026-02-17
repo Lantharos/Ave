@@ -1,8 +1,10 @@
 <script lang="ts">
     import Text from "../../../components/Text.svelte";
     import ActionCard from "../../../components/ActionCard.svelte";
+    import QRCode from "qrcode";
     import Device from "./components/Device.svelte";
     import { api, type Device as DeviceType } from "../../../lib/api";
+    import { currentIdentity } from "../../../stores/auth";
 
     let devices = $state<DeviceType[]>([]);
     let loading = $state(true);
@@ -11,6 +13,7 @@
     let revokingAll = $state(false);
     let showAddDeviceModal = $state(false);
     let addDeviceLoading = $state(false);
+    let addDeviceQrDataUrl = $state<string | null>(null);
 
     async function loadDevices() {
         try {
@@ -27,9 +30,33 @@
     }
 
     async function handleAddDevice() {
-        // For now, show a modal with instructions
-        // In the future, this could generate a QR code linking to the login flow
-        showAddDeviceModal = true;
+        addDeviceLoading = true;
+        error = null;
+        try {
+            const identityHandle = $currentIdentity?.handle;
+            if (!identityHandle) {
+                throw new Error("No identity available for QR enrollment");
+            }
+
+            const loginUrl = new URL("/login", window.location.origin);
+            loginUrl.searchParams.set("handle", identityHandle);
+            loginUrl.searchParams.set("autostart", "1");
+
+            addDeviceQrDataUrl = await QRCode.toDataURL(loginUrl.toString(), {
+                width: 320,
+                margin: 1,
+                color: {
+                    dark: "#FFFFFF",
+                    light: "#090909",
+                },
+            });
+
+            showAddDeviceModal = true;
+        } catch (err) {
+            error = err instanceof Error ? err.message : "Failed to generate add-device QR";
+        } finally {
+            addDeviceLoading = false;
+        }
     }
 
     async function handleRevokeDevice(deviceId: string) {
@@ -103,7 +130,7 @@
         action="ADD A NEW DEVICE" 
         description="You can easily enroll a new device by generating a QR code that you can scan with your phone or tablet. This action will require you to present your passkey." 
         buttons={[
-            { icon: "/icons/chevron-right-68.svg", color: "#FFFFFF", onClick: handleAddDevice },
+            { icon: "/icons/chevron-right-68.svg", color: "#FFFFFF", onClick: handleAddDevice, loading: addDeviceLoading },
         ]}
     />
 
@@ -162,16 +189,25 @@
         >
             <Text type="h" size={24} weight="bold">Add a New Device</Text>
             <p class="text-[#878787] text-sm md:text-[16px] mt-2 md:mt-[10px]">
-                To add a new device to your account:
+                Scan this QR on your new device to jump into secure sign-in.
             </p>
-            <ol class="text-[#FFFFFF] text-sm md:text-[16px] mt-4 md:mt-[20px] list-decimal list-inside space-y-3">
-                <li>Open <strong>ave.id</strong> on your new device</li>
-                <li>Enter your handle to sign in</li>
-                <li>Choose "Confirm on another device"</li>
-                <li>A notification will appear here for you to approve</li>
-            </ol>
+
+            <div class="mt-5 flex items-center justify-center">
+                {#if addDeviceQrDataUrl}
+                    <img
+                        src={addDeviceQrDataUrl}
+                        alt="QR code to add a new Ave device"
+                        class="w-[220px] h-[220px] md:w-[280px] md:h-[280px] rounded-[18px] border border-[#2A2A2A] bg-[#090909] p-2"
+                    />
+                {:else}
+                    <div class="w-[220px] h-[220px] md:w-[280px] md:h-[280px] rounded-[18px] border border-[#2A2A2A] bg-[#090909] flex items-center justify-center text-[#666] text-sm">
+                        QR unavailable
+                    </div>
+                {/if}
+            </div>
+
             <p class="text-[#666666] text-xs md:text-[14px] mt-4 md:mt-[20px]">
-                You can also use a trust code if you don't have access to any trusted devices.
+                This opens login with your handle prefilled. If camera access is blocked, open Ave and sign in manually.
             </p>
             <div class="flex gap-2 md:gap-[10px] mt-6 md:mt-[30px]">
                 <button 

@@ -2,6 +2,7 @@
     import { onMount, onDestroy } from "svelte";
     import Text from "../../../components/Text.svelte";
     import Spinner from "../../../components/Spinner.svelte";
+    import QRCode from "qrcode";
     import { api } from "../../../lib/api";
     import { decryptMasterKeyFromDevice } from "../../../lib/crypto";
     import { auth } from "../../../stores/auth";
@@ -17,6 +18,33 @@
 
     let status = $state<"waiting" | "approved" | "denied" | "expired">("waiting");
     let pollInterval: number | null = null;
+    let qrDataUrl = $state<string | null>(null);
+
+    async function generateQrCode() {
+        if (!loginRequestId) {
+            qrDataUrl = null;
+            return;
+        }
+
+        const payload = JSON.stringify({
+            type: "ave_login_request",
+            requestId: loginRequestId,
+            ts: Date.now(),
+        });
+
+        qrDataUrl = await QRCode.toDataURL(payload, {
+            width: 260,
+            margin: 1,
+            color: {
+                dark: "#FFFFFF",
+                light: "#090909",
+            },
+        });
+    }
+
+    $effect(() => {
+        void generateQrCode();
+    });
 
     onMount(() => {
         if (!loginRequestId) {
@@ -172,6 +200,15 @@
                 A notification has been sent to your trusted devices. 
                 Open the Ave app and tap "Approve" to sign in.
             </p>
+
+            {#if qrDataUrl}
+                <div class="mt-4 p-4 bg-[#090909] rounded-[20px] border border-[#2A2A2A]">
+                    <img src={qrDataUrl} alt="QR code for Ave login approval" class="w-[180px] h-[180px] md:w-[220px] md:h-[220px] rounded-[16px]" />
+                </div>
+                <p class="text-[#777] text-xs text-center max-w-sm">
+                    Scan this with the Ave mobile app to approve instantly.
+                </p>
+            {/if}
         {:else if status === "approved"}
             <div class="w-16 h-16 bg-[#32A94C]/20 rounded-full flex items-center justify-center">
                 <svg class="w-8 h-8 text-[#32A94C]" fill="none" stroke="currentColor" viewBox="0 0 24 24">

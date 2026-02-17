@@ -14,6 +14,17 @@ export interface DevApp {
   refreshTokenTtlSeconds: number;
   allowUserIdScope: boolean;
   createdAt: string;
+  resources?: AppResource[];
+}
+
+export interface AppResource {
+  id: string;
+  resourceKey: string;
+  displayName: string;
+  description?: string;
+  scopes: string[];
+  audience: string;
+  status: "active" | "disabled";
 }
 
 export interface CreateAppPayload {
@@ -98,6 +109,41 @@ export async function rotateSecret(
 ): Promise<{ clientSecret: string }> {
   return request(`/api/apps/${appId}/rotate-secret`, {
     method: "POST",
+  });
+}
+
+export async function listResources(appId: string): Promise<AppResource[]> {
+  const data = await request<{ resources: AppResource[] }>(`/api/apps/${appId}/resources`);
+  return data.resources;
+}
+
+export async function createResource(
+  appId: string,
+  payload: Omit<AppResource, "id">,
+): Promise<{ resource: AppResource }> {
+  return request(`/api/apps/${appId}/resources`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateResource(
+  appId: string,
+  resourceId: string,
+  payload: Partial<Omit<AppResource, "id">>,
+): Promise<{ resource: AppResource }> {
+  return request(`/api/apps/${appId}/resources/${resourceId}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function deleteResource(
+  appId: string,
+  resourceId: string,
+): Promise<{ success: boolean }> {
+  return request(`/api/apps/${appId}/resources/${resourceId}`, {
+    method: "DELETE",
   });
 }
 

@@ -1,0 +1,30 @@
+{
+  "expo": {
+    "name": "Ave",
+    "slug": "ave-mobile",
+    "scheme": "ave",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "splash": {
+      "resizeMode": "contain",
+      "backgroundColor": "#090909"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "net.aveid.mobile"
+    },
+    "android": {
+      "package": "net.aveid.mobile"
+    },
+    "plugins": [
+      "expo-camera"
+    ],
+    "extra": {
+      "apiUrl": "https://api.aveid.net"
+    }
+  }
+}

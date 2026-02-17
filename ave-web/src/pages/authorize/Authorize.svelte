@@ -78,6 +78,7 @@
 				scope: searchParams.get("scope") || "openid profile email",
 				state: searchParams.get("state") || "",
 				nonce: searchParams.get("nonce") || "",
+				resource: searchParams.get("resource") || "",
 				embed: searchParams.get("embed") === "1",
 				codeChallenge: codeChallenge || undefined,
 				codeChallengeMethod: (codeChallengeMethod === "S256" || codeChallengeMethod === "plain") ? codeChallengeMethod : undefined,
@@ -398,6 +399,10 @@
 
     // Check auth and load app info
 	$effect(() => {
+		if (params.resource) {
+			window.location.replace(`/connect${window.location.search}`);
+			return;
+		}
 		if (completed) return;
 		if (!$isAuthenticated) {
 			if (redirectingToLogin) return;

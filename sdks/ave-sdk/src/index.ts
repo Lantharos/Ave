@@ -51,6 +51,27 @@ export function buildAuthorizeUrl(config: AveConfig, params: {
   return `${issuer}/signin?${search.toString()}`;
 }
 
+export function buildConnectorUrl(config: AveConfig, params: {
+  state?: string;
+  resource: string;
+  scope: string;
+  mode?: "user_present" | "background";
+  extraParams?: Record<string, string>;
+}): string {
+  const issuer = config.issuer || "https://aveid.net";
+  const search = new URLSearchParams({
+    client_id: config.clientId,
+    redirect_uri: config.redirectUri,
+    resource: params.resource,
+    scope: params.scope,
+    mode: params.mode || "user_present",
+    state: params.state || "",
+    ...params.extraParams,
+  });
+
+  return `${issuer}/connect?${search.toString()}`;
+}
+
 export async function exchangeCode(config: AveConfig, payload: {
   code: string;
   codeVerifier?: string;
@@ -94,6 +115,78 @@ export async function refreshToken(config: AveConfig, payload: { refreshToken: s
   }
 
   return response.json();
+}
+
+export async function exchangeDelegatedToken(
+  config: AveConfig,
+  payload: {
+    subjectToken: string;
+    requestedResource: string;
+    requestedScope: string;
+    actor?: Record<string, unknown>;
+    clientSecret?: string;
+  }
+): Promise<import("./types").DelegationTokenResponse> {
+  const apiBase = getApiBase(config.issuer);
+  const response = await fetch(`${apiBase}/api/oauth/token`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      grantType: "urn:ietf:params:oauth:grant-type:token-exchange",
+      subjectToken: payload.subjectToken,
+      requestedResource: payload.requestedResource,
+      requestedScope: payload.requestedScope,
+      clientId: config.clientId,
+      clientSecret: payload.clientSecret,
+      actor: payload.actor,
+    }),
+  });
+
+  if (!response.ok) {
+    const data = await response.json();
+    throw new Error(data.error || "Failed to exchange delegated token");
+  }
+
+  return response.json();
+}
+
+export async function listDelegations(
+  config: { issuer?: string },
+  sessionToken: string
+): Promise<import("./types").DelegationGrant[]> {
+  const apiBase = getApiBase(config.issuer);
+  const response = await fetch(`${apiBase}/api/oauth/delegations`, {
+    headers: {
+      Authorization: `Bearer ${sessionToken}`,
+    },
+  });
+
+  if (!response.ok) {
+    const data = await response.json();
+    throw new Error(data.error || "Failed to list delegations");
+  }
+
+  const payload = await response.json();
+  return payload.delegations || [];
+}
+
+export async function revokeDelegation(
+  config: { issuer?: string },
+  sessionToken: string,
+  delegationId: string
+): Promise<void> {
+  const apiBase = getApiBase(config.issuer);
+  const response = await fetch(`${apiBase}/api/oauth/delegations/${encodeURIComponent(delegationId)}`, {
+    method: "DELETE",
+    headers: {
+      Authorization: `Bearer ${sessionToken}`,
+    },
+  });
+
+  if (!response.ok) {
+    const data = await response.json();
+    throw new Error(data.error || "Failed to revoke delegation");
+  }
 }
 
 export async function fetchUserInfo(config: AveConfig, accessToken: string): Promise<import("./types").UserInfo> {

@@ -1,9 +1,9 @@
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
-import { db, oauthApps, oauthAuthorizations, oauthRefreshTokens, identities, activityLogs } from "../db";
+import { db, oauthApps, oauthAuthorizations, oauthRefreshTokens, identities, activityLogs, oauthResources, oauthDelegationGrants, oauthDelegationAuditLogs } from "../db";
 import { requireAuth } from "../middleware/auth";
-import { eq, and, inArray, isNull } from "drizzle-orm";
+import { eq, and, isNull } from "drizzle-orm";
 import { randomUUID } from "crypto";
 import { hashSessionToken } from "../lib/crypto";
 import { getIssuer, getResourceAudience, getJwtPublicJwk, signJwt, verifyJwt, hashToken } from "../lib/oidc";
@@ -42,6 +42,10 @@ const authorizationCodes = new Map<string, {
   codeChallengeMethod?: string;
   encryptedAppKey?: string; // E2EE: encrypted app key to return to the app
   nonce?: string;
+  requestedResource?: string;
+  requestedScope?: string;
+  communicationMode?: "user_present" | "background";
+  delegationGrantId?: string;
 }>();
 
 
@@ -91,6 +95,11 @@ function hasScope(scope: string, requested: string): boolean {
   return parseScopes(scope).includes(requested);
 }
 
+function hasAllScopes(grantedScope: string, requestedScope: string): boolean {
+  const granted = new Set(parseScopes(grantedScope));
+  return parseScopes(requestedScope).every((scope) => granted.has(scope));
+}
+
 
 // Public: Get OAuth app info (for authorization screen)
 app.get("/app/:clientId", async (c) => {
@@ -98,6 +107,7 @@ app.get("/app/:clientId", async (c) => {
   
   const [oauthApp] = await db
     .select({
+      id: oauthApps.id,
       name: oauthApps.name,
       description: oauthApps.description,
       iconUrl: oauthApps.iconUrl,
@@ -111,8 +121,20 @@ app.get("/app/:clientId", async (c) => {
   if (!oauthApp) {
     return c.json({ error: "App not found" }, 404);
   }
+
+  const resources = await db
+    .select({
+      resourceKey: oauthResources.resourceKey,
+      displayName: oauthResources.displayName,
+      description: oauthResources.description,
+      scopes: oauthResources.scopes,
+      audience: oauthResources.audience,
+      status: oauthResources.status,
+    })
+    .from(oauthResources)
+    .where(and(eq(oauthResources.ownerAppId, (oauthApp as any).id), eq(oauthResources.status, "active")));
   
-  return c.json({ app: oauthApp });
+  return c.json({ app: oauthApp, resources });
 });
 
 // Authorization endpoint - user grants access
@@ -126,9 +148,27 @@ app.post("/authorize", requireAuth, zValidator("json", z.object({
   codeChallengeMethod: z.enum(["S256", "plain"]).optional(),
   encryptedAppKey: z.string().optional(), // E2EE: app key encrypted with user's master key
   nonce: z.string().optional(),
+  connector: z.boolean().optional().default(false),
+  requestedResource: z.string().optional(),
+  requestedScope: z.string().optional(),
+  communicationMode: z.enum(["user_present", "background"]).optional().default("user_present"),
 })), async (c) => {
   const user = c.get("user")!;
-  const { clientId, redirectUri, scope, state, identityId, codeChallenge, codeChallengeMethod, encryptedAppKey, nonce } = c.req.valid("json");
+  const {
+    clientId,
+    redirectUri,
+    scope,
+    state,
+    identityId,
+    codeChallenge,
+    codeChallengeMethod,
+    encryptedAppKey,
+    nonce,
+    connector,
+    requestedResource,
+    requestedScope,
+    communicationMode,
+  } = c.req.valid("json");
 
   
   // Find the OAuth app
@@ -197,6 +237,81 @@ app.post("/authorize", requireAuth, zValidator("json", z.object({
       .set({ encryptedAppKey })
       .where(eq(oauthAuthorizations.id, existingAuth.id));
   }
+
+  let delegationGrantId: string | undefined;
+  let resolvedRequestedScope: string | undefined;
+
+  if (connector) {
+    if (!requestedResource || !requestedScope) {
+      return c.json({ error: "invalid_request", error_description: "requestedResource and requestedScope are required for connector flow" }, 400);
+    }
+
+    const [resource] = await db
+      .select()
+      .from(oauthResources)
+      .where(and(eq(oauthResources.resourceKey, requestedResource), eq(oauthResources.status, "active")))
+      .limit(1);
+
+    if (!resource) {
+      return c.json({ error: "invalid_target", error_description: "Requested resource not found" }, 400);
+    }
+
+    const allowedResourceScopes = (resource.scopes || []) as string[];
+    const requestedConnectorScopes = parseScopes(requestedScope);
+    const invalidConnectorScopes = requestedConnectorScopes.filter((s) => !allowedResourceScopes.includes(s));
+    if (invalidConnectorScopes.length > 0) {
+      return c.json({ error: "invalid_scope", error_description: `Invalid connector scopes: ${invalidConnectorScopes.join(", ")}` }, 400);
+    }
+
+    const [existingGrant] = await db
+      .select()
+      .from(oauthDelegationGrants)
+      .where(and(
+        eq(oauthDelegationGrants.userId, user.id),
+        eq(oauthDelegationGrants.identityId, identityId),
+        eq(oauthDelegationGrants.sourceAppId, oauthApp.id),
+        eq(oauthDelegationGrants.targetResourceId, resource.id),
+        isNull(oauthDelegationGrants.revokedAt),
+      ))
+      .limit(1);
+
+    if (!existingGrant) {
+      const [newGrant] = await db.insert(oauthDelegationGrants).values({
+        userId: user.id,
+        identityId,
+        sourceAppId: oauthApp.id,
+        targetResourceId: resource.id,
+        scope: requestedConnectorScopes.join(" "),
+        communicationMode,
+      }).returning();
+      delegationGrantId = newGrant.id;
+      resolvedRequestedScope = newGrant.scope;
+    } else {
+      const mergedScope = Array.from(new Set([...parseScopes(existingGrant.scope), ...requestedConnectorScopes])).join(" ");
+      await db.update(oauthDelegationGrants)
+        .set({
+          scope: mergedScope,
+          communicationMode,
+          updatedAt: new Date(),
+        })
+        .where(eq(oauthDelegationGrants.id, existingGrant.id));
+      delegationGrantId = existingGrant.id;
+      resolvedRequestedScope = mergedScope;
+    }
+
+    await db.insert(oauthDelegationAuditLogs).values({
+      grantId: delegationGrantId,
+      userId: user.id,
+      sourceAppId: oauthApp.id,
+      targetResourceId: resource.id,
+      eventType: "grant_created",
+      details: {
+        requestedResource,
+        requestedScope: requestedConnectorScopes.join(" "),
+        communicationMode,
+      },
+    });
+  }
   
   // Generate authorization code
   const code = generateAuthCode();
@@ -216,6 +331,10 @@ app.post("/authorize", requireAuth, zValidator("json", z.object({
     codeChallengeMethod,
     encryptedAppKey: finalEncryptedAppKey,
     nonce: nonce || undefined,
+    requestedResource: connector ? requestedResource : undefined,
+    requestedScope: connector ? resolvedRequestedScope || requestedScope : undefined,
+    communicationMode: connector ? communicationMode : undefined,
+    delegationGrantId,
   });
 
   
@@ -256,8 +375,161 @@ app.post("/token", zValidator("json", z.discriminatedUnion("grantType", [
     clientId: z.string(),
     clientSecret: z.string().optional(),
   }),
+  z.object({
+    grantType: z.literal("urn:ietf:params:oauth:grant-type:token-exchange"),
+    subjectToken: z.string(),
+    requestedResource: z.string(),
+    requestedScope: z.string(),
+    clientId: z.string(),
+    clientSecret: z.string().optional(),
+    actor: z.record(z.string(), z.unknown()).optional(),
+  }),
 ])), async (c) => {
   const payload = c.req.valid("json");
+
+  if (payload.grantType === "urn:ietf:params:oauth:grant-type:token-exchange") {
+    const { subjectToken, requestedResource, requestedScope, clientId, clientSecret, actor } = payload;
+
+    const [sourceApp] = await db
+      .select()
+      .from(oauthApps)
+      .where(eq(oauthApps.clientId, clientId))
+      .limit(1);
+
+    if (!sourceApp) {
+      return c.json({ error: "invalid_client", error_description: "Client not found" }, 400);
+    }
+
+    if (clientSecret) {
+      const expectedHash = sourceApp.clientSecretHash;
+      const providedHash = hashSessionToken(clientSecret);
+      if (expectedHash !== providedHash) {
+        return c.json({ error: "invalid_client", error_description: "Invalid client secret" }, 400);
+      }
+    }
+
+    let subject: {
+      userId: string;
+      identityId: string;
+      sourceAppId: string;
+      scope: string;
+    } | null = null;
+
+    const inMemorySubject = accessTokens.get(subjectToken);
+    if (inMemorySubject) {
+      subject = {
+        userId: inMemorySubject.userId,
+        identityId: inMemorySubject.identityId,
+        sourceAppId: inMemorySubject.appId,
+        scope: inMemorySubject.scope,
+      };
+    } else {
+      const jwtPayload = await verifyJwt(subjectToken, getResourceAudience());
+      if (jwtPayload) {
+        const tokenClientId = String(jwtPayload.cid || "");
+        const [tokenApp] = await db
+          .select()
+          .from(oauthApps)
+          .where(eq(oauthApps.clientId, tokenClientId))
+          .limit(1);
+
+        if (tokenApp) {
+          subject = {
+            userId: String(jwtPayload.sid || ""),
+            identityId: String(jwtPayload.sub || ""),
+            sourceAppId: tokenApp.id,
+            scope: String(jwtPayload.scope || ""),
+          };
+        }
+      }
+    }
+
+    if (!subject) {
+      return c.json({ error: "invalid_grant", error_description: "Subject token is invalid" }, 400);
+    }
+
+    if (subject.sourceAppId !== sourceApp.id) {
+      return c.json({ error: "invalid_grant", error_description: "Subject token does not belong to client" }, 400);
+    }
+
+    const [resource] = await db
+      .select()
+      .from(oauthResources)
+      .where(and(eq(oauthResources.resourceKey, requestedResource), eq(oauthResources.status, "active")))
+      .limit(1);
+
+    if (!resource) {
+      return c.json({ error: "invalid_target", error_description: "Requested resource not found" }, 400);
+    }
+
+    const requestedConnectorScopes = parseScopes(requestedScope);
+    const invalidScopes = requestedConnectorScopes.filter((scope) => !((resource.scopes || []) as string[]).includes(scope));
+    if (invalidScopes.length > 0) {
+      return c.json({ error: "invalid_scope", error_description: `Invalid connector scopes: ${invalidScopes.join(", ")}` }, 400);
+    }
+
+    const [grant] = await db
+      .select()
+      .from(oauthDelegationGrants)
+      .where(and(
+        eq(oauthDelegationGrants.userId, subject.userId),
+        eq(oauthDelegationGrants.identityId, subject.identityId),
+        eq(oauthDelegationGrants.sourceAppId, sourceApp.id),
+        eq(oauthDelegationGrants.targetResourceId, resource.id),
+        isNull(oauthDelegationGrants.revokedAt),
+      ))
+      .limit(1);
+
+    if (!grant) {
+      return c.json({ error: "access_denied", error_description: "No active connector grant found" }, 403);
+    }
+
+    if (!hasAllScopes(grant.scope, requestedScope)) {
+      return c.json({ error: "invalid_scope", error_description: "Requested scope exceeds granted scope" }, 400);
+    }
+
+    const expiresIn = 10 * 60;
+    const issuedAt = nowSeconds();
+    const expiresAt = issuedAt + expiresIn;
+
+    const delegatedAccessTokenJwt = await signJwt({
+      iss: getIssuer(),
+      sub: subject.identityId,
+      aud: resource.audience,
+      exp: expiresAt,
+      iat: issuedAt,
+      sid: subject.userId,
+      cid: sourceApp.clientId,
+      scope: requestedConnectorScopes.join(" "),
+      grant_id: grant.id,
+      target_resource: resource.resourceKey,
+      com_mode: grant.communicationMode,
+      actor,
+    });
+
+    await db.insert(oauthDelegationAuditLogs).values({
+      grantId: grant.id,
+      userId: subject.userId,
+      sourceAppId: sourceApp.id,
+      targetResourceId: resource.id,
+      eventType: "token_exchanged",
+      details: {
+        requestedResource,
+        requestedScope: requestedConnectorScopes.join(" "),
+      },
+    });
+
+    return c.json({
+      access_token: delegatedAccessTokenJwt,
+      token_type: "Bearer",
+      expires_in: expiresIn,
+      scope: requestedConnectorScopes.join(" "),
+      audience: resource.audience,
+      target_resource: resource.resourceKey,
+      communication_mode: grant.communicationMode,
+    });
+  }
+
   if (payload.grantType === "refresh_token") {
     const { refreshToken, clientId, clientSecret } = payload;
 
@@ -574,7 +846,7 @@ oidcRoutes.get("/openid-configuration", (c) => {
     jwks_uri: `${discoveryBase}/.well-known/jwks.json`,
     scopes_supported: ["openid", "profile", "email", "offline_access", "user_id"],
     response_types_supported: ["code"],
-    grant_types_supported: ["authorization_code", "refresh_token"],
+    grant_types_supported: ["authorization_code", "refresh_token", "urn:ietf:params:oauth:grant-type:token-exchange"],
     subject_types_supported: ["public"],
     id_token_signing_alg_values_supported: ["RS256"],
     token_endpoint_auth_methods_supported: ["client_secret_post", "none"],
@@ -758,6 +1030,67 @@ app.delete("/authorizations/:authId", requireAuth, async (c) => {
     severity: "warning",
   });
   
+  return c.json({ success: true });
+});
+
+// List connector delegations for current user
+app.get("/delegations", requireAuth, async (c) => {
+  const user = c.get("user")!;
+
+  const delegations = await db
+    .select({
+      id: oauthDelegationGrants.id,
+      createdAt: oauthDelegationGrants.createdAt,
+      updatedAt: oauthDelegationGrants.updatedAt,
+      revokedAt: oauthDelegationGrants.revokedAt,
+      communicationMode: oauthDelegationGrants.communicationMode,
+      scope: oauthDelegationGrants.scope,
+      sourceAppClientId: oauthApps.clientId,
+      sourceAppName: oauthApps.name,
+      sourceAppIconUrl: oauthApps.iconUrl,
+      sourceAppWebsiteUrl: oauthApps.websiteUrl,
+      targetResourceKey: oauthResources.resourceKey,
+      targetResourceName: oauthResources.displayName,
+      targetAudience: oauthResources.audience,
+    })
+    .from(oauthDelegationGrants)
+    .innerJoin(oauthApps, eq(oauthDelegationGrants.sourceAppId, oauthApps.id))
+    .innerJoin(oauthResources, eq(oauthDelegationGrants.targetResourceId, oauthResources.id))
+    .where(eq(oauthDelegationGrants.userId, user.id));
+
+  return c.json({ delegations });
+});
+
+// Revoke connector delegation
+app.delete("/delegations/:delegationId", requireAuth, async (c) => {
+  const user = c.get("user")!;
+  const delegationId = c.req.param("delegationId");
+
+  const [grant] = await db
+    .select()
+    .from(oauthDelegationGrants)
+    .where(and(eq(oauthDelegationGrants.id, delegationId), eq(oauthDelegationGrants.userId, user.id), isNull(oauthDelegationGrants.revokedAt)))
+    .limit(1);
+
+  if (!grant) {
+    return c.json({ error: "Delegation not found" }, 404);
+  }
+
+  await db.update(oauthDelegationGrants)
+    .set({ revokedAt: new Date(), updatedAt: new Date() })
+    .where(eq(oauthDelegationGrants.id, delegationId));
+
+  await db.insert(oauthDelegationAuditLogs).values({
+    grantId: grant.id,
+    userId: grant.userId,
+    sourceAppId: grant.sourceAppId,
+    targetResourceId: grant.targetResourceId,
+    eventType: "grant_revoked",
+    details: {
+      revokedByUserId: user.id,
+    },
+  });
+
   return c.json({ success: true });
 });
 

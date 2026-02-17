@@ -46,3 +46,29 @@ export interface SigningConfig {
   clientSecret: string;
   issuer?: string;
 }
+
+export interface DelegationTokenResponse {
+  access_token: string;
+  token_type: "Bearer";
+  expires_in: number;
+  scope: string;
+  audience: string;
+  target_resource: string;
+  communication_mode: "user_present" | "background";
+}
+
+export interface DelegationGrant {
+  id: string;
+  createdAt: string;
+  updatedAt: string;
+  revokedAt?: string | null;
+  communicationMode: "user_present" | "background";
+  scope: string;
+  sourceAppClientId: string;
+  sourceAppName: string;
+  sourceAppIconUrl?: string;
+  sourceAppWebsiteUrl?: string;
+  targetResourceKey: string;
+  targetResourceName: string;
+  targetAudience: string;
+}

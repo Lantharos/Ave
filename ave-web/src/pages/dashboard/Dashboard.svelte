@@ -10,6 +10,7 @@
     import Devices from "./pages/Devices.svelte";
     import ActivityLog from "./pages/ActivityLog.svelte";
     import LoginApproval from "./pages/LoginApproval.svelte";
+    import Connectors from "./pages/Connectors.svelte";
     import { auth, identities as identitiesStore, isAuthenticated } from "../../stores/auth";
     import { websocket } from "../../stores/websocket";
     import { api, type Identity as IdentityType } from "../../lib/api";
@@ -128,6 +129,7 @@
                 <SidebarButton text="Devices" bind:currentlySelected={selectedPage} onclick={() => selectPage("Devices")} />
                 <SidebarButton text="My Data" bind:currentlySelected={selectedPage} onclick={() => selectPage("My Data")} />
                 <SidebarButton text="Activity Log" bind:currentlySelected={selectedPage} onclick={() => selectPage("Activity Log")} />
+                <SidebarButton text="Connectors" bind:currentlySelected={selectedPage} onclick={() => selectPage("Connectors")} />
                 
                 <div class="h-px bg-[#878787]/20 w-full my-1"></div>
                 <SidebarButton
@@ -180,6 +182,7 @@
             <SidebarButton text="Devices" bind:currentlySelected={selectedPage} onclick={() => { selectedPage = "Devices"; }} />
             <SidebarButton text="My Data" bind:currentlySelected={selectedPage} onclick={() => { selectedPage = "My Data"; }} />
             <SidebarButton text="Activity Log" bind:currentlySelected={selectedPage} onclick={() => { selectedPage = "Activity Log"; }} />
+            <SidebarButton text="Connectors" bind:currentlySelected={selectedPage} onclick={() => { selectedPage = "Connectors"; }} />
         </div>
         <div class="h-[1px] bg-[#878787]/20 w-full"></div>
         <SidebarButton
@@ -205,6 +208,8 @@
             <MyData />
         {:else if selectedPage === "Activity Log"}
             <ActivityLog />
+        {:else if selectedPage === "Connectors"}
+            <Connectors />
         {:else}
             <div class="flex items-center justify-center h-full">
                 <Text type="p" size={18} color="#878787">Select an option from the sidebar</Text>

@@ -15,6 +15,8 @@
     updateApp,
     deleteApp,
     rotateSecret,
+    createResource,
+    deleteResource,
     checkSession,
     logoutSession,
     type DevApp,
@@ -231,6 +233,43 @@
       error = "Failed to copy to clipboard";
     }
   }
+
+  async function handleCreateResource(appId: string, resource: {
+    resourceKey: string;
+    displayName: string;
+    description?: string;
+    scopes: string[];
+    audience: string;
+    status: "active" | "disabled";
+  }) {
+    const result = await createResource(appId, resource);
+    apps = apps.map((a) =>
+      a.id === appId
+        ? { ...a, resources: [...(a.resources || []), result.resource] }
+        : a
+    );
+    if (selectedApp?.id === appId) {
+      selectedApp = {
+        ...selectedApp,
+        resources: [...(selectedApp.resources || []), result.resource],
+      };
+    }
+  }
+
+  async function handleDeleteResource(appId: string, resourceId: string) {
+    await deleteResource(appId, resourceId);
+    apps = apps.map((a) =>
+      a.id === appId
+        ? { ...a, resources: (a.resources || []).filter((resource) => resource.id !== resourceId) }
+        : a
+    );
+    if (selectedApp?.id === appId) {
+      selectedApp = {
+        ...selectedApp,
+        resources: (selectedApp.resources || []).filter((resource) => resource.id !== resourceId),
+      };
+    }
+  }
 </script>
 
 {#if !authenticated}
@@ -293,6 +332,8 @@
           onsave={handleSaveApp}
           onrotate={handleRotateSecret}
           ondelete={(app) => (deleteTarget = app)}
+          oncreateResource={handleCreateResource}
+          ondeleteResource={handleDeleteResource}
           onback={() => navigate("apps")}
           oncopy={handleCopy}
           saving={saveState === "saving"}

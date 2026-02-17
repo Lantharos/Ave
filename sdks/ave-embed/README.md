@@ -65,6 +65,42 @@ const popup = openAvePopup({
 // popup?.close();
 ```
 
+### Connector flow (separate from sign-in)
+
+```js
+import { openAveConnectorSheet } from "@ave-id/embed";
+
+openAveConnectorSheet({
+  clientId: "YOUR_CLIENT_ID",
+  redirectUri: "https://yourapp.com/callback",
+  resource: "target:resource",
+  scope: "resource.access",
+  mode: "user_present", // or "background"
+  onSuccess: ({ redirectUrl }) => {
+    window.location.href = redirectUrl;
+  },
+});
+```
+
+### Connector runtime (protected browser execution)
+
+```js
+import { openAveConnectorRuntime } from "@ave-id/embed";
+
+const runtime = openAveConnectorRuntime({
+  delegatedToken: "DELEGATED_TOKEN",
+  target: "iris", // example target app
+  targetOrigin: "https://irischat.app",
+  mode: "user_present",
+  onEvent: (event) => console.log(event),
+});
+
+runtime.send({
+  op: "infer",
+  payload: { prompt: "hello" },
+});
+```
+
 ## Options
 
 Common:

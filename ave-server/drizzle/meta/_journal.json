@@ -1,0 +1,27 @@
+{
+  "version": "7",
+  "dialect": "sqlite",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "6",
+      "when": 1770716439932,
+      "tag": "0000_bent_anita_blake",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1770733500000,
+      "tag": "0001_remove_security_questions",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1771338000000,
+      "tag": "0002_connector_brokering",
+      "breakpoints": true
+    }
+  ]
+}

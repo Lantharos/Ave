@@ -81,6 +81,7 @@ export function openAveSheet({
   theme = DEFAULT_THEME,
   codeChallenge,
   codeChallengeMethod,
+  extraParams = {},
   onSuccess,
   onError,
   onClose,
@@ -152,6 +153,7 @@ export function openAveSheet({
     scope,
     embed: "1",
     theme,
+    ...extraParams,
   });
   
   if (codeChallenge) {
@@ -352,6 +354,108 @@ export function openAvePopup({
     popup,
     close() {
       clearInterval(pollTimer);
+      popup.close();
+      window.removeEventListener("message", messageHandler);
+    },
+  };
+}
+
+/**
+ * Open Ave connector flow as a modal sheet.
+ */
+export function openAveConnectorSheet({
+  clientId,
+  redirectUri,
+  resource,
+  scope = "resource.access",
+  mode = "user_present",
+  issuer = "https://aveid.net",
+  onSuccess,
+  onError,
+  onClose,
+}) {
+  return openAveSheet({
+    clientId,
+    redirectUri,
+    scope,
+    issuer,
+    onSuccess,
+    onError,
+    onClose,
+    codeChallenge: undefined,
+    codeChallengeMethod: undefined,
+    theme: "dark",
+    extraParams: {
+      resource,
+      mode,
+    },
+  });
+}
+
+/**
+ * Open Ave connector flow in a popup.
+ */
+export function openAveConnectorPopup({
+  clientId,
+  redirectUri,
+  resource,
+  scope = "resource.access",
+  mode = "user_present",
+  issuer = "https://aveid.net",
+  width = 460,
+  height = 700,
+  onSuccess,
+  onError,
+  onClose,
+}) {
+  const params = new URLSearchParams({
+    client_id: clientId,
+    redirect_uri: redirectUri,
+    resource,
+    scope,
+    mode,
+    embed: "1",
+  });
+
+  const left = (window.innerWidth - width) / 2 + window.screenX;
+  const top = (window.innerHeight - height) / 2 + window.screenY;
+  const popup = window.open(
+    `${issuer}/connect?${params.toString()}`,
+    "ave_connector",
+    `width=${width},height=${height},left=${left},top=${top},menubar=no,toolbar=no,location=no,status=no`
+  );
+
+  if (!popup) {
+    onError?.({ error: "popup_blocked", message: "Popup was blocked by the browser" });
+    return null;
+  }
+
+  const messageHandler = (event) => {
+    if (event.origin !== issuer) return;
+    const data = event.data || {};
+
+    if (data.type === "ave:success") {
+      popup.close();
+      window.removeEventListener("message", messageHandler);
+      onSuccess?.(data.payload);
+    }
+    if (data.type === "ave:error") {
+      popup.close();
+      window.removeEventListener("message", messageHandler);
+      onError?.(data.payload);
+    }
+    if (data.type === "ave:close") {
+      popup.close();
+      window.removeEventListener("message", messageHandler);
+      onClose?.();
+    }
+  };
+
+  window.addEventListener("message", messageHandler);
+
+  return {
+    popup,
+    close() {
       popup.close();
       window.removeEventListener("message", messageHandler);
     },
@@ -589,4 +693,107 @@ export function openAveSigningPopup({
       window.removeEventListener("message", messageHandler);
     },
   };
+}
+
+// ============================================
+// Connector Runtime (Target App Execution)
+// ============================================
+
+/**
+ * Open a connector runtime iframe for protected execution in the user's browser.
+ * The host app sends requests via postMessage and receives streaming events.
+ */
+export function openAveConnectorRuntime({
+  issuer = "https://aveid.net",
+  target = "resource",
+  targetOrigin,
+  delegatedToken,
+  mode = "user_present",
+  width = "100%",
+  height = 640,
+  container,
+  onReady,
+  onEvent,
+  onError,
+}) {
+  const runtimeUrl = new URL(`${issuer}/connect/runtime`);
+  runtimeUrl.searchParams.set("target", target);
+  runtimeUrl.searchParams.set("mode", mode);
+
+  const iframe = document.createElement("iframe");
+  iframe.src = runtimeUrl.toString();
+  iframe.style.width = width;
+  iframe.style.height = typeof height === "number" ? `${height}px` : height;
+  iframe.style.border = "0";
+  iframe.style.borderRadius = "18px";
+  iframe.allow = "publickey-credentials-get";
+
+  const mountTarget = container || document.body;
+  mountTarget.appendChild(iframe);
+
+  const sendInit = () => {
+    iframe.contentWindow?.postMessage(
+      {
+        type: "ave:connector:init",
+        payload: {
+          delegatedToken,
+          targetOrigin,
+        },
+      },
+      issuer
+    );
+  };
+
+  iframe.addEventListener("load", sendInit);
+
+  const messageHandler = (event) => {
+    if (event.origin !== issuer) return;
+    const data = event.data || {};
+
+    if (data.type === "ave:connector:ready") {
+      onReady?.();
+      return;
+    }
+
+    if (data.type === "ave:connector:event") {
+      onEvent?.(data.payload);
+      return;
+    }
+
+    if (data.type === "ave:connector:error") {
+      onError?.(data.payload);
+      return;
+    }
+  };
+
+  window.addEventListener("message", messageHandler);
+
+  return {
+    iframe,
+    send(payload) {
+      iframe.contentWindow?.postMessage(
+        { type: "ave:connector:request", payload },
+        issuer
+      );
+    },
+    destroy() {
+      window.removeEventListener("message", messageHandler);
+      iframe.removeEventListener("load", sendInit);
+      iframe.remove();
+    },
+  };
+}
+
+/**
+ * Backward-compatible wrapper for Iris integrations.
+ */
+export function openIrisDelegatedRuntime({
+  targetOrigin = "https://irischat.app",
+  ...rest
+}) {
+  return openAveConnectorRuntime({
+    target: "iris",
+    targetOrigin,
+    ...rest,
+  });
 }

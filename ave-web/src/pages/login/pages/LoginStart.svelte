@@ -1,4 +1,5 @@
 <script lang="ts">
+    import { onMount } from "svelte";
     import Button from "../../../components/Button.svelte";
     import { api, type Identity } from "../../../lib/api";
     import { goto } from "@mateothegreat/svelte5-router";
@@ -19,6 +20,24 @@
 
     let handle = $state("");
     let isLoading = $state(false);
+    let autoStart = false;
+
+    onMount(() => {
+        const params = new URLSearchParams(window.location.search);
+        const prefilledHandle = params.get("handle");
+        autoStart = params.get("autostart") === "1";
+
+        if (prefilledHandle) {
+            handle = prefilledHandle;
+            if (autoStart) {
+                setTimeout(() => {
+                    if (handle.trim() && !isLoading) {
+                        void handleContinue();
+                    }
+                }, 50);
+            }
+        }
+    });
 
     async function handleContinue() {
         if (!handle.trim()) {

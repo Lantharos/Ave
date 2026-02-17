@@ -1,4 +1,4 @@
-import { buildAuthorizeUrl, generateCodeChallenge, generateCodeVerifier, generateNonce } from "./index";
+import { buildAuthorizeUrl, buildConnectorUrl, generateCodeChallenge, generateCodeVerifier, generateNonce } from "./index";
 
 export async function startPkceLogin(params: {
   clientId: string;
@@ -24,6 +24,34 @@ export async function startPkceLogin(params: {
       nonce,
       codeChallenge: challenge,
       codeChallengeMethod: "S256",
+    }
+  );
+
+  window.location.href = url;
+}
+
+export async function startConnectorFlow(params: {
+  clientId: string;
+  redirectUri: string;
+  resource: string;
+  scope: string;
+  mode?: "user_present" | "background";
+  issuer?: string;
+}): Promise<void> {
+  const state = generateNonce();
+  sessionStorage.setItem("ave_connector_state", state);
+
+  const url = buildConnectorUrl(
+    {
+      clientId: params.clientId,
+      redirectUri: params.redirectUri,
+      issuer: params.issuer,
+    },
+    {
+      resource: params.resource,
+      scope: params.scope,
+      mode: params.mode || "user_present",
+      state,
     }
   );
 

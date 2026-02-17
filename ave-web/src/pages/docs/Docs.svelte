@@ -17,6 +17,7 @@
         { id: "convex", title: "Convex (Custom Auth)" },
         { id: "e2ee", title: "End-to-End Encryption" },
         { id: "signing", title: "Ave Signing" },
+        { id: "connector", title: "Connector (App-to-App)" },
         { id: "endpoints", title: "API Endpoints" },
         { id: "user-data", title: "User Data" },
         { id: "security", title: "Security Best Practices" },
@@ -259,7 +260,7 @@
 
                     <h3 class="text-[#FFFFFF] text-[22px] font-semibold mt-[50px] mb-[16px]">Authorization URL</h3>
                     <p class="text-[#999999] text-[16px] mb-[16px]">
-                        Redirect users to the Ave sign-in page (<code>/authorize</code> still works for backwards compatibility):
+                        Redirect users to the Ave sign-in page (<code>/authorize</code> still works for backwards compatibility). Connector-based app-to-app brokering uses a separate page: <code>/connect</code>.
                     </p>
 
                     <CodeBlock code={`https://aveid.net/signin?
@@ -692,6 +693,89 @@ Content-Type: application/json
   "publicKey": "BASE64_PUBLIC_KEY",
   "createdAt": "2026-01-25T12:34:56.000Z"
 }`} />
+                </DocSec>
+
+                <DocSec title="Connector (App-to-App Brokering)" id="connector">
+                    <p class="text-[#999999] text-[17px] leading-[1.8]">
+                        Ave Connector is a separate grant flow on top of sign-in. It lets one app request controlled access to a resource exposed by another app (for example, delegated inference, task sync, or structured event push).
+                    </p>
+
+                    <div class="mt-[24px] p-[24px] bg-[#0f0f0f] border border-[#1f1f1f] rounded-[12px]">
+                        <p class="text-[#BBBBBB] text-[16px]">
+                            Connector is not part of default login. Start users at <code>/connect</code> when they explicitly choose to link apps.
+                        </p>
+                    </div>
+
+                    <h3 class="text-[#FFFFFF] text-[22px] font-semibold mt-[40px] mb-[16px]">Connector URL</h3>
+                    <CodeBlock code={`https://aveid.net/connect?
+  client_id=YOUR_CLIENT_ID
+  &redirect_uri=https://yourapp.com/callback
+  &resource=target:resource
+  &scope=resource.access
+  &mode=user_present
+  &state=RANDOM_STATE`} />
+
+                    <div class="mt-[20px] overflow-x-auto">
+                        <table class="w-full text-[15px]">
+                            <thead>
+                                <tr class="border-b border-[#222222]">
+                                    <th class="text-left py-[14px] text-[#AAAAAA] font-semibold">Parameter</th>
+                                    <th class="text-left py-[14px] text-[#AAAAAA] font-semibold">Required</th>
+                                    <th class="text-left py-[14px] text-[#AAAAAA] font-semibold">Description</th>
+                                </tr>
+                            </thead>
+                            <tbody class="text-[#888888]">
+                                <tr class="border-b border-[#1a1a1a]">
+                                    <td class="py-[14px]"><code>resource</code></td>
+                                    <td class="py-[14px]">Yes</td>
+                                    <td class="py-[14px]">Resource key registered by target app (e.g. <code>target:resource</code>)</td>
+                                </tr>
+                                <tr class="border-b border-[#1a1a1a]">
+                                    <td class="py-[14px]"><code>scope</code></td>
+                                    <td class="py-[14px]">Yes</td>
+                                    <td class="py-[14px]">Requested connector scope (resource-defined)</td>
+                                </tr>
+                                <tr class="border-b border-[#1a1a1a]">
+                                    <td class="py-[14px]"><code>mode</code></td>
+                                    <td class="py-[14px]">No</td>
+                                    <td class="py-[14px]"><code>user_present</code> or <code>background</code></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <h3 class="text-[#FFFFFF] text-[22px] font-semibold mt-[40px] mb-[16px]">Token Exchange for Delegated Access</h3>
+                    <CodeBlock code={`POST https://api.aveid.net/api/oauth/token
+Content-Type: application/json
+
+{
+  "grantType": "urn:ietf:params:oauth:grant-type:token-exchange",
+  "subjectToken": "SOURCE_APP_ACCESS_TOKEN",
+  "requestedResource": "target:resource",
+  "requestedScope": "resource.access",
+  "clientId": "YOUR_CLIENT_ID",
+  "clientSecret": "YOUR_CLIENT_SECRET"
+}`} />
+
+                    <CodeBlock code={`// Response
+{
+  "access_token": "DELEGATED_JWT",
+  "token_type": "Bearer",
+  "expires_in": 600,
+  "scope": "resource.access",
+  "audience": "https://target.app/delegated",
+  "target_resource": "target:resource",
+  "communication_mode": "user_present"
+}`} />
+
+                    <h3 class="text-[#FFFFFF] text-[22px] font-semibold mt-[40px] mb-[16px]">Grant Management (User Dashboard)</h3>
+                    <CodeBlock code={`GET https://api.aveid.net/api/oauth/delegations
+DELETE https://api.aveid.net/api/oauth/delegations/:delegationId`} />
+
+                    <h3 class="text-[#FFFFFF] text-[22px] font-semibold mt-[40px] mb-[16px]">Protected Runtime</h3>
+                    <p class="text-[#999999] text-[16px] leading-[1.8]">
+                        If protected connector material is required, execute via Ave connector runtime in the user browser session. Ave may request passkey confirmation during connector runtime so protected material can be used securely in your browser session.
+                    </p>
                 </DocSec>
 
                 <DocSec title="API Endpoints" id="endpoints">

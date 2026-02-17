@@ -510,12 +510,21 @@ export const api = {
     getApp: (clientId: string) =>
       request<{
         app: {
+          id?: string;
           name: string;
           description?: string;
           iconUrl?: string;
           websiteUrl?: string;
           supportsE2ee: boolean;
         };
+        resources?: {
+          resourceKey: string;
+          displayName: string;
+          description?: string;
+          scopes: string[];
+          audience: string;
+          status: string;
+        }[];
       }>(`/api/oauth/app/${encodeURIComponent(clientId)}`),
     
     authorize: (data: {
@@ -528,6 +537,10 @@ export const api = {
       codeChallengeMethod?: "S256" | "plain";
       encryptedAppKey?: string;
       nonce?: string;
+      connector?: boolean;
+      requestedResource?: string;
+      requestedScope?: string;
+      communicationMode?: "user_present" | "background";
     }) =>
       request<{ redirectUrl: string }>("/api/oauth/authorize", {
         method: "POST",
@@ -560,6 +573,30 @@ export const api = {
     
     revokeAuthorization: (authId: string) =>
       request<{ success: boolean }>(`/api/oauth/authorizations/${authId}`, {
+        method: "DELETE",
+      }),
+
+    getDelegations: () =>
+      request<{
+        delegations: {
+          id: string;
+          createdAt: string;
+          updatedAt: string;
+          revokedAt?: string | null;
+          communicationMode: "user_present" | "background";
+          scope: string;
+          sourceAppClientId: string;
+          sourceAppName: string;
+          sourceAppIconUrl?: string;
+          sourceAppWebsiteUrl?: string;
+          targetResourceKey: string;
+          targetResourceName: string;
+          targetAudience: string;
+        }[];
+      }>("/api/oauth/delegations"),
+
+    revokeDelegation: (delegationId: string) =>
+      request<{ success: boolean }>(`/api/oauth/delegations/${delegationId}`, {
         method: "DELETE",
       }),
   },

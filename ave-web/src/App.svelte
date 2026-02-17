@@ -15,6 +15,8 @@
     import Authorize from "./pages/authorize/Authorize.svelte";
     import Docs from "./pages/docs/Docs.svelte";
     import Sign from "./pages/sign/Sign.svelte";
+    import Connect from "./pages/connect/Connect.svelte";
+    import ConnectRuntime from "./pages/connect/Runtime.svelte";
     import { auth, isAuthenticated, isLoading } from "./stores/auth";
     import { websocket } from "./stores/websocket";
 
@@ -28,6 +30,8 @@
         { path: "/terms", component: TermsOfService },
         { path: "/authorize", component: Authorize },
         { path: "/signin", component: Authorize },
+        { path: "/connect", component: Connect },
+        { path: "/connect/runtime", component: ConnectRuntime },
         { path: "/docs(#.*)?", component: Docs },
         { path: "/sign", component: Sign },
     ];
@@ -37,7 +41,7 @@
     };
 
     // Protected routes that require authentication
-    const protectedRoutes = ["/dashboard", "/authorize", "/signin", "/sign"];
+    const protectedRoutes = ["/dashboard", "/authorize", "/signin", "/connect", "/sign"];
 
     // Routes that should redirect to dashboard if already authenticated
     const authRoutes = ["/login", "/register"];

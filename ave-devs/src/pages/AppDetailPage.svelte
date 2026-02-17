@@ -4,7 +4,7 @@
   import Input from "../components/Input.svelte";
   import Textarea from "../components/Textarea.svelte";
   import Toggle from "../components/Toggle.svelte";
-  import type { DevApp } from "../lib/api";
+import type { DevApp } from "../lib/api";
 
   interface Props {
     app: DevApp & { redirectUrisText?: string };
@@ -13,6 +13,15 @@
     ondelete: (app: DevApp) => void;
     onback: () => void;
     oncopy: (text: string) => void;
+    oncreateResource: (appId: string, resource: {
+      resourceKey: string;
+      displayName: string;
+      description?: string;
+      scopes: string[];
+      audience: string;
+      status: "active" | "disabled";
+    }) => Promise<void>;
+    ondeleteResource: (appId: string, resourceId: string) => Promise<void>;
     saving: boolean;
     saved: boolean;
     rotating: boolean;
@@ -26,6 +35,8 @@
     ondelete,
     onback,
     oncopy,
+    oncreateResource,
+    ondeleteResource,
     saving,
     saved,
     rotating,
@@ -33,11 +44,66 @@
   }: Props = $props();
 
   let copiedField = $state<string | null>(null);
+  let resourceForm = $state({
+    resourceKey: "",
+    displayName: "",
+    description: "",
+    scopes: "iris.infer",
+    audience: "https://irischat.app/delegated",
+    status: "active" as "active" | "disabled",
+  });
+  let resourceError = $state<string | null>(null);
+  let creatingResource = $state(false);
+  let deletingResourceId = $state<string | null>(null);
 
   async function handleCopy(text: string, field: string) {
     oncopy(text);
     copiedField = field;
     setTimeout(() => (copiedField = null), 1500);
+  }
+
+  async function handleCreateResource() {
+    resourceError = null;
+    if (!resourceForm.resourceKey.trim() || !resourceForm.displayName.trim()) {
+      resourceError = "Resource key and display name are required.";
+      return;
+    }
+
+    creatingResource = true;
+    try {
+      await oncreateResource(app.id, {
+        resourceKey: resourceForm.resourceKey.trim(),
+        displayName: resourceForm.displayName.trim(),
+        description: resourceForm.description.trim() || undefined,
+        scopes: resourceForm.scopes.split(" ").map((s) => s.trim()).filter(Boolean),
+        audience: resourceForm.audience.trim(),
+        status: resourceForm.status,
+      });
+      resourceForm = {
+        resourceKey: "",
+        displayName: "",
+        description: "",
+        scopes: "iris.infer",
+        audience: resourceForm.audience,
+        status: "active",
+      };
+    } catch (e: any) {
+      resourceError = e?.message || "Failed to create resource";
+    } finally {
+      creatingResource = false;
+    }
+  }
+
+  async function handleDeleteResource(resourceId: string) {
+    deletingResourceId = resourceId;
+    resourceError = null;
+    try {
+      await ondeleteResource(app.id, resourceId);
+    } catch (e: any) {
+      resourceError = e?.message || "Failed to delete resource";
+    } finally {
+      deletingResourceId = null;
+    }
   }
 </script>
 
@@ -127,6 +193,73 @@
       <Button variant="primary" onclick={onsave} disabled={saving}>
         {saving ? "Saving..." : saved ? "Saved" : "Save changes"}
       </Button>
+    </div>
+  </Card>
+
+  <Card>
+    <div class="flex flex-col gap-6">
+      <div>
+        <h3 class="text-[22px] font-black m-0 text-white">Connector Resources</h3>
+        <p class="text-[#878787] mt-2 text-[14px]">Expose brokerable capabilities for Ave Connector flows.</p>
+      </div>
+
+      {#if resourceError}
+        <div class="bg-[#2A1111] border border-[#4A2222] rounded-[14px] px-4 py-3 text-[#E57272] text-[14px]">
+          {resourceError}
+        </div>
+      {/if}
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <label class="flex flex-col gap-2">
+          <span class="text-[14px] text-[#878787]">Resource key</span>
+          <Input bind:value={resourceForm.resourceKey} placeholder="iris:inference" />
+        </label>
+        <label class="flex flex-col gap-2">
+          <span class="text-[14px] text-[#878787]">Display name</span>
+          <Input bind:value={resourceForm.displayName} placeholder="Iris Inference" />
+        </label>
+        <label class="flex flex-col gap-2 md:col-span-2">
+          <span class="text-[14px] text-[#878787]">Description</span>
+          <Input bind:value={resourceForm.description} placeholder="Delegated inference capability" />
+        </label>
+        <label class="flex flex-col gap-2">
+          <span class="text-[14px] text-[#878787]">Scopes (space separated)</span>
+          <Input bind:value={resourceForm.scopes} placeholder="iris.infer" />
+        </label>
+        <label class="flex flex-col gap-2">
+          <span class="text-[14px] text-[#878787]">Audience</span>
+          <Input bind:value={resourceForm.audience} placeholder="https://irischat.app/delegated" />
+        </label>
+      </div>
+
+      <div class="flex justify-end">
+        <Button variant="primary" size="sm" onclick={handleCreateResource} disabled={creatingResource}>
+          {creatingResource ? "Creating..." : "Add resource"}
+        </Button>
+      </div>
+
+      <div class="flex flex-col gap-3">
+        {#if !(app.resources || []).length}
+          <div class="text-[#666] text-[14px]">No resources configured yet.</div>
+        {/if}
+        {#each app.resources || [] as resource}
+          <div class="rounded-[14px] border border-white/[0.06] bg-[#0F0F0F] px-4 py-3 flex items-center justify-between gap-4">
+            <div>
+              <p class="text-white font-semibold">{resource.displayName} <span class="text-[#7E7E7E] font-normal">({resource.resourceKey})</span></p>
+              <p class="text-[#8A8A8A] text-[13px] mt-1">{resource.description || "No description"}</p>
+              <p class="text-[#707070] text-[12px] mt-1">scopes: {resource.scopes.join(", ")} · aud: {resource.audience}</p>
+            </div>
+            <Button
+              variant="danger"
+              size="sm"
+              onclick={() => handleDeleteResource(resource.id)}
+              disabled={deletingResourceId === resource.id}
+            >
+              {deletingResourceId === resource.id ? "Deleting..." : "Delete"}
+            </Button>
+          </div>
+        {/each}
+      </div>
     </div>
   </Card>
 </div>

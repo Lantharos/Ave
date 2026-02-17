@@ -72,6 +72,65 @@ https://aveid.net/signin?
 | state | Recommended | Random string to prevent CSRF attacks |
 | nonce | Recommended | Random string for ID token replay protection |
 
+## Connector Flow (App-to-App Brokering)
+
+Connector is a separate flow from sign-in. Use it when users explicitly connect one app to another app resource.
+
+- **Connector page:** `https://aveid.net/connect`
+- **Modes:** `user_present` or `background`
+- **Resource model:** target app exposes resource keys + scopes in Ave dev portal
+
+### Connector URL
+
+```
+https://aveid.net/connect?
+  client_id=YOUR_CLIENT_ID
+  &redirect_uri=https://yourapp.com/callback
+  &resource=target:resource
+  &scope=resource.access
+  &mode=user_present
+  &state=RANDOM_STATE
+```
+
+### Token Exchange for Delegated Access
+
+Exchange a source app access token for a delegated resource token:
+
+```
+POST https://api.aveid.net/api/oauth/token
+Content-Type: application/json
+
+{
+  "grantType": "urn:ietf:params:oauth:grant-type:token-exchange",
+  "subjectToken": "SOURCE_APP_ACCESS_TOKEN",
+  "requestedResource": "target:resource",
+  "requestedScope": "resource.access",
+  "clientId": "YOUR_CLIENT_ID",
+  "clientSecret": "YOUR_CLIENT_SECRET"
+}
+```
+
+Response (example):
+
+```
+{
+  "access_token": "DELEGATED_JWT",
+  "token_type": "Bearer",
+  "expires_in": 600,
+  "scope": "resource.access",
+  "audience": "https://target.app/delegated",
+  "target_resource": "target:resource",
+  "communication_mode": "user_present"
+}
+```
+
+### Delegation Management
+
+- `GET https://api.aveid.net/api/oauth/delegations`
+- `DELETE https://api.aveid.net/api/oauth/delegations/:delegationId`
+
+Use these in account settings so users can review/revoke connector grants.
+
 ## SDKs & Embed
 
 Use the official packages to cut down integration time:
@@ -138,6 +197,44 @@ openAvePopup({
 });
 ```
 
+Connector helpers:
+
+```ts
+import { buildConnectorUrl, exchangeDelegatedToken } from "@ave-id/sdk";
+import { startConnectorFlow } from "@ave-id/sdk/client";
+import { openAveConnectorSheet, openAveConnectorRuntime } from "@ave-id/embed";
+
+// Redirect connector flow
+await startConnectorFlow({
+  clientId: "YOUR_CLIENT_ID",
+  redirectUri: "https://yourapp.com/callback",
+  resource: "target:resource",
+  scope: "resource.access",
+  mode: "user_present",
+});
+
+// Or open connector as embedded sheet
+openAveConnectorSheet({
+  clientId: "YOUR_CLIENT_ID",
+  redirectUri: "https://yourapp.com/callback",
+  resource: "target:resource",
+  scope: "resource.access",
+  mode: "user_present",
+  onSuccess: ({ redirectUrl }) => (window.location.href = redirectUrl),
+});
+
+// Optional protected runtime (example target shown as iris)
+openAveConnectorRuntime({
+  delegatedToken: "DELEGATED_JWT",
+  target: "iris",
+  targetOrigin: "https://irischat.app",
+  mode: "user_present",
+  onEvent: (event) => console.log(event),
+});
+```
+
+If protected connector material is required, Ave may request passkey confirmation during connector runtime so protected material can be used securely in the user's browser session.
+
 ## Convex Custom Auth (Using Ave as Provider)
 
 Convex supports custom auth providers. You can use Ave as the issuer and pass the Ave JWT access token to Convex.
@@ -181,6 +278,10 @@ When your app has E2EE enabled, Ave provides an app-specific encryption key duri
 
 `POST https://api.aveid.net/api/oauth/token` - Exchange authorization code for tokens
 
+Also supports connector delegation:
+
+- `grantType: "urn:ietf:params:oauth:grant-type:token-exchange"`
+
 **CRITICAL:** The request body must use **camelCase** field names, NOT snake_case.
 
 **Response highlights:**
@@ -197,6 +298,12 @@ When your app has E2EE enabled, Ave provides an app-specific encryption key duri
 ### Userinfo
 
 `GET https://api.aveid.net/api/oauth/userinfo`
+
+### Connector Endpoints
+
+- `GET https://api.aveid.net/api/oauth/delegations`
+- `DELETE https://api.aveid.net/api/oauth/delegations/:delegationId`
+- `GET https://api.aveid.net/api/oauth/app/:clientId` (includes published resources)
 
 ## Common Integration Mistakes
 
