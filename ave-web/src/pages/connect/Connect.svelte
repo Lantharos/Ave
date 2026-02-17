@@ -1,7 +1,6 @@
 <script lang="ts">
   import { goto } from "@mateothegreat/svelte5-router";
   import { get } from "svelte/store";
-  import AuroraBackdrop from "../../components/AuroraBackdrop.svelte";
   import { api } from "../../lib/api";
   import { auth, isAuthenticated } from "../../stores/auth";
   import { setReturnUrl } from "../../util/return-url";
@@ -92,8 +91,8 @@
       const resolvedScope = pickScope(params.scope, targetResource.scopes || []);
       if (!resolvedScope) {
         error = params.scope
-          ? "Requested scope is not allowed for this connector resource."
-          : "Target resource has no available scopes.";
+          ? "Requested access is not allowed for this connector resource."
+          : "Target resource has no available access scope.";
         return;
       }
 
@@ -174,338 +173,114 @@
   });
 </script>
 
-<div class="bg-[#090909] min-h-screen-fixed relative overflow-hidden px-4 md:px-[70px] py-6 md:py-[50px]">
-  <AuroraBackdrop preset="dashboard-tr" cclass="absolute top-0 right-0 w-[70%] pointer-events-none select-none" />
-  <AuroraBackdrop preset="dashboard-bl" cclass="absolute bottom-0 left-0 w-[80%] pointer-events-none select-none" />
-
-  <div class="max-w-[1240px] mx-auto relative z-10">
-    {#if loading}
-      <div class="shell"><p class="state-copy">Loading connector details...</p></div>
-    {:else if error}
-      <div class="shell shell-error"><p>{error}</p></div>
-    {:else if appInfo && targetResource}
-      <div class="shell shell-grid">
-        <section class="hero">
-          <p class="hero-eyebrow">Ave Connector</p>
-          <h1>{appInfo.name} wants to connect with {targetResource.ownerAppName}</h1>
-          <p class="hero-sub">Review access and approve.</p>
-
-          <div class="flow">
-            <div class="flow-app">
-              <div class="icon-wrap">
-                {#if appInfo.iconUrl}
-                  <img src={appInfo.iconUrl} alt="{appInfo.name} icon" class="icon icon-fill" />
-                {:else}
-                  <div class="icon-fallback">{appInitial(appInfo.name)}</div>
-                {/if}
-              </div>
-              <strong>{appInfo.name}</strong>
-              <span>Requesting app</span>
-            </div>
-
-            <div class="flow-arrow" aria-hidden="true">
-              <svg width="34" height="34" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M4 12h16M13 5l7 7-7 7" stroke="#BFC2C5" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
-              </svg>
-            </div>
-
-            <div class="flow-app">
-              <div class="icon-wrap">
-                {#if targetResource.ownerAppIconUrl}
-                  <img src={targetResource.ownerAppIconUrl} alt="{targetResource.ownerAppName} icon" class="icon icon-target" />
-                {:else}
-                  <div class="icon-fallback">{appInitial(targetResource.ownerAppName)}</div>
-                {/if}
-              </div>
-              <strong>{targetResource.ownerAppName}</strong>
-              <span>Target app</span>
-            </div>
-          </div>
-
-          <div class="meta">
-            <div><span class="meta-key">Resource</span><span>{targetResource.displayName}</span></div>
-            <div><span class="meta-key">Scope</span><span>{selectedScope}</span></div>
-          </div>
-        </section>
-
-        <section class="consent">
-          <h2>Approve access</h2>
-          <p>
-            This will let <strong>{appInfo.name}</strong> use <strong>{targetResource.ownerAppName}</strong> for this feature.
-          </p>
-
-          <div class="actions">
-            <button class="btn-primary" disabled={connecting} onclick={handleConnect}>
-              {connecting ? "Approving..." : "Approve and continue"}
-            </button>
-            <button class="btn-secondary" onclick={handleCancel}>Cancel</button>
-          </div>
-        </section>
-      </div>
-    {/if}
+{#if loading}
+  <div class="bg-[#090909] min-h-screen-fixed flex items-center justify-center p-6 md:p-[50px]">
+    <div class="w-[48px] h-[48px] border-2 border-[#FFFFFF] border-t-transparent rounded-full animate-spin"></div>
   </div>
-</div>
+{:else if error}
+  <div class="bg-[#090909] min-h-screen-fixed flex items-center justify-center p-6 md:p-[50px]">
+    <div class="w-full max-w-[560px] rounded-[28px] bg-[#151515] p-6 md:p-10 text-center">
+      <p class="text-[#E57272] text-[16px] md:text-[20px]">{error}</p>
+      <button
+        class="mt-6 px-6 py-3 rounded-full bg-[#FFFFFF] text-[#090909] font-semibold hover:bg-[#EAEAEA] transition-colors"
+        onclick={handleCancel}
+      >
+        Go back
+      </button>
+    </div>
+  </div>
+{:else if appInfo && targetResource}
+  <div class="bg-[#090909] min-h-screen-fixed flex flex-col md:flex-row md:items-stretch items-center gap-6 md:gap-[50px] p-6 md:p-[50px] relative overflow-auto">
+    <div class="flex-1 z-10 flex flex-col items-start justify-start md:justify-between p-4 md:p-[50px] w-full">
+      <div class="flex flex-row gap-4 md:gap-[20px] items-start">
+        <button
+          class="w-12 h-12 md:w-[80px] md:h-[80px] rounded-[12px] md:rounded-[16px] overflow-hidden bg-[#171717] flex items-center justify-center"
+          onclick={handleCancel}
+          title="Go back"
+        >
+          {#if appInfo.iconUrl}
+            <img src={appInfo.iconUrl} alt="{appInfo.name} logo" class="w-full h-full object-cover" />
+          {:else}
+            <span class="text-[#878787] text-[18px] md:text-[30px] font-bold">{appInitial(appInfo.name)}</span>
+          {/if}
+        </button>
 
-<style>
-  .shell {
-    border-radius: 52px;
-    background: #11111199;
-    backdrop-filter: blur(20px);
-    padding: 24px;
-    min-height: 280px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
+        <div class="flex flex-col gap-1 md:gap-[10px]">
+          <h1 class="font-poppins text-2xl md:text-[48px] text-white leading-[1.05]">
+            Connect {appInfo.name} to {targetResource.ownerAppName}
+          </h1>
+          <p class="font-poppins text-[14px] md:text-[22px] text-[#878787]">
+            Approve to continue.
+          </p>
+        </div>
+      </div>
 
-  .shell-error {
-    background: #2a1111;
-    color: #e57272;
-    justify-content: flex-start;
-    min-height: 0;
-  }
+      <div class="mt-8 md:mt-0 w-full max-w-[760px] bg-[#111111]/80 rounded-[20px] md:rounded-[32px] p-4 md:p-6">
+        <div class="flex items-center justify-between gap-4 md:gap-8">
+          <div class="flex flex-col items-center text-center min-w-[110px] md:min-w-[160px]">
+            <div class="w-[56px] h-[56px] md:w-[88px] md:h-[88px] rounded-[16px] md:rounded-[24px] overflow-hidden bg-[#171717] flex items-center justify-center">
+              {#if appInfo.iconUrl}
+                <img src={appInfo.iconUrl} alt="{appInfo.name} icon" class="w-full h-full object-cover" />
+              {:else}
+                <span class="text-[#CFCFCF] text-[20px] md:text-[34px] font-bold">{appInitial(appInfo.name)}</span>
+              {/if}
+            </div>
+            <p class="mt-2 text-white text-[16px] md:text-[24px] font-semibold">{appInfo.name}</p>
+          </div>
 
-  .state-copy {
-    margin: 0;
-    color: #8a8a8a;
-    font-size: 18px;
-  }
+          <svg class="text-[#BFC2C5] shrink-0" width="30" height="30" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M4 12h16M13 5l7 7-7 7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
 
-  .shell-grid {
-    display: grid;
-    grid-template-columns: minmax(0, 1.2fr) minmax(0, 0.8fr);
-    gap: 20px;
-    align-items: stretch;
-    justify-content: initial;
-  }
+          <div class="flex flex-col items-center text-center min-w-[110px] md:min-w-[160px]">
+            <div class="w-[56px] h-[56px] md:w-[88px] md:h-[88px] rounded-[16px] md:rounded-[24px] overflow-hidden bg-[#171717] flex items-center justify-center">
+              {#if targetResource.ownerAppIconUrl}
+                <img src={targetResource.ownerAppIconUrl} alt="{targetResource.ownerAppName} icon" class="h-full w-auto max-w-full object-contain" />
+              {:else}
+                <span class="text-[#CFCFCF] text-[20px] md:text-[34px] font-bold">{appInitial(targetResource.ownerAppName)}</span>
+              {/if}
+            </div>
+            <p class="mt-2 text-white text-[16px] md:text-[24px] font-semibold">{targetResource.ownerAppName}</p>
+          </div>
+        </div>
 
-  .hero,
-  .consent {
-    border-radius: 36px;
-    background: #101010;
-    padding: 34px;
-  }
+        <div class="mt-5 space-y-2">
+          <div class="bg-[#171717] rounded-[14px] px-4 py-3 flex items-center justify-between">
+            <span class="text-[#8B8B8B] text-[13px] md:text-[15px]">Access</span>
+            <span class="text-white text-[14px] md:text-[16px] font-semibold">{targetResource.displayName}</span>
+          </div>
+          <div class="bg-[#171717] rounded-[14px] px-4 py-3 flex items-center justify-between">
+            <span class="text-[#8B8B8B] text-[13px] md:text-[15px]">Usage</span>
+            <span class="text-white text-[14px] md:text-[16px] font-semibold">Inside {appInfo.name}</span>
+          </div>
+        </div>
+      </div>
+    </div>
 
-  .hero-eyebrow {
-    margin: 0;
-    font-size: 12px;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    color: #7a7a7a;
-  }
+    <div class="flex-1 w-full md:min-h-full px-4 md:px-[75px] z-10 py-5 md:py-[70px] flex flex-col justify-between rounded-[24px] md:rounded-[64px] bg-[#111111]/60 backdrop-blur-xl">
+      <div class="flex flex-col gap-3 md:gap-[20px]">
+        <h2 class="text-white text-2xl md:text-[52px] font-bold font-poppins leading-[1.02]">Approve access</h2>
+        <p class="font-poppins text-[14px] md:text-[24px] text-[#878787] leading-[1.45]">
+          This allows <span class="text-white font-semibold">{appInfo.name}</span> to use <span class="text-white font-semibold">{targetResource.ownerAppName}</span> for this feature.
+        </p>
+      </div>
 
-  .hero h1 {
-    margin: 10px 0 0;
-    color: #f4f4f4;
-    font-size: clamp(34px, 4.8vw, 56px);
-    line-height: 1.03;
-    font-weight: 700;
-    max-width: 15ch;
-  }
+      <div class="flex flex-col gap-3 md:gap-[20px] mt-8 md:mt-0">
+        <button
+          class="w-full py-3 md:py-[20px] bg-[#FFFFFF] text-[#090909] text-[18px] md:text-[40px] font-semibold rounded-full hover:bg-[#EAEAEA] transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+          disabled={connecting}
+          onclick={handleConnect}
+        >
+          {connecting ? "Approving..." : "Approve and continue"}
+        </button>
 
-  .hero-sub {
-    margin: 14px 0 0;
-    color: #8e8e8e;
-    font-size: 18px;
-  }
-
-  .flow {
-    margin-top: 24px;
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
-    gap: 14px;
-    align-items: center;
-  }
-
-  .flow-app {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    text-align: center;
-  }
-
-  .icon-wrap {
-    width: 88px;
-    height: 88px;
-    border-radius: 24px;
-    background: #171717;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    overflow: hidden;
-    padding: 0;
-  }
-
-  .icon {
-    display: block;
-  }
-
-  .icon-fill {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-  }
-
-  .icon-target {
-    height: 100%;
-    width: auto;
-    max-width: 100%;
-    object-fit: contain;
-  }
-
-  .icon-fallback {
-    color: #d0d0d0;
-    font-size: 34px;
-    font-weight: 700;
-  }
-
-  .flow-app strong {
-    margin-top: 10px;
-    color: #f5f5f5;
-    font-size: 22px;
-    line-height: 1.1;
-  }
-
-  .flow-app span {
-    color: #888;
-    font-size: 12px;
-    margin-top: 3px;
-  }
-
-  .flow-arrow {
-    color: #bfc2c5;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-
-  .meta {
-    margin-top: 24px;
-    display: grid;
-    gap: 10px;
-  }
-
-  .meta div {
-    display: flex;
-    justify-content: space-between;
-    align-items: baseline;
-    gap: 10px;
-    background: #161616;
-    border-radius: 14px;
-    padding: 12px 14px;
-  }
-
-  .meta-key {
-    color: #8b8b8b;
-    font-size: 13px;
-  }
-
-  .meta span {
-    color: #f2f2f2;
-    font-size: 15px;
-    font-weight: 600;
-  }
-
-  .consent {
-    display: flex;
-    flex-direction: column;
-  }
-
-  .consent h2 {
-    margin: 0;
-    color: #f3f3f3;
-    font-size: clamp(32px, 4vw, 46px);
-    line-height: 1.05;
-  }
-
-  .consent p {
-    margin: 14px 0 0;
-    color: #8e8e8e;
-    font-size: 18px;
-    line-height: 1.5;
-  }
-
-  .consent strong {
-    color: #f0f0f0;
-  }
-
-  .actions {
-    margin-top: auto;
-    padding-top: 28px;
-    display: grid;
-    gap: 10px;
-  }
-
-  .btn-primary,
-  .btn-secondary {
-    width: 100%;
-    border-radius: 999px;
-    padding: 14px 18px;
-    font-size: 22px;
-    font-weight: 600;
-    line-height: 1;
-  }
-
-  .btn-primary {
-    border: 0;
-    background: #f2f2f2;
-    color: #090909;
-  }
-
-  .btn-primary:hover:not(:disabled) {
-    background: #fff;
-  }
-
-  .btn-primary:disabled {
-    opacity: 0.65;
-  }
-
-  .btn-secondary {
-    border: 0;
-    background: #181818;
-    color: #b0b0b0;
-  }
-
-  .btn-secondary:hover {
-    color: #e2e2e2;
-    background: #232323;
-  }
-
-  @media (max-width: 1080px) {
-    .shell {
-      border-radius: 28px;
-      padding: 14px;
-    }
-
-    .shell-grid {
-      grid-template-columns: 1fr;
-      gap: 12px;
-    }
-
-    .hero,
-    .consent {
-      border-radius: 22px;
-      padding: 20px;
-    }
-
-    .hero h1 {
-      font-size: clamp(30px, 10vw, 46px);
-      max-width: none;
-    }
-
-    .consent h2 {
-      font-size: clamp(28px, 9vw, 40px);
-    }
-
-    .flow {
-      grid-template-columns: 1fr;
-      gap: 10px;
-    }
-
-    .meta div {
-      flex-direction: column;
-      align-items: flex-start;
-      gap: 4px;
-    }
-  }
-</style>
+        <button
+          class="w-full py-3 md:py-[20px] bg-[#171717] text-[#A8A8A8] text-[18px] md:text-[40px] font-semibold rounded-full hover:bg-[#222222] hover:text-[#E5E5E5] transition-colors"
+          onclick={handleCancel}
+        >
+          Cancel
+        </button>
+      </div>
+    </div>
+  </div>
+{/if}
