@@ -1,6 +1,6 @@
 {
   "name": "@ave-id/embed",
-  "version": "0.2.5",
+  "version": "0.2.6",
   "type": "module",
   "main": "dist/embed.js",
   "module": "dist/embed.js",
@@ -20,6 +20,6 @@
   },
   "scripts": {
     "build": "mkdir -p dist && cp src/embed.js dist/embed.js && cp src/embed.d.ts dist/embed.d.ts",
-    "prepublishOnly": "npm run build"
+    "build:windows": "mkdir dist && copy src\\embed.js dist\\embed.js && copy src\\embed.d.ts dist\\embed.d.ts"
   }
 }
