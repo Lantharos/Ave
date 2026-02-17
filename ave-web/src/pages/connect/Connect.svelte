@@ -1,7 +1,6 @@
 <script lang="ts">
   import { goto } from "@mateothegreat/svelte5-router";
   import { get } from "svelte/store";
-  import AuroraBackdrop from "../../components/AuroraBackdrop.svelte";
   import { api } from "../../lib/api";
   import { auth, isAuthenticated } from "../../stores/auth";
   import { setReturnUrl } from "../../util/return-url";
@@ -250,16 +249,25 @@
   });
 </script>
 
-{#if loading}
-  <div class="bg-[#090909] min-h-screen-fixed flex items-center justify-center p-6 md:p-[50px] relative overflow-hidden">
-    <AuroraBackdrop preset="dashboard-tr" cclass="absolute top-0 right-0 w-[70%] pointer-events-none select-none" />
-    <AuroraBackdrop preset="dashboard-bl" cclass="absolute bottom-0 left-0 w-[80%] pointer-events-none select-none" />
-    <div class="w-[48px] h-[48px] border-2 border-[#FFFFFF] border-t-transparent rounded-full animate-spin z-10"></div>
+<div class="bg-[#090909] min-h-screen-fixed relative overflow-hidden flex items-center justify-center p-6 md:p-[50px]">
+  <div class="absolute bottom-0 right-0 pointer-events-none hidden md:block">
+    <svg width="1416" height="695" viewBox="0 0 1416 695" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <g filter="url(#filter0_f_3071_668)">
+        <path d="M910.219 401.152C913.621 399.616 917.519 399.616 920.921 401.152L1423.47 628.138C1436.23 633.9 1432.12 652.985 1418.12 652.985H413.018C399.02 652.985 394.91 633.9 407.667 628.138L910.219 401.152Z" fill="#B9BBBE"/>
+      </g>
+      <defs>
+        <filter id="filter0_f_3071_668" x="0" y="0" width="1831.14" height="1052.99" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+          <feFlood flood-opacity="0" result="BackgroundImageFix"/>
+          <feBlend mode="normal" in="SourceGraphic" in2="BackgroundImageFix" result="shape"/>
+          <feGaussianBlur stdDeviation="200" result="effect1_foregroundBlur_3071_668"/>
+        </filter>
+      </defs>
+    </svg>
   </div>
-{:else if error}
-  <div class="bg-[#090909] min-h-screen-fixed flex items-center justify-center p-6 md:p-[50px] relative overflow-hidden">
-    <AuroraBackdrop preset="dashboard-tr" cclass="absolute top-0 right-0 w-[70%] pointer-events-none select-none" />
-    <AuroraBackdrop preset="dashboard-bl" cclass="absolute bottom-0 left-0 w-[80%] pointer-events-none select-none" />
+
+  {#if loading}
+    <div class="w-[48px] h-[48px] border-2 border-[#FFFFFF] border-t-transparent rounded-full animate-spin z-10"></div>
+  {:else if error}
     <div class="w-full max-w-[560px] rounded-[28px] bg-[#151515] p-6 md:p-10 text-center z-10">
       <p class="text-[#E57272] text-[16px] md:text-[20px]">{error}</p>
       <button
@@ -269,23 +277,16 @@
         Go back
       </button>
     </div>
-  </div>
-{:else if appInfo && targetResource}
-  <div class="bg-[#090909] min-h-screen-fixed flex flex-col md:flex-row md:items-stretch items-center gap-6 md:gap-[50px] p-6 md:p-[50px] relative overflow-auto">
-    <AuroraBackdrop preset="dashboard-tr" cclass="absolute top-0 right-0 w-[70%] pointer-events-none select-none" />
-    <AuroraBackdrop preset="dashboard-bl" cclass="absolute bottom-0 left-0 w-[80%] pointer-events-none select-none" />
-
-    <div class="flex-1 z-10 flex flex-col items-start justify-start md:justify-between p-4 md:p-[50px] w-full">
-      <div class="flex flex-col gap-1 md:gap-[8px]">
-        <h1 class="font-poppins text-[34px] md:text-[42px] text-white leading-[1.05]">
-          Connect {appInfo.name} to {targetResource.ownerAppName}
-        </h1>
-        <p class="font-poppins text-[14px] md:text-[18px] text-[#878787]">
-          Approve to continue.
+  {:else if appInfo && targetResource}
+    <div class="w-full max-w-[940px] z-10 px-4 md:px-[75px] py-5 md:py-[60px] flex flex-col gap-8 rounded-[24px] md:rounded-[64px] bg-[#111111]/60 backdrop-blur-xl">
+      <div class="flex flex-col gap-2">
+        <h1 class="text-white text-[34px] md:text-[48px] font-bold font-poppins leading-[1.03]">Approve access</h1>
+        <p class="font-poppins text-[14px] md:text-[20px] text-[#878787] leading-[1.45]">
+          This allows <span class="text-white font-semibold">{appInfo.name}</span> to use <span class="text-white font-semibold">{targetResource.ownerAppName}</span> for this feature.
         </p>
       </div>
 
-      <div class="mt-8 md:mt-0 w-full max-w-[760px] bg-[#111111]/80 rounded-[20px] md:rounded-[32px] p-4 md:p-6">
+      <div class="bg-[#111111] rounded-[20px] md:rounded-[32px] p-4 md:p-6 space-y-4">
         <div class="flex items-center justify-between gap-4 md:gap-8">
           <div class="flex flex-col items-center text-center min-w-[110px] md:min-w-[160px]">
             <div class="w-[56px] h-[56px] md:w-[88px] md:h-[88px] rounded-[16px] md:rounded-[24px] overflow-hidden bg-[#171717] flex items-center justify-center">
@@ -314,7 +315,7 @@
           </div>
         </div>
 
-        <div class="mt-5 space-y-2">
+        <div class="space-y-2">
           <div class="bg-[#171717] rounded-[14px] px-4 py-3 flex items-center justify-between">
             <span class="text-[#8B8B8B] text-[13px] md:text-[15px]">Access</span>
             <span class="text-white text-[14px] md:text-[16px] font-semibold">{targetResource.displayName}</span>
@@ -325,17 +326,8 @@
           </div>
         </div>
       </div>
-    </div>
 
-    <div class="flex-1 w-full md:min-h-full px-4 md:px-[75px] z-10 py-5 md:py-[70px] flex flex-col justify-between rounded-[24px] md:rounded-[64px] bg-[#111111]/60 backdrop-blur-xl">
-      <div class="flex flex-col gap-3 md:gap-[12px]">
-        <h2 class="text-white text-2xl md:text-[42px] font-bold font-poppins leading-[1.02]">Approve access</h2>
-        <p class="font-poppins text-[14px] md:text-[18px] text-[#878787] leading-[1.45]">
-          This allows <span class="text-white font-semibold">{appInfo.name}</span> to use <span class="text-white font-semibold">{targetResource.ownerAppName}</span> for this feature.
-        </p>
-      </div>
-
-      <div class="flex flex-col gap-3 md:gap-[18px] mt-8 md:mt-0">
+      <div class="flex flex-col gap-3 md:gap-[14px]">
         <!-- svelte-ignore a11y_no_static_element_interactions -->
         <div
           id="connect-slider"
@@ -364,12 +356,12 @@
         </div>
 
         <button
-          class="w-full py-3 md:py-[14px] bg-[#171717] text-[#A8A8A8] text-[18px] md:text-[32px] font-semibold rounded-full hover:bg-[#222222] hover:text-[#E5E5E5] transition-colors"
+          class="w-full py-3 bg-[#171717] text-[#A8A8A8] text-[20px] md:text-[22px] font-semibold rounded-full hover:bg-[#222222] hover:text-[#E5E5E5] transition-colors"
           onclick={handleCancel}
         >
           Cancel
         </button>
       </div>
     </div>
-  </div>
-{/if}
+  {/if}
+</div>
