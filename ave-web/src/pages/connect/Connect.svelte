@@ -1,7 +1,6 @@
 <script lang="ts">
   import { goto } from "@mateothegreat/svelte5-router";
   import { get } from "svelte/store";
-  import Text from "../../components/Text.svelte";
   import AuroraBackdrop from "../../components/AuroraBackdrop.svelte";
   import { api } from "../../lib/api";
   import { auth, isAuthenticated } from "../../stores/auth";
@@ -38,8 +37,8 @@
 
   let selectedResourceKey = $state("");
   let selectedScope = $state("");
-  let communicationMode = $state<"user_present" | "background">("user_present");
   let selectedIdentityId = $state("");
+  let requestedCommunicationMode = $state<"user_present" | "background">("user_present");
 
   const params = $derived.by(() => {
     const p = new URLSearchParams(window.location.search);
@@ -88,7 +87,7 @@
       appInfo = appData.app;
       targetResource = resourceData.resource;
       selectedResourceKey = targetResource.resourceKey;
-      communicationMode = params.mode;
+      requestedCommunicationMode = params.mode;
 
       const resolvedScope = pickScope(params.scope, targetResource.scopes || []);
       if (!resolvedScope) {
@@ -121,7 +120,7 @@
         connector: true,
         requestedResource: selectedResourceKey,
         requestedScope: selectedScope,
-        communicationMode,
+        communicationMode: requestedCommunicationMode,
       });
 
       if (params.embed) {
@@ -173,121 +172,90 @@
   <AuroraBackdrop preset="dashboard-tr" cclass="absolute top-0 right-0 w-[70%] pointer-events-none select-none" />
   <AuroraBackdrop preset="dashboard-bl" cclass="absolute bottom-0 left-0 w-[80%] pointer-events-none select-none" />
 
-  <div class="max-w-[1200px] mx-auto relative z-10 bg-[#111111]/60 rounded-[28px] md:rounded-[52px] p-6 md:p-[40px] backdrop-blur-[20px] border border-[#1E1E1E]">
+  <div class="max-w-[1350px] mx-auto relative z-10">
     {#if loading}
-      <div class="py-14 text-center text-[#8A8A8A]">Loading connector details...</div>
+      <div class="panel-shell py-20 text-center text-[#8A8A8A]">Loading connector details...</div>
     {:else if error}
-      <div class="p-4 rounded-[14px] bg-[#2A1111] border border-[#502222] text-[#E57272]">{error}</div>
+      <div class="panel-shell p-4 rounded-[14px] bg-[#2A1111] border border-[#502222] text-[#E57272]">{error}</div>
     {:else if appInfo && targetResource}
-      <div class="grid grid-cols-1 lg:grid-cols-[1.15fr_0.85fr] gap-6 md:gap-8">
-        <section class="rounded-[24px] border border-[#222] bg-[#101010] p-5 md:p-8">
-          <Text type="h" size={42} mobileSize={28} weight="bold">Connect apps with Ave</Text>
-          <p class="text-[#8A8A8A] text-[14px] md:text-[17px] mt-2">
-            Connector grants are separate from sign-in and let one app call another app's resource with your explicit approval.
+      <div class="panel-shell panel-grid">
+        <section class="hero-pane">
+          <p class="eyebrow">Ave Connector</p>
+          <h1>
+            <span>{appInfo.name}</span>
+            <small>wants to use</small>
+            <span>{targetResource.ownerAppName}</span>
+          </h1>
+          <p class="hero-copy">
+            This is a separate connector grant on top of sign-in. The requesting app cannot change this request from this screen.
           </p>
 
-          <div class="mt-8 rounded-[22px] border border-[#232323] bg-[#0d0d0d] p-4 md:p-6">
-            <div class="flex items-center justify-between gap-4 md:gap-8">
-              <div class="app-node">
-                <div class="app-icon-wrap">
-                  {#if appInfo.iconUrl}
-                    <img src={appInfo.iconUrl} alt="{appInfo.name} icon" class="app-icon" />
-                  {:else}
-                    <div class="app-fallback">{appInitial(appInfo.name)}</div>
-                  {/if}
-                </div>
-                <p class="app-label">{appInfo.name}</p>
-                <p class="app-sub">Requesting app</p>
+          <div class="flow-card" aria-label="Connector direction">
+            <div class="flow-app">
+              <div class="app-icon-wrap">
+                {#if appInfo.iconUrl}
+                  <img src={appInfo.iconUrl} alt="{appInfo.name} icon" class="app-icon" />
+                {:else}
+                  <div class="app-fallback">{appInitial(appInfo.name)}</div>
+                {/if}
               </div>
+              <strong>{appInfo.name}</strong>
+              <span>Requesting app</span>
+            </div>
 
-              <div class="connector-link" aria-hidden="true">
-                <span></span>
-                <svg width="34" height="34" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M6 12h12M12 6l6 6-6 6" stroke="#B9BBBE" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
-                </svg>
-                <span></span>
-              </div>
+            <div class="flow-arrow" aria-hidden="true">
+              <span></span>
+              <svg width="38" height="38" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M4 12h16M13 5l7 7-7 7" stroke="#C9CBCE" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+              <span></span>
+            </div>
 
-              <div class="app-node">
-                <div class="app-icon-wrap">
-                  {#if targetResource.ownerAppIconUrl}
-                    <img src={targetResource.ownerAppIconUrl} alt="{targetResource.ownerAppName} icon" class="app-icon" />
-                  {:else}
-                    <div class="app-fallback">{appInitial(targetResource.ownerAppName)}</div>
-                  {/if}
-                </div>
-                <p class="app-label">{targetResource.ownerAppName}</p>
-                <p class="app-sub">Target app</p>
+            <div class="flow-app">
+              <div class="app-icon-wrap">
+                {#if targetResource.ownerAppIconUrl}
+                  <img src={targetResource.ownerAppIconUrl} alt="{targetResource.ownerAppName} icon" class="app-icon" />
+                {:else}
+                  <div class="app-fallback">{appInitial(targetResource.ownerAppName)}</div>
+                {/if}
               </div>
+              <strong>{targetResource.ownerAppName}</strong>
+              <span>Target app</span>
             </div>
           </div>
 
-          <div class="mt-6 rounded-[20px] border border-[#232323] bg-[#131313] p-4 md:p-6">
-            <p class="text-[#6F6F6F] uppercase tracking-[0.09em] text-[11px] mb-2">Grant details</p>
-            <div class="grid gap-3">
-              <div class="grant-row">
-                <span>Resource</span>
-                <strong>{targetResource.displayName} <em>({targetResource.resourceKey})</em></strong>
-              </div>
-              <div class="grant-row">
-                <span>Scope</span>
-                <strong>{selectedScope}</strong>
-              </div>
-              <div class="grant-row">
-                <span>Persistence</span>
-                <strong>Persistent until revoked</strong>
-              </div>
-            </div>
-            <p class="text-[#7C7C7C] text-[13px] mt-4">
-              Scope and resource are set by the requesting app and validated against the target resource definition.
-            </p>
+          <div class="grant-card">
+            <p class="eyebrow">Connector request</p>
+            <div class="grant-item"><span class="grant-key">Resource</span><span class="grant-value">{targetResource.displayName} ({targetResource.resourceKey})</span></div>
+            <div class="grant-item"><span class="grant-key">Scope</span><span class="grant-value">{selectedScope}</span></div>
+            <div class="grant-item"><span class="grant-key">Mode</span><span class="grant-value">{requestedCommunicationMode === "background" ? "Background" : "User present"}</span></div>
+            <div class="grant-item"><span class="grant-key">Revocation</span><span class="grant-value">Any time from dashboard</span></div>
           </div>
         </section>
 
-        <section class="rounded-[24px] border border-[#232323] bg-[#0f0f0f] p-5 md:p-8 flex flex-col">
-          <h2 class="text-white text-[24px] md:text-[30px] font-semibold">Connector consent</h2>
-          <p class="text-[#8A8A8A] text-[14px] mt-2">
-            Choose how communication is allowed, then create this connector grant.
+        <section class="consent-pane">
+          <h2>Approve connector grant</h2>
+          <p>
+            Approving lets <strong>{appInfo.name}</strong> call <strong>{targetResource.ownerAppName}</strong> on your behalf within the scope above.
           </p>
 
-          <div class="mt-6 rounded-[18px] border border-[#27313C] bg-[#11161C] p-4 text-[#9EB5CD] text-[13px] leading-[1.45]">
+          <div class="note-card">
             If connector secrets are required, Ave may request passkey confirmation during connector runtime so protected material can be used securely in your browser session.
           </div>
 
-          <div class="mt-6 rounded-[18px] border border-[#232323] bg-[#121212] p-4">
-            <p class="text-[13px] text-[#A6A6A6] mb-3">Communication mode</p>
-            <div class="grid grid-cols-1 gap-2">
-              <button
-                class="mode-btn {communicationMode === 'user_present' ? 'active' : ''}"
-                onclick={() => communicationMode = 'user_present'}
-              >
-                <span>Only when user present</span>
-                <small>Use this connector while you are actively in the requesting app.</small>
-              </button>
-              <button
-                class="mode-btn {communicationMode === 'background' ? 'active' : ''}"
-                onclick={() => communicationMode = 'background'}
-              >
-                <span>Allow background</span>
-                <small>Allow server-to-server use after consent, until revoked.</small>
-              </button>
-            </div>
+          <div class="consent-lock">
+            <span>Request is app-defined and locked on this screen.</span>
           </div>
 
-          <div class="mt-auto pt-6 flex flex-col gap-2">
+          <div class="consent-actions">
             <button
-              class="w-full px-6 py-3 rounded-full bg-white text-black font-semibold hover:bg-[#EAEAEA] transition-colors disabled:opacity-60"
+              class="primary-btn"
               disabled={connecting}
               onclick={handleConnect}
             >
-              {connecting ? 'Creating grant...' : 'Create connector grant'}
+              {connecting ? "Creating connector grant..." : "Approve and continue"}
             </button>
-            <button
-              class="w-full px-6 py-3 rounded-full border border-[#333] text-[#aaa] hover:text-white hover:border-[#555] transition-colors"
-              onclick={handleCancel}
-            >
-              Cancel
-            </button>
+            <button class="secondary-btn" onclick={handleCancel}>Cancel</button>
           </div>
         </section>
       </div>
@@ -296,25 +264,108 @@
 </div>
 
 <style>
-  .app-node {
+  .panel-shell {
+    border-radius: 52px;
+    border: 1px solid #1f1f1f;
+    background: linear-gradient(180deg, rgba(16, 16, 16, 0.85), rgba(10, 10, 10, 0.9));
+    backdrop-filter: blur(20px);
+    padding: 28px;
+  }
+
+  .panel-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
+    gap: 22px;
+  }
+
+  .hero-pane,
+  .consent-pane {
+    border-radius: 36px;
+    border: 1px solid #252525;
+    background: rgba(12, 12, 12, 0.78);
+    padding: 34px;
+  }
+
+  .eyebrow {
+    margin: 0;
+    text-transform: uppercase;
+    letter-spacing: 0.09em;
+    color: #6f6f6f;
+    font-size: 11px;
+    font-weight: 600;
+  }
+
+  h1 {
+    margin: 12px 0 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    color: #f5f5f5;
+    font-size: clamp(34px, 4.7vw, 56px);
+    line-height: 1.03;
+    font-weight: 700;
+  }
+
+  h1 small {
+    font-size: clamp(16px, 2vw, 21px);
+    color: #8a8a8a;
+    font-weight: 500;
+    line-height: 1.2;
+  }
+
+  .hero-copy {
+    margin: 16px 0 0;
+    color: #8f8f8f;
+    font-size: 16px;
+    line-height: 1.52;
+    max-width: 680px;
+  }
+
+  .flow-card,
+  .grant-card {
+    margin-top: 22px;
+    border: 1px solid #262626;
+    background: #101010;
+    border-radius: 24px;
+    padding: 18px;
+  }
+
+  .flow-card {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    align-items: center;
+    gap: 16px;
+  }
+
+  .flow-app {
+    text-align: center;
     display: flex;
     flex-direction: column;
     align-items: center;
-    text-align: center;
-    min-width: 140px;
+    gap: 4px;
+  }
+
+  .flow-app strong {
+    color: #f4f4f4;
+    font-size: 22px;
+    line-height: 1.1;
+  }
+
+  .flow-app span {
+    color: #838383;
+    font-size: 12px;
   }
 
   .app-icon-wrap {
-    width: 78px;
-    height: 78px;
-    border-radius: 22px;
-    border: 1px solid #2a2a2a;
-    background: #111;
+    width: 86px;
+    height: 86px;
+    border-radius: 26px;
+    border: 1px solid #2b2b2b;
+    background: #151515;
     display: flex;
     align-items: center;
     justify-content: center;
     overflow: hidden;
-    box-shadow: inset 0 0 0 1px #171717;
   }
 
   .app-icon {
@@ -324,112 +375,186 @@
   }
 
   .app-fallback {
-    font-size: 30px;
+    font-size: 34px;
     font-weight: 700;
-    color: #d2d2d2;
+    color: #d4d4d4;
   }
 
-  .app-label {
-    margin-top: 10px;
-    color: #fff;
-    font-size: 16px;
-    font-weight: 600;
-  }
-
-  .app-sub {
-    margin-top: 2px;
-    color: #7f7f7f;
-    font-size: 12px;
-  }
-
-  .connector-link {
+  .flow-arrow {
     display: flex;
     align-items: center;
     gap: 8px;
-    flex: 1;
-    max-width: 240px;
+    min-width: 150px;
   }
 
-  .connector-link span {
-    height: 1px;
+  .flow-arrow span {
     flex: 1;
+    height: 1px;
     background: linear-gradient(90deg, transparent, #3a3a3a, transparent);
   }
 
-  .grant-row {
+  .grant-card {
     display: flex;
-    justify-content: space-between;
+    flex-direction: column;
     gap: 10px;
-    border: 1px solid #242424;
-    border-radius: 12px;
-    padding: 10px 12px;
-    background: #111;
-    align-items: center;
   }
 
-  .grant-row span {
-    color: #999;
+  .grant-item {
+    display: grid;
+    grid-template-columns: 120px minmax(0, 1fr);
+    align-items: center;
+    gap: 12px;
+    border: 1px solid #252525;
+    border-radius: 14px;
+    padding: 10px 12px;
+    background: #0f0f0f;
+  }
+
+  .grant-key {
+    color: #8d8d8d;
     font-size: 13px;
   }
 
-  .grant-row strong {
-    color: #fff;
-    font-size: 14px;
+  .grant-value {
+    color: #f1f1f1;
+    font-size: 15px;
     font-weight: 600;
     text-align: right;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
-  .grant-row em {
-    color: #8a8a8a;
-    font-style: normal;
-    font-weight: 500;
+  .consent-pane {
+    display: flex;
+    flex-direction: column;
   }
 
-  .mode-btn {
-    text-align: left;
-    border: 1px solid #333;
-    background: #111;
-    color: #b3b3b3;
-    border-radius: 14px;
-    padding: 12px;
-    transition: all 120ms ease;
+  .consent-pane h2 {
+    margin: 0;
+    font-size: 42px;
+    color: #f6f6f6;
+    line-height: 1.04;
   }
 
-  .mode-btn span {
-    display: block;
+  .consent-pane p {
+    margin: 14px 0 0;
+    color: #8f8f8f;
+    line-height: 1.52;
+    font-size: 16px;
+  }
+
+  .consent-pane p strong {
+    color: #dfdfdf;
+  }
+
+  .note-card {
+    margin-top: 20px;
+    border-radius: 18px;
+    border: 1px solid #274067;
+    background: #111822;
+    color: #9eb5cd;
     font-size: 14px;
+    line-height: 1.5;
+    padding: 16px;
+  }
+
+  .consent-lock {
+    margin-top: 14px;
+    border-radius: 14px;
+    border: 1px solid #2f2f2f;
+    background: #141414;
+    color: #9d9d9d;
+    font-size: 13px;
+    padding: 12px;
+  }
+
+  .consent-actions {
+    margin-top: auto;
+    padding-top: 22px;
+    display: grid;
+    gap: 10px;
+  }
+
+  .primary-btn,
+  .secondary-btn {
+    width: 100%;
+    border-radius: 999px;
+    padding: 14px 18px;
+    font-size: 23px;
+    line-height: 1;
     font-weight: 600;
-    color: #d9d9d9;
+    transition: all 0.15s ease;
   }
 
-  .mode-btn small {
-    display: block;
-    margin-top: 4px;
-    font-size: 12px;
-    color: #8b8b8b;
-    line-height: 1.4;
+  .primary-btn {
+    border: 1px solid transparent;
+    background: #f2f2f2;
+    color: #090909;
   }
 
-  .mode-btn.active {
-    border-color: #6f6f6f;
-    background: #181818;
-    box-shadow: inset 0 0 0 1px #3b3b3b;
+  .primary-btn:hover:not(:disabled) {
+    background: #ffffff;
   }
 
-  @media (max-width: 800px) {
-    .connector-link {
-      max-width: 90px;
+  .primary-btn:disabled {
+    opacity: 0.6;
+    cursor: default;
+  }
+
+  .secondary-btn {
+    border: 1px solid #3b3b3b;
+    background: transparent;
+    color: #a9a9a9;
+  }
+
+  .secondary-btn:hover {
+    color: #e4e4e4;
+    border-color: #636363;
+  }
+
+  @media (max-width: 1080px) {
+    .panel-shell {
+      border-radius: 32px;
+      padding: 16px;
+    }
+
+    .panel-grid {
+      grid-template-columns: 1fr;
+      gap: 14px;
+    }
+
+    .hero-pane,
+    .consent-pane {
+      border-radius: 24px;
+      padding: 20px;
+    }
+
+    h1 {
+      font-size: clamp(30px, 11vw, 48px);
+    }
+
+    .consent-pane h2 {
+      font-size: clamp(28px, 9vw, 44px);
+    }
+
+    .flow-card {
+      grid-template-columns: 1fr;
+      gap: 14px;
+    }
+
+    .flow-arrow {
+      min-width: 0;
+      width: 100%;
+    }
+
+    .grant-item {
+      grid-template-columns: 1fr;
       gap: 4px;
     }
 
-    .app-icon-wrap {
-      width: 62px;
-      height: 62px;
-      border-radius: 18px;
-    }
-
-    .app-node {
-      min-width: 92px;
+    .grant-value {
+      text-align: left;
     }
   }
 </style>
