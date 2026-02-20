@@ -454,7 +454,7 @@ const tokens = await exchangeCodeServer({
                         </p>
                         <ul class="list-disc list-inside mt-[10px] space-y-[8px] text-[#999999] text-[16px]">
                             <li>Complete the Ave OAuth flow in your app.</li>
-                            <li>Use the returned <code>access_token_jwt</code> as your Convex auth token.</li>
+                            <li>Use the returned <code>id_token</code> as your Convex auth token.</li>
                             <li>Configure Convex Custom Auth using Ave's OIDC discovery for issuer + JWKS URL.</li>
                         </ul>
                     </div>

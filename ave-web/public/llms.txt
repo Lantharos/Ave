@@ -242,7 +242,7 @@ Convex supports custom auth providers. You can use Ave as the issuer and pass th
 High-level steps:
 
 1. Complete the Ave OAuth flow in your app.
-2. Use the `access_token_jwt` returned by Ave as your Convex auth token.
+2. Use the `id_token` returned by Ave as your Convex auth token.
 3. Configure Convex Custom Auth with:
    - Issuer: from Ave OIDC discovery
    - JWKS URL: from Ave OIDC discovery
