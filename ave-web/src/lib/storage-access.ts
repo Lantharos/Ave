@@ -15,6 +15,8 @@ export async function hasStorageAccess(): Promise<boolean> {
 export async function requestStorageAccess(): Promise<boolean> {
   const docAny = document as any;
   if (typeof docAny.requestStorageAccess !== "function") return false;
+  const userActivation = (navigator as any).userActivation;
+  if (userActivation && !userActivation.isActive) return false;
   try {
     await docAny.requestStorageAccess();
     return true;

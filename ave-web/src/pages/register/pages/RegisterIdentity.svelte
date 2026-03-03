@@ -19,13 +19,24 @@
         initialData?: IdentityData;
     }>();
 
-    let displayName = $state(initialData?.displayName || "");
-    let handle = $state(initialData?.handle || "");
-    let email = $state(initialData?.email || "");
-    let birthday = $state(initialData?.birthday || "");
-    let avatarUrl = $state(initialData?.avatarUrl || "");
-    let bannerUrl = $state(initialData?.bannerUrl || "");
-    let bannerColor = $state(initialData?.bannerColor || "#1a1a2e");
+    let displayName = $state("");
+    let handle = $state("");
+    let email = $state("");
+    let birthday = $state("");
+    let avatarUrl = $state("");
+    let bannerUrl = $state("");
+    let bannerColor = $state("#1a1a2e");
+
+    $effect(() => {
+        if (!initialData) return;
+        displayName = initialData.displayName || "";
+        handle = initialData.handle || "";
+        email = initialData.email || "";
+        birthday = initialData.birthday || "";
+        avatarUrl = initialData.avatarUrl || "";
+        bannerUrl = initialData.bannerUrl || "";
+        bannerColor = initialData.bannerColor || "#1a1a2e";
+    });
 
     let handleError = $state("");
     let isCheckingHandle = $state(false);

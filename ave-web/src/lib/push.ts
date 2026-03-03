@@ -133,9 +133,10 @@ export async function subscribeToPushNotifications(): Promise<boolean> {
     await navigator.serviceWorker.ready;
     
     // Subscribe to push notifications
+    const applicationServerKey = urlBase64ToUint8Array(vapidPublicKey) as unknown as BufferSource;
     const subscription = await registration.pushManager.subscribe({
       userVisibleOnly: true,
-      applicationServerKey: urlBase64ToUint8Array(vapidPublicKey),
+      applicationServerKey,
     });
     
     console.log("[Push] Push subscription created");

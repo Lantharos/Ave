@@ -6,11 +6,7 @@
  */
 
 import * as ed from "@noble/ed25519";
-import { sha512 } from "@noble/hashes/sha2.js";
 import { encrypt, decrypt, loadMasterKey } from "./crypto";
-
-// Configure ed25519 to use sha512
-ed.etc.sha512Sync = (...m) => sha512(ed.etc.concatBytes(...m));
 
 /**
  * Generate a new Ed25519 signing keypair

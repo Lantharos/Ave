@@ -240,11 +240,10 @@
             if (embedSheet) {
                 if (requestingStorageAccess) return;
                 if (!storageAccessAttempted) {
-                    needsStorageAccess = false;
-                    handleStorageAccessAuto();
-                } else {
-                    needsStorageAccess = true;
+                    tryAutoStorageAccess();
+                    return;
                 }
+                needsStorageAccess = true;
                 return;
             }
             setReturnUrl(window.location.pathname + window.location.search);
@@ -256,7 +255,39 @@
         loadRequest();
     });
 
-    async function handleStorageAccessAuto() {
+    async function tryAutoStorageAccess() {
+        if (requestingStorageAccess) return;
+        storageAccessAttempted = true;
+        requestingStorageAccess = true;
+        needsStorageAccess = false;
+        storageAccessError = null;
+        try {
+            const initOk = (await withTimeout(auth.init(), 5000)) !== null;
+            if (initOk && $isAuthenticated) {
+                needsStorageAccess = false;
+                return;
+            }
+
+            if (supportsStorageAccessApi()) {
+                const alreadyHasAccess = (await withTimeout(hasStorageAccess(), 1200)) === true;
+                if (alreadyHasAccess) {
+                    const retryInitOk = (await withTimeout(auth.init(), 5000)) !== null;
+                    if (retryInitOk && $isAuthenticated) {
+                        needsStorageAccess = false;
+                        return;
+                    }
+                }
+                needsStorageAccess = true;
+                return;
+            }
+
+            needsStorageAccess = true;
+        } finally {
+            requestingStorageAccess = false;
+        }
+    }
+
+    async function requestStorageAccessFromUserAction() {
         if (requestingStorageAccess) return;
         storageAccessAttempted = true;
         requestingStorageAccess = true;
@@ -325,15 +356,7 @@
     }
 
     function handleStorageAccessContinue() {
-        const opened = openSigningPopupHere();
-        if (!opened) {
-            storageAccessError = "Popup blocked. Allow popups to continue.";
-            needsStorageAccess = true;
-            return;
-        }
-        redirectingToLogin = true;
-        needsStorageAccess = false;
-        loading = true;
+        requestStorageAccessFromUserAction();
     }
 
     function formatPayload(payload: string): string {

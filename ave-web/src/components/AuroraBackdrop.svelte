@@ -48,6 +48,7 @@
 
     let { preset = "home", cclass = "" } = $props<{ preset?: PresetName; cclass?: string }>();
     let container: HTMLDivElement | null = null;
+    const activePreset = $derived(presets[preset as PresetName]);
 
     const VERT = `#version 300 es
 in vec2 position;
@@ -164,7 +165,7 @@ void main() {
 
     function setup() {
         if (!container) return;
-        const presetConfig = presets[preset];
+        const presetConfig = activePreset;
 
         renderer = new Renderer({
             alpha: true,
@@ -184,7 +185,7 @@ void main() {
             delete (geometry as any).attributes.uv;
         }
 
-        const colorStopsArray = presetConfig.colorStops.map((hex) => {
+        const colorStopsArray = presetConfig.colorStops.map((hex: string) => {
             const c = new Color(hex);
             return [c.r, c.g, c.b];
         });
@@ -253,9 +254,9 @@ void main() {
 
 <div
     bind:this={container}
-    class={`aurora-backdrop ${cclass} ${presets[preset].position === "top" ? "aurora-top" : "aurora-bottom"}`}
-    style={`height: ${presets[preset].height}px;`}
-/>
+    class={`aurora-backdrop ${cclass} ${activePreset.position === "top" ? "aurora-top" : "aurora-bottom"}`}
+    style={`height: ${activePreset.height}px;`}
+></div>
 
 <style>
     .aurora-backdrop {

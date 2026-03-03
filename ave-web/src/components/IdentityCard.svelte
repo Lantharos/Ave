@@ -25,8 +25,12 @@
     let bannerInput: HTMLInputElement;
     let bannerButton = $state<HTMLButtonElement | null>(null);
     let showColorPicker = $state(false);
-    let customColor = $state(bannerColor || "#CCCCCC");
+    let customColor = $state("#CCCCCC");
     let pickerPosition = $state({ top: 0, left: 0 });
+
+    $effect(() => {
+        customColor = bannerColor || "#CCCCCC";
+    });
 
     const PICKER_WIDTH = 280;
     // Approx height of the picker UI; used for viewport clamping.

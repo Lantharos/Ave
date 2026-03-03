@@ -11,12 +11,12 @@
     }>();
 
     // Form state
-    let displayName = $state(identity?.displayName || "");
-    let handle = $state(identity?.handle || "");
-    let email = $state(identity?.email || "");
-    let birthday = $state(identity?.birthday || "");
-    let avatarUrl = $state(identity?.avatarUrl || "");
-    let bannerUrl = $state(identity?.bannerUrl || "");
+    let displayName = $state("");
+    let handle = $state("");
+    let email = $state("");
+    let birthday = $state("");
+    let avatarUrl = $state("");
+    let bannerUrl = $state("");
 
     let editing = $state({
         displayName: false,
