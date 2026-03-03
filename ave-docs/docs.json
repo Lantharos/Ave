@@ -5,7 +5,7 @@
   "description": "Not another login. Not another password. Just you.",
   "colors": {
     "primary": "#D3D3D3",
-    "light": "#929292",
+    "light": "#161616",
     "dark": "#b4b4b4"
   },
   "navigation": {
