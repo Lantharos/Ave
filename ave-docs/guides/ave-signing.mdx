@@ -7,10 +7,20 @@ Ave Signing provides identity-backed Ed25519 signatures for high-integrity user 
 
 ## Server flow
 
-1. Create request (`POST /api/signing/request`) with app credentials
-2. Present signing UI (sheet/popup/embedded web)
-3. Poll status (`GET /api/signing/request/:requestId/status`)
-4. Verify signature (`POST /api/signing/verify`) or verify locally
+<Steps>
+  <Step title="Create request">
+    Call `POST /api/signing/request` with app credentials and operation payload.
+  </Step>
+  <Step title="Present signing UI">
+    Show signing sheet/popup/embedded experience to the target identity.
+  </Step>
+  <Step title="Track request status">
+    Poll `GET /api/signing/request/:requestId/status` until terminal state.
+  </Step>
+  <Step title="Verify signature before action">
+    Verify via `POST /api/signing/verify` or local crypto verification before executing critical action.
+  </Step>
+</Steps>
 
 ## Create request
 
@@ -39,6 +49,14 @@ Constraints from implementation:
 - `expired`
 
 Server auto-marks expired requests when status endpoint is queried after expiry.
+
+## Practical lifecycle sequence
+
+1. Persist request record in your own DB with `pending` state
+2. Surface UI timeout aligned with `expiresInSeconds`
+3. Poll at short interval (for example 1-2s) with overall timeout
+4. Transition local state to `signed` / `denied` / `expired`
+5. Perform final verification before side effects
 
 ## Verify endpoint behavior
 

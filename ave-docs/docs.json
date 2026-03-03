@@ -22,6 +22,7 @@
         "pages": [
           "index",
           "quickstart",
+          "reference/how-it-works",
           "reference/base-urls-and-concepts"
         ]
       },
@@ -29,6 +30,7 @@
         "group": "Guides",
         "pages": [
           "guides/oauth-authorization-code-flow",
+          "guides/scopes-and-claims",
           "guides/pkce-for-public-clients",
           "guides/server-side-confidential-clients",
           "guides/convex-custom-auth",
@@ -56,6 +58,7 @@
       {
         "group": "Security",
         "pages": [
+          "security/encryption-model-and-key-lifecycle",
           "security/best-practices"
         ]
       },

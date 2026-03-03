@@ -1,0 +1,53 @@
+---
+title: "How Ave works"
+description: "High-level architecture and protocol flow: identity, passkeys, OAuth/OIDC, connector delegation, and signing."
+---
+
+## Architecture at a glance
+
+Ave combines:
+
+- Passwordless identity (passkey-based)
+- OAuth 2.0 + OIDC for app integration
+- Optional E2EE app-key delivery
+- Connector delegation (resource-scoped app-to-app access)
+- Identity-backed signing workflows
+
+## Core interaction model
+
+<Steps>
+  <Step title="User authenticates with identity">
+    User completes passkey-driven login and selects an identity.
+  </Step>
+  <Step title="App receives authorization code">
+    App gets one-time code via redirect URI.
+  </Step>
+  <Step title="App exchanges code for tokens">
+    App receives opaque access token, JWT access token, optional ID/refresh tokens.
+  </Step>
+  <Step title="App consumes claims and APIs">
+    App uses token for userinfo/profile and application session establishment.
+  </Step>
+</Steps>
+
+## Optional extension paths
+
+### Connector delegation
+
+Use connector flow when one app needs user-approved access to another app resource.
+
+### Signing
+
+Use signing flow when app needs cryptographic proof of identity approval on a payload.
+
+### E2EE
+
+Use E2EE key handoff when app stores encrypted user data and must never persist plaintext keys server-side.
+
+## Trust boundaries
+
+- Ave auth UI + identity system: user-facing trust boundary
+- Ave API: token issuance, validation, metadata, and signing endpoints
+- Integrator backend: app sessioning, business logic, and authorization decisions
+
+The integrator should treat Ave tokens/signatures as verified identity signals, then enforce app-specific policy locally.

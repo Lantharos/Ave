@@ -21,48 +21,54 @@ Typical URL:
 https://aveid.net/signin?client_id=...&redirect_uri=...&scope=openid%20profile%20email&state=...&nonce=...
 ```
 
-## Step 2: Handle callback securely
+## End-to-end flow
 
-On callback:
+<Steps>
+  <Step title="Create request context">
+    Generate and persist one-time `state` and `nonce` values before redirect.
+  </Step>
+  <Step title="Redirect to Ave">
+    Send user to `https://aveid.net/signin` with `client_id`, `redirect_uri`, scope, `state`, and `nonce`.
+  </Step>
+  <Step title="Handle callback securely">
+    On callback:
 
-1. Parse `code` and `state`
-2. Verify `state` against one-time stored value
-3. Clear stored `state`/`nonce` after use
-4. Reject replayed or missing values
+    1. Parse `code` and `state`
+    2. Verify `state` against one-time stored value
+    3. Clear stored `state`/`nonce` after use
+    4. Reject replayed or missing values
+  </Step>
+  <Step title="Exchange authorization code">
+    Endpoint: `POST https://api.aveid.net/api/oauth/token`
 
-## Step 3: Exchange authorization code
+    Body uses **camelCase** fields.
 
-Endpoint:
+    ```json
+    {
+      "grantType": "authorization_code",
+      "code": "AUTHORIZATION_CODE",
+      "redirectUri": "https://yourapp.com/callback",
+      "clientId": "YOUR_CLIENT_ID",
+      "clientSecret": "YOUR_SECRET"
+    }
+    ```
 
-- `POST https://api.aveid.net/api/oauth/token`
+    For PKCE, replace `clientSecret` with `codeVerifier`.
+  </Step>
+  <Step title="Validate tokens and establish app session">
+    Expect token payload with:
 
-Body uses **camelCase** fields.
-
-```json
-{
-  "grantType": "authorization_code",
-  "code": "AUTHORIZATION_CODE",
-  "redirectUri": "https://yourapp.com/callback",
-  "clientId": "YOUR_CLIENT_ID",
-  "clientSecret": "YOUR_SECRET"
-}
-```
-
-For PKCE, replace `clientSecret` with `codeVerifier`.
-
-## Step 4: Process response fields
-
-Expect:
-
-- `access_token`
-- `access_token_jwt`
-- `token_type` (`Bearer`)
-- `expires_in`
-- `scope`
-- optional `id_token`
-- optional `refresh_token`
-- `user`
-- optional `encrypted_app_key`
+    - `access_token`
+    - `access_token_jwt`
+    - `token_type` (`Bearer`)
+    - `expires_in`
+    - `scope`
+    - optional `id_token`
+    - optional `refresh_token`
+    - `user`
+    - optional `encrypted_app_key`
+  </Step>
+</Steps>
 
 ## Refresh token flow (rotation)
 
@@ -94,6 +100,14 @@ Validate `id_token` claims:
 - `aud` contains your client ID
 - `exp`/`iat` valid
 - `nonce` matches original request
+
+## Validation sequence (recommended)
+
+1. Fetch OIDC discovery from `/.well-known/openid-configuration`
+2. Resolve JWKS URL and cache keys
+3. Verify signature and token timestamps
+4. Verify issuer/audience/nonce claims
+5. Reject token and force full login on mismatch
 
 ## Userinfo
 

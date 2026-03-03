@@ -9,66 +9,61 @@ description: "Ship Ave login safely with the right URL, flow, token exchange, an
 - Configure exact redirect URI(s)
 - Copy your `clientId` (and `clientSecret` for confidential clients)
 
-## 1) Redirect user to Ave sign-in
+## Core login flow
 
-Use authorization code flow at `https://aveid.net/signin`:
+<Steps>
+  <Step title="Redirect to Ave sign-in">
+    Use authorization code flow at `https://aveid.net/signin`.
 
-```text
-https://aveid.net/signin?
-  client_id=YOUR_CLIENT_ID
-  &redirect_uri=https://yourapp.com/callback
-  &scope=openid%20profile%20email
-  &state=RANDOM_STATE
-  &nonce=RANDOM_NONCE
-```
+    ```text
+    https://aveid.net/signin?
+      client_id=YOUR_CLIENT_ID
+      &redirect_uri=https://yourapp.com/callback
+      &scope=openid%20profile%20email
+      &state=RANDOM_STATE
+      &nonce=RANDOM_NONCE
+    ```
+  </Step>
+  <Step title="Handle callback">
+    Your callback gets `?code=...&state=...`.
 
-## 2) Receive code on callback
+    Required checks:
 
-Your callback gets `?code=...&state=...`.
+    - Verify `state`
+    - Reject missing or reused state
+    - Enforce exact callback origin/path
+  </Step>
+  <Step title="Exchange code for tokens">
+    ```bash
+    POST https://api.aveid.net/api/oauth/token
+    Content-Type: application/json
+    ```
 
-Required checks:
+    ```json
+    {
+      "grantType": "authorization_code",
+      "code": "AUTHORIZATION_CODE",
+      "redirectUri": "https://yourapp.com/callback",
+      "clientId": "YOUR_CLIENT_ID",
+      "codeVerifier": "PKCE_VERIFIER"
+    }
+    ```
 
-- Verify `state`
-- Reject missing or reused state
-- Enforce exact callback origin/path
+    For confidential clients, use `clientSecret` instead of PKCE.
+  </Step>
+  <Step title="Create app session and load profile">
+    Typical token response fields:
 
-## 3) Exchange code for tokens
+    - `access_token` (opaque)
+    - `access_token_jwt` (JWT)
+    - `id_token` (if `openid` scope)
+    - `refresh_token` (if `offline_access` scope)
+    - `expires_in`, `scope`, `user`
+    - optional `encrypted_app_key`
 
-```bash
-POST https://api.aveid.net/api/oauth/token
-Content-Type: application/json
-```
-
-```json
-{
-  "grantType": "authorization_code",
-  "code": "AUTHORIZATION_CODE",
-  "redirectUri": "https://yourapp.com/callback",
-  "clientId": "YOUR_CLIENT_ID",
-  "codeVerifier": "PKCE_VERIFIER"
-}
-```
-
-For confidential clients, use `clientSecret` instead of PKCE.
-
-## 4) Use tokens
-
-Typical response fields:
-
-- `access_token` (opaque)
-- `access_token_jwt` (JWT)
-- `id_token` (if `openid` scope)
-- `refresh_token` (if `offline_access` scope)
-- `expires_in`
-- `scope`
-- `user`
-- optional `encrypted_app_key`
-
-## 5) Validate and fetch user profile
-
-- Validate ID token against JWKS
-- For profile claims, call `GET /api/oauth/userinfo` with bearer access token
-- Store app session server-side; avoid persisting sensitive OAuth tokens in insecure storage
+    Validate ID token against JWKS and call `GET /api/oauth/userinfo` when you need refreshed claims.
+  </Step>
+</Steps>
 
 ## Minimal error handling matrix
 

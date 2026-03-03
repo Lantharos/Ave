@@ -1,0 +1,56 @@
+---
+title: "Scopes and claims"
+description: "Scope catalog, claim mapping, and practical permission design for OAuth/OIDC and connector flows."
+---
+
+## Standard scopes
+
+- `openid`: enables OIDC identity token (`sub`, issuer/audience/time claims)
+- `profile`: enables profile claims (`name`, `preferred_username`, `picture`)
+- `email`: enables `email`
+- `offline_access`: enables refresh token issuance
+
+## Extended scope
+
+- `user_id`: exposes permanent user-level identifier only if app allows it
+
+## Scope-to-claim mapping
+
+| Scope | Token/UserInfo effects |
+| --- | --- |
+| `openid` | `id_token` returned; base identity claims available |
+| `profile` | profile fields on `id_token` and `/userinfo` |
+| `email` | email claim on `id_token` and `/userinfo` |
+| `offline_access` | refresh token returned |
+| `user_id` | `user_id` response claim when app config permits |
+
+## Requesting scopes safely
+
+<Steps>
+  <Step title="Request minimum viable scope set">
+    Start with only what your feature requires (`openid profile` or `openid profile email`).
+  </Step>
+  <Step title="Validate granted scopes">
+    Read returned `scope` string after token exchange and gate features by granted values.
+  </Step>
+  <Step title="Handle missing claims gracefully">
+    Treat absent optional claims as expected, not exceptional.
+  </Step>
+  <Step title="Keep scope changes explicit">
+    Any additional scope should be product-reviewed because it changes user consent surface.
+  </Step>
+</Steps>
+
+## Connector scope model
+
+Connector uses resource-defined scopes (for example `resource.read`, `resource.write`) and enforces:
+
+- scope must exist on target resource
+- requested scope cannot exceed granted scope
+
+## Common mistakes
+
+- Requesting `user_id` without app allowlist support
+- Assuming `email` is always present
+- Using refresh flow to ask for new scopes
+- Treating connector scopes like regular OIDC profile scopes

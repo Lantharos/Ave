@@ -1,0 +1,60 @@
+---
+title: "Encryption model and key lifecycle"
+description: "Understand app-key lifecycle for E2EE integrations and implement secure key handling patterns."
+---
+
+## Model summary
+
+Ave supports per-app, per-identity encryption context for E2EE apps.
+
+Key points:
+
+- Same identity + same app -> stable key context
+- Different identities -> isolated key context
+- Key material should be treated as highly sensitive client-side secret
+
+## Lifecycle
+
+<Steps>
+  <Step title="Provision">
+    E2EE-capable app requests authorization and supplies encrypted app key material on first grant path.
+  </Step>
+  <Step title="Grant">
+    Authorization record stores encrypted app key context.
+  </Step>
+  <Step title="Token exchange">
+    Token response may include `encrypted_app_key` for consuming app.
+  </Step>
+  <Step title="Client import">
+    App normalizes/decodes key payload and imports into Web Crypto runtime.
+  </Step>
+  <Step title="Encrypt/decrypt operations">
+    App uses AES-GCM with unique IV per ciphertext.
+  </Step>
+  <Step title="Identity switch handling">
+    App transitions encryption context and data partition by `identityId`.
+  </Step>
+</Steps>
+
+## URL/fragment hygiene
+
+If key material ever arrives through URL fragment mechanisms:
+
+- parse immediately
+- normalize base64 (`+` vs space)
+- remove fragment from history
+- never log raw value
+
+## Data partitioning strategy
+
+Use storage keys like:
+
+- `app:{appId}:identity:{identityId}:...`
+
+Never merge encrypted datasets across identities.
+
+## Failure handling
+
+- Missing key for E2EE-required route -> block action and force re-auth/re-grant
+- Decrypt failure -> treat as key-context mismatch; never silently overwrite ciphertext
+- Corrupted payload -> fail closed and request user re-auth

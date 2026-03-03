@@ -7,11 +7,23 @@ Connector is separate from default sign-in and is used for explicit app linking.
 
 ## Flow overview
 
-1. Start at `https://aveid.net/connect`
-2. User approves source app access to target resource scopes
-3. Source app receives code (as in auth code flow)
-4. Source app obtains normal access token
-5. Source app exchanges subject token for delegated token using token exchange grant
+<Steps>
+  <Step title="Start connector consent">
+    Start at `https://aveid.net/connect` with target `resource`, requested `scope`, and `mode`.
+  </Step>
+  <Step title="User approves grant">
+    User consents to source app access for specific target resource scopes.
+  </Step>
+  <Step title="Receive authorization code">
+    Source app receives callback code, same style as standard auth code flow.
+  </Step>
+  <Step title="Exchange for source token">
+    Obtain normal source-app access token first.
+  </Step>
+  <Step title="Exchange for delegated token">
+    Use token-exchange grant to mint short-lived delegated JWT for target resource.
+  </Step>
+</Steps>
 
 ## Connector authorization URL
 
