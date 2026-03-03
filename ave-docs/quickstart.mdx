@@ -1,77 +1,229 @@
 ---
 title: "Quickstart"
-description: "Ship Ave login safely with the right URL, flow, token exchange, and validation checks."
+description: "Set up Ave login from scratch: app registration, the authorization code flow, token exchange, and what to do with each token."
 ---
 
 ## Prerequisites
 
-- Create an app in `https://devs.aveid.net`
-- Configure exact redirect URI(s)
-- Copy your `clientId` (and `clientSecret` for confidential clients)
-
-## Core login flow
-
 <Steps>
-  <Step title="Redirect to Ave sign-in">
-    Use authorization code flow at `https://aveid.net/signin`.
+  <Step title="Create an app in the developer portal">
+    Go to [devs.aveid.net](https://devs.aveid.net) and create an OAuth app. You will receive:
 
-    ```text
-    https://aveid.net/signin?
-      client_id=YOUR_CLIENT_ID
-      &redirect_uri=https://yourapp.com/callback
-      &scope=openid%20profile%20email
-      &state=RANDOM_STATE
-      &nonce=RANDOM_NONCE
-    ```
+    - **Client ID** — used in all requests, safe to expose in browser code
+    - **Client secret** — server-only, never put this in browser or mobile code
+
+    <Tip>
+      If you are building a SPA or any app where code runs in the browser, use PKCE instead of a client secret. PKCE does not require a secret.
+    </Tip>
   </Step>
-  <Step title="Handle callback">
-    Your callback gets `?code=...&state=...`.
-
-    Required checks:
-
-    - Verify `state`
-    - Reject missing or reused state
-    - Enforce exact callback origin/path
-  </Step>
-  <Step title="Exchange code for tokens">
-    ```bash
-    POST https://api.aveid.net/api/oauth/token
-    Content-Type: application/json
-    ```
-
-    ```json
-    {
-      "grantType": "authorization_code",
-      "code": "AUTHORIZATION_CODE",
-      "redirectUri": "https://yourapp.com/callback",
-      "clientId": "YOUR_CLIENT_ID",
-      "codeVerifier": "PKCE_VERIFIER"
-    }
-    ```
-
-    For confidential clients, use `clientSecret` instead of PKCE.
-  </Step>
-  <Step title="Create app session and load profile">
-    Typical token response fields:
-
-    - `access_token` (opaque)
-    - `access_token_jwt` (JWT)
-    - `id_token` (if `openid` scope)
-    - `refresh_token` (if `offline_access` scope)
-    - `expires_in`, `scope`, `user`
-    - optional `encrypted_app_key`
-
-    Validate ID token against JWKS and call `GET /api/oauth/userinfo` when you need refreshed claims.
+  <Step title="Configure your redirect URI">
+    Register the exact callback URL where Ave will redirect after login (`https://yourapp.com/callback`). The URI must match exactly — no wildcards, no trailing slash differences.
   </Step>
 </Steps>
 
-## Minimal error handling matrix
+## Login flow
 
-- `invalid_client`: client ID or secret mismatch
-- `invalid_grant`: bad/expired code or bad refresh token
-- `invalid_request`: missing required field (for example `codeVerifier` in PKCE)
-- `invalid_scope`: scopes not allowed
-- `invalid_target`: bad connector resource
-- `access_denied`: connector grant missing/revoked
+<Steps>
+  <Step title="Generate PKCE parameters and redirect">
+    Before redirecting the user, generate PKCE parameters. These prove that the same browser session that started the login is the one completing it.
 
-Next: [OAuth authorization code flow](guides/oauth-authorization-code-flow)
+    ```ts
+    import { generateCodeVerifier, generateCodeChallenge, generateNonce } from "@ave-id/sdk";
+
+    const codeVerifier = generateCodeVerifier();
+    const codeChallenge = await generateCodeChallenge(codeVerifier);
+    const state = crypto.randomUUID(); // CSRF protection
+    const nonce = generateNonce();     // ID token replay protection
+
+    // Persist these — you need them when the user comes back
+    sessionStorage.setItem("ave_code_verifier", codeVerifier);
+    sessionStorage.setItem("ave_state", state);
+    sessionStorage.setItem("ave_nonce", nonce);
+
+    const url = new URL("https://aveid.net/signin");
+    url.searchParams.set("client_id", "YOUR_CLIENT_ID");
+    url.searchParams.set("redirect_uri", "https://yourapp.com/callback");
+    url.searchParams.set("scope", "openid profile email");
+    url.searchParams.set("state", state);
+    url.searchParams.set("nonce", nonce);
+    url.searchParams.set("code_challenge", codeChallenge);
+    url.searchParams.set("code_challenge_method", "S256");
+
+    window.location.href = url.toString();
+    ```
+
+    <Note>
+      `state` prevents CSRF attacks — without it, an attacker could trick your app into completing a login they initiated. `nonce` prevents replay attacks against the ID token. Both are short strings you generate randomly and store temporarily.
+    </Note>
+  </Step>
+  <Step title="Handle the callback">
+    Ave redirects back to your `redirect_uri` with `?code=AUTH_CODE&state=YOUR_STATE`. Validate `state` before doing anything else.
+
+    ```ts
+    const params = new URLSearchParams(window.location.search);
+    const code = params.get("code");
+    const returnedState = params.get("state");
+
+    const savedState = sessionStorage.getItem("ave_state");
+    const codeVerifier = sessionStorage.getItem("ave_code_verifier");
+
+    if (!returnedState || returnedState !== savedState) {
+      throw new Error("State mismatch — possible CSRF attack");
+    }
+
+    // Clear state immediately — one-time use only
+    sessionStorage.removeItem("ave_state");
+    sessionStorage.removeItem("ave_code_verifier");
+    ```
+
+    <Warning>
+      The authorization code expires quickly (seconds). Do not queue the exchange — call the token endpoint immediately.
+    </Warning>
+  </Step>
+  <Step title="Exchange the code for tokens">
+    Send the code to the token endpoint from your server (for confidential clients) or directly from the browser (for PKCE-only public clients).
+
+    <Tabs>
+      <Tab title="PKCE (public client)">
+        ```ts
+        import { exchangeCode } from "@ave-id/sdk";
+
+        const tokens = await exchangeCode(
+          { clientId: "YOUR_CLIENT_ID", redirectUri: "https://yourapp.com/callback" },
+          { code, codeVerifier }
+        );
+        ```
+      </Tab>
+      <Tab title="Client secret (confidential client)">
+        ```ts
+        // Server-side only — never expose clientSecret in browser code
+        import { exchangeCodeServer } from "@ave-id/sdk/server";
+
+        const tokens = await exchangeCodeServer(
+          {
+            clientId: "YOUR_CLIENT_ID",
+            clientSecret: process.env.AVE_CLIENT_SECRET!,
+            redirectUri: "https://yourapp.com/callback",
+          },
+          { code }
+        );
+        ```
+      </Tab>
+      <Tab title="Raw HTTP">
+        ```bash
+        POST https://api.aveid.net/api/oauth/token
+        Content-Type: application/json
+
+        {
+          "grantType": "authorization_code",
+          "code": "AUTH_CODE",
+          "redirectUri": "https://yourapp.com/callback",
+          "clientId": "YOUR_CLIENT_ID",
+          "codeVerifier": "PKCE_VERIFIER"
+        }
+        ```
+
+        <Warning>
+          All token endpoint fields use **camelCase** (`grantType`, `clientId`, `redirectUri`, `codeVerifier`) — not the snake_case you may be used to from other OAuth providers. The endpoint will return a `400` error if you send `grant_type` or `client_id`.
+        </Warning>
+      </Tab>
+    </Tabs>
+  </Step>
+  <Step title="Understand the token response">
+    A successful exchange returns:
+
+    ```json
+    {
+      "access_token": "ave_at_...",
+      "access_token_jwt": "eyJ...",
+      "id_token": "eyJ...",
+      "refresh_token": "rt_...",
+      "token_type": "Bearer",
+      "expires_in": 3600,
+      "scope": "openid profile email",
+      "user": {
+        "id": "identity-uuid",
+        "handle": "alice",
+        "displayName": "Alice Smith",
+        "email": "alice@example.com",
+        "avatarUrl": "https://..."
+      }
+    }
+    ```
+
+    You get **two different tokens** and they serve different purposes:
+
+    | Token | What it is | `aud` claim | Use for |
+    |---|---|---|---|
+    | `access_token` | Opaque string | – | Calling Ave's `/api/oauth/userinfo` endpoint |
+    | `access_token_jwt` | Signed JWT | `https://api.aveid.net` | Calling Ave API endpoints, Connector delegation |
+    | `id_token` | Signed OIDC JWT | **Your client ID** | Identity assertion, Convex auth |
+    | `refresh_token` | Opaque string | – | Getting new tokens without re-login |
+
+    <Note>
+      `id_token` and `access_token_jwt` are both signed JWTs, but they have **different audiences**. The `id_token` audience (`aud`) is your `clientId`. The `access_token_jwt` audience is `https://api.aveid.net`. This matters a lot for Convex and any library that validates JWT audience.
+    </Note>
+
+    Only `id_token` is returned when you request the `openid` scope. Only `refresh_token` is returned when you request `offline_access`.
+  </Step>
+  <Step title="Establish your app session">
+    Use `id_token` or the `user` payload to create your app's own session:
+
+    ```ts
+    // Option A: use the user object directly (quick start)
+    const { user, id_token, access_token, refresh_token } = tokens;
+    // user.id is the identity UUID (stable identity identifier)
+
+    // Option B: validate id_token claims properly
+    // Fetch JWKS from https://api.aveid.net/.well-known/jwks.json
+    // Verify signature, iss, aud === YOUR_CLIENT_ID, exp, nonce
+    ```
+
+    Store `refresh_token` securely (HTTP-only cookie or server-side session) if you requested `offline_access`. Never store it in localStorage.
+  </Step>
+</Steps>
+
+## Refresh tokens
+
+When `access_token` expires, exchange the refresh token for a new set.
+
+```ts
+import { refreshToken } from "@ave-id/sdk";
+
+const newTokens = await refreshToken(
+  { clientId: "YOUR_CLIENT_ID", redirectUri: "https://yourapp.com/callback" },
+  { refreshToken: storedRefreshToken }
+);
+```
+
+<Warning>
+  Refresh tokens are **rotated** on every use — each successful refresh returns a new refresh token and invalidates the previous one. Store the new token immediately. If you reuse an old token, the server will return `invalid_grant` and may revoke related tokens as a security measure.
+</Warning>
+
+## Common errors
+
+| Error | Cause |
+|---|---|
+| `invalid_client` | Client ID or secret mismatch |
+| `invalid_grant` | Bad/expired code, wrong `codeVerifier`, or replayed refresh token |
+| `invalid_request` | Missing required field (for example `codeVerifier` when PKCE is required) |
+| `invalid_scope` | Scope not allowed for this app |
+| `invalid_target` | Bad connector resource key |
+| `access_denied` | Connector grant missing or revoked |
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Token details" href="/guides/oauth-authorization-code-flow">
+    Full JWT payload reference for `id_token` and `access_token_jwt`, validation steps, and refresh token rotation.
+  </Card>
+  <Card title="Convex auth" href="/guides/convex-custom-auth">
+    Exactly how to wire Ave tokens into Convex, including which token to use and why.
+  </Card>
+  <Card title="PKCE deep dive" href="/guides/pkce-for-public-clients">
+    PKCE security model, browser storage guidance, and anti-patterns to avoid.
+  </Card>
+  <Card title="Scopes and claims" href="/guides/scopes-and-claims">
+    Complete scope catalog with the exact JWT claims each scope adds.
+  </Card>
+</CardGroup>

@@ -1,81 +1,212 @@
----
+﻿---
 title: "Connector (app-to-app)"
-description: "Authorize delegated access to target resources and exchange source tokens for short-lived delegated JWTs."
+description: "Delegated app-to-app access using the token-exchange grant. Covers the consent flow, token exchange, delegated JWT payload, and token validation on the target resource."
 ---
 
-Connector is separate from default sign-in and is used for explicit app linking.
+The Connector lets one Ave app act on behalf of a user at another Ave-registered resource. A user approves the connection once; your app can then mint short-lived delegated JWTs whenever it needs to act on their behalf.
 
-## Flow overview
+A common use case: your app needs to access a partner service on a user's behalf. The user consents via the Connector flow and your app exchanges tokens to get a scoped, time-limited JWT that the partner service accepts.
+
+## How it works
 
 <Steps>
-  <Step title="Start connector consent">
-    Start at `https://aveid.net/connect` with target `resource`, requested `scope`, and `mode`.
+  <Step title="Start the connector consent flow">
+    Redirect the user to `https://aveid.net/connect` with the target resource key, the scopes you want, and the communication mode.
+
+    ```ts
+    const url = new URL("https://aveid.net/connect");
+    url.searchParams.set("client_id", "YOUR_CLIENT_ID");
+    url.searchParams.set("redirect_uri", "https://yourapp.com/callback");
+    url.searchParams.set("resource", "target-resource-key");
+    url.searchParams.set("scope", "resource.read");
+    url.searchParams.set("mode", "user_present");
+    url.searchParams.set("state", state);
+
+    window.location.href = url.toString();
+    ```
+
+    <Note>
+      `resource` is the resource key of the target Ave-registered resource (not a URL). `scope` must be one of the scopes defined by the target resource. `mode` is either `user_present` or `background`.
+    </Note>
   </Step>
-  <Step title="User approves grant">
-    User consents to source app access for specific target resource scopes.
+  <Step title="User approves the grant">
+    The user sees the target resource's information and what scopes your app is requesting. They choose which identity to use and approve. If they approve, Ave redirects back to your `redirect_uri` with a standard `?code=...&state=...`.
   </Step>
-  <Step title="Receive authorization code">
-    Source app receives callback code, same style as standard auth code flow.
+  <Step title="Exchange the authorization code">
+    Exchange the code exactly like a regular auth code flow to get a **source app access token**:
+
+    ```ts
+    import { exchangeCodeServer } from "@ave-id/sdk/server";
+
+    const sourceTokens = await exchangeCodeServer(
+      {
+        clientId: "YOUR_CLIENT_ID",
+        clientSecret: process.env.AVE_CLIENT_SECRET!,
+        redirectUri: "https://yourapp.com/callback",
+      },
+      { code }
+    );
+
+    // sourceTokens.access_token_jwt is what you use for the next step
+    ```
   </Step>
-  <Step title="Exchange for source token">
-    Obtain normal source-app access token first.
+  <Step title="Exchange for a delegated token">
+    Use the `token-exchange` grant to mint a short-lived delegated JWT scoped to the target resource:
+
+    ```bash
+    POST https://api.aveid.net/api/oauth/token
+    Content-Type: application/json
+
+    {
+      "grantType": "urn:ietf:params:oauth:grant-type:token-exchange",
+      "subjectToken": "ACCESS_TOKEN_JWT_FROM_PREVIOUS_STEP",
+      "requestedResource": "target-resource-key",
+      "requestedScope": "resource.read",
+      "clientId": "YOUR_CLIENT_ID",
+      "clientSecret": "YOUR_CLIENT_SECRET"
+    }
+    ```
+
+    <Warning>
+      Use `access_token_jwt` as the `subjectToken`, not the opaque `access_token`. The server validates the JWT to resolve the user and client identity.
+    </Warning>
   </Step>
-  <Step title="Exchange for delegated token">
-    Use token-exchange grant to mint short-lived delegated JWT for target resource.
+  <Step title="Use the delegated token at the target resource">
+    The response contains a `access_token` that is a short-lived delegated JWT. Send it to the target resource API as a bearer token:
+
+    ```ts
+    const response = await fetch("https://partner-service.example.com/api/data", {
+      headers: {
+        Authorization: `Bearer ${delegatedTokens.access_token}`,
+      },
+    });
+    ```
+
+    The delegated JWT expires in 10 minutes. Re-exchange when it expires (as long as the grant is still active).
   </Step>
 </Steps>
 
-## Connector authorization URL
+## Token exchange request
 
-```text
-https://aveid.net/connect?
-  client_id=YOUR_CLIENT_ID
-  &redirect_uri=https://yourapp.com/callback
-  &resource=target:resource
-  &scope=resource.access
-  &mode=user_present
-  &state=RANDOM_STATE
-```
+<ParamField body="grantType" type="string" required>
+  Must be exactly `urn:ietf:params:oauth:grant-type:token-exchange`.
+</ParamField>
 
-## Delegated token exchange
+<ParamField body="subjectToken" type="string" required>
+  The `access_token_jwt` from the source app's token response. The server validates this JWT to identify the user and confirm the client ID.
+</ParamField>
+
+<ParamField body="requestedResource" type="string" required>
+  The target resource key (as registered in the developer portal).
+</ParamField>
+
+<ParamField body="requestedScope" type="string" required>
+  The scope(s) to include in the delegated token. Must be a subset of what was originally granted.
+</ParamField>
+
+<ParamField body="clientId" type="string" required>
+  Your source app's client ID.
+</ParamField>
+
+<ParamField body="clientSecret" type="string" required>
+  Your source app's client secret. This is a server-only call.
+</ParamField>
+
+## Token exchange response
+
+<ResponseField name="access_token" type="string">
+  A signed delegated JWT. Send this as the bearer token to the target resource.
+</ResponseField>
+
+<ResponseField name="token_type" type="string">
+  Always `Bearer`.
+</ResponseField>
+
+<ResponseField name="expires_in" type="number">
+  Token lifetime in seconds. Delegated tokens have a fixed 10-minute TTL.
+</ResponseField>
+
+<ResponseField name="scope" type="string">
+  The actual scopes included in the delegated token.
+</ResponseField>
+
+<ResponseField name="audience" type="string">
+  The audience of the target resource. The target resource should validate this.
+</ResponseField>
+
+<ResponseField name="target_resource" type="string">
+  The target resource key.
+</ResponseField>
+
+<ResponseField name="communication_mode" type="string">
+  Either `user_present` or `background`, as set when the grant was created.
+</ResponseField>
+
+## Delegated JWT payload
+
+The `access_token` from the exchange is a JWT with the following claims:
 
 ```json
 {
-  "grantType": "urn:ietf:params:oauth:grant-type:token-exchange",
-  "subjectToken": "SOURCE_APP_ACCESS_TOKEN",
-  "requestedResource": "target:resource",
-  "requestedScope": "resource.access",
-  "clientId": "YOUR_CLIENT_ID",
-  "clientSecret": "YOUR_CLIENT_SECRET"
+  "iss": "https://api.aveid.net",
+  "sub": "identity-uuid",
+  "aud": "target-resource-audience",
+  "exp": 1712345678,
+  "iat": 1712342078,
+  "sid": "user-uuid",
+  "cid": "source_app_client_id",
+  "scope": "resource.read",
+  "grant_id": "grant-uuid",
+  "target_resource": "target-resource-key",
+  "com_mode": "user_present"
 }
 ```
 
-Response:
+The target resource should validate:
+- Signature against Ave's JWKS
+- `aud` matches its registered audience
+- `iss` is `https://api.aveid.net`
+- `exp > now`
+- `scope` contains the required scope for the action
+- `cid` is a known/trusted source app (optional but recommended)
 
-- `access_token` (delegated JWT)
-- `audience`
-- `target_resource`
-- `communication_mode`
-- short TTL (`expires_in`)
+## Server-side enforcement
 
-## Important server-side checks (implemented)
+Ave enforces these rules on every token exchange:
 
-- Subject token must resolve to same `clientId`
-- Requested resource must exist and be active
-- Requested scope must be subset of resource scopes
-- Grant must exist and be active (not revoked)
-- Requested scope must not exceed granted scope
+- `subjectToken` must decode to a valid JWT belonging to the same `clientId`
+- The target resource must exist and be active
+- The delegation grant must exist and not be revoked
+- `requestedScope` must be a subset of the granted scope
+- `requestedScope` must be a known scope of the target resource
 
-## Grant management endpoints
+## Grant management
 
-- `GET /api/oauth/delegations`
-- `DELETE /api/oauth/delegations/:delegationId`
+Users can revoke grants. Your app should handle `access_denied` errors gracefully:
 
-These endpoints require authenticated Ave session context.
+```ts
+try {
+  const delegatedTokens = await exchangeDelegatedTokenServer(config, {
+    subjectToken: sourceAccessTokenJwt,
+    requestedResource: "target-resource-key",
+    requestedScope: "resource.read",
+  });
+} catch (err) {
+  if (err.error === "access_denied") {
+    // User revoked the grant — redirect them to re-connect
+  }
+}
+```
 
-## Edge cases
+You can also list and revoke grants via:
+- `GET /api/oauth/delegations` — list active grants (requires Ave session auth)
+- `DELETE /api/oauth/delegations/:delegationId` — revoke a grant
 
-- `invalid_target`: resource key missing/disabled
-- `access_denied`: no active grant
-- `invalid_scope`: requested scope too broad or unknown
-- `invalid_grant`: subject token invalid or for wrong client
+## Error reference
+
+| Error | Cause |
+|---|---|
+| `invalid_grant` | `subjectToken` is invalid, expired, or for the wrong client |
+| `invalid_target` | Target resource key does not exist or is inactive |
+| `access_denied` | No active grant exists for this user/resource/source combination |
+| `invalid_scope` | Requested scope exceeds granted scope or is not defined by the resource |

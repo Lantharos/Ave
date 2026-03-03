@@ -9,15 +9,6 @@
     "dark": "#b4b4b4"
   },
   "navigation": {
-    "global": {
-      "anchors": [
-        {
-          "anchor": "LLMs",
-          "icon": "robot",
-          "href": "https://aveid.net/llms.txt"
-        }
-      ]
-    },
     "groups": [
       {
         "group": "Getting started",
@@ -45,8 +36,7 @@
         "group": "SDKs",
         "pages": [
           "sdk/javascript-sdk",
-          "sdk/embed-sdk",
-          "sdk/expo-auth-bridge"
+          "sdk/embed-sdk"
         ]
       },
       {

@@ -1,51 +1,348 @@
----
+﻿---
 title: "@ave-id/embed"
-description: "Embed, sheet, popup, connector, and signing UI integrations with postMessage callback handling."
+description: "UI integration helpers for Ave auth, Connector, and Signing flows. Covers iframe embed, sheet (modal), and popup patterns with full event handling."
 ---
-
-## Install
 
 ```bash
 npm install @ave-id/embed
 ```
 
-## Auth UIs
+The embed library handles all the browser UI for Ave flows without redirecting away from your page. It provides three UI patterns and handles `postMessage` communication from the Ave iframe.
 
-- `mountAveEmbed(...)` inline iframe
-- `openAveSheet(...)` modal sheet
-- `openAvePopup(...)` desktop popup
+## UI patterns
 
-## Connector UIs
+<CardGroup cols={3}>
+  <Card title="Inline embed" icon="window-maximize">
+    Mount an iframe directly in a container element. Stays in page, no overlay. Good for dedicated auth pages.
+  </Card>
+  <Card title="Sheet">
+    Slides up from the bottom as a fixed modal overlay. Good for triggering login from any page.
+  </Card>
+  <Card title="Popup">
+    Opens a new browser window. Works well on desktop. Falls back to sheet if popup is blocked.
+  </Card>
+</CardGroup>
 
-- `openAveConnectorSheet(...)`
-- `openAveConnectorPopup(...)`
-- `openAveConnectorRuntime(...)`
+---
 
-## Signing UIs
+## Auth flows
 
-- `openAveSigningSheet(...)`
-- `openAveSigningPopup(...)`
+### `mountAveEmbed(options)`
 
-## Event origin safety
+Mounts an Ave auth iframe inside a container element. The iframe stays visible while the user completes login.
 
-All embed integrations should only trust `postMessage` events from your configured `issuer` origin.
+```ts
+function mountAveEmbed(options: MountAveEmbedOptions): {
+  iframe: HTMLIFrameElement;
+  destroy: () => void;
+}
+```
 
-## Popup-blocked handling
+<ParamField path="options.container" type="HTMLElement" required>
+  The DOM element that will contain the iframe.
+</ParamField>
 
-Popup methods can return `null` when blocked by browser policy. Always fallback to redirect or sheet UX.
+<ParamField path="options.clientId" type="string" required>
+  Your app's client ID.
+</ParamField>
 
-## Recommended callback contract
+<ParamField path="options.redirectUri" type="string" required>
+  Registered redirect URI.
+</ParamField>
 
-Handle all outcomes:
+<ParamField path="options.scope" type="string" default='"openid profile email"'>
+  Space-separated scopes.
+</ParamField>
 
-- Success (`ave:success` or signed callback)
-- Error (`ave:error`)
-- User close (`ave:close`)
-- No-op close (popup manually closed)
+<ParamField path="options.onSuccess" type="(payload) => void">
+  Called when the user completes login. `payload.redirectUrl` is the callback URL with the authorization code.
 
-## UX hardening
+  ```ts
+  onSuccess: (payload) => {
+    // Extract code from payload.redirectUrl and exchange it
+    const url = new URL(payload.redirectUrl);
+    const code = url.searchParams.get("code");
+  }
+  ```
+</ParamField>
 
-- Prevent duplicate callback handling with a resolved flag
-- Remove event listeners on cleanup
-- Destroy iframes/popups on route unmount
-- Avoid using embed for highly constrained third-party iframe contexts with blocked credentials/passkey support
+<ParamField path="options.onError" type="(payload) => void">
+  Called on error. `payload.error` is the error string, `payload.message` is a human-readable description.
+</ParamField>
+
+<ParamField path="options.onClose" type="() => void">
+  Called when the user closes the embed without completing auth.
+</ParamField>
+
+```ts
+import { mountAveEmbed } from "@ave-id/embed";
+
+const { destroy } = mountAveEmbed({
+  container: document.getElementById("auth-container")!,
+  clientId: "YOUR_CLIENT_ID",
+  redirectUri: "https://yourapp.com/callback",
+  scope: "openid profile email",
+  onSuccess: async ({ redirectUrl }) => {
+    const code = new URL(redirectUrl).searchParams.get("code")!;
+    const tokens = await exchangeCode({ clientId, redirectUri }, { code, codeVerifier });
+    // Create your session
+  },
+  onError: ({ error, message }) => {
+    console.error("Auth error:", error, message);
+  },
+  onClose: () => {
+    console.log("User closed auth");
+  },
+});
+
+// When done
+destroy();
+```
+
+---
+
+### `openAveSheet(options)`
+
+Opens a full-width sheet overlay from the bottom. Non-blocking — the user can dismiss it.
+
+```ts
+function openAveSheet(options: OpenAveSheetOptions): {
+  close: () => void;
+  iframe: HTMLIFrameElement;
+}
+```
+
+Same options as `mountAveEmbed` except no `container` — it mounts to the document body automatically.
+
+```ts
+import { openAveSheet } from "@ave-id/embed";
+import { generateCodeVerifier, generateCodeChallenge, exchangeCode } from "@ave-id/sdk";
+
+async function loginWithSheet() {
+  const verifier = generateCodeVerifier();
+  const challenge = await generateCodeChallenge(verifier);
+
+  const { close } = openAveSheet({
+    clientId: "YOUR_CLIENT_ID",
+    redirectUri: "https://yourapp.com/callback",
+    scope: "openid profile email",
+    codeChallenge: challenge,
+    codeChallengeMethod: "S256",
+    onSuccess: async ({ redirectUrl }) => {
+      close();
+      const code = new URL(redirectUrl).searchParams.get("code")!;
+      const tokens = await exchangeCode({ clientId, redirectUri }, { code, codeVerifier: verifier });
+      // Create session
+    },
+    onError: ({ error }) => {
+      close();
+      showError(error);
+    },
+  });
+}
+```
+
+---
+
+### `openAvePopup(options)`
+
+Opens a popup window for Ave auth. Returns `null` if the browser blocked the popup — always handle that case.
+
+```ts
+function openAvePopup(options: OpenAvePopupOptions): {
+  popup: Window;
+  close: () => void;
+} | null
+```
+
+Additional options beyond sheet:
+
+<ParamField path="options.width" type="number" default="480">
+  Popup window width in pixels.
+</ParamField>
+
+<ParamField path="options.height" type="number" default="600">
+  Popup window height in pixels.
+</ParamField>
+
+```ts
+import { openAvePopup } from "@ave-id/embed";
+
+const result = openAvePopup({
+  clientId: "YOUR_CLIENT_ID",
+  redirectUri: "https://yourapp.com/callback",
+  onSuccess: async ({ redirectUrl }) => {
+    // Handle success
+  },
+});
+
+if (!result) {
+  // Popup was blocked — fall back to sheet or redirect
+  openAveSheet(/* ... */);
+}
+```
+
+---
+
+## Connector flows
+
+### `openAveConnectorSheet(options)` / `openAveConnectorPopup(options)`
+
+Opens the Connector consent UI in a sheet or popup.
+
+```ts
+function openAveConnectorSheet(options: OpenAveConnectorOptions): {
+  close: () => void;
+  iframe: HTMLIFrameElement;
+}
+```
+
+<ParamField path="options.resource" type="string" required>
+  The target resource key.
+</ParamField>
+
+<ParamField path="options.scope" type="string">
+  The resource scope(s) to request.
+</ParamField>
+
+<ParamField path="options.mode" type="string" default='"user_present"'>
+  Communication mode: `"user_present"` or `"background"`.
+</ParamField>
+
+```ts
+import { openAveConnectorSheet } from "@ave-id/embed";
+
+const { close } = openAveConnectorSheet({
+  clientId: "YOUR_CLIENT_ID",
+  redirectUri: "https://yourapp.com/callback",
+  resource: "target-resource-key",
+  scope: "resource.read",
+  mode: "user_present",
+  onSuccess: async ({ redirectUrl }) => {
+    close();
+    // Exchange code for source token, then do token-exchange for delegated token
+  },
+  onError: ({ error }) => {
+    close();
+  },
+});
+```
+
+---
+
+### `openAveConnectorRuntime(options)`
+
+Mounts a Connector runtime iframe for active connector sessions where the source app communicates with the target resource UI.
+
+```ts
+function openAveConnectorRuntime(options: OpenAveConnectorRuntimeOptions): {
+  iframe: HTMLIFrameElement;
+  send: (payload: unknown) => void;
+  destroy: () => void;
+}
+```
+
+<ParamField path="options.delegatedToken" type="string" required>
+  The delegated access token from the token-exchange grant.
+</ParamField>
+
+<ParamField path="options.container" type="HTMLElement">
+  DOM element to mount the runtime iframe in.
+</ParamField>
+
+<ParamField path="options.onReady" type="() => void">
+  Called when the runtime iframe is ready to receive messages.
+</ParamField>
+
+<ParamField path="options.onEvent" type="(payload) => void">
+  Called for events sent from the runtime iframe.
+</ParamField>
+
+---
+
+## Signing flows
+
+### `openAveSigningSheet(options)`
+
+Opens the signing UI as a sheet overlay.
+
+```ts
+function openAveSigningSheet(options: OpenAveSigningSheetOptions): {
+  close: () => void;
+  iframe: HTMLIFrameElement;
+}
+```
+
+<ParamField path="options.requestId" type="string" required>
+  The signing request ID from `createSignatureRequest`.
+</ParamField>
+
+<ParamField path="options.onSigned" type="(payload) => void">
+  Called when the user approves and signs.
+</ParamField>
+
+<ParamField path="options.onDenied" type="(payload) => void">
+  Called when the user explicitly denies the request.
+</ParamField>
+
+<ParamField path="options.onClose" type="() => void">
+  Called when the user closes the sheet without acting.
+</ParamField>
+
+```ts
+import { openAveSigningSheet } from "@ave-id/embed";
+import { createSignatureRequest, verifySignature } from "@ave-id/sdk";
+
+// 1. Create request on your server first
+const { requestId } = await fetch("/api/signing/create", {
+  method: "POST",
+  body: JSON.stringify({ action: "approve_transfer" }),
+}).then(r => r.json());
+
+// 2. Present signing UI
+const { close } = openAveSigningSheet({
+  requestId,
+  onSigned: async (payload) => {
+    close();
+    // Verify and execute the approved action server-side
+    await fetch("/api/signing/confirm", {
+      method: "POST",
+      body: JSON.stringify({ requestId }),
+    });
+  },
+  onDenied: () => {
+    close();
+    showMessage("Request was denied");
+  },
+  onClose: () => {
+    close();
+    showMessage("Request was cancelled");
+  },
+});
+```
+
+### `openAveSigningPopup(options)`
+
+Same as sheet but in a popup window.
+
+```ts
+function openAveSigningPopup(options: OpenAveSigningPopupOptions): {
+  popup: Window;
+  close: () => void;
+} | null
+```
+
+Returns `null` if the popup was blocked. Fall back to sheet.
+
+---
+
+## Security rules
+
+<Warning>
+  Always validate `postMessage` event origins. Only trust events from your configured Ave issuer origin (`https://aveid.net` by default). The embed library handles this internally, but if you listen for `message` events manually, check `event.origin`.
+</Warning>
+
+- Always call `destroy()` or `close()` when the component unmounts to remove event listeners and clean up iframes
+- Handle all three outcomes for every flow: success, error, and close-without-action
+- Do not use popups as the primary UX on mobile — fall back to sheet
+- The embed does not work inside sandboxed iframes that restrict credentials or passkey access

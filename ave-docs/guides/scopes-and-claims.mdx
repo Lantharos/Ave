@@ -1,56 +1,187 @@
----
+﻿---
 title: "Scopes and claims"
-description: "Scope catalog, claim mapping, and practical permission design for OAuth/OIDC and connector flows."
+description: "Every available scope, what JWT claims it adds to id_token and access_token_jwt, and how to design your permission model."
 ---
+
+Scopes are space-separated strings you pass in the `scope` parameter of your authorization request. They control what information Ave includes in the tokens and what actions your app can perform.
+
+```text
+scope=openid profile email offline_access
+```
+
+<Note>
+  If a scope is not in the list above, or if your app is not configured to request it, the server silently excludes the corresponding claims. Always check the returned `scope` string in the token response to know exactly what was granted.
+</Note>
 
 ## Standard scopes
 
-- `openid`: enables OIDC identity token (`sub`, issuer/audience/time claims)
-- `profile`: enables profile claims (`name`, `preferred_username`, `picture`)
-- `email`: enables `email`
-- `offline_access`: enables refresh token issuance
+These are available to all OAuth apps without any special configuration.
 
-## Extended scope
+<ParamField path="openid" type="scope">
+  Required for OIDC. Without this scope, no `id_token` is returned — just an access token.
 
-- `user_id`: exposes permanent user-level identifier only if app allows it
+  **Adds to `id_token`:**
+  ```json
+  {
+    "iss": "https://api.aveid.net",
+    "sub": "identity-uuid",
+    "aud": "your_client_id",
+    "exp": 1712345678,
+    "iat": 1712342078,
+    "auth_time": 1712342078,
+    "azp": "your_client_id",
+    "sid": "user-uuid"
+  }
+  ```
 
-## Scope-to-claim mapping
+  The `sub` is the Ave **identity UUID**. The `sid` is the permanent **user UUID** (stable across all identities for the same user).
 
-| Scope | Token/UserInfo effects |
-| --- | --- |
-| `openid` | `id_token` returned; base identity claims available |
-| `profile` | profile fields on `id_token` and `/userinfo` |
-| `email` | email claim on `id_token` and `/userinfo` |
-| `offline_access` | refresh token returned |
-| `user_id` | `user_id` response claim when app config permits |
+  **You almost always want this.** Without `openid`, you cannot use Convex auth, validate identity server-side, or get an `id_token`.
+</ParamField>
+
+<ParamField path="profile" type="scope">
+  Adds display name, username handle, and avatar URL.
+
+  **Adds to `id_token`:**
+  ```json
+  {
+    "name": "Alice Smith",
+    "preferred_username": "alice",
+    "picture": "https://avatars.aveid.net/..."
+  }
+  ```
+
+  **Adds to `/userinfo` response:**
+  ```json
+  {
+    "sub": "identity-uuid",
+    "name": "Alice Smith",
+    "preferred_username": "alice",
+    "picture": "https://avatars.aveid.net/..."
+  }
+  ```
+</ParamField>
+
+<ParamField path="email" type="scope">
+  Adds the user's email address.
+
+  **Adds to `id_token`:**
+  ```json
+  {
+    "email": "alice@example.com"
+  }
+  ```
+
+  **Adds to `/userinfo` response:**
+  ```json
+  {
+    "sub": "identity-uuid",
+    "email": "alice@example.com"
+  }
+  ```
+
+  <Note>
+    Not all Ave identities have a verified email address. If the user has no email on their identity, this claim is absent even if the scope was granted.
+  </Note>
+</ParamField>
+
+<ParamField path="offline_access" type="scope">
+  Issues a refresh token alongside the access token.
+
+  **Adds to token response:**
+  ```json
+  {
+    "refresh_token": "rt_a1b2c3d4e5f6..."
+  }
+  ```
+
+  Without this scope, you get no `refresh_token`. When the `access_token` expires, the user must log in again.
+
+  Use this for long-lived sessions or background sync scenarios. Store the refresh token in an HTTP-only cookie or your server-side session storage — never in `localStorage`.
+</ParamField>
+
+## Extended scopes
+
+These require explicit app configuration in the developer portal.
+
+<ParamField path="user_id" type="scope">
+  Exposes the permanent user UUID — stable across all identities for the same physical user. Requires `allowUserIdScope: true` in your app config.
+
+  **Adds to `access_token_jwt`:**
+  ```json
+  {
+    "uid": "user-uuid",
+    "sid": "user-uuid"
+  }
+  ```
+
+  **Adds to token response:**
+  ```json
+  {
+    "user_id": "user-uuid"
+  }
+  ```
+
+  <Note>
+    `user_id` is **not** in the `id_token`. It is in `access_token_jwt` as `uid` and in the top-level token response as `user_id`. If you need it in Convex, you will need to pass it separately or use a Convex mutation to look it up from the `sub`.
+  </Note>
+
+  Only request this when your app has a genuine need for cross-identity user linking. It increases the user consent surface and requires portal configuration.
+</ParamField>
+
+## Scope-to-token mapping
+
+| Scope | id_token claims added | access_token_jwt claims added | token response fields |
+|---|---|---|---|
+| `openid` | `iss`, `sub`, `aud`, `exp`, `iat`, `auth_time`, `azp`, `sid` | `iss`, `sub`, `aud`, `exp`, `iat`, `scope`, `cid`, `sid` | (enables `id_token`) |
+| `profile` | `name`, `preferred_username`, `picture` | — | — |
+| `email` | `email` | — | — |
+| `offline_access` | — | — | `refresh_token` |
+| `user_id` | — | `uid` | `user_id` |
+
+## Connector scopes
+
+Connector flows use resource-defined scopes, not OIDC scopes. The target resource defines what scopes it exposes (for example `resource.read`, `resource.write`). When a user approves the connector, they grant specific scopes from the resource's available list.
+
+When you perform the token-exchange grant, `requestedScope` must be a subset of what was granted. Requesting more than granted returns `invalid_scope`.
+
+See [Connector app-to-app](/guides/connector-app-to-app) for details.
 
 ## Requesting scopes safely
 
 <Steps>
-  <Step title="Request minimum viable scope set">
-    Start with only what your feature requires (`openid profile` or `openid profile email`).
+  <Step title="Start with the minimum">
+    Begin with `openid profile` (or just `openid` if you do not need display names). Add scopes when a specific feature requires them.
   </Step>
-  <Step title="Validate granted scopes">
-    Read returned `scope` string after token exchange and gate features by granted values.
+  <Step title="Check what was actually granted">
+    Read the `scope` field in the token response. It contains the actual granted scopes, which may differ from what you requested if some were rejected.
+
+    ```ts
+    const grantedScopes = tokens.scope.split(" ");
+    const hasEmail = grantedScopes.includes("email");
+    ```
   </Step>
   <Step title="Handle missing claims gracefully">
-    Treat absent optional claims as expected, not exceptional.
+    Treat any optional claim (`email`, `name`, etc.) as potentially absent, even when you requested the scope. Do not throw or break when a claim is missing.
   </Step>
-  <Step title="Keep scope changes explicit">
-    Any additional scope should be product-reviewed because it changes user consent surface.
+  <Step title="Review scope changes">
+    Adding a new scope changes what users see on the consent screen. Have product and legal review any scope additions.
   </Step>
 </Steps>
 
-## Connector scope model
-
-Connector uses resource-defined scopes (for example `resource.read`, `resource.write`) and enforces:
-
-- scope must exist on target resource
-- requested scope cannot exceed granted scope
-
 ## Common mistakes
 
-- Requesting `user_id` without app allowlist support
-- Assuming `email` is always present
-- Using refresh flow to ask for new scopes
-- Treating connector scopes like regular OIDC profile scopes
+<AccordionGroup>
+  <Accordion title="Requesting user_id without app config">
+    If your app does not have `allowUserIdScope` enabled, requesting `user_id` in the scope has no effect. The `uid` claim will not appear and the `user_id` field will not be in the token response.
+  </Accordion>
+  <Accordion title="Assuming email is always present">
+    Email is present only if you requested `email` scope and the identity has an email address. Always treat it as optional.
+  </Accordion>
+  <Accordion title="Re-requesting scopes on refresh">
+    Refresh token grants cannot add new scopes. The new tokens will have the same scopes as the original grant. To get additional scopes, run a new authorization code flow with the new scope.
+  </Accordion>
+  <Accordion title="Confusing sub with user_id">
+    `sub` (identity UUID) is not the same as `user_id` (user UUID). A user can have multiple identities, each with a different `sub`. If you store `sub` as a user identifier and a user creates a second identity, they appear as a different user. Decide upfront whether you identify by identity or by user.
+  </Accordion>
+</AccordionGroup>

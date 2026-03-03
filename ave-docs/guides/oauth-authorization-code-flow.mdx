@@ -1,123 +1,274 @@
----
+﻿---
 title: "OAuth authorization code flow"
-description: "Detailed end-to-end OAuth + OIDC flow with state, nonce, token exchange, and token lifecycle guidance."
+description: "End-to-end OAuth 2.0 + OIDC flow with full token payload reference, validation steps, and refresh token rotation."
 ---
 
-## Step 1: Build authorization request
+The authorization code flow is the standard way to authenticate users with Ave. The user is redirected to Ave, authenticates, and Ave redirects back with a short-lived code. You exchange the code for tokens server-side (or via PKCE from the browser).
 
-Required query params:
+## The two JWT tokens
 
-- `client_id`
-- `redirect_uri`
+Ave returns two different JWTs on a successful token exchange. Understanding the difference is critical before writing any validation or auth integration.
 
-Strongly recommended:
-
-- `state` (CSRF protection)
-- `nonce` (ID token replay protection)
-
-Typical URL:
-
-```text
-https://aveid.net/signin?client_id=...&redirect_uri=...&scope=openid%20profile%20email&state=...&nonce=...
-```
-
-## End-to-end flow
-
-<Steps>
-  <Step title="Create request context">
-    Generate and persist one-time `state` and `nonce` values before redirect.
-  </Step>
-  <Step title="Redirect to Ave">
-    Send user to `https://aveid.net/signin` with `client_id`, `redirect_uri`, scope, `state`, and `nonce`.
-  </Step>
-  <Step title="Handle callback securely">
-    On callback:
-
-    1. Parse `code` and `state`
-    2. Verify `state` against one-time stored value
-    3. Clear stored `state`/`nonce` after use
-    4. Reject replayed or missing values
-  </Step>
-  <Step title="Exchange authorization code">
-    Endpoint: `POST https://api.aveid.net/api/oauth/token`
-
-    Body uses **camelCase** fields.
+<Tabs>
+  <Tab title="id_token">
+    The `id_token` is an **OIDC identity token**. It proves who the user is. It is signed by Ave and its audience is **your client ID**.
 
     ```json
     {
-      "grantType": "authorization_code",
-      "code": "AUTHORIZATION_CODE",
-      "redirectUri": "https://yourapp.com/callback",
-      "clientId": "YOUR_CLIENT_ID",
-      "clientSecret": "YOUR_SECRET"
+      "iss": "https://api.aveid.net",
+      "sub": "identity-uuid",
+      "aud": "your_client_id",
+      "exp": 1712345678,
+      "iat": 1712342078,
+      "auth_time": 1712342078,
+      "azp": "your_client_id",
+      "sid": "user-uuid",
+      "nonce": "random-nonce-from-request",
+      "name": "Alice Smith",
+      "preferred_username": "alice",
+      "email": "alice@example.com",
+      "picture": "https://avatars.aveid.net/..."
     }
     ```
 
-    For PKCE, replace `clientSecret` with `codeVerifier`.
-  </Step>
-  <Step title="Validate tokens and establish app session">
-    Expect token payload with:
+    Profile claims (`name`, `preferred_username`, `picture`) are only present if you requested the `profile` scope. `email` is only present if you requested `email`. `nonce` is only present if you included one in the authorization request.
 
-    - `access_token`
-    - `access_token_jwt`
-    - `token_type` (`Bearer`)
-    - `expires_in`
-    - `scope`
-    - optional `id_token`
-    - optional `refresh_token`
-    - `user`
-    - optional `encrypted_app_key`
+    **Use `id_token` for:**
+    - Establishing your app session (validating who logged in)
+    - Convex custom auth integration
+    - Any system that needs to verify Ave-issued identity
+  </Tab>
+  <Tab title="access_token_jwt">
+    The `access_token_jwt` is a **resource access JWT**. It authorizes calls to Ave's API. Its audience is Ave's own resource audience, not your client ID.
+
+    ```json
+    {
+      "iss": "https://api.aveid.net",
+      "sub": "identity-uuid",
+      "aud": "https://api.aveid.net",
+      "exp": 1712345678,
+      "iat": 1712342078,
+      "scope": "openid profile email",
+      "cid": "your_client_id",
+      "sid": "user-uuid",
+      "uid": "user-uuid"
+    }
+    ```
+
+    `cid` is your client ID. `sid` is the permanent user UUID (same across all identities). `uid` is also the user UUID, only present when the `user_id` scope was granted and your app has `allowUserIdScope` enabled.
+
+    **Use `access_token_jwt` for:**
+    - Connector token-exchange grant (`subjectToken` field)
+    - Passing to Ave API endpoints that accept JWT auth
+  </Tab>
+  <Tab title="access_token (opaque)">
+    The plain `access_token` is an **opaque string**, not a JWT. You cannot decode it.
+
+    **Use the opaque `access_token` for:**
+    - Calling `GET /api/oauth/userinfo` with `Authorization: Bearer ACCESS_TOKEN`
+    - Any Ave API endpoint that documents accepting a bearer token
+
+    You can use either the opaque token or the JWT for Ave API endpoints. The opaque token is simpler when you do not need to inspect claims client-side.
+  </Tab>
+</Tabs>
+
+<Note>
+  If you are building Convex auth, use `id_token`. Its `aud` is your `clientId`, which is what Convex validates against. The `access_token_jwt` has `aud: "https://api.aveid.net"` — Convex will reject it because the audience does not match your app.
+</Note>
+
+## Claim reference
+
+| Claim | Present in | Description |
+|---|---|---|
+| `iss` | Both JWTs | Always `https://api.aveid.net` |
+| `sub` | Both JWTs | Identity UUID (changes per Ave identity) |
+| `aud` | Both JWTs | `clientId` in `id_token`; `https://api.aveid.net` in `access_token_jwt` |
+| `exp` | Both JWTs | Expiry timestamp (Unix seconds) |
+| `iat` | Both JWTs | Issued-at timestamp |
+| `sid` | Both JWTs | Permanent user UUID (stable across all identities) |
+| `azp` | `id_token` only | Your client ID (authorized party) |
+| `auth_time` | `id_token` only | When the user last authenticated |
+| `nonce` | `id_token` only | Echo of the nonce from the authorization request |
+| `name` | `id_token` only | Display name (requires `profile` scope) |
+| `preferred_username` | `id_token` only | Identity handle (requires `profile` scope) |
+| `email` | `id_token` only | Email address (requires `email` scope) |
+| `picture` | `id_token` only | Avatar URL (requires `profile` scope) |
+| `cid` | `access_token_jwt` only | Your client ID |
+| `scope` | `access_token_jwt` only | Space-separated granted scopes |
+| `uid` | `access_token_jwt` only | User UUID (only if `user_id` scope + app config) |
+
+## Full flow
+
+<Steps>
+  <Step title="Create request context">
+    Generate `state`, `nonce`, and PKCE parameters before redirecting. Store them temporarily in `sessionStorage` (browser) or your server session.
+
+    ```ts
+    import { generateCodeVerifier, generateCodeChallenge, generateNonce } from "@ave-id/sdk";
+
+    const codeVerifier = generateCodeVerifier();
+    const codeChallenge = await generateCodeChallenge(codeVerifier);
+    const state = crypto.randomUUID();
+    const nonce = generateNonce();
+
+    sessionStorage.setItem("ave_verifier", codeVerifier);
+    sessionStorage.setItem("ave_state", state);
+    sessionStorage.setItem("ave_nonce", nonce);
+    ```
+  </Step>
+  <Step title="Redirect to Ave">
+    Build the authorization URL and redirect the user.
+
+    ```ts
+    import { buildAuthorizeUrl } from "@ave-id/sdk";
+
+    const url = buildAuthorizeUrl(
+      { clientId: "YOUR_CLIENT_ID", redirectUri: "https://yourapp.com/callback" },
+      {
+        scope: ["openid", "profile", "email", "offline_access"],
+        codeChallenge,
+        codeChallengeMethod: "S256",
+        state,
+        nonce,
+      }
+    );
+
+    window.location.href = url;
+    ```
+  </Step>
+  <Step title="Handle callback securely">
+    Ave redirects to your `redirect_uri` with `?code=...&state=...`.
+
+    ```ts
+    const params = new URLSearchParams(window.location.search);
+    const code = params.get("code");
+    const returnedState = params.get("state");
+    const savedState = sessionStorage.getItem("ave_state");
+    const codeVerifier = sessionStorage.getItem("ave_verifier");
+    const savedNonce = sessionStorage.getItem("ave_nonce");
+
+    if (!returnedState || returnedState !== savedState) {
+      throw new Error("State mismatch — possible CSRF attack");
+    }
+
+    // Clear immediately — they are one-time use
+    sessionStorage.removeItem("ave_state");
+    sessionStorage.removeItem("ave_verifier");
+    sessionStorage.removeItem("ave_nonce");
+    ```
+  </Step>
+  <Step title="Exchange authorization code">
+    ```ts
+    import { exchangeCode } from "@ave-id/sdk";
+
+    const tokens = await exchangeCode(
+      { clientId: "YOUR_CLIENT_ID", redirectUri: "https://yourapp.com/callback" },
+      { code, codeVerifier }
+    );
+    ```
+
+    The response includes `access_token`, `access_token_jwt`, `id_token`, `refresh_token`, `expires_in`, `scope`, and `user`.
+  </Step>
+  <Step title="Validate id_token and create session">
+    For security-critical systems, validate the `id_token` before trusting it.
+
+    ```ts
+    // Fetch JWKS (cache this — it rarely changes)
+    const { keys } = await fetch("https://api.aveid.net/.well-known/jwks.json").then(r => r.json());
+
+    // Validate using your JWT library (jose, jsonwebtoken, etc.)
+    // Required checks:
+    // 1. Signature valid against JWKS
+    // 2. iss === "https://api.aveid.net"
+    // 3. aud === YOUR_CLIENT_ID
+    // 4. exp > Date.now() / 1000
+    // 5. nonce === savedNonce (if you sent one)
+    ```
+
+    <Tip>
+      Libraries like `jose` handle JWKS fetching and validation automatically. Pass `issuer`, `audience` (your client ID), and `clockTolerance` options.
+    </Tip>
   </Step>
 </Steps>
 
-## Refresh token flow (rotation)
+## Refresh token flow
 
-If `offline_access` was granted, refresh via:
+Refresh tokens allow you to get new access tokens without requiring the user to log in again. They are only issued when you request `offline_access` scope.
+
+```ts
+import { refreshToken } from "@ave-id/sdk";
+
+const newTokens = await refreshToken(
+  { clientId: "YOUR_CLIENT_ID", redirectUri: "https://yourapp.com/callback" },
+  { refreshToken: storedRefreshToken }
+);
+
+// Store the new refresh token immediately
+storeRefreshToken(newTokens.refresh_token);
+```
+
+<Warning>
+  Refresh tokens **rotate on every use**. Each successful refresh invalidates the old token and issues a new one. If you try to reuse an old refresh token, you will get `invalid_grant` and the server may revoke the entire token family as a security measure. Always persist the new `refresh_token` from the response before discarding the old one.
+</Warning>
+
+## Userinfo endpoint
+
+`GET /api/oauth/userinfo` returns live identity claims. Use this when you need fresh data that may not be in the cached `id_token`.
+
+```bash
+GET https://api.aveid.net/api/oauth/userinfo
+Authorization: Bearer ACCESS_TOKEN
+```
+
+The returned claims depend on the scopes your access token has. The response always includes `sub` (identity UUID).
+
+## OIDC discovery
+
+Fetch the discovery document to programmatically get endpoint URLs and signing key locations:
+
+```bash
+GET https://api.aveid.net/.well-known/openid-configuration
+```
 
 ```json
 {
-  "grantType": "refresh_token",
-  "refreshToken": "rt_...",
-  "clientId": "YOUR_CLIENT_ID",
-  "clientSecret": "YOUR_SECRET"
+  "issuer": "https://api.aveid.net",
+  "authorization_endpoint": "https://aveid.net/signin",
+  "token_endpoint": "https://api.aveid.net/api/oauth/token",
+  "userinfo_endpoint": "https://api.aveid.net/api/oauth/userinfo",
+  "jwks_uri": "https://api.aveid.net/.well-known/jwks.json",
+  "scopes_supported": ["openid", "profile", "email", "offline_access", "user_id"],
+  "response_types_supported": ["code"],
+  "id_token_signing_alg_values_supported": ["RS256"]
 }
 ```
 
-Server behavior to design for:
+## ID token validation sequence
 
-- Refresh token is rotated per successful use
-- Expired/revoked/reused refresh tokens return `invalid_grant`
-- Reuse attempts trigger broader revocation safety logic
+For any library or system that validates tokens manually, follow this order:
 
-## OIDC discovery and validation
-
-- Discovery: `/.well-known/openid-configuration`
-- JWKS: `/.well-known/jwks.json`
-
-Validate `id_token` claims:
-
-- `iss` equals Ave issuer
-- `aud` contains your client ID
-- `exp`/`iat` valid
-- `nonce` matches original request
-
-## Validation sequence (recommended)
-
-1. Fetch OIDC discovery from `/.well-known/openid-configuration`
-2. Resolve JWKS URL and cache keys
-3. Verify signature and token timestamps
-4. Verify issuer/audience/nonce claims
-5. Reject token and force full login on mismatch
-
-## Userinfo
-
-`GET https://api.aveid.net/api/oauth/userinfo`
-
-Accepts opaque or JWT access tokens. Returned claims depend on granted scopes.
+<Steps>
+  <Step title="Fetch JWKS">
+    `GET https://api.aveid.net/.well-known/jwks.json`. Cache the response and re-fetch only when you encounter an unknown `kid`.
+  </Step>
+  <Step title="Verify signature">
+    Use the key matching the `kid` in the token header. Ave signs with RS256.
+  </Step>
+  <Step title="Check timestamps">
+    Verify `exp > now` and `iat <= now`. Use a small clock tolerance (60 seconds) to handle drift.
+  </Step>
+  <Step title="Verify issuer and audience">
+    `iss` must equal `https://api.aveid.net`. `aud` must equal your client ID. Reject anything else.
+  </Step>
+  <Step title="Verify nonce">
+    If you sent a `nonce` in the authorization request, the `id_token` must contain the same value. This prevents replay attacks.
+  </Step>
+</Steps>
 
 ## Edge cases
 
-- Authorization code expires quickly; don’t queue exchanges
-- Redirect URI must exactly match registered URI
-- Missing PKCE verifier when required returns `invalid_request`
-- If your app requests `user_id` but app config doesn’t allow it, claim won’t be exposed
+- Authorization codes expire in seconds — do not store and exchange later
+- Redirect URI must match exactly, including protocol and path
+- Missing `openid` scope means no `id_token` is returned
+- Missing `offline_access` scope means no `refresh_token` is returned
+- If your app requests `user_id` but does not have `allowUserIdScope` configured, the `uid` claim will not appear

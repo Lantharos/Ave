@@ -1,36 +1,213 @@
----
+﻿---
 title: "Convex custom auth"
-description: "Use Ave as a custom OIDC auth provider for Convex with proper issuer and JWKS validation."
+description: "Use Ave as a Convex custom OIDC auth provider. Covers which token to use, why, exact JWT claims, auth.config.ts setup, and full implementation."
 ---
 
-Ave works with Convex custom auth.
+Convex supports custom auth providers via its [custom auth](https://docs.convex.dev/auth/advanced/custom-auth) feature. Ave works as a drop-in OIDC provider. This guide explains exactly what to configure, which token to pass, and what Convex does with it.
 
-## Configuration sources
+## Which token to use
 
-- Convex custom auth docs: `https://docs.convex.dev/auth/advanced/custom-auth`
-- Ave discovery: `https://api.aveid.net/.well-known/openid-configuration`
+<Warning>
+  Always pass `id_token` to Convex. Never pass `access_token_jwt`. This is the most common mistake when integrating Ave with Convex.
+</Warning>
 
-## Required mapping
+Ave returns two JWTs. They look similar but serve different purposes and **have different audiences**:
 
-- Issuer: from discovery `issuer`
-- JWKS URL: from discovery `jwks_uri`
-- Token used for Convex auth: Ave `id_token` (OIDC)
+| Token | `aud` claim | Purpose |
+|---|---|---|
+| `id_token` | **Your `clientId`** | Identity assertion — proves who the user is |
+| `access_token_jwt` | `https://api.aveid.net` | API authorization — grants access to Ave's resources |
 
-## Implementation outline
+Convex validates the `aud` claim against the `applicationID` you configure. If you use `access_token_jwt`, Convex will reject it because its audience is `https://api.aveid.net`, not your client ID.
 
-1. Complete Ave OAuth flow in client/backend
-2. Extract `id_token` from token response
-3. Provide `id_token` to Convex auth pipeline
-4. Ensure claims (`sub`, `aud`, `iss`, `exp`) are valid
+## Auth config
 
-## Edge cases
+Add Ave as a custom provider in `convex/auth.config.ts`:
 
-- Missing `openid` scope means no `id_token`
-- Wrong audience in app config causes Convex verification failure
-- Clock drift can break `exp` validation; keep server clocks synced
+```ts
+export default {
+  providers: [
+    {
+      domain: "https://api.aveid.net",
+      applicationID: "your_client_id",
+    },
+  ],
+};
+```
 
-## Troubleshooting quick checks
+<Note>
+  `domain` maps to the `iss` (issuer) claim in the token. Ave's issuer is `https://api.aveid.net`. Convex fetches `{domain}/.well-known/openid-configuration` to discover the JWKS endpoint automatically.
+</Note>
 
-- Verify token is an ID token, not opaque access token
-- Verify issuer matches discovery output exactly
-- Verify keys are fetched from `.well-known/jwks.json`
+## What Convex validates
+
+When you call `convex.setAuth(idToken)` or equivalent, Convex:
+
+1. Fetches `https://api.aveid.net/.well-known/openid-configuration`
+2. Gets the JWKS URL from the discovery document
+3. Downloads and caches signing keys
+4. Verifies the JWT signature (RS256)
+5. Checks `iss === "https://api.aveid.net"`
+6. Checks `aud === "your_client_id"` (the `applicationID` you configured)
+7. Checks `exp > now`
+
+If all checks pass, Convex considers the user authenticated and the identity is available as `ctx.auth.getUserIdentity()`.
+
+## What claims Convex exposes
+
+After a successful auth check, `ctx.auth.getUserIdentity()` returns:
+
+```ts
+{
+  subject: "identity-uuid",         // id_token `sub` — Ave identity UUID
+  issuer: "https://api.aveid.net",  // id_token `iss`
+  name: "Alice Smith",              // id_token `name` (if profile scope)
+  email: "alice@example.com",       // id_token `email` (if email scope)
+  pictureUrl: "https://...",        // id_token `picture` (if profile scope)
+  // plus any other claims in the token
+}
+```
+
+The `subject` is the Ave identity UUID — this is the value you should use as your primary user identifier in Convex.
+
+<Tip>
+  The `sub` in the `id_token` is the **identity UUID**, not a permanent user UUID. A single Ave user can have multiple identities. If you need a stable cross-identity identifier, request the `user_id` scope — but note that `user_id` is in `access_token_jwt` (the `uid` claim), not in `id_token`. For most apps, the identity UUID is the right identifier.
+</Tip>
+
+## Full implementation
+
+<Steps>
+  <Step title="Configure auth.config.ts">
+    ```ts
+    // convex/auth.config.ts
+    export default {
+      providers: [
+        {
+          domain: "https://api.aveid.net",
+          applicationID: process.env.AVE_CLIENT_ID!,
+        },
+      ],
+    };
+    ```
+
+    Store your client ID in an environment variable. Do not hardcode it.
+  </Step>
+  <Step title="Complete the Ave OAuth flow">
+    Follow the [OAuth authorization code flow](/guides/oauth-authorization-code-flow) to get tokens. You need the `openid` scope at minimum — without it, Ave does not return an `id_token`.
+
+    ```ts
+    import { exchangeCode } from "@ave-id/sdk";
+
+    const tokens = await exchangeCode(
+      { clientId: process.env.AVE_CLIENT_ID!, redirectUri: REDIRECT_URI },
+      { code, codeVerifier }
+    );
+
+    // id_token is only present when openid scope was requested
+    if (!tokens.id_token) {
+      throw new Error("No id_token returned — did you include the openid scope?");
+    }
+    ```
+  </Step>
+  <Step title="Pass id_token to Convex">
+    ```ts
+    import { ConvexReactClient } from "convex/react";
+
+    const convex = new ConvexReactClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
+
+    // Set the Ave id_token as the auth token
+    convex.setAuth(async () => tokens.id_token);
+    ```
+
+    In a React app, use `ConvexProviderWithAuth` or the `useAuth` hook from your auth state to keep the token fresh.
+  </Step>
+  <Step title="Use the identity in mutations and queries">
+    ```ts
+    // convex/users.ts
+    import { mutation, query } from "./_generated/server";
+
+    export const getOrCreateUser = mutation(async (ctx) => {
+      const identity = await ctx.auth.getUserIdentity();
+      if (!identity) throw new Error("Not authenticated");
+
+      // identity.subject is the Ave identity UUID
+      const existing = await ctx.db
+        .query("users")
+        .withIndex("byAveId", q => q.eq("aveIdentityId", identity.subject))
+        .first();
+
+      if (existing) return existing;
+
+      return await ctx.db.insert("users", {
+        aveIdentityId: identity.subject,
+        name: identity.name ?? "Unknown",
+        email: identity.email,
+        imageUrl: identity.pictureUrl,
+      });
+    });
+    ```
+  </Step>
+  <Step title="Handle token refresh">
+    `id_token` expires (check `exp` claim). When it expires, refresh your Ave tokens and pass the new `id_token` to Convex.
+
+    ```ts
+    import { refreshToken } from "@ave-id/sdk";
+
+    const newTokens = await refreshToken(
+      { clientId: CLIENT_ID, redirectUri: REDIRECT_URI },
+      { refreshToken: storedRefreshToken }
+    );
+
+    // Update Convex with the new id_token
+    convex.setAuth(async () => newTokens.id_token);
+    ```
+
+    <Note>
+      `id_token` and `access_token` share the same `expires_in`. Use the expiry to proactively refresh before Convex starts rejecting requests.
+    </Note>
+  </Step>
+</Steps>
+
+## Complete id_token payload reference
+
+For your reference, here is the full `id_token` payload shape:
+
+```json
+{
+  "iss": "https://api.aveid.net",
+  "sub": "identity-uuid",
+  "aud": "your_client_id",
+  "exp": 1712345678,
+  "iat": 1712342078,
+  "auth_time": 1712342078,
+  "azp": "your_client_id",
+  "sid": "user-uuid",
+  "nonce": "nonce-from-request",
+  "name": "Alice Smith",
+  "preferred_username": "alice",
+  "email": "alice@example.com",
+  "picture": "https://avatars.aveid.net/..."
+}
+```
+
+Profile claims are only present when the corresponding scope was granted.
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Convex rejects the token with 'invalid audience'">
+    You are passing `access_token_jwt` instead of `id_token`. The `access_token_jwt` has `aud: "https://api.aveid.net"` — Convex expects `aud === your_client_id`. Always use `id_token`.
+  </Accordion>
+  <Accordion title="No id_token in the token response">
+    You did not include `openid` in the `scope` parameter of the authorization request. `id_token` is only issued when the `openid` scope is granted. Add `openid` to your scope list.
+  </Accordion>
+  <Accordion title="Convex says issuer does not match">
+    Verify that `domain` in `auth.config.ts` is exactly `https://api.aveid.net`. The `iss` claim in Ave tokens is `https://api.aveid.net`. If you have set a custom issuer via the `OIDC_ISSUER` environment variable in your Ave server, use that value instead.
+  </Accordion>
+  <Accordion title="getUserIdentity() returns null">
+    The token may have expired, or `convex.setAuth` was not called before the query/mutation ran. Make sure your auth state provider calls `convex.setAuth` before any authenticated Convex calls.
+  </Accordion>
+  <Accordion title="Clock skew errors">
+    Server clocks must be reasonably in sync. Convex allows a small tolerance. If you see `exp` validation failures on otherwise valid tokens, check that your backend server time is accurate.
+  </Accordion>
+</AccordionGroup>

@@ -3,41 +3,61 @@ title: "Ave OAuth + OIDC"
 description: "Integrate Ave sign-in, OIDC, Connector delegation, Signing, and E2EE app keys."
 ---
 
-Ave is an OAuth 2.0 + OpenID Connect provider with privacy-first identity, optional end-to-end encryption key delivery, and delegated app-to-app access.
+Ave is an OAuth 2.0 + OpenID Connect provider. It handles identity, authentication, token issuance, delegated access, cryptographic signing, and optional per-app encryption key delivery.
 
 ## What you can build
 
-- User sign-in via Authorization Code flow
-- PKCE login for web/mobile public clients
-- Server-side token exchange for confidential clients
-- OIDC profile retrieval (`/userinfo`) and ID token validation
-- Connector app-to-app delegation (`token-exchange` grant)
-- Signature workflows using identity-backed Ed25519 keys
-- Optional per-app encryption key handoff for E2EE apps
+<CardGroup cols={2}>
+  <Card title="User sign-in" icon="user" href="/quickstart">
+    Authorization code flow with PKCE for SPAs and browser apps. Client secret for confidential server apps.
+  </Card>
+  <Card title="OIDC tokens" icon="id-card" href="/guides/oauth-authorization-code-flow">
+    ID token for identity assertion. Access token JWT for API calls. Learn when to use which.
+  </Card>
+  <Card title="Connector delegation" icon="link" href="/guides/connector-app-to-app">
+    App-to-app delegated access via token-exchange grant. Users approve once; your app acts on their behalf.
+  </Card>
+  <Card title="Ave Signing" icon="pen-nib" href="/guides/ave-signing">
+    Identity-backed Ed25519 signature requests for high-integrity user approval flows.
+  </Card>
+  <Card title="End-to-end encryption" icon="lock" href="/guides/end-to-end-encryption">
+    Per-app encryption key delivery over the OAuth flow. Only your app can decrypt user data.
+  </Card>
+  <Card title="Convex custom auth" icon="database" href="/guides/convex-custom-auth">
+    Use Ave as a Convex OIDC provider. Includes exact token, claim, and config details.
+  </Card>
+</CardGroup>
 
-## Important URLs (don’t mix these)
+## Important URLs
 
-- User-facing auth UI: `https://aveid.net/signin`
-- Connector UI: `https://aveid.net/connect`
-- API base: `https://api.aveid.net`
-- OIDC discovery: `https://api.aveid.net/.well-known/openid-configuration`
-- JWKS: `https://api.aveid.net/.well-known/jwks.json`
+<Warning>
+  Ave uses two separate hosts. The sign-in UI lives on `aveid.net`. All API calls go to `api.aveid.net`. Using the wrong host is the most common integration mistake.
+</Warning>
 
-## For AI-assisted integration
+| Purpose | URL |
+|---|---|
+| Sign-in UI | `https://aveid.net/signin` |
+| Connector consent UI | `https://aveid.net/connect` |
+| OAuth token endpoint | `https://api.aveid.net/api/oauth/token` |
+| Userinfo endpoint | `https://api.aveid.net/api/oauth/userinfo` |
+| OIDC discovery | `https://api.aveid.net/.well-known/openid-configuration` |
+| JWKS | `https://api.aveid.net/.well-known/jwks.json` |
 
-Keep and use your current machine-readable docs at:
 
-- `https://aveid.net/llms.txt`
-
-This Mintlify documentation is the human-friendly migration and expansion.
 
 ## Where to start
 
-1. Read [Quickstart](quickstart)
-2. Choose your auth model:
-   - Public client: [PKCE for public clients](guides/pkce-for-public-clients)
-   - Confidential client: [Server-side confidential clients](guides/server-side-confidential-clients)
-3. Add advanced features as needed:
-   - [Connector app-to-app](guides/connector-app-to-app)
-   - [Ave Signing](guides/ave-signing)
-   - [End-to-end encryption](guides/end-to-end-encryption)
+<Steps>
+  <Step title="Read the quickstart">
+    [Quickstart](/quickstart) covers prerequisites, the full login flow with code examples, and what to do with each token.
+  </Step>
+  <Step title="Understand the tokens">
+    [OAuth authorization code flow](/guides/oauth-authorization-code-flow) explains `id_token` vs `access_token_jwt`, what their JWT payloads contain, and when to use each.
+  </Step>
+  <Step title="Pick your auth model">
+    Public clients (SPAs, browser apps): [PKCE for public clients](/guides/pkce-for-public-clients). Server apps with a secret: [Server-side confidential clients](/guides/server-side-confidential-clients).
+  </Step>
+  <Step title="Add advanced features">
+    [Connector app-to-app](/guides/connector-app-to-app), [Ave Signing](/guides/ave-signing), [End-to-end encryption](/guides/end-to-end-encryption), or [Convex custom auth](/guides/convex-custom-auth).
+  </Step>
+</Steps>

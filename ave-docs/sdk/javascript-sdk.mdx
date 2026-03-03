@@ -1,61 +1,499 @@
----
+﻿---
 title: "@ave-id/sdk"
-description: "Reference for OAuth/OIDC, Connector, userinfo, delegations, and Signing helpers in the JavaScript SDK."
+description: "Complete function reference for OAuth, Connector, signing, and utility helpers. Import paths, parameter types, and usage examples."
 ---
-
-## Install
 
 ```bash
 npm install @ave-id/sdk
 ```
 
-## Core functions
+The SDK splits into three import paths:
 
-- `buildAuthorizeUrl(config, params)`
-- `generateCodeVerifier()`
-- `generateCodeChallenge(verifier)`
-- `generateNonce()`
-- `exchangeCode(config, { code, codeVerifier? })`
-- `refreshToken(config, { refreshToken })`
-- `fetchUserInfo(config, accessToken)`
+| Import | Contents | Runtime |
+|---|---|---|
+| `@ave-id/sdk` | Core OAuth, PKCE, Connector, Signing | Browser or Node |
+| `@ave-id/sdk/client` | `startPkceLogin`, `startConnectorFlow` | Browser only |
+| `@ave-id/sdk/server` | `exchangeCodeServer`, `refreshTokenServer`, `exchangeDelegatedTokenServer` | Server only |
 
-## Connector functions
+<Warning>
+  Never import from `@ave-id/sdk/server` in browser code. Those functions require your `clientSecret`, which must never be exposed to the client.
+</Warning>
 
-- `buildConnectorUrl(...)`
-- `exchangeDelegatedToken(...)`
-- `listDelegations(config, sessionToken)`
-- `revokeDelegation(config, sessionToken, delegationId)`
+## Config object
 
-## Signing functions
+Most functions take a config object as the first argument:
 
-- `createSignatureRequest(...)`
-- `getSignatureStatus(...)`
-- `getPublicKey(...)`
-- `verifySignature(...)`
-- `buildSigningUrl(...)`
-- `openSigningPopup(...)`
+```ts
+interface AveConfig {
+  clientId: string;     // Your app's client ID
+  redirectUri: string;  // Registered redirect URI
+  issuer?: string;      // Default: "https://aveid.net"
+}
+```
 
-## Client helpers (`@ave-id/sdk/client`)
+---
 
-- `startPkceLogin(...)`
-- `startConnectorFlow(...)`
+## PKCE helpers
 
-These helpers store transient state in `sessionStorage`.
+### `generateCodeVerifier()`
 
-## Server helpers (`@ave-id/sdk/server`)
+Generates a cryptographically random PKCE code verifier.
 
-- `exchangeCodeServer(...)`
-- `refreshTokenServer(...)`
-- `exchangeDelegatedTokenServer(...)`
+```ts
+function generateCodeVerifier(): string
+```
 
-## Issuer behavior
+Returns a 43-character base64url-encoded random string. Store this in `sessionStorage` before redirecting and send it as `codeVerifier` when exchanging the code.
 
-`getApiBase(issuer)` maps `https://aveid.net` to `https://api.aveid.net`.
+```ts
+const verifier = generateCodeVerifier();
+sessionStorage.setItem("ave_verifier", verifier);
+```
 
-If you set custom issuer values, ensure API host resolution stays correct.
+---
 
-## Error model
+### `generateCodeChallenge(verifier)`
 
-SDK methods throw `Error` with server-provided `error` string when present.
+Generates the PKCE code challenge from a verifier using SHA-256.
 
-Treat thrown errors as retryable only when you classify them (network timeout vs protocol error).
+```ts
+function generateCodeChallenge(verifier: string): Promise<string>
+```
+
+<ParamField path="verifier" type="string" required>
+  The code verifier from `generateCodeVerifier()`.
+</ParamField>
+
+Returns `Promise<string>` — the base64url-encoded SHA-256 hash. Pass this as `codeChallenge` to `buildAuthorizeUrl`.
+
+```ts
+const challenge = await generateCodeChallenge(verifier);
+```
+
+---
+
+### `generateNonce()`
+
+Generates a random nonce for ID token replay protection.
+
+```ts
+function generateNonce(): string
+```
+
+Returns a 32-character base64url-encoded random string. Pass it as `nonce` to `buildAuthorizeUrl` and verify it matches the `nonce` claim in the `id_token` after exchange.
+
+---
+
+## Authorization
+
+### `buildAuthorizeUrl(config, params)`
+
+Builds the URL to redirect users to Ave for sign-in.
+
+```ts
+function buildAuthorizeUrl(
+  config: AveConfig,
+  params?: {
+    scope?: Scope[];
+    state?: string;
+    nonce?: string;
+    codeChallenge?: string;
+    codeChallengeMethod?: "S256" | "plain";
+    extraParams?: Record<string, string>;
+  }
+): string
+```
+
+<ParamField path="config.clientId" type="string" required>
+  Your app's client ID.
+</ParamField>
+
+<ParamField path="config.redirectUri" type="string" required>
+  The registered redirect URI the user will be sent to after authorization.
+</ParamField>
+
+<ParamField path="params.scope" type="Scope[]" default='["openid", "profile", "email"]'>
+  Scopes to request. Available values: `"openid"`, `"profile"`, `"email"`, `"offline_access"`, `"user_id"`.
+</ParamField>
+
+<ParamField path="params.state" type="string">
+  CSRF protection token. Generate with `crypto.randomUUID()`. Store and verify on the callback.
+</ParamField>
+
+<ParamField path="params.nonce" type="string">
+  ID token replay protection. Generate with `generateNonce()`. Verify against the `nonce` claim in `id_token`.
+</ParamField>
+
+<ParamField path="params.codeChallenge" type="string">
+  PKCE challenge from `generateCodeChallenge()`. Required for public clients.
+</ParamField>
+
+```ts
+const url = buildAuthorizeUrl(
+  { clientId: "YOUR_CLIENT_ID", redirectUri: "https://yourapp.com/callback" },
+  {
+    scope: ["openid", "profile", "email", "offline_access"],
+    state: crypto.randomUUID(),
+    nonce: generateNonce(),
+    codeChallenge: challenge,
+    codeChallengeMethod: "S256",
+  }
+);
+window.location.href = url;
+```
+
+---
+
+### `exchangeCode(config, payload)`
+
+Exchanges an authorization code for tokens. Use for PKCE (public client) flows.
+
+```ts
+function exchangeCode(
+  config: AveConfig,
+  payload: { code: string; codeVerifier?: string }
+): Promise<TokenResponse>
+```
+
+<ParamField path="payload.code" type="string" required>
+  The authorization code from the callback URL.
+</ParamField>
+
+<ParamField path="payload.codeVerifier" type="string">
+  The PKCE code verifier from `sessionStorage`. Required if you used PKCE.
+</ParamField>
+
+```ts
+const tokens = await exchangeCode(
+  { clientId: "YOUR_CLIENT_ID", redirectUri: "https://yourapp.com/callback" },
+  { code, codeVerifier }
+);
+```
+
+---
+
+### `refreshToken(config, payload)`
+
+Exchanges a refresh token for a new set of tokens.
+
+```ts
+function refreshToken(
+  config: AveConfig,
+  payload: { refreshToken: string }
+): Promise<TokenResponse>
+```
+
+<ParamField path="payload.refreshToken" type="string" required>
+  The refresh token from a previous token response. Refresh tokens rotate on every use — store the new `refresh_token` from the response.
+</ParamField>
+
+---
+
+### `fetchUserInfo(config, accessToken)`
+
+Fetches live identity claims from the userinfo endpoint.
+
+```ts
+function fetchUserInfo(config: AveConfig, accessToken: string): Promise<UserInfo>
+```
+
+<ParamField path="accessToken" type="string" required>
+  The opaque `access_token` (not the JWT) from the token response.
+</ParamField>
+
+Returns `UserInfo` with `sub`, `name?`, `preferred_username?`, `email?`, `picture?`.
+
+---
+
+## Connector
+
+### `buildConnectorUrl(config, params)`
+
+Builds the URL to start the Connector consent flow.
+
+```ts
+function buildConnectorUrl(
+  config: AveConfig,
+  params: {
+    resource: string;
+    scope: string;
+    state?: string;
+    mode?: "user_present" | "background";
+    extraParams?: Record<string, string>;
+  }
+): string
+```
+
+<ParamField path="params.resource" type="string" required>
+  The target resource key (as registered in the developer portal).
+</ParamField>
+
+<ParamField path="params.scope" type="string" required>
+  The resource scope(s) to request. Space-separated if multiple.
+</ParamField>
+
+<ParamField path="params.mode" type="string" default='"user_present"'>
+  `"user_present"` for interactive use, `"background"` for automated/background access.
+</ParamField>
+
+---
+
+### `exchangeDelegatedToken(config, payload)`
+
+Exchanges a source app access token JWT for a short-lived delegated token scoped to the target resource. Use for PKCE connector flows.
+
+```ts
+function exchangeDelegatedToken(
+  config: AveConfig,
+  payload: {
+    subjectToken: string;
+    requestedResource: string;
+    requestedScope: string;
+    clientSecret?: string;
+    actor?: Record<string, unknown>;
+  }
+): Promise<DelegationTokenResponse>
+```
+
+<ParamField path="payload.subjectToken" type="string" required>
+  The `access_token_jwt` from the source app's token response. Not the opaque token.
+</ParamField>
+
+<ParamField path="payload.requestedResource" type="string" required>
+  The target resource key.
+</ParamField>
+
+<ParamField path="payload.requestedScope" type="string" required>
+  The scope(s) to include in the delegated token. Must be a subset of granted scope.
+</ParamField>
+
+---
+
+### `listDelegations(config, sessionToken)`
+
+Lists active delegation grants for an Ave session. Requires an Ave session token.
+
+```ts
+function listDelegations(
+  config: { issuer?: string },
+  sessionToken: string
+): Promise<DelegationGrant[]>
+```
+
+---
+
+### `revokeDelegation(config, sessionToken, delegationId)`
+
+Revokes a delegation grant. Requires an Ave session token.
+
+```ts
+function revokeDelegation(
+  config: { issuer?: string },
+  sessionToken: string,
+  delegationId: string
+): Promise<void>
+```
+
+---
+
+## Signing
+
+### `createSignatureRequest(config, params)`
+
+Creates a signature request. **Server-side only** — requires `clientSecret`.
+
+```ts
+function createSignatureRequest(
+  config: SigningConfig,
+  params: {
+    identityId: string;
+    payload: string;
+    metadata?: Record<string, unknown>;
+    expiresInSeconds?: number;
+  }
+): Promise<SignatureRequest>
+```
+
+<ParamField path="config.clientSecret" type="string" required>
+  Your app's client secret. Never call this from client code.
+</ParamField>
+
+<ParamField path="params.identityId" type="string" required>
+  The Ave identity UUID (the `sub` from the user's `id_token`).
+</ParamField>
+
+<ParamField path="params.payload" type="string" required>
+  The text the user will see and sign. Keep it human-readable. Max 10,000 characters.
+</ParamField>
+
+<ParamField path="params.expiresInSeconds" type="number" default="300">
+  How long the request stays open. Min 60, max 3600.
+</ParamField>
+
+Returns `{ requestId, expiresAt, publicKey }`.
+
+---
+
+### `getSignatureStatus(config, requestId)`
+
+Polls the status of a signing request.
+
+```ts
+function getSignatureStatus(
+  config: { clientId: string; issuer?: string },
+  requestId: string
+): Promise<SignatureResult>
+```
+
+Returns `{ status: "pending" | "signed" | "denied" | "expired", signature?, resolvedAt? }`.
+
+---
+
+### `verifySignature(config, params)`
+
+Verifies a message/signature/publicKey tuple via Ave's API.
+
+```ts
+function verifySignature(
+  config: { issuer?: string },
+  params: { message: string; signature: string; publicKey: string }
+): Promise<{ valid: boolean; error?: string }>
+```
+
+---
+
+### `buildSigningUrl(config, requestId, options?)`
+
+Builds the URL for the Ave signing page.
+
+```ts
+function buildSigningUrl(
+  config: { issuer?: string },
+  requestId: string,
+  options?: { embed?: boolean }
+): string
+```
+
+---
+
+### `openSigningPopup(config, requestId)`
+
+Opens a popup window for a signing flow. Returns a promise that resolves when the user signs or closes.
+
+```ts
+function openSigningPopup(
+  config: { issuer?: string },
+  requestId: string
+): Promise<{ signed: boolean; signature?: string; publicKey?: string }>
+```
+
+Returns `null` if the browser blocked the popup.
+
+---
+
+## Client helpers
+
+Import from `@ave-id/sdk/client`. Browser-only. These helpers wrap the PKCE flow and manage `sessionStorage` automatically.
+
+### `startPkceLogin(params)`
+
+Generates PKCE params, saves them to `sessionStorage`, and redirects the user.
+
+```ts
+async function startPkceLogin(params: {
+  clientId: string;
+  redirectUri: string;
+  scope?: string;
+  issuer?: string;
+}): Promise<void>
+```
+
+Stores `ave_code_verifier` and `ave_nonce` in `sessionStorage`. Read them back on your callback page.
+
+### `startConnectorFlow(params)`
+
+Same as `startPkceLogin` but for the Connector flow. Saves `ave_connector_state` to `sessionStorage`.
+
+```ts
+async function startConnectorFlow(params: {
+  clientId: string;
+  redirectUri: string;
+  resource: string;
+  scope: string;
+  mode?: "user_present" | "background";
+  issuer?: string;
+}): Promise<void>
+```
+
+---
+
+## Server helpers
+
+Import from `@ave-id/sdk/server`. Node.js / server runtime only.
+
+### `exchangeCodeServer(config, payload)`
+
+Same as `exchangeCode` but uses `clientSecret` instead of `codeVerifier`.
+
+```ts
+async function exchangeCodeServer(
+  config: ServerConfig,
+  payload: { code: string }
+): Promise<TokenResponse>
+```
+
+```ts
+import { exchangeCodeServer } from "@ave-id/sdk/server";
+
+const tokens = await exchangeCodeServer(
+  {
+    clientId: process.env.AVE_CLIENT_ID!,
+    clientSecret: process.env.AVE_CLIENT_SECRET!,
+    redirectUri: "https://yourapp.com/callback",
+  },
+  { code }
+);
+```
+
+### `refreshTokenServer(config, payload)`
+
+Refreshes tokens using client secret (confidential client).
+
+```ts
+async function refreshTokenServer(
+  config: ServerConfig,
+  payload: { refreshToken: string }
+): Promise<TokenResponse>
+```
+
+### `exchangeDelegatedTokenServer(config, payload)`
+
+Server-side token exchange for Connector flows.
+
+```ts
+async function exchangeDelegatedTokenServer(
+  config: ServerConfig,
+  payload: {
+    subjectToken: string;
+    requestedResource: string;
+    requestedScope: string;
+    actor?: Record<string, unknown>;
+  }
+): Promise<DelegationTokenResponse>
+```
+
+---
+
+## Error handling
+
+All SDK functions throw an `Error` when the server returns a non-2xx response. The error message is the `error` field from the response body (for example `"invalid_grant"`, `"invalid_client"`).
+
+```ts
+try {
+  const tokens = await exchangeCode(config, { code, codeVerifier });
+} catch (err) {
+  if (err.message === "invalid_grant") {
+    // Code expired or verifier mismatch
+  }
+}
+```

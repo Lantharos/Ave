@@ -1,77 +1,257 @@
----
+﻿---
 title: "Signing endpoints"
-description: "Request lifecycle, key management, public verification, and authenticated user signing endpoints."
+description: "Full reference for the Ave signing API. Covers request creation, status polling, public key lookup, signature verification, and session-authenticated key management."
 ---
 
-## Public app endpoints
+## Authentication
+
+Signing endpoints split into two groups based on how they authenticate:
+
+| Group | Auth method | Use case |
+|---|---|---|
+| **App endpoints** | `clientId` + `clientSecret` in body | Server-to-server, creating requests on behalf of users |
+| **Session endpoints** | `Authorization: Bearer AVE_SESSION_TOKEN` | Authenticated Ave user managing their own keys and requests |
+
+---
+
+## App endpoints
 
 ### `POST /api/signing/request`
 
-Create signature request with app credentials.
+Creates a signature request for a specific identity. Call this from your server — never from the browser.
 
-Validation:
+**Request body:**
 
-- `clientId`, `clientSecret` required and verified
-- `identityId` must exist
-- identity must have signing key
-- `payload` max 10KB
-- `expiresInSeconds` range: 60..3600
+<ParamField body="clientId" type="string" required>
+  Your app's client ID.
+</ParamField>
 
-Returns:
+<ParamField body="clientSecret" type="string" required>
+  Your app's client secret.
+</ParamField>
 
-- `requestId`
-- `expiresAt`
-- `publicKey`
+<ParamField body="identityId" type="string" required>
+  UUID of the Ave identity that will sign the request. This is the `sub` claim from the user's `id_token`. The identity must have a signing key set up.
+</ParamField>
 
-### `GET /api/signing/request/:requestId/status?clientId=...`
+<ParamField body="payload" type="string" required>
+  The string the user will see and sign. Keep it human-readable. Maximum 10,000 characters.
+</ParamField>
 
-Returns request state if request belongs to provided app clientId.
+<ParamField body="metadata" type="object">
+  Arbitrary JSON metadata attached to the request. Not shown to the user in the signing UI but persisted with the record.
+</ParamField>
 
-Possible states:
+<ParamField body="expiresInSeconds" type="number" default="300">
+  How long the request stays active before expiring. Minimum `60`, maximum `3600`.
+</ParamField>
 
-- `pending`, `signed`, `denied`, `expired`
+**Response:**
 
-If pending and expired at read time, server transitions state to `expired`.
+<ResponseField name="requestId" type="string">
+  UUID for this signing request. Use it to present the signing UI and poll for status.
+</ResponseField>
+
+<ResponseField name="expiresAt" type="string">
+  ISO 8601 timestamp when the request expires.
+</ResponseField>
+
+<ResponseField name="publicKey" type="string">
+  Ed25519 public key for this identity in base64. Store it if you want to verify signatures locally.
+</ResponseField>
+
+**Example:**
+
+```bash
+POST https://api.aveid.net/api/signing/request
+Content-Type: application/json
+
+{
+  "clientId": "YOUR_CLIENT_ID",
+  "clientSecret": "YOUR_CLIENT_SECRET",
+  "identityId": "identity-uuid",
+  "payload": "I approve the transfer of $500 to account ending 4242",
+  "metadata": { "action": "transfer", "amount": 500 },
+  "expiresInSeconds": 300
+}
+```
+
+**Error responses:**
+
+| Status | Error | Cause |
+|---|---|---|
+| `400` | `invalid_request` | Missing required field |
+| `401` | `invalid_client` | `clientId` or `clientSecret` mismatch |
+| `404` | `identity_not_found` | `identityId` does not exist |
+| `422` | `no_signing_key` | Identity has not set up a signing key |
+
+---
+
+### `GET /api/signing/request/:requestId/status`
+
+Returns the current status of a signing request.
+
+**Query parameters:**
+
+<ParamField query="clientId" type="string" required>
+  Your app's client ID. Only requests belonging to this app are accessible.
+</ParamField>
+
+**Response:**
+
+<ResponseField name="status" type="string">
+  Current state: `pending`, `signed`, `denied`, or `expired`.
+
+  If the request has passed its `expiresAt` timestamp and is still `pending`, the server automatically transitions it to `expired` when this endpoint is queried.
+</ResponseField>
+
+<ResponseField name="signature" type="string">
+  The Ed25519 signature in base64. Present only when `status` is `signed`.
+</ResponseField>
+
+<ResponseField name="resolvedAt" type="string">
+  ISO 8601 timestamp when the request was resolved. Present when `status` is `signed` or `denied`.
+</ResponseField>
+
+**Example:**
+
+```bash
+GET https://api.aveid.net/api/signing/request/req-uuid/status?clientId=YOUR_CLIENT_ID
+```
+
+**Error responses:**
+
+| Status | Cause |
+|---|---|
+| `403` | Request does not belong to the provided `clientId` |
+| `404` | Request not found |
+
+---
 
 ### `GET /api/signing/public-key/:handle`
 
-Returns public key for identity handle.
+Returns the Ed25519 public key for an identity by its handle (username). Use this to verify signatures independently without calling the verify endpoint.
 
-Errors:
+**Path parameters:**
 
-- `404` identity not found
-- `404` identity has no signing key
+<ParamField path="handle" type="string" required>
+  The identity's handle (username, without `@`).
+</ParamField>
+
+**Response:**
+
+<ResponseField name="handle" type="string">
+  The identity handle.
+</ResponseField>
+
+<ResponseField name="publicKey" type="string">
+  Ed25519 public key in base64.
+</ResponseField>
+
+<ResponseField name="createdAt" type="string">
+  When the signing key was created.
+</ResponseField>
+
+**Error responses:**
+
+| Status | Cause |
+|---|---|
+| `404` | Identity not found |
+| `404` | Identity has no signing key |
+
+---
 
 ### `POST /api/signing/verify`
 
-Verifies message/signature/publicKey tuple.
+Verifies a message/signature/publicKey tuple. Use this as a server-side verification step before executing any side effect triggered by a signature.
 
-Returns `{ valid: boolean }` and optional error details.
+**Request body:**
 
-## Session-authenticated user endpoints
+<ParamField body="message" type="string" required>
+  The signed payload string, exactly as it appeared in the signing request.
+</ParamField>
+
+<ParamField body="signature" type="string" required>
+  The Ed25519 signature in base64, from the signed request status response.
+</ParamField>
+
+<ParamField body="publicKey" type="string" required>
+  The Ed25519 public key in base64, from the create request response or public key endpoint.
+</ParamField>
+
+**Response:**
+
+<ResponseField name="valid" type="boolean">
+  `true` if the signature is cryptographically valid for the message and key. `false` otherwise.
+</ResponseField>
+
+<ResponseField name="error" type="string">
+  Present when `valid` is `false`. Describes why verification failed.
+</ResponseField>
+
+**Example:**
+
+```bash
+POST https://api.aveid.net/api/signing/verify
+Content-Type: application/json
+
+{
+  "message": "I approve the transfer of $500 to account ending 4242",
+  "signature": "base64-ed25519-signature",
+  "publicKey": "base64-ed25519-public-key"
+}
+```
+
+<Tip>
+  You can also verify signatures locally using any Ed25519 library without calling this endpoint. Use the `publicKey` from the create request response, the `signature` from the status response, and the original `payload` string.
+</Tip>
+
+---
+
+## Session-authenticated endpoints
+
+These endpoints require an Ave session token in the `Authorization` header. They are used by authenticated Ave users to manage their own signing keys and view/act on signing requests.
+
+```bash
+Authorization: Bearer AVE_SESSION_TOKEN
+```
 
 ### Key management
 
-- `GET /api/signing/keys`
-- `GET /api/signing/keys/:identityId`
-- `POST /api/signing/keys/:identityId`
-- `PUT /api/signing/keys/:identityId`
+<AccordionGroup>
+  <Accordion title="GET /api/signing/keys">
+    Returns all signing keys for the authenticated user's identities.
+  </Accordion>
+  <Accordion title="GET /api/signing/keys/:identityId">
+    Returns the signing key for a specific identity owned by the authenticated user. Returns `404` if the identity has no signing key or does not belong to the user.
+  </Accordion>
+  <Accordion title="POST /api/signing/keys/:identityId">
+    Creates a signing key for the specified identity. The identity must belong to the authenticated user and must not already have a signing key.
+  </Accordion>
+  <Accordion title="PUT /api/signing/keys/:identityId">
+    Rotates (replaces) the signing key for the specified identity.
+  </Accordion>
+</AccordionGroup>
 
 ### Request interaction
 
-- `GET /api/signing/requests`
-- `GET /api/signing/requests/:requestId`
-- `POST /api/signing/requests/:requestId/sign`
-- `POST /api/signing/requests/:requestId/deny`
+<AccordionGroup>
+  <Accordion title="GET /api/signing/requests">
+    Returns pending signing requests for the authenticated user's identities.
+  </Accordion>
+  <Accordion title="GET /api/signing/requests/:requestId">
+    Returns details of a specific signing request targeted at the authenticated user.
+  </Accordion>
+  <Accordion title="POST /api/signing/requests/:requestId/sign">
+    Signs the request. Identity ownership is enforced. Request must be in `pending` state. The server validates the cryptographic signature format before accepting.
+  </Accordion>
+  <Accordion title="POST /api/signing/requests/:requestId/deny">
+    Denies the request. Request must be in `pending` state.
+  </Accordion>
+</AccordionGroup>
 
-Important checks:
+---
 
-- Identity ownership enforced
-- Request must be pending
-- Signature format and cryptographic validity enforced on sign
+## Demo endpoint
 
-## Demo-only endpoint
-
-- `POST /api/signing/demo/request`
-
-Reserved for Ave playground/demo behavior.
+`POST /api/signing/demo/request` creates a signing request without app credentials. It is reserved for the Ave playground and demo tooling. Do not use in production integrations.
