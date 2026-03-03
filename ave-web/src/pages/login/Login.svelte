@@ -55,6 +55,7 @@
     let authOptions = $state<PublicKeyCredentialRequestOptions | null>(null);
     let authSessionId = $state<string | null>(null);
     let loginRequestId = $state<string | null>(null);
+    let loginRequestQrToken = $state<string | null>(null);
     let ephemeralKeyPair = $state<{ publicKey: string; privateKey: CryptoKey } | null>(null);
     
     // For passkey login without master key - we already authenticated but need the master key
@@ -155,6 +156,7 @@
             onSuccess={handleLoginSuccess}
             onError={setError}
             bind:loginRequestId
+            bind:loginRequestQrToken
             bind:ephemeralKeyPair
             bind:pendingPasskeyLogin
         />
@@ -169,6 +171,7 @@
     {:else if currentPage === "waiting"}
         <LoginWaiting 
             {loginRequestId}
+            {loginRequestQrToken}
             {ephemeralKeyPair}
             onSuccess={handleLoginSuccess}
             onError={setError}

@@ -23,6 +23,7 @@
         onSuccess,
         onError,
         loginRequestId = $bindable(null),
+        loginRequestQrToken = $bindable(null),
         ephemeralKeyPair = $bindable(null),
         pendingPasskeyLogin = $bindable(null),
     } = $props<{
@@ -36,6 +37,7 @@
         onSuccess?: () => void;
         onError?: (error: string) => void;
         loginRequestId?: string | null;
+        loginRequestQrToken?: string | null;
         ephemeralKeyPair?: { publicKey: string; privateKey: CryptoKey } | null;
         pendingPasskeyLogin?: { 
             sessionToken: string; 
@@ -153,6 +155,7 @@
             });
 
             loginRequestId = result.requestId;
+            loginRequestQrToken = result.qrToken;
             onSelect?.("device");
         } catch (e: any) {
             onError?.(e.message || "Failed to request device approval");

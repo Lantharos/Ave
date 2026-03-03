@@ -16,8 +16,9 @@ import {
 import { clearSessionCookie, setSessionCookie, SESSION_COOKIE_NAME } from "../lib/session-cookie";
 import { eq, and, gt, desc } from "drizzle-orm";
 import { notifyLoginRequest } from "../lib/websocket";
-import { sendLoginRequestNotification, type PushSubscription } from "../lib/webpush";
+import { sendLoginRequestNotification, sendAccountEventNotification, type PushSubscription } from "../lib/webpush";
 import { deleteChallenge, getChallenge, setChallenge } from "../lib/challenge-store";
+import { createQrLoginToken, verifyQrLoginToken } from "../lib/qr-login-token";
 
 const app = new Hono();
 
@@ -85,6 +86,54 @@ async function getOrCreateDevice(
     type: newDevice.type,
     isNew: true,
   };
+}
+
+async function notifyAccountLoginEvent(
+  userId: string,
+  event: {
+    method: "passkey" | "device_approval" | "trust_code";
+    deviceName: string;
+    deviceType: string;
+  },
+  excludeDeviceId?: string | null
+): Promise<void> {
+  const userDevices = await db
+    .select()
+    .from(devices)
+    .where(and(eq(devices.userId, userId), eq(devices.isActive, true)));
+
+  for (const userDevice of userDevices) {
+    if (excludeDeviceId && userDevice.id === excludeDeviceId) {
+      continue;
+    }
+
+    if (!userDevice.pushSubscription) {
+      continue;
+    }
+
+    try {
+      const subscription = userDevice.pushSubscription as PushSubscription;
+      const sent = await sendAccountEventNotification(subscription, {
+        title: "New Login",
+        body: `${event.deviceName} signed in to your Ave account`,
+        event: "login",
+        url: "/dashboard/activity",
+        details: {
+          method: event.method,
+          deviceType: event.deviceType,
+        },
+      });
+
+      if (!sent) {
+        await db
+          .update(devices)
+          .set({ pushSubscription: null })
+          .where(eq(devices.id, userDevice.id));
+      }
+    } catch (error) {
+      console.error(`[Push] Failed to send account event to device ${userDevice.id}:`, error);
+    }
+  }
 }
 
 // Start login - find user by handle and return options
@@ -278,6 +327,16 @@ app.post("/passkey", zValidator("json", z.object({
       userAgent: c.req.header("user-agent"),
       severity: "info",
     });
+
+    await notifyAccountLoginEvent(
+      storedChallenge.userId,
+      {
+        method: "passkey",
+        deviceName: deviceRecord.name,
+        deviceType: deviceRecord.type,
+      },
+      deviceRecord.id
+    );
     
     // Get user's identities
     const userIdentities = await db
@@ -401,6 +460,7 @@ app.post("/request-approval", zValidator("json", z.object({
   return c.json({
     requestId: request.id,
     expiresAt: request.expiresAt,
+    qrToken: createQrLoginToken(request.id),
   });
 });
 
@@ -472,6 +532,16 @@ app.get("/request-status/:requestId", async (c) => {
       ipAddress: request.ipAddress,
       severity: "info",
     });
+
+    await notifyAccountLoginEvent(
+      identity.userId,
+      {
+        method: "device_approval",
+        deviceName: deviceRecord.name,
+        deviceType: deviceRecord.type,
+      },
+      deviceRecord.id
+    );
     
     // Get user's identities
     const userIdentities = await db
@@ -511,6 +581,64 @@ app.get("/request-status/:requestId", async (c) => {
   }
   
   return c.json({ status: "pending" });
+});
+
+app.post("/scan-claim", zValidator("json", z.object({
+  qrToken: z.string().min(1),
+})), async (c) => {
+  const authUser = c.get("user");
+  if (!authUser) {
+    return c.json({ error: "Unauthorized" }, 401);
+  }
+
+  const { qrToken } = c.req.valid("json");
+  const verified = verifyQrLoginToken(qrToken);
+  if (!verified.valid || !verified.requestId) {
+    return c.json({ error: "Invalid or expired QR token" }, 400);
+  }
+
+  const [request] = await db
+    .select()
+    .from(loginRequests)
+    .where(eq(loginRequests.id, verified.requestId))
+    .limit(1);
+
+  if (!request) {
+    return c.json({ error: "Login request not found" }, 404);
+  }
+
+  if (request.status !== "pending") {
+    return c.json({ error: "Login request already handled" }, 400);
+  }
+
+  if (new Date() > request.expiresAt) {
+    return c.json({ error: "Login request expired" }, 400);
+  }
+
+  const userIdentities = await db
+    .select()
+    .from(identities)
+    .where(eq(identities.userId, authUser.id));
+  const handleSet = new Set(userIdentities.map((identity) => identity.handle));
+
+  if (!handleSet.has(request.handle)) {
+    return c.json({ error: "This login request is not for your account" }, 403);
+  }
+
+  return c.json({
+    request: {
+      id: request.id,
+      handle: request.handle,
+      deviceName: request.deviceName,
+      deviceType: request.deviceType,
+      browser: request.browser,
+      os: request.os,
+      ipAddress: request.ipAddress,
+      requesterPublicKey: request.requesterPublicKey,
+      createdAt: request.createdAt,
+      expiresAt: request.expiresAt,
+    },
+  });
 });
 
 // Login with trust code (recovery)
@@ -622,6 +750,16 @@ app.post("/trust-code", zValidator("json", z.object({
     userAgent: c.req.header("user-agent"),
     severity: "warning", // Trust code usage is noteworthy
   });
+
+  await notifyAccountLoginEvent(
+    identity.userId,
+    {
+      method: "trust_code",
+      deviceName: deviceRecord.name,
+      deviceType: deviceRecord.type,
+    },
+    deviceRecord.id
+  );
   
   // Get user's identities
   const userIdentities = await db

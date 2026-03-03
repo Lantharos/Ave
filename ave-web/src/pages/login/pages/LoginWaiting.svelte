@@ -8,8 +8,9 @@
     import { auth } from "../../../stores/auth";
     import { websocket } from "../../../stores/websocket";
 
-    let { loginRequestId, ephemeralKeyPair, onSuccess, onError, onBack } = $props<{
+    let { loginRequestId, loginRequestQrToken = null, ephemeralKeyPair, onSuccess, onError, onBack } = $props<{
         loginRequestId: string | null;
+        loginRequestQrToken?: string | null;
         ephemeralKeyPair: { publicKey: string; privateKey: CryptoKey } | null;
         onSuccess?: () => void;
         onError?: (error: string) => void;
@@ -29,6 +30,9 @@
         const payload = JSON.stringify({
             type: "ave_login_request",
             requestId: loginRequestId,
+            qrToken: loginRequestQrToken || null,
+            deepLink: `ave://approve-login?requestId=${encodeURIComponent(loginRequestId)}${loginRequestQrToken ? `&qrToken=${encodeURIComponent(loginRequestQrToken)}` : ""}`,
+            webFallback: `${window.location.origin}/login`,
             ts: Date.now(),
         });
 

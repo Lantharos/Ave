@@ -150,3 +150,28 @@ export async function sendLoginRequestNotification(
     ],
   });
 }
+
+export async function sendAccountEventNotification(
+  subscription: PushSubscription,
+  data: {
+    title: string;
+    body: string;
+    event: string;
+    url?: string;
+    details?: Record<string, unknown>;
+  }
+): Promise<boolean> {
+  return sendPushNotification(subscription, {
+    title: data.title,
+    body: data.body,
+    icon: "/icons/ave-icon-192.png",
+    badge: "/icons/ave-badge-72.png",
+    tag: `account-event-${data.event}`,
+    data: {
+      type: "account_event",
+      event: data.event,
+      url: data.url || "/dashboard/activity",
+      ...(data.details || {}),
+    },
+  });
+}
