@@ -1,0 +1,49 @@
+---
+title: "End-to-end encryption"
+description: "Implement Ave app-key handoff safely, avoid URL-fragment decoding pitfalls, and isolate identity data correctly."
+---
+
+Ave can return an app-specific encrypted key for E2EE-capable apps.
+
+## How key handoff works
+
+- App is marked `supportsE2ee`
+- During authorization, encrypted app key is associated with authorization state
+- Token exchange response can include `encrypted_app_key`
+- Browser-based flows may also pass key material in URL fragment (`#app_key=...`) depending on UX surface
+
+## Storage model
+
+- Key is identity-specific
+- Same identity gets same app key across logins
+- Different identities must map to separate encrypted data domains
+
+## URL-fragment parsing gotcha
+
+When parsing fragment with `URLSearchParams`, `+` may become space. Normalize before decoding.
+
+```ts
+const hashParams = new URLSearchParams(window.location.hash.slice(1));
+const appKeyRaw = hashParams.get("app_key");
+const appKeyBase64 = appKeyRaw?.replace(/ /g, "+");
+```
+
+Then clear sensitive fragment from history.
+
+```ts
+window.history.replaceState({}, document.title, window.location.pathname + window.location.search);
+```
+
+## Crypto recommendations
+
+- Import app key with Web Crypto
+- Use AES-GCM with random 96-bit IV per encryption
+- Store `{iv + ciphertext}` together
+- Never reuse IV with same key
+
+## Failure modes to handle
+
+- Missing key on first login for E2EE app (treat as setup failure)
+- Identity switch returns different key context
+- Key decode failures due to base64 normalization bug
+- Fragment key left in browser history/logs

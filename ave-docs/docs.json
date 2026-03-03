@@ -1,0 +1,85 @@
+{
+  "$schema": "https://mintlify.com/docs.json",
+  "theme": "mint",
+  "name": "Ave Docs",
+  "description": "OAuth 2.0 + OpenID Connect integration docs for Ave, including PKCE, Connector, Signing, E2EE keys, and SDKs.",
+  "colors": {
+    "primary": "#6B7BFF"
+  },
+  "navigation": {
+    "groups": [
+      {
+        "group": "Getting started",
+        "pages": [
+          "index",
+          "quickstart",
+          "reference/base-urls-and-concepts"
+        ]
+      },
+      {
+        "group": "Guides",
+        "pages": [
+          "guides/oauth-authorization-code-flow",
+          "guides/pkce-for-public-clients",
+          "guides/server-side-confidential-clients",
+          "guides/convex-custom-auth",
+          "guides/end-to-end-encryption",
+          "guides/connector-app-to-app",
+          "guides/ave-signing"
+        ]
+      },
+      {
+        "group": "SDKs",
+        "pages": [
+          "sdk/javascript-sdk",
+          "sdk/embed-sdk",
+          "sdk/expo-auth-bridge"
+        ]
+      },
+      {
+        "group": "API reference",
+        "pages": [
+          "api/overview",
+          "api/oauth-endpoints",
+          "api/signing-endpoints"
+        ]
+      },
+      {
+        "group": "Security",
+        "pages": [
+          "security/best-practices"
+        ]
+      },
+      {
+        "group": "Troubleshooting",
+        "pages": [
+          "troubleshooting/common-mistakes-and-edge-cases"
+        ]
+      }
+    ],
+    "global": {
+      "anchors": [
+        {
+          "anchor": "LLMs",
+          "href": "https://aveid.net/llms.txt",
+          "icon": "bot"
+        }
+      ]
+    }
+  },
+  "metadata": {
+    "timestamp": true
+  },
+  "navbar": {
+    "links": [
+      {
+        "type": "github",
+        "href": "https://github.com/Lantharos/Ave"
+      },
+      {
+        "label": "Developer Portal",
+        "href": "https://devs.aveid.net"
+      }
+    ]
+  }
+}

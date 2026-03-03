@@ -1,0 +1,77 @@
+---
+title: "Signing endpoints"
+description: "Request lifecycle, key management, public verification, and authenticated user signing endpoints."
+---
+
+## Public app endpoints
+
+### `POST /api/signing/request`
+
+Create signature request with app credentials.
+
+Validation:
+
+- `clientId`, `clientSecret` required and verified
+- `identityId` must exist
+- identity must have signing key
+- `payload` max 10KB
+- `expiresInSeconds` range: 60..3600
+
+Returns:
+
+- `requestId`
+- `expiresAt`
+- `publicKey`
+
+### `GET /api/signing/request/:requestId/status?clientId=...`
+
+Returns request state if request belongs to provided app clientId.
+
+Possible states:
+
+- `pending`, `signed`, `denied`, `expired`
+
+If pending and expired at read time, server transitions state to `expired`.
+
+### `GET /api/signing/public-key/:handle`
+
+Returns public key for identity handle.
+
+Errors:
+
+- `404` identity not found
+- `404` identity has no signing key
+
+### `POST /api/signing/verify`
+
+Verifies message/signature/publicKey tuple.
+
+Returns `{ valid: boolean }` and optional error details.
+
+## Session-authenticated user endpoints
+
+### Key management
+
+- `GET /api/signing/keys`
+- `GET /api/signing/keys/:identityId`
+- `POST /api/signing/keys/:identityId`
+- `PUT /api/signing/keys/:identityId`
+
+### Request interaction
+
+- `GET /api/signing/requests`
+- `GET /api/signing/requests/:requestId`
+- `POST /api/signing/requests/:requestId/sign`
+- `POST /api/signing/requests/:requestId/deny`
+
+Important checks:
+
+- Identity ownership enforced
+- Request must be pending
+- Signature format and cryptographic validity enforced on sign
+
+## Demo-only endpoint
+
+- `POST /api/signing/demo/request`
+
+Reserved for Ave playground/demo behavior.

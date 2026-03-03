@@ -1,0 +1,46 @@
+---
+title: "@aveid/expo-auth-bridge"
+description: "Native Ave authentication bridge for Expo with Android native flow and browser fallback behavior."
+---
+
+## Install
+
+```bash
+npm install @aveid/expo-auth-bridge
+```
+
+## Public API
+
+- `isAveInstalledAsync()`
+- `authenticateWithAveAsync({ scope, interactive, browserFallbackUrl })`
+
+`AveAuthResult`:
+
+- `sessionToken`
+- `identityId`
+- `expiresAtEpochMs`
+
+## Platform behavior
+
+### Android
+
+- Uses native module `AveAuthBridge`
+- Checks Ave app installation
+- Calls native authentication flow
+
+### iOS / unsupported platforms
+
+- Opens `browserFallbackUrl` if provided
+- Defaults to `https://aveid.net/login`
+- Throws after opening fallback URL
+
+## Error cases to handle
+
+- Module unavailable
+- App not installed
+- Native flow rejected/cancelled
+- Fallback browser open failure
+
+## Integration note
+
+This bridge returns an Ave session token model for native cross-app auth workflows; do not treat it as a drop-in replacement for OAuth access token exchange.

@@ -1,0 +1,36 @@
+---
+title: "Convex custom auth"
+description: "Use Ave as a custom OIDC auth provider for Convex with proper issuer and JWKS validation."
+---
+
+Ave works with Convex custom auth.
+
+## Configuration sources
+
+- Convex custom auth docs: `https://docs.convex.dev/auth/advanced/custom-auth`
+- Ave discovery: `https://api.aveid.net/.well-known/openid-configuration`
+
+## Required mapping
+
+- Issuer: from discovery `issuer`
+- JWKS URL: from discovery `jwks_uri`
+- Token used for Convex auth: Ave `id_token` (OIDC)
+
+## Implementation outline
+
+1. Complete Ave OAuth flow in client/backend
+2. Extract `id_token` from token response
+3. Provide `id_token` to Convex auth pipeline
+4. Ensure claims (`sub`, `aud`, `iss`, `exp`) are valid
+
+## Edge cases
+
+- Missing `openid` scope means no `id_token`
+- Wrong audience in app config causes Convex verification failure
+- Clock drift can break `exp` validation; keep server clocks synced
+
+## Troubleshooting quick checks
+
+- Verify token is an ID token, not opaque access token
+- Verify issuer matches discovery output exactly
+- Verify keys are fetched from `.well-known/jwks.json`

@@ -1,0 +1,52 @@
+---
+title: "Server-side confidential clients"
+description: "Implement authorization code exchange and refresh on trusted servers using client credentials."
+---
+
+Confidential clients run token exchange on a backend that can keep secrets safely.
+
+## Core flow
+
+1. Redirect browser to `https://aveid.net/signin`
+2. Receive callback code on your server
+3. Exchange with `clientSecret`
+4. Store session server-side
+5. Refresh using rotated refresh tokens
+
+## Server helper example
+
+```ts
+import { exchangeCodeServer, refreshTokenServer } from "@ave-id/sdk/server";
+
+const tokens = await exchangeCodeServer(
+  {
+    clientId: process.env.AVE_CLIENT_ID!,
+    clientSecret: process.env.AVE_CLIENT_SECRET!,
+    redirectUri: "https://yourapp.com/callback"
+  },
+  { code }
+);
+```
+
+## Secret handling requirements
+
+- Never ship `clientSecret` to browsers/apps
+- Store secrets in encrypted runtime config
+- Rotate secrets in developer portal and deployment env at the same time
+- Log token endpoint failures without logging raw token values
+
+## Refresh token safety
+
+Because Ave rotates refresh tokens, always replace stored refresh token after each successful refresh.
+
+If refresh fails with `invalid_grant`:
+
+- Stop retry loops
+- Clear local session
+- Force full re-authentication
+
+## Recommended server session strategy
+
+- Keep OAuth tokens in encrypted server-side session store
+- Issue your own app session cookie to frontend
+- Optionally mint your own short-lived app JWT from validated Ave identity

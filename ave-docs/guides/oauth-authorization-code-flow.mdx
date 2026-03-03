@@ -1,0 +1,109 @@
+---
+title: "OAuth authorization code flow"
+description: "Detailed end-to-end OAuth + OIDC flow with state, nonce, token exchange, and token lifecycle guidance."
+---
+
+## Step 1: Build authorization request
+
+Required query params:
+
+- `client_id`
+- `redirect_uri`
+
+Strongly recommended:
+
+- `state` (CSRF protection)
+- `nonce` (ID token replay protection)
+
+Typical URL:
+
+```text
+https://aveid.net/signin?client_id=...&redirect_uri=...&scope=openid%20profile%20email&state=...&nonce=...
+```
+
+## Step 2: Handle callback securely
+
+On callback:
+
+1. Parse `code` and `state`
+2. Verify `state` against one-time stored value
+3. Clear stored `state`/`nonce` after use
+4. Reject replayed or missing values
+
+## Step 3: Exchange authorization code
+
+Endpoint:
+
+- `POST https://api.aveid.net/api/oauth/token`
+
+Body uses **camelCase** fields.
+
+```json
+{
+  "grantType": "authorization_code",
+  "code": "AUTHORIZATION_CODE",
+  "redirectUri": "https://yourapp.com/callback",
+  "clientId": "YOUR_CLIENT_ID",
+  "clientSecret": "YOUR_SECRET"
+}
+```
+
+For PKCE, replace `clientSecret` with `codeVerifier`.
+
+## Step 4: Process response fields
+
+Expect:
+
+- `access_token`
+- `access_token_jwt`
+- `token_type` (`Bearer`)
+- `expires_in`
+- `scope`
+- optional `id_token`
+- optional `refresh_token`
+- `user`
+- optional `encrypted_app_key`
+
+## Refresh token flow (rotation)
+
+If `offline_access` was granted, refresh via:
+
+```json
+{
+  "grantType": "refresh_token",
+  "refreshToken": "rt_...",
+  "clientId": "YOUR_CLIENT_ID",
+  "clientSecret": "YOUR_SECRET"
+}
+```
+
+Server behavior to design for:
+
+- Refresh token is rotated per successful use
+- Expired/revoked/reused refresh tokens return `invalid_grant`
+- Reuse attempts trigger broader revocation safety logic
+
+## OIDC discovery and validation
+
+- Discovery: `/.well-known/openid-configuration`
+- JWKS: `/.well-known/jwks.json`
+
+Validate `id_token` claims:
+
+- `iss` equals Ave issuer
+- `aud` contains your client ID
+- `exp`/`iat` valid
+- `nonce` matches original request
+
+## Userinfo
+
+`GET https://api.aveid.net/api/oauth/userinfo`
+
+Accepts opaque or JWT access tokens. Returned claims depend on granted scopes.
+
+## Edge cases
+
+- Authorization code expires quickly; don’t queue exchanges
+- Redirect URI must exactly match registered URI
+- Missing PKCE verifier when required returns `invalid_request`
+- If your app requests `user_id` but app config doesn’t allow it, claim won’t be exposed

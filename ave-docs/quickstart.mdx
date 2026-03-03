@@ -1,0 +1,82 @@
+---
+title: "Quickstart"
+description: "Ship Ave login safely with the right URL, flow, token exchange, and validation checks."
+---
+
+## Prerequisites
+
+- Create an app in `https://devs.aveid.net`
+- Configure exact redirect URI(s)
+- Copy your `clientId` (and `clientSecret` for confidential clients)
+
+## 1) Redirect user to Ave sign-in
+
+Use authorization code flow at `https://aveid.net/signin`:
+
+```text
+https://aveid.net/signin?
+  client_id=YOUR_CLIENT_ID
+  &redirect_uri=https://yourapp.com/callback
+  &scope=openid%20profile%20email
+  &state=RANDOM_STATE
+  &nonce=RANDOM_NONCE
+```
+
+## 2) Receive code on callback
+
+Your callback gets `?code=...&state=...`.
+
+Required checks:
+
+- Verify `state`
+- Reject missing or reused state
+- Enforce exact callback origin/path
+
+## 3) Exchange code for tokens
+
+```bash
+POST https://api.aveid.net/api/oauth/token
+Content-Type: application/json
+```
+
+```json
+{
+  "grantType": "authorization_code",
+  "code": "AUTHORIZATION_CODE",
+  "redirectUri": "https://yourapp.com/callback",
+  "clientId": "YOUR_CLIENT_ID",
+  "codeVerifier": "PKCE_VERIFIER"
+}
+```
+
+For confidential clients, use `clientSecret` instead of PKCE.
+
+## 4) Use tokens
+
+Typical response fields:
+
+- `access_token` (opaque)
+- `access_token_jwt` (JWT)
+- `id_token` (if `openid` scope)
+- `refresh_token` (if `offline_access` scope)
+- `expires_in`
+- `scope`
+- `user`
+- optional `encrypted_app_key`
+
+## 5) Validate and fetch user profile
+
+- Validate ID token against JWKS
+- For profile claims, call `GET /api/oauth/userinfo` with bearer access token
+- Store app session server-side; avoid persisting sensitive OAuth tokens in insecure storage
+
+## Minimal error handling matrix
+
+- `invalid_client`: client ID or secret mismatch
+- `invalid_grant`: bad/expired code or bad refresh token
+- `invalid_request`: missing required field (for example `codeVerifier` in PKCE)
+- `invalid_scope`: scopes not allowed
+- `invalid_target`: bad connector resource
+- `access_denied`: connector grant missing/revoked
+
+Next: [OAuth authorization code flow](guides/oauth-authorization-code-flow)

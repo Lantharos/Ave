@@ -1,0 +1,53 @@
+---
+title: "Base URLs and concepts"
+description: "Understand domains, token types, identity model, and auth boundaries before implementing."
+---
+
+## Domain split
+
+- Auth UI host: `aveid.net`
+- API host: `api.aveid.net`
+
+This split is intentional. Do not post token requests to `aveid.net/api/...`.
+
+## Identity model
+
+Ave login resolves to an identity (`identityId`), not only a user account.
+
+Design implications:
+
+- Same person can use multiple identities
+- Persist data keyed by `identityId`
+- Never assume one global profile row per person across identities
+
+## Token model
+
+- `access_token`: opaque token accepted by Ave APIs
+- `access_token_jwt`: JWT representation for JWT-oriented backends
+- `id_token`: OIDC identity token (when `openid` scope granted)
+- `refresh_token`: optional, only when `offline_access` is granted
+
+## Scope model
+
+Common scopes:
+
+- `openid`
+- `profile`
+- `email`
+- `offline_access`
+- `user_id` (only when app allows it)
+
+Scopes are app-allowlisted. Requesting unknown scopes fails.
+
+## Two authorization surfaces
+
+### Browser/partner integrator surface
+
+- Start at `GET https://aveid.net/signin`
+- Exchange code at `POST /api/oauth/token`
+
+### First-party session-backed API surface
+
+Internally, Ave also exposes `POST /api/oauth/authorize` requiring authenticated Ave session context (`Authorization: Bearer <sessionToken>` or session cookie).
+
+Use this only if you are implementing deep first-party-like session UX.

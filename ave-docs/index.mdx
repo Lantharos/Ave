@@ -1,0 +1,43 @@
+---
+title: "Ave OAuth + OIDC"
+description: "Integrate Ave sign-in, OIDC, Connector delegation, Signing, and E2EE app keys."
+---
+
+Ave is an OAuth 2.0 + OpenID Connect provider with privacy-first identity, optional end-to-end encryption key delivery, and delegated app-to-app access.
+
+## What you can build
+
+- User sign-in via Authorization Code flow
+- PKCE login for web/mobile public clients
+- Server-side token exchange for confidential clients
+- OIDC profile retrieval (`/userinfo`) and ID token validation
+- Connector app-to-app delegation (`token-exchange` grant)
+- Signature workflows using identity-backed Ed25519 keys
+- Optional per-app encryption key handoff for E2EE apps
+
+## Important URLs (don’t mix these)
+
+- User-facing auth UI: `https://aveid.net/signin`
+- Connector UI: `https://aveid.net/connect`
+- API base: `https://api.aveid.net`
+- OIDC discovery: `https://api.aveid.net/.well-known/openid-configuration`
+- JWKS: `https://api.aveid.net/.well-known/jwks.json`
+
+## For AI-assisted integration
+
+Keep and use your current machine-readable docs at:
+
+- `https://aveid.net/llms.txt`
+
+This Mintlify documentation is the human-friendly migration and expansion.
+
+## Where to start
+
+1. Read [Quickstart](quickstart)
+2. Choose your auth model:
+   - Public client: [PKCE for public clients](guides/pkce-for-public-clients)
+   - Confidential client: [Server-side confidential clients](guides/server-side-confidential-clients)
+3. Add advanced features as needed:
+   - [Connector app-to-app](guides/connector-app-to-app)
+   - [Ave Signing](guides/ave-signing)
+   - [End-to-end encryption](guides/end-to-end-encryption)

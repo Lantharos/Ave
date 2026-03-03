@@ -1,0 +1,72 @@
+---
+title: "Ave Signing"
+description: "Create signature requests, collect user approvals, verify signatures, and handle expiry/denial paths."
+---
+
+Ave Signing provides identity-backed Ed25519 signatures for high-integrity user approval flows.
+
+## Server flow
+
+1. Create request (`POST /api/signing/request`) with app credentials
+2. Present signing UI (sheet/popup/embedded web)
+3. Poll status (`GET /api/signing/request/:requestId/status`)
+4. Verify signature (`POST /api/signing/verify`) or verify locally
+
+## Create request
+
+```json
+{
+  "clientId": "YOUR_CLIENT_ID",
+  "clientSecret": "YOUR_CLIENT_SECRET",
+  "identityId": "IDENTITY_UUID",
+  "payload": "I approve this action",
+  "metadata": { "action": "transfer" },
+  "expiresInSeconds": 300
+}
+```
+
+Constraints from implementation:
+
+- Payload max 10,000 chars
+- `expiresInSeconds` min 60, max 3600
+- Identity must exist and have signing key
+
+## Polling states
+
+- `pending`
+- `signed`
+- `denied`
+- `expired`
+
+Server auto-marks expired requests when status endpoint is queried after expiry.
+
+## Verify endpoint behavior
+
+`POST /api/signing/verify` returns:
+
+```json
+{ "valid": true }
+```
+
+Invalid key/signature formats return `valid: false` with error string.
+
+## Embed helpers
+
+`@ave-id/embed` exposes:
+
+- `openAveSigningSheet(...)`
+- `openAveSigningPopup(...)`
+
+Handle all terminal callbacks:
+
+- Signed
+- Denied
+- Closed-without-action
+
+## Edge cases
+
+- Request belongs to wrong app (`403` on status)
+- Request already resolved
+- Request expired before user acts
+- Identity has no signing key
+- Signature provided but fails cryptographic verification

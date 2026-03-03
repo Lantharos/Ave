@@ -1,0 +1,47 @@
+---
+title: "API overview"
+description: "Endpoint families, auth requirements, and request conventions for Ave OAuth/OIDC and Signing APIs."
+---
+
+## API host
+
+- Base URL: `https://api.aveid.net`
+
+## Request conventions
+
+- JSON request bodies
+- OAuth token endpoint expects **camelCase** body fields
+- Bearer auth where applicable
+
+## Auth models by endpoint family
+
+### Public OAuth/OIDC
+
+- Discovery and JWKS: public
+- `/api/oauth/token`: public (client credentials / PKCE validated in payload)
+- `/api/oauth/userinfo`: requires bearer access token
+- `/api/oauth/app/:clientId`, `/api/oauth/resource/:resourceKey`: public metadata
+
+### Session-authenticated OAuth management
+
+Requires authenticated Ave session (bearer session token or Ave session cookie):
+
+- `/api/oauth/authorize`
+- `/api/oauth/authorizations`
+- `/api/oauth/authorization/:clientId`
+- `/api/oauth/delegations`
+
+### Signing
+
+- Public app endpoints: create request, poll status, verify, public key lookup
+- Session-authenticated identity-management endpoints: key management + end-user sign/deny request routes
+
+## OIDC endpoints
+
+- `GET /.well-known/openid-configuration`
+- `GET /.well-known/jwks.json`
+- `GET /.well-known/webfinger?resource=...`
+
+## CORS/origin behavior summary
+
+OAuth and OIDC paths are CORS-enabled with controlled origin resolution. Session-protected mutating requests with cookies enforce origin allowlisting.

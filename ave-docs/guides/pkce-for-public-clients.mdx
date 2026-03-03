@@ -1,0 +1,60 @@
+---
+title: "PKCE for public clients"
+description: "Production-grade PKCE implementation for SPAs and mobile clients with replay-safe storage and callback handling."
+---
+
+Use PKCE whenever you cannot safely store a client secret.
+
+## Why PKCE matters
+
+PKCE binds authorization code exchange to the same client that started login.
+
+Without PKCE, leaked authorization codes are easier to misuse.
+
+## Required pieces
+
+- High-entropy `code_verifier`
+- `code_challenge = BASE64URL(SHA256(code_verifier))`
+- `code_challenge_method=S256`
+
+## Browser implementation checklist
+
+- Generate verifier/challenge before redirect
+- Store verifier in short-lived session storage (not localStorage)
+- Store `state` and `nonce` alongside verifier
+- Remove all three immediately after successful exchange
+
+## Example using `@ave-id/sdk`
+
+```ts
+import { startPkceLogin } from "@ave-id/sdk/client";
+
+await startPkceLogin({
+  clientId: "YOUR_CLIENT_ID",
+  redirectUri: "https://yourapp.com/callback"
+});
+```
+
+Callback exchange:
+
+```ts
+import { exchangeCode } from "@ave-id/sdk";
+
+const tokens = await exchangeCode(
+  { clientId: "YOUR_CLIENT_ID", redirectUri: "https://yourapp.com/callback" },
+  { code, codeVerifier }
+);
+```
+
+## Common PKCE failures
+
+- Verifier lost after redirect (storage bug)
+- Verifier/challenge generated with non-URL-safe base64
+- `codeVerifier` omitted in token request
+- Callback handled twice (double exchange)
+
+## Mobile notes
+
+- Treat deep links as untrusted input; validate `state`
+- Use app lifecycle-safe storage for verifier/state/nonce
+- Guard against duplicate callback intents

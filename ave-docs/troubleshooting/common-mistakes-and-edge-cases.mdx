@@ -1,0 +1,101 @@
+---
+title: "Common mistakes and edge cases"
+description: "Frequent implementation bugs, protocol mismatches, and concrete fixes."
+---
+
+## Wrong API host
+
+Problem:
+
+- Sending token requests to `https://aveid.net/api/...`
+
+Fix:
+
+- Use `https://api.aveid.net/api/...`
+
+## Wrong field casing on token request
+
+Problem:
+
+- Using `grant_type`, `client_id`, `redirect_uri`
+
+Fix:
+
+- Use camelCase fields: `grantType`, `clientId`, `redirectUri`, `codeVerifier`, `refreshToken`
+
+## PKCE verifier mismatch
+
+Causes:
+
+- Base64url encoding bug
+- Stored verifier overwritten
+- Multiple login tabs racing
+
+Fix:
+
+- One verifier per login intent, clear after single use
+
+## Missing `id_token`
+
+Cause:
+
+- `openid` not requested/granted
+
+Fix:
+
+- Include `openid` in requested scopes
+
+## Refresh token suddenly invalid
+
+Possible causes:
+
+- Token expired
+- Token revoked
+- Token reuse detection
+
+Fix:
+
+- Treat as terminal session loss; re-authenticate user
+
+## Connector exchange denied
+
+Possible causes:
+
+- No active grant
+- Resource disabled
+- Requested scope exceeds grant
+- Subject token issued to different client
+
+Fix:
+
+- Re-run connector authorization with correct resource/scope and correct source app token
+
+## E2EE app key decode fails
+
+Cause:
+
+- `+` turned into space when parsed from fragment
+
+Fix:
+
+- `replace(/ /g, "+")` before base64 decode
+
+## User profile drift
+
+Cause:
+
+- Caching profile forever
+
+Fix:
+
+- Re-fetch profile on login or call userinfo as needed
+
+## Storing data by user instead of identity
+
+Cause:
+
+- Assuming one identity per person
+
+Fix:
+
+- Partition by `identityId` to avoid cross-identity data bleed

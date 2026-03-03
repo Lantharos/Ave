@@ -1,0 +1,69 @@
+---
+title: "Connector (app-to-app)"
+description: "Authorize delegated access to target resources and exchange source tokens for short-lived delegated JWTs."
+---
+
+Connector is separate from default sign-in and is used for explicit app linking.
+
+## Flow overview
+
+1. Start at `https://aveid.net/connect`
+2. User approves source app access to target resource scopes
+3. Source app receives code (as in auth code flow)
+4. Source app obtains normal access token
+5. Source app exchanges subject token for delegated token using token exchange grant
+
+## Connector authorization URL
+
+```text
+https://aveid.net/connect?
+  client_id=YOUR_CLIENT_ID
+  &redirect_uri=https://yourapp.com/callback
+  &resource=target:resource
+  &scope=resource.access
+  &mode=user_present
+  &state=RANDOM_STATE
+```
+
+## Delegated token exchange
+
+```json
+{
+  "grantType": "urn:ietf:params:oauth:grant-type:token-exchange",
+  "subjectToken": "SOURCE_APP_ACCESS_TOKEN",
+  "requestedResource": "target:resource",
+  "requestedScope": "resource.access",
+  "clientId": "YOUR_CLIENT_ID",
+  "clientSecret": "YOUR_CLIENT_SECRET"
+}
+```
+
+Response:
+
+- `access_token` (delegated JWT)
+- `audience`
+- `target_resource`
+- `communication_mode`
+- short TTL (`expires_in`)
+
+## Important server-side checks (implemented)
+
+- Subject token must resolve to same `clientId`
+- Requested resource must exist and be active
+- Requested scope must be subset of resource scopes
+- Grant must exist and be active (not revoked)
+- Requested scope must not exceed granted scope
+
+## Grant management endpoints
+
+- `GET /api/oauth/delegations`
+- `DELETE /api/oauth/delegations/:delegationId`
+
+These endpoints require authenticated Ave session context.
+
+## Edge cases
+
+- `invalid_target`: resource key missing/disabled
+- `access_denied`: no active grant
+- `invalid_scope`: requested scope too broad or unknown
+- `invalid_grant`: subject token invalid or for wrong client

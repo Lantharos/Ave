@@ -1,0 +1,53 @@
+---
+title: "Security best practices"
+description: "Hardening checklist for OAuth, OIDC token validation, connector delegation, and signing workflows."
+---
+
+## OAuth request hardening
+
+- Always send and verify `state`
+- Always send and verify `nonce` when using OIDC
+- Use PKCE (`S256`) for every public client
+- Register exact redirect URIs only
+
+## Token handling
+
+- Treat `access_token` and `refresh_token` as secrets
+- Prefer server-side token storage
+- If browser storage is required, prefer memory over persistent storage
+- Rotate sessions after refresh or privilege change
+
+## Token validation
+
+- Validate ID token signature via JWKS
+- Validate `iss`, `aud`, `exp`, `iat`, and `nonce`
+- Reject tokens with missing critical claims
+- Keep service clocks synchronized
+
+## Connector safety
+
+- Request minimum connector scopes
+- Pin to known `requestedResource` values
+- Handle revoked grants as normal user action, not system error
+- Never cache delegated tokens beyond expiry
+
+## Signing safety
+
+- Sign canonicalized payloads
+- Include anti-replay nonce or unique operation ID in payload
+- Set short expirations for signature requests
+- Verify signatures server-side before performing irreversible actions
+
+## E2EE key safety
+
+- Normalize base64 fragment values (`+`/space issue)
+- Remove key-bearing URL fragments immediately
+- Keep per-identity encrypted data partitions
+- Never log raw key material
+
+## Operational controls
+
+- Monitor `invalid_grant` and `invalid_scope` spikes
+- Track refresh failure/reuse patterns
+- Alert on unusual signing denial/success anomalies
+- Rotate app credentials periodically

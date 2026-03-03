@@ -1,0 +1,51 @@
+---
+title: "@ave-id/embed"
+description: "Embed, sheet, popup, connector, and signing UI integrations with postMessage callback handling."
+---
+
+## Install
+
+```bash
+npm install @ave-id/embed
+```
+
+## Auth UIs
+
+- `mountAveEmbed(...)` inline iframe
+- `openAveSheet(...)` modal sheet
+- `openAvePopup(...)` desktop popup
+
+## Connector UIs
+
+- `openAveConnectorSheet(...)`
+- `openAveConnectorPopup(...)`
+- `openAveConnectorRuntime(...)`
+
+## Signing UIs
+
+- `openAveSigningSheet(...)`
+- `openAveSigningPopup(...)`
+
+## Event origin safety
+
+All embed integrations should only trust `postMessage` events from your configured `issuer` origin.
+
+## Popup-blocked handling
+
+Popup methods can return `null` when blocked by browser policy. Always fallback to redirect or sheet UX.
+
+## Recommended callback contract
+
+Handle all outcomes:
+
+- Success (`ave:success` or signed callback)
+- Error (`ave:error`)
+- User close (`ave:close`)
+- No-op close (popup manually closed)
+
+## UX hardening
+
+- Prevent duplicate callback handling with a resolved flag
+- Remove event listeners on cleanup
+- Destroy iframes/popups on route unmount
+- Avoid using embed for highly constrained third-party iframe contexts with blocked credentials/passkey support

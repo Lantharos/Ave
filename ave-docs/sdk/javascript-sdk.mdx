@@ -1,0 +1,61 @@
+---
+title: "@ave-id/sdk"
+description: "Reference for OAuth/OIDC, Connector, userinfo, delegations, and Signing helpers in the JavaScript SDK."
+---
+
+## Install
+
+```bash
+npm install @ave-id/sdk
+```
+
+## Core functions
+
+- `buildAuthorizeUrl(config, params)`
+- `generateCodeVerifier()`
+- `generateCodeChallenge(verifier)`
+- `generateNonce()`
+- `exchangeCode(config, { code, codeVerifier? })`
+- `refreshToken(config, { refreshToken })`
+- `fetchUserInfo(config, accessToken)`
+
+## Connector functions
+
+- `buildConnectorUrl(...)`
+- `exchangeDelegatedToken(...)`
+- `listDelegations(config, sessionToken)`
+- `revokeDelegation(config, sessionToken, delegationId)`
+
+## Signing functions
+
+- `createSignatureRequest(...)`
+- `getSignatureStatus(...)`
+- `getPublicKey(...)`
+- `verifySignature(...)`
+- `buildSigningUrl(...)`
+- `openSigningPopup(...)`
+
+## Client helpers (`@ave-id/sdk/client`)
+
+- `startPkceLogin(...)`
+- `startConnectorFlow(...)`
+
+These helpers store transient state in `sessionStorage`.
+
+## Server helpers (`@ave-id/sdk/server`)
+
+- `exchangeCodeServer(...)`
+- `refreshTokenServer(...)`
+- `exchangeDelegatedTokenServer(...)`
+
+## Issuer behavior
+
+`getApiBase(issuer)` maps `https://aveid.net` to `https://api.aveid.net`.
+
+If you set custom issuer values, ensure API host resolution stays correct.
+
+## Error model
+
+SDK methods throw `Error` with server-provided `error` string when present.
+
+Treat thrown errors as retryable only when you classify them (network timeout vs protocol error).
