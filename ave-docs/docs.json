@@ -73,6 +73,13 @@
   "metadata": {
     "timestamp": true
   },
+  "errors": {
+    "404": {
+      "redirect": false,
+      "title": "Page not found",
+      "description": "The page you are looking for moved or no longer exists. Use the sidebar or search to find the latest integration guide."
+    }
+  },
   "navbar": {
     "links": [
       {

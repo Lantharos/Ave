@@ -3,15 +3,50 @@ title: "API overview"
 description: "Endpoint families, auth requirements, and request conventions for Ave OAuth/OIDC and Signing APIs."
 ---
 
+<CardGroup cols={3}>
+	<Card title="OAuth + OIDC" icon="key-round" href="/api/oauth-endpoints">
+		Token grants, userinfo, discovery, and delegation management endpoints.
+	</Card>
+	<Card title="Signing" icon="signature" href="/api/signing-endpoints">
+		Signature request lifecycle, verification, and user signing endpoints.
+	</Card>
+	<Card title="Security" icon="shield" href="/security/best-practices">
+		Hardening checklist for token handling, claims validation, and key safety.
+	</Card>
+</CardGroup>
+
 ## API host
 
 - Base URL: `https://api.aveid.net`
+
+<Note>
+	Use `api.aveid.net` for API calls and `aveid.net` for user-facing auth pages.
+</Note>
 
 ## Request conventions
 
 - JSON request bodies
 - OAuth token endpoint expects **camelCase** body fields
 - Bearer auth where applicable
+
+<CodeGroup>
+```bash OAuth token request
+curl -X POST https://api.aveid.net/api/oauth/token \
+	-H "Content-Type: application/json" \
+	-d '{
+		"grantType": "authorization_code",
+		"code": "AUTHORIZATION_CODE",
+		"redirectUri": "https://yourapp.com/callback",
+		"clientId": "YOUR_CLIENT_ID",
+		"codeVerifier": "PKCE_VERIFIER"
+	}'
+```
+
+```bash Userinfo request
+curl https://api.aveid.net/api/oauth/userinfo \
+	-H "Authorization: Bearer ACCESS_TOKEN"
+```
+</CodeGroup>
 
 ## Auth models by endpoint family
 
@@ -36,6 +71,26 @@ Requires authenticated Ave session (bearer session token or Ave session cookie):
 - Public app endpoints: create request, poll status, verify, public key lookup
 - Session-authenticated identity-management endpoints: key management + end-user sign/deny request routes
 
+<Tabs>
+	<Tab title="Public endpoints">
+		- `/api/oauth/token`
+		- `/api/oauth/userinfo`
+		- `/.well-known/openid-configuration`
+		- `/.well-known/jwks.json`
+		- `/api/signing/request`
+		- `/api/signing/request/:requestId/status`
+		- `/api/signing/verify`
+	</Tab>
+	<Tab title="Session-auth endpoints">
+		- `/api/oauth/authorize`
+		- `/api/oauth/authorizations`
+		- `/api/oauth/delegations`
+		- `/api/signing/keys`
+		- `/api/signing/requests/:requestId/sign`
+		- `/api/signing/requests/:requestId/deny`
+	</Tab>
+</Tabs>
+
 ## OIDC endpoints
 
 - `GET /.well-known/openid-configuration`
@@ -45,3 +100,7 @@ Requires authenticated Ave session (bearer session token or Ave session cookie):
 ## CORS/origin behavior summary
 
 OAuth and OIDC paths are CORS-enabled with controlled origin resolution. Session-protected mutating requests with cookies enforce origin allowlisting.
+
+<Warning>
+	If you rely on cookie-based session auth for mutating endpoints, requests from disallowed origins are rejected.
+</Warning>

@@ -13,7 +13,7 @@
     import PrivacyPolicy from "./pages/home/legal/PrivacyPolicy.svelte";
     import TermsOfService from "./pages/home/legal/TermsOfService.svelte";
     import Authorize from "./pages/authorize/Authorize.svelte";
-    import Docs from "./pages/docs/Docs.svelte";
+    import DocsRedirect from "./pages/docs/DocsRedirect.svelte";
     import Sign from "./pages/sign/Sign.svelte";
     import Connect from "./pages/connect/Connect.svelte";
     import ConnectRuntime from "./pages/connect/Runtime.svelte";
@@ -32,7 +32,7 @@
         { path: "/signin", component: Authorize },
         { path: "/connect", component: Connect },
         { path: "/connect/runtime", component: ConnectRuntime },
-        { path: "/docs(#.*)?", component: Docs },
+        { path: "/docs(#.*)?", component: DocsRedirect },
         { path: "/sign", component: Sign },
     ];
 

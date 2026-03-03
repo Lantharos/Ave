@@ -3,6 +3,10 @@ title: "OAuth + OIDC endpoints"
 description: "Detailed endpoint contract for app metadata, authorize, token grants, userinfo, discovery, and delegation management."
 ---
 
+<Tip>
+	All token endpoint body fields use camelCase (`grantType`, `clientId`, `redirectUri`, `codeVerifier`).
+</Tip>
+
 ## `GET /api/oauth/app/:clientId`
 
 Returns app public metadata and active connector resources.
@@ -25,10 +29,30 @@ Used by authenticated Ave session context to grant app authorization and produce
 
 Body fields include:
 
-- `clientId`, `redirectUri`, `scope`, `state`, `identityId`
-- PKCE: `codeChallenge`, `codeChallengeMethod`
-- E2EE: `encryptedAppKey`
-- Connector: `connector`, `requestedResource`, `requestedScope`, `communicationMode`
+<ParamField path="clientId" type="string" required>
+	OAuth client identifier.
+</ParamField>
+<ParamField path="redirectUri" type="string" required>
+	Must exactly match one of the app's registered redirect URIs.
+</ParamField>
+<ParamField path="identityId" type="uuid" required>
+	Identity selected by the authenticated user.
+</ParamField>
+<ParamField path="scope" type="string">
+	Space-separated scopes; validated against app allowlist.
+</ParamField>
+<ParamField path="codeChallenge" type="string">
+	PKCE challenge for public-client authorization.
+</ParamField>
+<ParamField path="encryptedAppKey" type="string">
+	Required for first E2EE authorization when the app supports E2EE.
+</ParamField>
+<ParamField path="requestedResource" type="string">
+	Connector resource key when `connector=true`.
+</ParamField>
+<ParamField path="requestedScope" type="string">
+	Connector scope set requested by source app.
+</ParamField>
 
 Notable behavior:
 
@@ -44,6 +68,42 @@ Supported `grantType` values:
 2. `refresh_token`
 3. `urn:ietf:params:oauth:grant-type:token-exchange`
 
+<Tabs>
+	<Tab title="authorization_code">
+		```json
+		{
+			"grantType": "authorization_code",
+			"code": "AUTHORIZATION_CODE",
+			"redirectUri": "https://yourapp.com/callback",
+			"clientId": "YOUR_CLIENT_ID",
+			"codeVerifier": "PKCE_VERIFIER"
+		}
+		```
+	</Tab>
+	<Tab title="refresh_token">
+		```json
+		{
+			"grantType": "refresh_token",
+			"refreshToken": "rt_...",
+			"clientId": "YOUR_CLIENT_ID",
+			"clientSecret": "YOUR_CLIENT_SECRET"
+		}
+		```
+	</Tab>
+	<Tab title="token_exchange">
+		```json
+		{
+			"grantType": "urn:ietf:params:oauth:grant-type:token-exchange",
+			"subjectToken": "SOURCE_APP_ACCESS_TOKEN",
+			"requestedResource": "target:resource",
+			"requestedScope": "resource.access",
+			"clientId": "YOUR_CLIENT_ID",
+			"clientSecret": "YOUR_CLIENT_SECRET"
+		}
+		```
+	</Tab>
+</Tabs>
+
 ### Authorization code grant
 
 Validates code, expiry, redirect URI, and either:
@@ -52,6 +112,19 @@ Validates code, expiry, redirect URI, and either:
 - client secret
 
 Returns tokens and user profile payload.
+
+<ResponseField name="access_token" type="string">
+	Opaque bearer token accepted by Ave APIs.
+</ResponseField>
+<ResponseField name="access_token_jwt" type="string">
+	JWT representation containing scope and audience claims.
+</ResponseField>
+<ResponseField name="id_token" type="string">
+	Returned when `openid` scope is granted.
+</ResponseField>
+<ResponseField name="refresh_token" type="string">
+	Returned when `offline_access` scope is granted.
+</ResponseField>
 
 ### Refresh token grant
 
@@ -71,6 +144,15 @@ Returns claims based on granted scopes:
 - `profile`: `name`, `preferred_username`, `picture`
 - `email`: `email`
 - `user_id`: only when app allows `user_id` scope
+
+<AccordionGroup>
+	<Accordion title="Why userinfo may omit fields">
+		Claims are scope-gated. Missing `email` or profile fields usually means those scopes were not granted.
+	</Accordion>
+	<Accordion title="Accepted token formats">
+		The endpoint accepts both opaque `access_token` and JWT `access_token_jwt` when valid and unexpired.
+	</Accordion>
+</AccordionGroup>
 
 Errors:
 
@@ -96,3 +178,7 @@ Lists user connector grants with source app and target resource context.
 ## `DELETE /api/oauth/delegations/:delegationId` (session-authenticated)
 
 Revokes active delegation grant and records audit log.
+
+<Check>
+	After revocation, token-exchange attempts for that grant fail until the user re-authorizes connector access.
+</Check>

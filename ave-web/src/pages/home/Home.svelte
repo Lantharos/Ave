@@ -33,7 +33,7 @@
             <a href="/register" use:route class="px-6 py-3 text-[#B9BBBE] text-lg" onclick={() => mobileMenuOpen = false}>
                 new id
             </a>
-            <a href="/docs" use:route class="px-6 py-3 text-[#B9BBBE] text-lg" onclick={() => mobileMenuOpen = false}>
+            <a href="https://docs.aveid.net" class="px-6 py-3 text-[#B9BBBE] text-lg" onclick={() => mobileMenuOpen = false}>
                 docs
             </a>
             <a href="https://demo.aveid.net" class="px-6 py-3 text-[#B9BBBE] text-lg" onclick={() => mobileMenuOpen = false}>
@@ -63,7 +63,7 @@
             <a href="https://devs.aveid.net" class="px-[40px] py-[20px] cursor-pointer hover:bg-[#121212] transition-colors duration-300 rounded-full flex items-center justify-center text-[#B9BBBE] text-[24px]">
                 devs
             </a>
-            <a href="/docs" use:route class="px-[40px] py-[20px] cursor-pointer hover:bg-[#121212] transition-colors duration-300 rounded-full flex items-center justify-center text-[#B9BBBE] text-[24px]">
+            <a href="https://docs.aveid.net" class="px-[40px] py-[20px] cursor-pointer hover:bg-[#121212] transition-colors duration-300 rounded-full flex items-center justify-center text-[#B9BBBE] text-[24px]">
                 docs
             </a>
             <a href="https://demo.aveid.net" class="px-[40px] py-[20px] cursor-pointer hover:bg-[#121212] transition-colors duration-300 rounded-full flex items-center justify-center text-[#B9BBBE] text-[24px]">
