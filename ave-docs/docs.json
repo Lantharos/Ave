@@ -2,9 +2,11 @@
   "$schema": "https://mintlify.com/docs.json",
   "theme": "mint",
   "name": "Ave Docs",
-  "description": "OAuth 2.0 + OpenID Connect integration docs for Ave, including PKCE, Connector, Signing, E2EE keys, and SDKs.",
+  "description": "Not another login. Not another password. Just you.",
   "colors": {
-    "primary": "#6B7BFF"
+    "primary": "#D3D3D3",
+    "light": "#929292",
+    "dark": "#b4b4b4"
   },
   "navigation": {
     "global": {
@@ -83,13 +85,21 @@
   "navbar": {
     "links": [
       {
-        "type": "github",
-        "href": "https://github.com/Lantharos/Ave"
-      },
-      {
         "label": "Developer Portal",
         "href": "https://devs.aveid.net"
       }
     ]
+  },
+  "favicon": "/images/Group6.png",
+  "logo": "/images/Group6.png",
+  "background": {
+    "decoration": "gradient"
+  },
+  "appearance": {
+    "default": "dark"
+  },
+  "fonts": {
+    "family": "Poppins",
+    "weight": 500
   }
 }
