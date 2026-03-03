@@ -7,6 +7,15 @@
     "primary": "#6B7BFF"
   },
   "navigation": {
+    "global": {
+      "anchors": [
+        {
+          "anchor": "LLMs",
+          "icon": "robot",
+          "href": "https://aveid.net/llms.txt"
+        }
+      ]
+    },
     "groups": [
       {
         "group": "Getting started",
@@ -56,16 +65,7 @@
           "troubleshooting/common-mistakes-and-edge-cases"
         ]
       }
-    ],
-    "global": {
-      "anchors": [
-        {
-          "anchor": "LLMs",
-          "href": "https://aveid.net/llms.txt",
-          "icon": "bot"
-        }
-      ]
-    }
+    ]
   },
   "metadata": {
     "timestamp": true
