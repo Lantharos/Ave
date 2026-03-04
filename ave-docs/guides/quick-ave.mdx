@@ -278,14 +278,17 @@ const monitor = startQuickSessionMonitor({
 
 ## Custom callback path
 
-If you can't use `/ave/callback`, pass `redirectUri` to `startQuickSignIn` and the matching path to `handleQuickCallback`:
+If you can't use `/ave/callback`, pass the same `redirectUri` to both `startQuickSignIn` and `handleQuickCallback`:
 
 ```ts
 // Initiating sign-in
 await startQuickSignIn({ redirectUri: "https://yourapp.com/auth/callback" });
 
 // On your /auth/callback page
-await handleQuickCallback({ fallbackPath: "/dashboard" });
+await handleQuickCallback({
+  redirectUri: "https://yourapp.com/auth/callback",
+  fallbackPath: "/dashboard",
+});
 ```
 
 ---

@@ -233,8 +233,21 @@ export async function finishQuickSignIn(options?: {
   sessionStorage.removeItem(QUICK_PKCE_KEY);
 
   if (!response.ok) {
-    const data = await response.json();
-    throw new Error(data.error ?? "[Quick Ave] Failed to exchange token");
+    // response.json() may fail for non-JSON error bodies (e.g. HTML gateway errors)
+    const data = await response.json().catch(() => ({})) as { error?: string; error_description?: string };
+    const error = data.error;
+    const errorDescription = data.error_description;
+    let message: string;
+    if (error && errorDescription) {
+      message = `${error}: ${errorDescription}`;
+    } else if (errorDescription) {
+      message = errorDescription;
+    } else if (error) {
+      message = error;
+    } else {
+      message = "[Quick Ave] Failed to exchange token";
+    }
+    throw new Error(message);
   }
 
   const token = (await response.json()) as {
@@ -248,15 +261,19 @@ export async function finishQuickSignIn(options?: {
       displayName: string;
       email?: string;
       avatarUrl?: string;
-    };
+    } | null;
   };
 
+  if (!token.user?.id) {
+    throw new Error("[Quick Ave] Token exchange succeeded but no user identity was returned.");
+  }
+
   const identity: QuickIdentity = {
-    userId: token.user?.id ?? "",
-    handle: token.user?.handle,
-    displayName: token.user?.displayName,
-    email: token.user?.email,
-    avatarUrl: token.user?.avatarUrl,
+    userId: token.user.id,
+    handle: token.user.handle,
+    displayName: token.user.displayName,
+    email: token.user.email,
+    avatarUrl: token.user.avatarUrl,
     token: token.access_token_jwt ?? token.access_token,
     idToken: token.id_token,
     expiresIn: token.expires_in,
@@ -284,6 +301,8 @@ export async function finishQuickSignIn(options?: {
  */
 export async function handleQuickCallback(options?: {
   issuer?: string;
+  /** Must match the redirectUri passed to startQuickSignIn (default: <origin>/ave/callback) */
+  redirectUri?: string;
   /** Fallback redirect when no return-to is stored (default: "/") */
   fallbackPath?: string;
 }): Promise<QuickIdentity | null> {
