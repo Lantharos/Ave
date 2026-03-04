@@ -89,7 +89,13 @@ export interface QuickIdentity {
   displayName?: string;
   email?: string;
   avatarUrl?: string;
-  /** JWT access token — use as Bearer token for your own API */
+  /**
+   * JWT access token (`access_token_jwt`).
+   * Fine for prototypes and internal tooling — pass it as a Bearer token to your own API.
+   * In production, always verify server-side: check `iss`, `aud`, `exp`, and the signature
+   * against the JWKS endpoint (`https://api.aveid.net/.well-known/jwks.json`).
+   * Upgrade to the standard OIDC flow for confidential or high-security use cases.
+   */
   token: string;
   /**
    * OIDC id_token — pass this to Convex or any service that validates OIDC identity.

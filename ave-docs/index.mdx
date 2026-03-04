@@ -5,11 +5,19 @@ description: "Integrate Ave sign-in, OIDC, Connector delegation, Signing, and E2
 
 Ave is an OAuth 2.0 + OpenID Connect provider. It handles identity, authentication, token issuance, delegated access, cryptographic signing, and optional per-app encryption key delivery.
 
-## What you can build
+## Start here — no dashboard required
+
+The fastest path to working auth: **Quick Ave** ships a prototype in under 2 minutes with zero configuration. No dashboard. No client IDs. No environment variables. No redirect setup.
 
 <CardGroup cols={2}>
-  <Card title="User sign-in" icon="user" href="/quickstart">
-    Authorization code flow with PKCE for SPAs and browser apps. Client secret for confidential server apps.
+  <Card title="Quick Ave (start here)" icon="bolt" href="/guides/quick-ave">
+    Auth in 3 lines. No dashboard, no client ID, no environment variables. Upgrade to Standard Ave whenever you're ready.
+  </Card>
+  <Card title="Standard OAuth / OIDC" icon="user" href="/quickstart">
+    Full authorization code flow with PKCE. Register an app for refresh tokens, branding, and confidential flows.
+  </Card>
+  <Card title="Convex custom auth" icon="database" href="/guides/convex-custom-auth">
+    Use Ave as a Convex OIDC provider. Works with both Quick Ave and Standard Ave. Includes exact token and config details.
   </Card>
   <Card title="OIDC tokens" icon="id-card" href="/guides/oauth-authorization-code-flow">
     ID token for identity assertion. Access token JWT for API calls. Learn when to use which.
@@ -19,12 +27,6 @@ Ave is an OAuth 2.0 + OpenID Connect provider. It handles identity, authenticati
   </Card>
   <Card title="Ave Signing" icon="pen-nib" href="/guides/ave-signing">
     Identity-backed Ed25519 signature requests for high-integrity user approval flows.
-  </Card>
-  <Card title="End-to-end encryption" icon="lock" href="/guides/end-to-end-encryption">
-    Per-app encryption key delivery over the OAuth flow. Only your app can decrypt user data.
-  </Card>
-  <Card title="Convex custom auth" icon="database" href="/guides/convex-custom-auth">
-    Use Ave as a Convex OIDC provider. Includes exact token, claim, and config details.
   </Card>
 </CardGroup>
 
@@ -48,8 +50,11 @@ Ave is an OAuth 2.0 + OpenID Connect provider. It handles identity, authenticati
 ## Where to start
 
 <Steps>
-  <Step title="Read the quickstart">
-    [Quickstart](/quickstart) covers prerequisites, the full login flow with code examples, and what to do with each token.
+  <Step title="Try Quick Ave">
+    [Quick Ave](/guides/quick-ave) — zero-setup auth in 3 lines. No registration required. Works great for prototypes, internal tools, and hackathon projects.
+  </Step>
+  <Step title="Read the quickstart (when you need more)">
+    [Quickstart](/quickstart) covers the full login flow with PKCE, what to do with each token, and how to register an app.
   </Step>
   <Step title="Understand the tokens">
     [OAuth authorization code flow](/guides/oauth-authorization-code-flow) explains `id_token` vs `access_token_jwt`, what their JWT payloads contain, and when to use each.
