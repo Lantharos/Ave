@@ -611,6 +611,7 @@ interface QuickIdentity {
   email?: string;
   avatarUrl?: string;
   token: string;         // JWT access token — use as Bearer token for your API
+  idToken?: string;      // OIDC id_token — pass this to Convex or other OIDC-aware services
   expiresIn: number;     // seconds until expiry
   receivedAt: number;    // Unix ms when the token was stored
 }

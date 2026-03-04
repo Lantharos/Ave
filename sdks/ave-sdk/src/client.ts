@@ -61,9 +61,9 @@ export async function startConnectorFlow(params: {
 // ============================================
 // Quick Ave — zero-registration auth
 //
-// Mirrors the shoo.dev pattern: the clientId is derived from the calling
-// site's origin ("origin:https://example.com"), PKCE is the only required
-// security mechanism, and no app registration is needed.
+// The clientId is derived from the calling site's origin
+// ("origin:https://example.com"), PKCE is the only required security
+// mechanism, and no app registration is needed.
 //
 // Minimal usage:
 //   // protected page
@@ -91,6 +91,12 @@ export interface QuickIdentity {
   avatarUrl?: string;
   /** JWT access token — use as Bearer token for your own API */
   token: string;
+  /**
+   * OIDC id_token — pass this to Convex or any service that validates OIDC identity.
+   * Only present when the `openid` scope was requested (the default).
+   * The `aud` claim equals your site's Quick Ave clientId: `"origin:https://yourapp.com"`.
+   */
+  idToken?: string;
   expiresIn: number;
   receivedAt: number;
 }
@@ -227,6 +233,7 @@ export async function finishQuickSignIn(options?: {
   const token = (await response.json()) as {
     access_token: string;
     access_token_jwt?: string;
+    id_token?: string;
     expires_in: number;
     user?: {
       id: string;
@@ -244,6 +251,7 @@ export async function finishQuickSignIn(options?: {
     email: token.user?.email,
     avatarUrl: token.user?.avatarUrl,
     token: token.access_token_jwt ?? token.access_token,
+    idToken: token.id_token,
     expiresIn: token.expires_in,
     receivedAt: Date.now(),
   };

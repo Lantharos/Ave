@@ -3,7 +3,7 @@ title: "Quick Ave"
 description: "Add Ave authentication to any site in minutes — no app registration, no client secret, no redirect-URI configuration. Uses PKCE under the hood and is fully upgradeable to the standard OIDC flow."
 ---
 
-Quick Ave is a zero-configuration authentication layer. It works the same way as shoo.dev: the SDK derives a `clientId` from your site's origin (`origin:https://yourapp.com`), generates PKCE parameters automatically, and handles everything from the initial redirect through to the token exchange and session monitoring. You don't register an app in the developer portal.
+Quick Ave is a zero-configuration authentication layer. The SDK derives a `clientId` from your site's origin (`origin:https://yourapp.com`), generates PKCE parameters automatically, and handles everything from the initial redirect through to the token exchange and session monitoring. You don't register an app in the developer portal.
 
 <Note>
   Quick Ave is designed for rapid prototyping and internal tooling. When you are ready to go to production — or need features like refresh tokens, app branding on the consent screen, E2EE, or the Connector flow — upgrade to the [standard OIDC flow](/quickstart) by replacing the Quick Ave calls with `startPkceLogin` / `exchangeCode` from the full SDK. No server changes required.
@@ -11,11 +11,23 @@ Quick Ave is a zero-configuration authentication layer. It works the same way as
 
 ## How it works
 
-1. Your page calls `startQuickSignIn()`. The SDK saves a PKCE verifier and a `state` nonce in `sessionStorage`, then redirects the user to `aveid.net/signin` with `client_id=origin:https://yourapp.com`.
-2. The user logs in (or confirms their existing session). Ave issues an authorization code.
-3. The user is redirected to `https://yourapp.com/ave/callback?code=…&state=…`.
-4. Your callback page calls `handleQuickCallback()`. The SDK verifies the state, exchanges the code for a 1-hour access token, stores the identity in `localStorage`, and redirects the user back to where they were.
-5. Your app reads the identity with `getQuickIdentity()` on every page load. A background session monitor can call `clearQuickIdentity()` and prompt the user to re-authenticate when the token expires.
+<Steps>
+  <Step title="Initiate sign-in">
+    Your page calls `startQuickSignIn()`. The SDK saves a PKCE verifier and a `state` nonce in `sessionStorage`, then redirects the user to `aveid.net/signin` with `client_id=origin:https://yourapp.com`.
+  </Step>
+  <Step title="User authenticates">
+    The user logs in (or confirms their existing Ave session). Ave issues a short-lived authorization code.
+  </Step>
+  <Step title="Ave redirects back">
+    The user is redirected to `https://yourapp.com/ave/callback?code=…&state=…`.
+  </Step>
+  <Step title="Exchange the code">
+    Your callback page calls `handleQuickCallback()`. The SDK verifies the state, exchanges the code for a 1-hour access token, stores the identity in `localStorage`, and redirects the user back to where they were.
+  </Step>
+  <Step title="Read the identity on every page load">
+    Your app calls `getQuickIdentity()`. A background session monitor can call `clearQuickIdentity()` and prompt the user to re-authenticate when the token expires.
+  </Step>
+</Steps>
 
 **Security model:** PKCE (S256) is the only authentication mechanism. There is no client secret. The server validates that the `redirect_uri` origin matches the `clientId` origin, so a malicious site cannot impersonate your `clientId`. Tokens are scoped to `openid profile email` and expire after one hour. Refresh tokens are not issued.
 
@@ -29,61 +41,61 @@ npm install @ave-id/sdk
 
 ---
 
-## Drop-in usage (three steps)
+## Drop-in usage
 
-### Step 1 — Protect a page
+<Steps>
+  <Step title="Protect a page">
+    Add this to any page that requires authentication:
 
-Add this to any page that requires authentication:
+    ```ts
+    import { getQuickIdentity, startQuickSignIn } from "@ave-id/sdk/client";
 
-```ts
-import { getQuickIdentity, startQuickSignIn } from "@ave-id/sdk/client";
+    const user = getQuickIdentity();
 
-const user = getQuickIdentity();
+    if (!user) {
+      // Redirects to Ave. When the user comes back, handleQuickCallback()
+      // on your callback page will send them straight back here.
+      await startQuickSignIn();
+    }
 
-if (!user) {
-  // Redirects to Ave. When the user comes back, handleQuickCallback()
-  // on your callback page will send them straight back here.
-  await startQuickSignIn();
-}
+    // user is now a QuickIdentity
+    console.log(user.displayName, user.email);
+    ```
+  </Step>
+  <Step title="Add a callback page at /ave/callback">
+    Create a page at exactly that path (the default). Its only job is to finish the sign-in:
 
-// user is now a QuickIdentity
-console.log(user.displayName, user.email);
-```
+    ```ts
+    import { handleQuickCallback } from "@ave-id/sdk/client";
 
-### Step 2 — Add a callback page at `/ave/callback`
+    // Call once on page load — exchanges the code, stores the identity,
+    // and redirects back to where the user came from.
+    await handleQuickCallback();
+    ```
 
-Create a page at exactly that path (the default). Its only job is to finish the sign-in:
+    In a **SPA** (React, Svelte, Vue …) add a route for `/ave/callback` that calls `handleQuickCallback()` on mount:
 
-```ts
-import { handleQuickCallback } from "@ave-id/sdk/client";
+    ```tsx
+    // React example
+    import { useEffect } from "react";
+    import { handleQuickCallback } from "@ave-id/sdk/client";
 
-// Call once on page load — exchanges the code, stores the identity,
-// and redirects back to where the user came from.
-await handleQuickCallback();
-```
+    export default function AveCallback() {
+      useEffect(() => { handleQuickCallback(); }, []);
+      return <p>Signing in…</p>;
+    }
+    ```
+  </Step>
+  <Step title="Sign out">
+    ```ts
+    import { clearQuickIdentity } from "@ave-id/sdk/client";
 
-In a **SPA** (React, Svelte, Vue …) add a route for `/ave/callback` that calls `handleQuickCallback()` on mount:
-
-```tsx
-// React example
-import { useEffect } from "react";
-import { handleQuickCallback } from "@ave-id/sdk/client";
-
-export default function AveCallback() {
-  useEffect(() => { handleQuickCallback(); }, []);
-  return <p>Signing in…</p>;
-}
-```
-
-### Step 3 — Sign out
-
-```ts
-import { clearQuickIdentity } from "@ave-id/sdk/client";
-
-clearQuickIdentity();
-// Optionally redirect to the homepage
-window.location.href = "/";
-```
+    clearQuickIdentity();
+    // Optionally redirect to the homepage
+    window.location.href = "/";
+    ```
+  </Step>
+</Steps>
 
 ---
 
@@ -100,7 +112,8 @@ if (user) {
   console.log(user.displayName); // display name
   console.log(user.email);       // email (if granted)
   console.log(user.avatarUrl);   // avatar URL (if set)
-  console.log(user.token);       // JWT access token — use as Bearer token
+  console.log(user.token);       // JWT access token — use as Bearer token for your API
+  console.log(user.idToken);     // OIDC id_token — use with Convex and other OIDC-aware services
 }
 ```
 
@@ -123,6 +136,106 @@ On your server, verify the JWT:
 - `aud`: `https://api.aveid.net`
 - `sub`: the user's Ave identity UUID
 - JWKS endpoint: `https://api.aveid.net/.well-known/jwks.json`
+
+---
+
+## Using with Convex
+
+Quick Ave works with [Convex custom auth](https://docs.convex.dev/auth/advanced/custom-auth). The `idToken` field on `QuickIdentity` is the OIDC `id_token` you pass to Convex — its `aud` claim is set to your Quick Ave `clientId` (`origin:https://yourapp.com`).
+
+<Steps>
+  <Step title="Configure auth.config.ts">
+    Set `applicationID` to your site's Quick Ave clientId — the string `"origin:"` followed by your origin:
+
+    ```ts
+    // convex/auth.config.ts
+    export default {
+      providers: [
+        {
+          domain: "https://api.aveid.net",
+          applicationID: "origin:https://yourapp.com",
+        },
+      ],
+    };
+    ```
+
+    <Note>
+      Convex fetches `https://api.aveid.net/.well-known/openid-configuration` automatically to discover the JWKS endpoint. The `domain` must be exactly `https://api.aveid.net`.
+    </Note>
+  </Step>
+  <Step title="Pass idToken to Convex after sign-in">
+    ```tsx
+    import { useEffect, useState } from "react";
+    import { handleQuickCallback, getQuickIdentity } from "@ave-id/sdk/client";
+    import { useConvexAuth } from "convex/react";
+
+    // In your /ave/callback component, capture the identity before redirecting
+    export default function AveCallback() {
+      useEffect(() => {
+        handleQuickCallback();
+      }, []);
+      return <p>Signing in…</p>;
+    }
+
+    // In your app root, wire up the id_token to Convex
+    export function useAveConvexAuth() {
+      const user = getQuickIdentity();
+      return {
+        isLoading: false,
+        isAuthenticated: !!user,
+        fetchAccessToken: async () => user?.idToken ?? null,
+      };
+    }
+    ```
+
+    Pass `useAveConvexAuth` to `ConvexProviderWithAuth`:
+
+    ```tsx
+    import { ConvexProviderWithAuth } from "convex/react";
+    import { ConvexReactClient } from "convex/react";
+
+    const convex = new ConvexReactClient(import.meta.env.VITE_CONVEX_URL);
+
+    export default function App() {
+      return (
+        <ConvexProviderWithAuth client={convex} useAuth={useAveConvexAuth}>
+          {/* your app */}
+        </ConvexProviderWithAuth>
+      );
+    }
+    ```
+  </Step>
+  <Step title="Use the identity in Convex functions">
+    ```ts
+    // convex/users.ts
+    import { mutation } from "./_generated/server";
+
+    export const getOrCreateUser = mutation(async (ctx) => {
+      const identity = await ctx.auth.getUserIdentity();
+      if (!identity) throw new Error("Not authenticated");
+
+      // identity.subject is the Ave identity UUID
+      const existing = await ctx.db
+        .query("users")
+        .withIndex("byAveId", q => q.eq("aveIdentityId", identity.subject))
+        .first();
+
+      if (existing) return existing;
+
+      return await ctx.db.insert("users", {
+        aveIdentityId: identity.subject,
+        name: identity.name ?? "Unknown",
+        email: identity.email,
+        imageUrl: identity.pictureUrl,
+      });
+    });
+    ```
+  </Step>
+</Steps>
+
+<Tip>
+  When you upgrade from Quick Ave to a registered app, update `applicationID` in `auth.config.ts` to your real clientId (e.g. `"app_xxxx"`). Everything else stays the same — the token format, claims, and JWKS endpoint do not change.
+</Tip>
 
 ---
 
@@ -168,12 +281,34 @@ await handleQuickCallback({ fallbackPath: "/dashboard" });
 
 Quick Ave and the full OIDC flow use the exact same token format, scopes, and API endpoints. When you are ready to upgrade:
 
-1. [Register an app](/quickstart) in the developer portal.
-2. Replace `startQuickSignIn()` with `startPkceLogin({ clientId, redirectUri })`.
-3. Replace `handleQuickCallback()` with `exchangeCode(config, { code, codeVerifier })`.
-4. Replace `getQuickIdentity()` with your own session management that stores the `TokenResponse`.
+<Steps>
+  <Step title="Register an app in the developer portal">
+    Go to [devs.aveid.net](https://devs.aveid.net) and create an OAuth app. You will receive a `clientId` and optionally a `clientSecret`.
+  </Step>
+  <Step title="Replace startQuickSignIn">
+    ```ts
+    // Before
+    await startQuickSignIn();
 
-You gain: refresh tokens, app branding, E2EE support, the Connector (app-to-app delegation) flow, and custom token TTLs.
+    // After
+    await startPkceLogin({ clientId: "app_xxxx", redirectUri: "https://yourapp.com/callback" });
+    ```
+  </Step>
+  <Step title="Replace handleQuickCallback">
+    ```ts
+    // Before
+    await handleQuickCallback();
+
+    // After
+    const tokens = await exchangeCode(config, { code, codeVerifier });
+    ```
+  </Step>
+  <Step title="Replace getQuickIdentity">
+    Store the full `TokenResponse` in your own session management. You gain refresh tokens, longer-lived sessions, and the `offline_access` scope.
+  </Step>
+</Steps>
+
+You gain: refresh tokens, app branding on the consent screen, E2EE support, the Connector (app-to-app delegation) flow, and custom token TTLs.
 
 ---
 

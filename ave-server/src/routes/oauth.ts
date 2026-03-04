@@ -1063,8 +1063,7 @@ app.get("/userinfo", async (c) => {
 });
 
 
-// Session check endpoint — used by Quick Ave session monitor and compatible with the
-// same interface shoo.dev exposes at /session/check.
+// Session check endpoint — used by Quick Ave session monitor.
 app.post("/session/check", async (c) => {
   const authHeader = c.req.header("Authorization");
   if (!authHeader?.startsWith("Bearer ")) {
