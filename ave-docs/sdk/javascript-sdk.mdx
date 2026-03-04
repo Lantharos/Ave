@@ -143,6 +143,8 @@ interface QuickIdentity {
    * Suitable for prototypes and low-risk internal tooling. For production or
    * security-sensitive deployments, always verify server-side: check `iss`,
    * `aud`, `exp`, and the JWT signature against the JWKS endpoint.
+   * The JWT payload always contains `quick: true` — Standard-only API
+   * middleware can check for the absence of this claim to reject Quick tokens.
    * Upgrade to Standard Ave for confidential flows.
    */
   token: string;

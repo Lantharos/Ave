@@ -803,6 +803,26 @@ app.post("/token", zValidator("json", z.discriminatedUnion("grantType", [
     if (!authCode.codeChallenge) {
       return c.json({ error: "invalid_request", error_description: "PKCE is required for Quick Ave" }, 400);
     }
+    // Validate that the redirect_uri origin matches the client_id origin
+    // (mirrors the check performed at authorize time)
+    const quickOrigin = getQuickOrigin(clientId);
+    if (!quickOrigin) {
+      return c.json({ error: "invalid_client", error_description: "Invalid client_id" }, 400);
+    }
+    let redirectOrigin: string;
+    try { redirectOrigin = new URL(redirectUri).origin; } catch (err) {
+      if (!(err instanceof TypeError)) throw err;
+      return c.json({ error: "invalid_grant", error_description: "Invalid redirect_uri" }, 400);
+    }
+    if (redirectOrigin !== quickOrigin) {
+      return c.json({ error: "invalid_grant", error_description: "redirect_uri origin does not match client_id" }, 400);
+    }
+    // When the browser sends an Origin header (always present for cross-origin fetch),
+    // it must match the client_id origin — this cannot be forged by browser code.
+    const requestOrigin = c.req.header("Origin");
+    if (requestOrigin && requestOrigin !== quickOrigin) {
+      return c.json({ error: "invalid_client", error_description: "Request origin does not match client_id" }, 400);
+    }
     oauthApp = buildQuickApp(clientId);
   } else {
     const [app] = await db
@@ -816,7 +836,14 @@ app.post("/token", zValidator("json", z.discriminatedUnion("grantType", [
     }
     oauthApp = app;
   }
-  
+
+  // Verify the client presenting the code is the same one that received it at
+  // authorize time. For Quick clients oauthApp.id === clientId; for standard
+  // clients oauthApp.id is the database UUID stored in the auth code.
+  if (oauthApp.id !== authCode.appId) {
+    return c.json({ error: "invalid_grant", error_description: "client_id does not match authorization" }, 400);
+  }
+
   // Verify client secret or PKCE code verifier
   if (authCode.codeChallenge) {
     // PKCE flow
@@ -914,6 +941,8 @@ app.post("/token", zValidator("json", z.discriminatedUnion("grantType", [
     cid: oauthApp.clientId,
     sid: authCode.userId,
     uid: hasScope(authCode.scope, "user_id") && oauthApp.allowUserIdScope ? authCode.userId : undefined,
+    // Mark Quick Ave tokens so Standard-only API middleware can reject them
+    ...(isQuickClient(clientId) ? { quick: true } : {}),
   });
 
     response.access_token_jwt = jwtAccessToken;
