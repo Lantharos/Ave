@@ -91,8 +91,9 @@ export interface QuickIdentity {
   avatarUrl?: string;
   /**
    * JWT access token (`access_token_jwt`).
-   * Fine for prototypes and internal tooling — pass it as a Bearer token to your own API.
-   * In production, always verify server-side: check `iss`, `aud`, `exp`, and the signature
+   * Suitable for prototypes and low-risk internal tooling — pass it as a Bearer
+   * token to your own API. For production or security-sensitive deployments,
+   * always verify server-side: check `iss`, `aud`, `exp`, and the JWT signature
    * against the JWKS endpoint (`https://api.aveid.net/.well-known/jwks.json`).
    * Upgrade to the standard OIDC flow for confidential or high-security use cases.
    */

@@ -140,9 +140,10 @@ interface QuickIdentity {
   avatarUrl?: string;
   /**
    * JWT access token (`access_token_jwt`).
-   * Fine for prototypes and internal tooling. In production, always verify
-   * server-side: check `iss`, `aud`, `exp`, and the JWT signature against the
-   * JWKS endpoint. Upgrade to Standard Ave for confidential flows.
+   * Suitable for prototypes and low-risk internal tooling. For production or
+   * security-sensitive deployments, always verify server-side: check `iss`,
+   * `aud`, `exp`, and the JWT signature against the JWKS endpoint.
+   * Upgrade to Standard Ave for confidential flows.
    */
   token: string;
   /**
