@@ -21,7 +21,7 @@ Ave combines several things that usually live in separate systems:
     Apps can request cryptographic approval from a user — the user signs a payload with their Ed25519 key.
   </Card>
   <Card title="E2EE key delivery" icon="lock">
-    Per-app, per-identity encryption keys are delivered at token exchange time. The server never holds plaintext.
+    Per-app, per-identity encryption keys are delivered via URL fragment (`#app_key=...`) on the OAuth callback redirect — never in `/api/oauth/token` responses. The server never holds plaintext.
   </Card>
 </CardGroup>
 
@@ -63,7 +63,7 @@ Ave combines several things that usually live in separate systems:
     → [Full guide](/guides/ave-signing)
   </Accordion>
   <Accordion title="E2EE — per-app encryption keys">
-    For apps that store encrypted user data, Ave can deliver a per-app, per-identity encryption key at token exchange time. The key is encrypted with the user's passkey — your server never sees plaintext key material.
+    For apps that store encrypted user data, Ave can deliver a per-app, per-identity encryption key. During the authorization consent step, the Ave UI decrypts the server-stored key using the user's master key and passes the plaintext key as `#app_key=...` in the callback redirect fragment. Your server never sees plaintext key material.
 
     Use this when: you want users to own their data and you want to guarantee you can't read it.
 

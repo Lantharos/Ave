@@ -988,9 +988,10 @@ app.post("/token", zValidator("json", z.discriminatedUnion("grantType", [
     response.refresh_token = refreshToken;
   }
   
-  // Note: encrypted_app_key is NOT included in the JSON token response.
-  // It is delivered exclusively via the URL fragment (#encrypted_app_key=...) on the callback
-  // redirect so it never appears in server logs, proxy access logs, or JSON response bodies.
+  // Note: the app key is NOT included in the JSON token response.
+  // The Ave authorization UI decrypts the server-stored encrypted key using the user's master key
+  // during the consent step and passes the plaintext key to the app as #app_key=... in the
+  // callback redirect URL fragment — it never appears in server logs or JSON response bodies.
   
   return c.json(response);
 });

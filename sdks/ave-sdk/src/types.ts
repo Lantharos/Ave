@@ -13,7 +13,7 @@ export interface TokenResponse {
     displayName: string;
     email?: string;
     avatarUrl?: string;
-  };
+  } | null;
   user_id?: string;
 }
 

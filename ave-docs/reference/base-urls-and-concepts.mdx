@@ -51,7 +51,7 @@ A successful token exchange returns up to four tokens, each with a different pur
     access_token_jwt: "eyJ..."
     ```
 
-    Verify with JWKS at `https://api.aveid.net/.well-known/jwks.json`.
+    Verify using the `jwks_uri` from your issuer's OIDC discovery document (`{issuer}/.well-known/openid-configuration`). For the default Ave issuer this is `https://api.aveid.net/.well-known/jwks.json`.
   </Accordion>
   <Accordion title="id_token — OIDC identity token">
     A signed JWT with `aud` set to **your `clientId`**. Use this to establish a user session in your app, or with OIDC-aware services like Convex. Only returned when `openid` scope is granted.

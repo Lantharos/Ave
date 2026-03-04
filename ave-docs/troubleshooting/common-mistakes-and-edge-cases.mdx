@@ -80,7 +80,7 @@ description: "Frequent integration bugs, protocol mismatches, and how to fix the
   <Accordion title="E2EE app key fails to decode" icon="circle-info">
     **Symptom:** `atob()` throws, or the decrypted key is garbage.
 
-    **Cause:** `encrypted_app_key` is delivered via URL fragment. Browsers silently replace `+` with a space in fragment parameters, breaking base64 decoding.
+    **Cause:** The app key is delivered via URL fragment (`#app_key=...`). Browsers silently replace `+` with a space in fragment parameters, breaking base64 decoding.
 
     **Fix:**
     ```ts

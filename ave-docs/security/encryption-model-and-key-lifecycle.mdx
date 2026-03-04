@@ -5,7 +5,7 @@ description: "How Ave delivers per-app, per-identity encryption keys — and how
 
 ## How it works
 
-Ave's E2EE model gives each (app, identity) pair a **stable, isolated encryption context**. The server stores an *encrypted* form of your app key — it's encrypted with the user's passkey during the first authorization. From then on, Ave delivers the key back to you at token exchange time.
+Ave's E2EE model gives each (app, identity) pair a **stable, isolated encryption context**. The server stores an *encrypted* form of your app key — it's encrypted with the user's passkey during the first authorization. From then on, Ave delivers the key back to you on the post-authorization redirect via URL fragment.
 
 | Property | Value |
 |---|---|
@@ -24,12 +24,12 @@ Ave's E2EE model gives each (app, identity) pair a **stable, isolated encryption
     Ave stores the encrypted key context in the user's authorization record. The server never holds the plaintext.
   </Step>
   <Step title="Key handoff via URL fragment">
-    After a successful authorization, Ave passes `encrypted_app_key` to your callback as a URL fragment (`#encrypted_app_key=...`). It is **not** included in the JSON token response — this ensures it never appears in server logs, proxy access logs, or JSON response bodies. Parse it from the fragment before exchanging the authorization code.
+    After the user consents, the Ave authorization UI reads the server-stored encrypted key and decrypts it on the client side using the user's master key. It then passes the plaintext app key to your callback as a URL fragment (`#app_key=...`). The server value is **never** sent — the fragment contains the already-decrypted key. Parse it from the fragment before or alongside your authorization code exchange.
 
     ```ts
-    // Parse the encrypted key from the URL fragment before clearing it
+    // Parse the app key from the URL fragment before clearing it
     const hashParams = new URLSearchParams(window.location.hash.slice(1));
-    const rawKey = hashParams.get("encrypted_app_key");
+    const rawKey = hashParams.get("app_key");
 
     // Clear the fragment from browser history immediately
     window.history.replaceState({}, "", window.location.pathname + window.location.search);
@@ -83,7 +83,7 @@ Ave's E2EE model gives each (app, identity) pair a **stable, isolated encryption
 
 ## Fragment hygiene
 
-`encrypted_app_key` is always delivered as a URL fragment (`#encrypted_app_key=...`). Browsers silently replace `+` with a space in fragment parameters, which breaks base64 decoding.
+The app key arrives as a URL fragment (`#app_key=...`). Browsers silently replace `+` with a space in fragment parameters, which breaks base64 decoding.
 
 ```ts
 // Always normalize before atob():
