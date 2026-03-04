@@ -1,0 +1,169 @@
+---
+title: "Upgrading from Quick Ave to standard OIDC"
+description: "Swap Quick Ave for a registered app and unlock refresh tokens, app branding, Connector delegation, E2EE, and confidential clients — with minimal code changes."
+---
+
+Quick Ave and the standard OIDC flow use the **exact same token format, JWKS endpoint, and OIDC discovery URL**. Upgrading is mostly a matter of swapping a few function calls and registering an app in the developer portal. Your backend doesn't need to change.
+
+## What you gain
+
+| Feature | Quick Ave | Standard Ave |
+|---|---|---|
+| Refresh tokens | ❌ | ✅ (request `offline_access` scope) |
+| App branding on consent screen | ❌ | ✅ |
+| Confidential client (client secret) | ❌ | ✅ |
+| Connector delegation (app-to-app) | ❌ | ✅ |
+| E2EE app-key delivery | ❌ | ✅ |
+| Custom token TTLs | ❌ | ✅ |
+| `offline_access` scope | ❌ | ✅ |
+| Longer-lived sessions | ❌ (1 hour, no refresh) | ✅ |
+
+## What stays the same
+
+- Token format — `id_token`, `access_token_jwt`, `access_token` have the same structure
+- OIDC discovery: `https://api.aveid.net/.well-known/openid-configuration`
+- JWKS endpoint: `https://api.aveid.net/.well-known/jwks.json`
+- Claims (`sub`, `iss`, `aud`, `name`, `email`, etc.) — same in both flows
+- All backend JWT validation code — no changes needed
+- Convex `domain` config — stays `https://api.aveid.net`
+
+## Upgrade steps
+
+<Steps>
+  <Step title="Register an app in the developer portal">
+    Go to [devs.aveid.net](https://devs.aveid.net) and create an OAuth app. You'll receive:
+
+    - **Client ID** (e.g. `app_xxxx`) — replaces your `origin:https://yourapp.com` clientId
+    - **Client secret** — only if you choose a confidential client flow
+
+    Register the exact callback URL you plan to use (e.g. `https://yourapp.com/callback`).
+
+    <Tip>
+      You can keep using PKCE without a client secret — just register the app and get a `clientId`. The confidential client option is only needed if you want server-side token exchange with a secret.
+    </Tip>
+  </Step>
+
+  <Step title="Replace startQuickSignIn with startPkceLogin">
+    ```ts
+    // Before (Quick Ave)
+    import { startQuickSignIn } from "@ave-id/sdk/client";
+    await startQuickSignIn();
+
+    // After (Standard Ave with PKCE)
+    import { startPkceLogin } from "@ave-id/sdk/client";
+    await startPkceLogin({
+      clientId: "app_xxxx",
+      redirectUri: "https://yourapp.com/callback",
+      scope: "openid profile email offline_access",
+    });
+    ```
+
+    `startPkceLogin` works the same way as `startQuickSignIn` — it generates PKCE params, stores them in `sessionStorage`, and redirects to Ave.
+  </Step>
+
+  <Step title="Replace handleQuickCallback with exchangeCode">
+    ```ts
+    // Before (Quick Ave) — on your /ave/callback page
+    import { handleQuickCallback } from "@ave-id/sdk/client";
+    await handleQuickCallback();
+
+    // After (Standard Ave) — on your callback page
+    import { exchangeCode } from "@ave-id/sdk";
+
+    const params = new URLSearchParams(window.location.search);
+    const code = params.get("code")!;
+    const returnedState = params.get("state");
+
+    // Validate state (CSRF protection)
+    const savedState = sessionStorage.getItem("ave_state");
+    if (returnedState !== savedState) throw new Error("State mismatch");
+    sessionStorage.removeItem("ave_state");
+
+    const codeVerifier = sessionStorage.getItem("ave_code_verifier")!;
+    sessionStorage.removeItem("ave_code_verifier");
+
+    const tokens = await exchangeCode(
+      { clientId: "app_xxxx", redirectUri: "https://yourapp.com/callback" },
+      { code, codeVerifier }
+    );
+
+    // Store tokens in your own session management
+    // tokens.refresh_token is now available if you requested offline_access
+    ```
+
+    Unlike `handleQuickCallback`, `exchangeCode` returns the full `TokenResponse` — you manage your own session from here.
+  </Step>
+
+  <Step title="Replace getQuickIdentity with your own session management">
+    Quick Ave stored the identity in `localStorage` automatically. With Standard Ave, you decide how to store and serve the session:
+
+    ```ts
+    // Before (Quick Ave)
+    import { getQuickIdentity } from "@ave-id/sdk/client";
+    const user = getQuickIdentity();
+    // user.token, user.idToken, user.displayName, etc.
+
+    // After (Standard Ave)
+    // Read from your own session store (cookie, context, database, etc.)
+    const { user, id_token, access_token, refresh_token } = tokens;
+    // user.id is the identity UUID
+    // Use refresh_token to get new tokens when they expire
+    ```
+  </Step>
+
+  <Step title="Add refresh token handling">
+    This is what you gain. With `offline_access` in your scope, you can silently refresh without re-authenticating the user:
+
+    ```ts
+    import { refreshToken } from "@ave-id/sdk";
+
+    const newTokens = await refreshToken(
+      { clientId: "app_xxxx", redirectUri: "https://yourapp.com/callback" },
+      { refreshToken: storedRefreshToken }
+    );
+
+    // Always store the new refresh token immediately — they rotate on every use
+    storeRefreshToken(newTokens.refresh_token);
+    ```
+  </Step>
+</Steps>
+
+## Updating Convex
+
+If you're using Convex, the only change is the `applicationID` in your `auth.config.ts`:
+
+```ts
+// Before (Quick Ave)
+export default {
+  providers: [{
+    domain: "https://api.aveid.net",
+    applicationID: "origin:https://yourapp.com",  // derived from your origin
+  }],
+};
+
+// After (Standard Ave)
+export default {
+  providers: [{
+    domain: "https://api.aveid.net",
+    applicationID: "app_xxxx",  // your registered client ID
+  }],
+};
+```
+
+Everything else — the `fetchAccessToken` implementation, Convex function auth, the JWKS endpoint — stays the same.
+
+<Note>
+  The `id_token` from a Standard Ave app has `aud: "app_xxxx"` instead of `aud: "origin:https://yourapp.com"`. Convex validates `aud` against `applicationID`, which is why you update `applicationID` when you upgrade.
+</Note>
+
+## Quick reference: function mapping
+
+| Quick Ave | Standard Ave | Notes |
+|---|---|---|
+| `startQuickSignIn()` | `startPkceLogin(config)` | Pass `clientId` + `redirectUri` |
+| `handleQuickCallback()` | `exchangeCode(config, { code, codeVerifier })` | You manage the session |
+| `getQuickIdentity()` | Your own session store | Use the `user` field from `TokenResponse` |
+| `clearQuickIdentity()` | Clear your session + optionally redirect | No SDK call needed |
+| `startQuickSessionMonitor()` | Periodic refresh token check | Use `refreshToken()` on a timer |
+| `user.token` | `tokens.access_token_jwt` | Same JWT format, same claims |
+| `user.idToken` | `tokens.id_token` | Same OIDC token, `aud` changes to your clientId |

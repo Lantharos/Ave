@@ -1,0 +1,215 @@
+---
+title: "@ave-id/sdk — Signing"
+description: "SDK functions for the Ave Signing flow: creating requests, polling status, verifying signatures, and presenting the signing UI."
+---
+
+The signing SDK functions cover the full lifecycle of an Ave signature request: creating it server-side, presenting the UI to the user, polling for resolution, and verifying the result.
+
+<Note>
+  For a full walkthrough including when to use signing, payload design, and server-side enforcement patterns, see the [Ave Signing guide](/guides/ave-signing).
+</Note>
+
+```bash
+npm install @ave-id/sdk
+```
+
+---
+
+## `createSignatureRequest(config, params)`
+
+Creates a signature request for a specific identity. **Server-side only** — requires `clientSecret`.
+
+```ts
+function createSignatureRequest(
+  config: {
+    clientId: string;
+    clientSecret: string;
+    issuer?: string;
+  },
+  params: {
+    identityId: string;
+    payload: string;
+    metadata?: Record<string, unknown>;
+    expiresInSeconds?: number;
+  }
+): Promise<SignatureRequest>
+```
+
+<ParamField path="config.clientSecret" type="string" required>
+  Your app's client secret. **Never call this from browser code.**
+</ParamField>
+
+<ParamField path="params.identityId" type="string" required>
+  The Ave identity UUID (the `sub` claim from the user's `id_token`). The identity must have a signing key set up, or this call fails with `no_signing_key`.
+</ParamField>
+
+<ParamField path="params.payload" type="string" required>
+  The text the user will see and sign. Keep it human-readable — this is what the user approves. Max 10,000 characters.
+</ParamField>
+
+<ParamField path="params.metadata" type="object">
+  Arbitrary JSON attached to the request record. Not shown to the user. Useful for audit logs and linking the request to your internal records.
+</ParamField>
+
+<ParamField path="params.expiresInSeconds" type="number" default="300">
+  How long the request stays open before automatically transitioning to `expired`. Min 60, max 3600.
+</ParamField>
+
+Returns `SignatureRequest`:
+
+```ts
+interface SignatureRequest {
+  requestId: string;   // UUID — pass to the signing UI and status endpoint
+  expiresAt: string;   // ISO 8601 expiry timestamp
+  publicKey: string;   // Ed25519 public key in base64 — store for offline verification
+}
+```
+
+```ts
+// Server-side
+import { createSignatureRequest } from "@ave-id/sdk";
+
+const request = await createSignatureRequest(
+  {
+    clientId: process.env.AVE_CLIENT_ID!,
+    clientSecret: process.env.AVE_CLIENT_SECRET!,
+  },
+  {
+    identityId: "user-identity-uuid",
+    payload: "I approve the transfer of $500 to account ending 4242",
+    metadata: { action: "transfer", amount: 500 },
+    expiresInSeconds: 300,
+  }
+);
+// request.requestId — pass to the browser
+```
+
+---
+
+## `getSignatureStatus(config, requestId)`
+
+Polls the current status of a signing request.
+
+```ts
+function getSignatureStatus(
+  config: { clientId: string; issuer?: string },
+  requestId: string
+): Promise<SignatureResult>
+```
+
+Returns `SignatureResult`:
+
+```ts
+interface SignatureResult {
+  status: "pending" | "signed" | "denied" | "expired";
+  signature?: string;    // Ed25519 signature in base64 — present when status is "signed"
+  resolvedAt?: string;   // ISO 8601 timestamp — present when signed or denied
+}
+```
+
+When the request has passed its `expiresAt` timestamp and is still `pending`, the server automatically transitions it to `expired` when this endpoint is queried.
+
+```ts
+// Simple poll loop
+async function waitForSignature(requestId: string): Promise<string | null> {
+  for (let i = 0; i < 30; i++) {
+    const result = await getSignatureStatus({ clientId: "YOUR_CLIENT_ID" }, requestId);
+    if (result.status === "signed") return result.signature!;
+    if (result.status !== "pending") return null;
+    await new Promise(r => setTimeout(r, 2000));
+  }
+  return null; // timed out
+}
+```
+
+---
+
+## `verifySignature(config, params)`
+
+Verifies a message/signature/publicKey tuple via Ave's API. Use this as a server-side check before executing any side effect.
+
+```ts
+function verifySignature(
+  config: { issuer?: string },
+  params: {
+    message: string;
+    signature: string;
+    publicKey: string;
+  }
+): Promise<{ valid: boolean; error?: string }>
+```
+
+<ParamField path="params.message" type="string" required>
+  The signed payload string — exactly as it appeared in the signing request.
+</ParamField>
+
+<ParamField path="params.signature" type="string" required>
+  The Ed25519 signature in base64, from the `getSignatureStatus` response.
+</ParamField>
+
+<ParamField path="params.publicKey" type="string" required>
+  The Ed25519 public key in base64, from `createSignatureRequest` or the public key endpoint.
+</ParamField>
+
+```ts
+const result = await verifySignature(
+  {},
+  {
+    message: "I approve the transfer of $500 to account ending 4242",
+    signature: signatureFromStatus,
+    publicKey: publicKeyFromRequest,
+  }
+);
+
+if (!result.valid) {
+  throw new Error(`Signature invalid: ${result.error}`);
+}
+
+// Safe to proceed with the side effect
+```
+
+<Tip>
+  You can also verify signatures locally using any Ed25519 library without calling this endpoint. Use the `publicKey` from `createSignatureRequest`, the `signature` from `getSignatureStatus`, and the original `payload` string.
+</Tip>
+
+---
+
+## `buildSigningUrl(config, requestId, options?)`
+
+Builds the URL for the Ave signing page. Use this when you want to redirect the user to a full signing page rather than using a popup or embed.
+
+```ts
+function buildSigningUrl(
+  config: { issuer?: string },
+  requestId: string,
+  options?: { embed?: boolean }
+): string
+```
+
+---
+
+## `openSigningPopup(config, requestId)`
+
+Opens a popup window for the signing flow. Returns a promise that resolves when the user signs, denies, or closes the popup.
+
+```ts
+function openSigningPopup(
+  config: { issuer?: string },
+  requestId: string
+): Promise<{ signed: boolean; signature?: string; publicKey?: string } | null>
+```
+
+Returns `null` if the browser blocked the popup (common on mobile and in some browsers without a direct user gesture).
+
+```ts
+const result = await openSigningPopup({}, requestId);
+
+if (result === null) {
+  // Popup was blocked — fall back to redirect or embed
+} else if (result.signed) {
+  // Verify server-side before taking action
+  await verifyOnServer(result.signature, result.publicKey);
+} else {
+  // User denied or closed
+}
+```

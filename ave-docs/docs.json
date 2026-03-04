@@ -33,9 +33,15 @@
         "tab": "Guides",
         "groups": [
           {
-            "group": "Authentication",
+            "group": "Quick Ave",
             "pages": [
               "guides/quick-ave",
+              "guides/quick-ave-to-standard"
+            ]
+          },
+          {
+            "group": "Standard OAuth",
+            "pages": [
               "guides/oauth-authorization-code-flow",
               "guides/pkce-for-public-clients",
               "guides/server-side-confidential-clients",
@@ -62,9 +68,17 @@
         "tab": "SDKs",
         "groups": [
           {
-            "group": "SDKs",
+            "group": "@ave-id/sdk",
             "pages": [
               "sdk/javascript-sdk",
+              "sdk/sdk-oauth",
+              "sdk/sdk-connector",
+              "sdk/sdk-signing"
+            ]
+          },
+          {
+            "group": "@ave-id/embed",
+            "pages": [
               "sdk/embed-sdk"
             ]
           }
@@ -84,7 +98,7 @@
         ]
       },
       {
-        "tab": "Security & Troubleshooting",
+        "tab": "Security & Help",
         "groups": [
           {
             "group": "Security",
