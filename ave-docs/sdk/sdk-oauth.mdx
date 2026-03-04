@@ -1,0 +1,318 @@
+---
+title: "@ave-id/sdk — OAuth & PKCE"
+description: "Standard OAuth / PKCE functions for registered Ave apps. Covers PKCE helpers, buildAuthorizeUrl, exchangeCode, refreshToken, fetchUserInfo, and client/server helpers."
+---
+
+These functions are for **registered Ave apps** (apps with a `clientId` from the developer portal). If you haven't registered yet, start with [Quick Ave](/guides/quick-ave) or the [quickstart](/quickstart).
+
+```bash
+npm install @ave-id/sdk
+```
+
+## Import paths
+
+| Import | Contents | Runtime |
+|---|---|---|
+| `@ave-id/sdk` | Core OAuth, PKCE helpers | Browser or Node |
+| `@ave-id/sdk/client` | `startPkceLogin` — browser redirect helper | Browser only |
+| `@ave-id/sdk/server` | `exchangeCodeServer`, `refreshTokenServer` — uses `clientSecret` | Server only |
+
+<Warning>
+  Never import from `@ave-id/sdk/server` in browser code. Those functions require your `clientSecret`, which must never be exposed to the client.
+</Warning>
+
+## Config object
+
+Most functions take a config object as the first argument:
+
+```ts
+interface AveConfig {
+  clientId: string;     // Your app's client ID
+  redirectUri: string;  // Registered redirect URI
+  issuer?: string;      // Base URL for Ave user-facing pages (default: "https://aveid.net"). Do not set this to the API host "https://api.aveid.net".
+}
+```
+
+---
+
+## PKCE helpers
+
+### `generateCodeVerifier()`
+
+Generates a cryptographically random PKCE code verifier.
+
+```ts
+function generateCodeVerifier(): string
+```
+
+Returns a 43-character base64url-encoded random string. Store this in `sessionStorage` before redirecting and send it as `codeVerifier` when exchanging the code.
+
+```ts
+const verifier = generateCodeVerifier();
+sessionStorage.setItem("ave_verifier", verifier);
+```
+
+---
+
+### `generateCodeChallenge(verifier)`
+
+Generates the PKCE code challenge from a verifier using SHA-256.
+
+```ts
+function generateCodeChallenge(verifier: string): Promise<string>
+```
+
+<ParamField path="verifier" type="string" required>
+  The code verifier from `generateCodeVerifier()`.
+</ParamField>
+
+Returns `Promise<string>` — the base64url-encoded SHA-256 hash. Pass this as `codeChallenge` to `buildAuthorizeUrl`.
+
+```ts
+const challenge = await generateCodeChallenge(verifier);
+```
+
+---
+
+### `generateNonce()`
+
+Generates a random nonce for ID token replay protection.
+
+```ts
+function generateNonce(): string
+```
+
+Returns a 32-character base64url-encoded random string. Pass it as `nonce` to `buildAuthorizeUrl` and verify it matches the `nonce` claim in the `id_token` after exchange.
+
+---
+
+## Authorization functions
+
+### `buildAuthorizeUrl(config, params)`
+
+Builds the URL to redirect users to Ave for sign-in.
+
+```ts
+function buildAuthorizeUrl(
+  config: AveConfig,
+  params?: {
+    scope?: Scope[];
+    state?: string;
+    nonce?: string;
+    codeChallenge?: string;
+    codeChallengeMethod?: "S256" | "plain";
+    extraParams?: Record<string, string>;
+  }
+): string
+```
+
+<ParamField path="config.clientId" type="string" required>
+  Your app's client ID.
+</ParamField>
+
+<ParamField path="config.redirectUri" type="string" required>
+  The registered redirect URI the user will be sent to after authorization.
+</ParamField>
+
+<ParamField path="params.scope" type="Scope[]" default='["openid", "profile", "email"]'>
+  Scopes to request. Available values: `"openid"`, `"profile"`, `"email"`, `"offline_access"`, `"user_id"`.
+</ParamField>
+
+<ParamField path="params.state" type="string">
+  CSRF protection token. Generate with `crypto.randomUUID()`. Store and verify on the callback.
+</ParamField>
+
+<ParamField path="params.nonce" type="string">
+  ID token replay protection. Generate with `generateNonce()`. Verify against the `nonce` claim in `id_token`.
+</ParamField>
+
+<ParamField path="params.codeChallenge" type="string">
+  PKCE challenge from `generateCodeChallenge()`. Required for public clients.
+</ParamField>
+
+```ts
+const url = buildAuthorizeUrl(
+  { clientId: "YOUR_CLIENT_ID", redirectUri: "https://yourapp.com/callback" },
+  {
+    scope: ["openid", "profile", "email", "offline_access"],
+    state: crypto.randomUUID(),
+    nonce: generateNonce(),
+    codeChallenge: challenge,
+    codeChallengeMethod: "S256",
+  }
+);
+window.location.href = url;
+```
+
+---
+
+### `exchangeCode(config, payload)`
+
+Exchanges an authorization code for tokens. Use for PKCE (public client) flows.
+
+```ts
+function exchangeCode(
+  config: AveConfig,
+  payload: { code: string; codeVerifier?: string }
+): Promise<TokenResponse>
+```
+
+<ParamField path="payload.code" type="string" required>
+  The authorization code from the callback URL.
+</ParamField>
+
+<ParamField path="payload.codeVerifier" type="string">
+  The PKCE code verifier from `sessionStorage`. Required if you used PKCE.
+</ParamField>
+
+```ts
+const tokens = await exchangeCode(
+  { clientId: "YOUR_CLIENT_ID", redirectUri: "https://yourapp.com/callback" },
+  { code, codeVerifier }
+);
+```
+
+---
+
+### `refreshToken(config, payload)`
+
+Exchanges a refresh token for a new set of tokens.
+
+```ts
+function refreshToken(
+  config: AveConfig,
+  payload: { refreshToken: string }
+): Promise<TokenResponse>
+```
+
+<ParamField path="payload.refreshToken" type="string" required>
+  The refresh token from a previous token response.
+</ParamField>
+
+<Warning>
+  Refresh tokens **rotate on every use** — each successful refresh returns a new refresh token and invalidates the old one. Store the new token immediately after every refresh. Sending an old token returns `invalid_grant` and may revoke the entire token family.
+</Warning>
+
+---
+
+### `fetchUserInfo(config, accessToken)`
+
+Fetches live identity claims from the userinfo endpoint.
+
+```ts
+function fetchUserInfo(config: AveConfig, accessToken: string): Promise<UserInfo>
+```
+
+<ParamField path="accessToken" type="string" required>
+  The opaque `access_token` (not the JWT) from the token response.
+</ParamField>
+
+Returns `UserInfo` with `sub`, `name?`, `preferred_username?`, `email?`, `picture?`.
+
+---
+
+## Client helper
+
+Import from `@ave-id/sdk/client`. Browser-only.
+
+### `startPkceLogin(params)`
+
+Generates PKCE params, saves them to `sessionStorage`, and redirects the user to Ave. The browser-friendly alternative to calling `generateCodeVerifier` + `buildAuthorizeUrl` + `window.location.href` manually.
+
+```ts
+async function startPkceLogin(params: {
+  clientId: string;
+  redirectUri: string;
+  scope?: string;
+  issuer?: string;
+}): Promise<void>
+```
+
+Stores `ave_code_verifier` and `ave_nonce` in `sessionStorage`. Read them back on your callback page before calling `exchangeCode`.
+
+<Note>
+  `startPkceLogin` does **not** generate or store a `state` value for CSRF protection. If your threat model requires state validation, use `buildAuthorizeUrl` directly, generate a `state` yourself with `crypto.randomUUID()`, store it in `sessionStorage`, include it in the authorize URL, and verify it on the callback.
+</Note>
+
+---
+
+## Server helpers
+
+Import from `@ave-id/sdk/server`. Server runtime only — requires your `clientSecret`.
+
+### `exchangeCodeServer(config, payload)`
+
+Same as `exchangeCode` but uses `clientSecret` instead of `codeVerifier`. Use this for confidential clients (server-side token exchange).
+
+```ts
+async function exchangeCodeServer(
+  config: { clientId: string; clientSecret: string; redirectUri: string; issuer?: string },
+  payload: { code: string }
+): Promise<TokenResponse>
+```
+
+```ts
+import { exchangeCodeServer } from "@ave-id/sdk/server";
+
+const tokens = await exchangeCodeServer(
+  {
+    clientId: process.env.AVE_CLIENT_ID!,
+    clientSecret: process.env.AVE_CLIENT_SECRET!,
+    redirectUri: "https://yourapp.com/callback",
+  },
+  { code }
+);
+```
+
+### `refreshTokenServer(config, payload)`
+
+Refreshes tokens using client secret (confidential client).
+
+```ts
+async function refreshTokenServer(
+  config: { clientId: string; clientSecret: string; redirectUri: string; issuer?: string },
+  payload: { refreshToken: string }
+): Promise<TokenResponse>
+```
+
+---
+
+## TokenResponse
+
+The shape returned by `exchangeCode`, `exchangeCodeServer`, `refreshToken`, and `refreshTokenServer`:
+
+```ts
+interface TokenResponse {
+  access_token: string;      // Opaque bearer token for Ave API endpoints
+  access_token_jwt: string;  // Signed JWT (aud: https://api.aveid.net)
+  id_token?: string;         // OIDC JWT (aud: your clientId) — requires openid scope
+  refresh_token?: string;    // Rotation token — requires offline_access scope
+  token_type: "Bearer";
+  expires_in: number;        // Seconds until access_token expires
+  scope: string;             // Space-separated granted scopes
+  user_id?: string;          // Present when user_id scope is granted
+  user?: {                   // May be absent depending on scopes/config
+    id: string;
+    handle: string;
+    displayName: string;
+    email?: string;
+    avatarUrl?: string;
+  } | null;
+}
+```
+
+---
+
+## Error handling
+
+All SDK functions throw an `Error` when the server returns a non-2xx response. The error message is the `error` field from the response body (e.g. `"invalid_grant"`, `"invalid_client"`).
+
+```ts
+try {
+  const tokens = await exchangeCode(config, { code, codeVerifier });
+} catch (err) {
+  if (err.message === "invalid_grant") {
+    // Code expired or PKCE verifier mismatch
+  }
+}
+```

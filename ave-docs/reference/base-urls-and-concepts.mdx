@@ -1,53 +1,105 @@
 ---
-title: "Base URLs and concepts"
-description: "Understand domains, token types, identity model, and auth boundaries before implementing."
+title: "Base URLs, tokens, and concepts"
+description: "The key concepts you need before integrating: domain split, identity model, token types, and scopes."
 ---
 
-## Domain split
+## Two hosts, two purposes
 
-- Auth UI host: `aveid.net`
-- API host: `api.aveid.net`
+<Warning>
+  Ave uses two separate domains. Mixing them up is the #1 integration mistake.
+</Warning>
 
-This split is intentional. Do not post token requests to `aveid.net/api/...`.
+| Host | Used for |
+|---|---|
+| `aveid.net` | User-facing pages (sign-in, Connector consent) |
+| `api.aveid.net` | All API calls (token exchange, userinfo, JWKS, signing) |
+
+```
+✅ POST https://api.aveid.net/api/oauth/token
+❌ POST https://aveid.net/api/oauth/token   ← wrong host
+```
 
 ## Identity model
 
-Ave login resolves to an identity (`identityId`), not only a user account.
+When a user signs in with Ave, they sign in as a specific **identity** — not just a user account. The same person can have multiple identities.
 
-Design implications:
+| Concept | Description |
+|---|---|
+| `identityId` | Stable UUID for an identity. Use this as your primary key for user data. |
+| `handle` | The identity's username (e.g. `alice`). Can be changed by the user. |
 
-- Same person can use multiple identities
-- Persist data keyed by `identityId`
-- Never assume one global profile row per person across identities
+<Warning>
+  Don't store data keyed by `handle` — it can change. Always use `identityId` (the `sub` claim in JWTs) as your stable identifier.
+</Warning>
 
-## Token model
+## Token types
 
-- `access_token`: opaque token accepted by Ave APIs
-- `access_token_jwt`: JWT representation for JWT-oriented backends
-- `id_token`: OIDC identity token (when `openid` scope granted)
-- `refresh_token`: optional, only when `offline_access` is granted
+A successful token exchange returns up to four tokens, each with a different purpose:
 
-## Scope model
+<AccordionGroup>
+  <Accordion title="access_token — opaque bearer token">
+    An opaque string accepted by Ave's own API endpoints (mainly `/api/oauth/userinfo`). Not a JWT — you cannot decode it. It expires after 1 hour.
 
-Common scopes:
+    ```
+    access_token: "ave_at_..."
+    ```
+  </Accordion>
+  <Accordion title="access_token_jwt — signed JWT for your backend">
+    A signed JWT with `aud: https://api.aveid.net`. Use this when calling Ave API endpoints that accept JWTs, or when your own backend wants to verify the token locally.
 
-- `openid`
-- `profile`
-- `email`
-- `offline_access`
-- `user_id` (only when app allows it)
+    ```
+    access_token_jwt: "eyJ..."
+    ```
 
-Scopes are app-allowlisted. Requesting unknown scopes fails.
+    Verify using the `jwks_uri` from your issuer's OIDC discovery document (`{issuer}/.well-known/openid-configuration`). For the default Ave issuer this is `https://api.aveid.net/.well-known/jwks.json`.
+  </Accordion>
+  <Accordion title="id_token — OIDC identity token">
+    A signed JWT with `aud` set to **your `clientId`**. Use this to establish a user session in your app, or with OIDC-aware services like Convex. Only returned when `openid` scope is granted.
 
-## Two authorization surfaces
+    ```
+    id_token: "eyJ..."
+    ```
+  </Accordion>
+  <Accordion title="refresh_token — long-lived session token">
+    An opaque token you can exchange for a fresh set of access/ID tokens without re-authenticating the user. Only returned when `offline_access` scope is granted. Rotated on every use — store the new one immediately.
 
-### Browser/partner integrator surface
+    ```
+    refresh_token: "rt_..."
+    ```
+  </Accordion>
+</AccordionGroup>
 
-- Start at `GET https://aveid.net/signin`
-- Exchange code at `POST /api/oauth/token`
+<Note>
+  `id_token` and `access_token_jwt` are both JWTs but have **different audiences**. The `id_token` audience is your `clientId`. The `access_token_jwt` audience is `https://api.aveid.net`. This matters for any library that validates JWT audience.
+</Note>
 
-### First-party session-backed API surface
+## Scopes
 
-Internally, Ave also exposes `POST /api/oauth/authorize` requiring authenticated Ave session context (`Authorization: Bearer <sessionToken>` or session cookie).
+Scopes are space-separated strings requested during authorization. They control what claims appear in tokens and what resources can be accessed.
 
-Use this only if you are implementing deep first-party-like session UX.
+| Scope | What it unlocks |
+|---|---|
+| `openid` | Returns `id_token`. Required for OIDC flows. |
+| `profile` | Adds `name`, `preferred_username`, `picture` to userinfo |
+| `email` | Adds `email` to userinfo |
+| `offline_access` | Returns `refresh_token` for long-lived sessions |
+| `user_id` | Returns raw `userId` — only available if the app has this scope enabled |
+
+<Note>
+  Scopes are allowlisted per app. Requesting a scope your app hasn't been granted will return an `invalid_scope` error.
+</Note>
+
+## camelCase fields on the token endpoint
+
+The Ave token endpoint (`POST /api/oauth/token`) uses **camelCase** body fields — not the snake_case used by many other OAuth providers.
+
+```ts
+{
+  "grantType": "authorization_code",   // not grant_type
+  "clientId": "YOUR_CLIENT_ID",        // not client_id
+  "redirectUri": "...",                // not redirect_uri
+  "codeVerifier": "..."                // not code_verifier
+}
+```
+
+Sending snake_case fields will return a `400` error.

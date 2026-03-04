@@ -1,0 +1,199 @@
+---
+title: "@ave-id/sdk — Connector"
+description: "SDK functions for the Connector (app-to-app delegation) flow: building the consent URL, exchanging delegated tokens, and managing grants."
+---
+
+The Connector flow lets one Ave app act on behalf of a user at another Ave-registered resource. These SDK functions handle the browser redirect, token exchange, and grant management.
+
+<Note>
+  For a full walkthrough of the Connector flow including the consent UI, delegated JWT payload, and server-side enforcement, see the [Connector guide](/guides/connector-app-to-app).
+</Note>
+
+```bash
+npm install @ave-id/sdk
+```
+
+---
+
+## `buildConnectorUrl(config, params)`
+
+Builds the URL to start the Connector consent flow at `https://aveid.net/connect`.
+
+```ts
+function buildConnectorUrl(
+  config: AveConfig,
+  params: {
+    resource: string;
+    scope: string;
+    state?: string;
+    mode?: "user_present" | "background";
+    extraParams?: Record<string, string>;
+  }
+): string
+```
+
+<ParamField path="config.clientId" type="string" required>
+  Your app's client ID (the source app).
+</ParamField>
+
+<ParamField path="config.redirectUri" type="string" required>
+  The registered redirect URI the user will be sent to after granting.
+</ParamField>
+
+<ParamField path="params.resource" type="string" required>
+  The target resource key (as registered in the developer portal by the target app).
+</ParamField>
+
+<ParamField path="params.scope" type="string" required>
+  The resource scope(s) to request. Space-separated if multiple. Must be scopes defined by the target resource.
+</ParamField>
+
+<ParamField path="params.state" type="string">
+  CSRF protection token. Store and verify on the callback.
+</ParamField>
+
+<ParamField path="params.mode" type="string" default='"user_present"'>
+  `"user_present"` for interactive consent; `"background"` for automated/background access.
+</ParamField>
+
+```ts
+import { buildConnectorUrl } from "@ave-id/sdk";
+
+const state = crypto.randomUUID();
+sessionStorage.setItem("ave_connector_state", state);
+
+const url = buildConnectorUrl(
+  { clientId: "YOUR_CLIENT_ID", redirectUri: "https://yourapp.com/callback" },
+  {
+    resource: "target-resource-key",
+    scope: "resource.read",
+    state,
+    mode: "user_present",
+  }
+);
+window.location.href = url;
+```
+
+---
+
+## `exchangeDelegatedToken(config, payload)`
+
+Exchanges a source app `access_token_jwt` for a short-lived delegated token scoped to the target resource. This is an OAuth token-exchange grant (`urn:ietf:params:oauth:grant-type:token-exchange`), not a PKCE flow.
+
+<Warning>
+  The `clientSecret` field in the payload must **never** be sent from browser code — it would expose your app's secret. For confidential clients, perform the token exchange server-side using `exchangeDelegatedTokenServer` from `@ave-id/sdk/server` instead.
+</Warning>
+
+```ts
+function exchangeDelegatedToken(
+  config: AveConfig,
+  payload: {
+    subjectToken: string;
+    requestedResource: string;
+    requestedScope: string;
+    clientSecret?: string;
+    actor?: Record<string, unknown>;
+  }
+): Promise<DelegationTokenResponse>
+```
+
+<ParamField path="payload.subjectToken" type="string" required>
+  The `access_token_jwt` from the source app's token response. **Not** the opaque `access_token`. The server validates this JWT to identify the user and client.
+</ParamField>
+
+<ParamField path="payload.requestedResource" type="string" required>
+  The target resource key.
+</ParamField>
+
+<ParamField path="payload.requestedScope" type="string" required>
+  The scope(s) to include in the delegated token. Must be a subset of what the user granted.
+</ParamField>
+
+```ts
+import { exchangeDelegatedToken } from "@ave-id/sdk";
+
+const delegated = await exchangeDelegatedToken(
+  { clientId: "YOUR_CLIENT_ID", redirectUri: "https://yourapp.com/callback" },
+  {
+    subjectToken: tokens.access_token_jwt,
+    requestedResource: "target-resource-key",
+    requestedScope: "resource.read",
+  }
+);
+
+// Use delegated.access_token as Bearer token to the target resource
+```
+
+---
+
+## Client helper
+
+Import from `@ave-id/sdk/client`. Browser-only.
+
+### `startConnectorFlow(params)`
+
+Generates PKCE params, saves state to `sessionStorage`, and redirects the user to the Connector consent page.
+
+```ts
+async function startConnectorFlow(params: {
+  clientId: string;
+  redirectUri: string;
+  resource: string;
+  scope: string;
+  mode?: "user_present" | "background";
+  issuer?: string;
+}): Promise<void>
+```
+
+Saves `ave_connector_state` to `sessionStorage`. Read it back on your callback page and verify it matches the `state` parameter returned in the callback URL before exchanging the delegated token.
+
+---
+
+## Server helper
+
+Import from `@ave-id/sdk/server`. Server runtime only — requires `clientSecret`.
+
+### `exchangeDelegatedTokenServer(config, payload)`
+
+Server-side token exchange for Connector flows. Use this for confidential clients.
+
+```ts
+async function exchangeDelegatedTokenServer(
+  config: { clientId: string; clientSecret: string; redirectUri: string; issuer?: string },
+  payload: {
+    subjectToken: string;
+    requestedResource: string;
+    requestedScope: string;
+    actor?: Record<string, unknown>;
+  }
+): Promise<DelegationTokenResponse>
+```
+
+---
+
+## Grant management
+
+These functions require an Ave session token (not an app token) and are for user-facing grant management flows.
+
+### `listDelegations(config, sessionToken)`
+
+Lists active delegation grants for the authenticated user's session.
+
+```ts
+function listDelegations(
+  config: { issuer?: string },
+  sessionToken: string
+): Promise<DelegationGrant[]>
+```
+
+### `revokeDelegation(config, sessionToken, delegationId)`
+
+Revokes a delegation grant. After revocation, `exchangeDelegatedToken` fails for that grant until the user re-authorizes.
+
+```ts
+function revokeDelegation(
+  config: { issuer?: string },
+  sessionToken: string,
+  delegationId: string
+): Promise<void>
+```

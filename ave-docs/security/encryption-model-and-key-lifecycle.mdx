@@ -1,60 +1,107 @@
 ---
 title: "Encryption model and key lifecycle"
-description: "Understand app-key lifecycle for E2EE integrations and implement secure key handling patterns."
+description: "How Ave delivers per-app, per-identity encryption keys — and how to handle them safely."
 ---
 
-## Model summary
+## How it works
 
-Ave supports per-app, per-identity encryption context for E2EE apps.
+Ave's E2EE model gives each (app, identity) pair a **stable, isolated encryption context**. The server stores an *encrypted* form of your app key — it's encrypted with the user's passkey during the first authorization. From then on, Ave delivers the key back to you on the post-authorization redirect via URL fragment.
 
-Key points:
+| Property | Value |
+|---|---|
+| Key isolation | Per-app, per-identity — different identities get different keys |
+| Key stability | Same app + same identity always gets the same key context |
+| Server knowledge | Zero — Ave stores only the encrypted key, never plaintext |
+| Encryption algorithm | AES-GCM with a unique IV per ciphertext |
 
-- Same identity + same app -> stable key context
-- Different identities -> isolated key context
-- Key material should be treated as highly sensitive client-side secret
-
-## Lifecycle
+## Key lifecycle
 
 <Steps>
-  <Step title="Provision">
-    E2EE-capable app requests authorization and supplies encrypted app key material on first grant path.
+  <Step title="First authorization (key provisioning)">
+    When a user authorizes your E2EE-capable app for the first time, the app generates key material client-side and encrypts it with the user's passkey. The encrypted key is sent along with the authorization request.
   </Step>
-  <Step title="Grant">
-    Authorization record stores encrypted app key context.
+  <Step title="Grant storage">
+    Ave stores the encrypted key context in the user's authorization record. The server never holds the plaintext.
   </Step>
-  <Step title="Token exchange">
-    Token response may include `encrypted_app_key` for consuming app.
+  <Step title="Key handoff via URL fragment">
+    After the user consents, the Ave authorization UI reads the server-stored encrypted key and decrypts it on the client side using the user's master key. It then passes the plaintext app key to your callback as a URL fragment (`#app_key=...`). The server value is **never** sent — the fragment contains the already-decrypted key. Parse it from the fragment before or alongside your authorization code exchange.
+
+    ```ts
+    // Parse the app key from the URL fragment before clearing it
+    const hashParams = new URLSearchParams(window.location.hash.slice(1));
+    const rawKey = hashParams.get("app_key");
+
+    // Clear the fragment from browser history immediately
+    window.history.replaceState({}, "", window.location.pathname + window.location.search);
+    ```
   </Step>
-  <Step title="Client import">
-    App normalizes/decodes key payload and imports into Web Crypto runtime.
+  <Step title="Key import">
+    Your app normalizes the base64 key payload (URL fragments can turn `+` into a space), decodes it, and imports it into the Web Crypto API.
+
+    ```ts
+    // Normalize base64 — URL fragments turn + into space
+    const normalized = rawKey.replace(/ /g, "+");
+    const keyBytes = Uint8Array.from(atob(normalized), c => c.charCodeAt(0));
+
+    const cryptoKey = await crypto.subtle.importKey(
+      "raw",
+      keyBytes,
+      { name: "AES-GCM" },
+      false,
+      ["encrypt", "decrypt"]
+    );
+    ```
   </Step>
-  <Step title="Encrypt/decrypt operations">
-    App uses AES-GCM with unique IV per ciphertext.
+  <Step title="Encrypt and decrypt data">
+    Use AES-GCM with a unique IV for every encryption operation.
+
+    ```ts
+    // Encrypt
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const ciphertext = await crypto.subtle.encrypt(
+      { name: "AES-GCM", iv },
+      cryptoKey,
+      plaintext
+    );
+
+    // Decrypt
+    const plaintext = await crypto.subtle.decrypt(
+      { name: "AES-GCM", iv },
+      cryptoKey,
+      ciphertext
+    );
+    ```
   </Step>
   <Step title="Identity switch handling">
-    App transitions encryption context and data partition by `identityId`.
+    When the user switches identities, transition the encryption context. Different identities have different keys.
+
+    Key storage pattern: `app:{appId}:identity:{identityId}:data`
+
+    Never merge or share encrypted datasets across identities.
   </Step>
 </Steps>
 
-## URL/fragment hygiene
+## Fragment hygiene
 
-If key material ever arrives through URL fragment mechanisms:
+The app key arrives as a URL fragment (`#app_key=...`). Browsers silently replace `+` with a space in fragment parameters, which breaks base64 decoding.
 
-- parse immediately
-- normalize base64 (`+` vs space)
-- remove fragment from history
-- never log raw value
+```ts
+// Always normalize before atob():
+const safe = rawKey.replace(/ /g, "+");
+```
 
-## Data partitioning strategy
-
-Use storage keys like:
-
-- `app:{appId}:identity:{identityId}:...`
-
-Never merge encrypted datasets across identities.
+After parsing the key, remove the fragment from the browser's history to prevent it from appearing in logs or being shared via the back button.
 
 ## Failure handling
 
-- Missing key for E2EE-required route -> block action and force re-auth/re-grant
-- Decrypt failure -> treat as key-context mismatch; never silently overwrite ciphertext
-- Corrupted payload -> fail closed and request user re-auth
+<AccordionGroup>
+  <Accordion title="Key missing for an E2EE-required route">
+    Block the action and prompt the user to re-authorize your app. Do not silently degrade to unencrypted storage.
+  </Accordion>
+  <Accordion title="Decryption fails">
+    Treat this as a key-context mismatch. Do not overwrite existing ciphertext — you could destroy data. Prompt re-authentication and re-grant.
+  </Accordion>
+  <Accordion title="Corrupted payload">
+    Fail closed. Request user re-authentication rather than attempting to recover from a potentially tampered key payload.
+  </Accordion>
+</AccordionGroup>

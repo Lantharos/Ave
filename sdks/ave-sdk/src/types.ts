@@ -13,8 +13,7 @@ export interface TokenResponse {
     displayName: string;
     email?: string;
     avatarUrl?: string;
-  };
-  encrypted_app_key?: string;
+  } | null;
   user_id?: string;
 }
 

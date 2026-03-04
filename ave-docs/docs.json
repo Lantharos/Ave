@@ -9,56 +9,110 @@
     "dark": "#2c2c2c"
   },
   "navigation": {
-    "groups": [
+    "tabs": [
       {
-        "group": "Getting started",
-        "pages": [
-          "index",
-          "quickstart",
-          "reference/how-it-works",
-          "reference/base-urls-and-concepts"
+        "tab": "Get Started",
+        "groups": [
+          {
+            "group": "Overview",
+            "pages": [
+              "index",
+              "quickstart"
+            ]
+          },
+          {
+            "group": "Concepts",
+            "pages": [
+              "reference/how-it-works",
+              "reference/base-urls-and-concepts"
+            ]
+          }
         ]
       },
       {
-        "group": "Guides",
-        "pages": [
-          "guides/quick-ave",
-          "guides/oauth-authorization-code-flow",
-          "guides/scopes-and-claims",
-          "guides/pkce-for-public-clients",
-          "guides/server-side-confidential-clients",
-          "guides/convex-custom-auth",
-          "guides/end-to-end-encryption",
-          "guides/connector-app-to-app",
-          "guides/ave-signing"
+        "tab": "Guides",
+        "groups": [
+          {
+            "group": "Quick Ave",
+            "pages": [
+              "guides/quick-ave",
+              "guides/quick-ave-to-standard"
+            ]
+          },
+          {
+            "group": "Standard OAuth",
+            "pages": [
+              "guides/oauth-authorization-code-flow",
+              "guides/pkce-for-public-clients",
+              "guides/server-side-confidential-clients",
+              "guides/scopes-and-claims"
+            ]
+          },
+          {
+            "group": "Advanced",
+            "pages": [
+              "guides/connector-app-to-app",
+              "guides/ave-signing",
+              "guides/end-to-end-encryption"
+            ]
+          },
+          {
+            "group": "Frameworks",
+            "pages": [
+              "guides/convex-custom-auth"
+            ]
+          }
         ]
       },
       {
-        "group": "SDKs",
-        "pages": [
-          "sdk/javascript-sdk",
-          "sdk/embed-sdk"
+        "tab": "SDKs",
+        "groups": [
+          {
+            "group": "@ave-id/sdk",
+            "pages": [
+              "sdk/javascript-sdk",
+              "sdk/sdk-oauth",
+              "sdk/sdk-connector",
+              "sdk/sdk-signing"
+            ]
+          },
+          {
+            "group": "@ave-id/embed",
+            "pages": [
+              "sdk/embed-sdk"
+            ]
+          }
         ]
       },
       {
-        "group": "API reference",
-        "pages": [
-          "api/overview",
-          "api/oauth-endpoints",
-          "api/signing-endpoints"
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "API Reference",
+            "pages": [
+              "api/overview",
+              "api/oauth-endpoints",
+              "api/signing-endpoints"
+            ]
+          }
         ]
       },
       {
-        "group": "Security",
-        "pages": [
-          "security/encryption-model-and-key-lifecycle",
-          "security/best-practices"
-        ]
-      },
-      {
-        "group": "Troubleshooting",
-        "pages": [
-          "troubleshooting/common-mistakes-and-edge-cases"
+        "tab": "Security & Help",
+        "groups": [
+          {
+            "group": "Security",
+            "pages": [
+              "security/best-practices",
+              "security/encryption-model-and-key-lifecycle"
+            ]
+          },
+          {
+            "group": "Troubleshooting",
+            "pages": [
+              "troubleshooting/common-mistakes-and-edge-cases"
+            ]
+          }
         ]
       }
     ]

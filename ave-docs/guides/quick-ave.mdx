@@ -154,101 +154,11 @@ On your server, verify the JWT:
 
 ## Using with Convex
 
-Quick Ave works with [Convex custom auth](https://docs.convex.dev/auth/advanced/custom-auth). The `idToken` field on `QuickIdentity` is the OIDC `id_token` you pass to Convex — its `aud` claim is set to your Quick Ave `clientId` (`origin:https://yourapp.com`).
+The `idToken` field on `QuickIdentity` is the OIDC `id_token` — pass it to `ConvexProviderWithAuth` for authenticated Convex queries. Your `auth.config.ts` `applicationID` should be `"origin:https://yourapp.com"`.
 
-<Steps>
-  <Step title="Configure auth.config.ts">
-    Set `applicationID` to your site's Quick Ave clientId — the string `"origin:"` followed by your origin:
-
-    ```ts
-    // convex/auth.config.ts
-    export default {
-      providers: [
-        {
-          domain: "https://api.aveid.net",
-          applicationID: "origin:https://yourapp.com",
-        },
-      ],
-    };
-    ```
-
-    <Note>
-      Convex fetches `https://api.aveid.net/.well-known/openid-configuration` automatically to discover the JWKS endpoint. The `domain` must be exactly `https://api.aveid.net`.
-    </Note>
-  </Step>
-  <Step title="Pass idToken to Convex after sign-in">
-    ```tsx
-    import { useEffect, useState } from "react";
-    import { handleQuickCallback, getQuickIdentity } from "@ave-id/sdk/client";
-    import { useConvexAuth } from "convex/react";
-
-    // In your /ave/callback component, capture the identity before redirecting
-    export default function AveCallback() {
-      useEffect(() => {
-        handleQuickCallback();
-      }, []);
-      return <p>Signing in…</p>;
-    }
-
-    // In your app root, wire up the id_token to Convex
-    export function useAveConvexAuth() {
-      const user = getQuickIdentity();
-      return {
-        isLoading: false,
-        isAuthenticated: !!user,
-        fetchAccessToken: async () => user?.idToken ?? null,
-      };
-    }
-    ```
-
-    Pass `useAveConvexAuth` to `ConvexProviderWithAuth`:
-
-    ```tsx
-    import { ConvexProviderWithAuth } from "convex/react";
-    import { ConvexReactClient } from "convex/react";
-
-    const convex = new ConvexReactClient(import.meta.env.VITE_CONVEX_URL);
-
-    export default function App() {
-      return (
-        <ConvexProviderWithAuth client={convex} useAuth={useAveConvexAuth}>
-          {/* your app */}
-        </ConvexProviderWithAuth>
-      );
-    }
-    ```
-  </Step>
-  <Step title="Use the identity in Convex functions">
-    ```ts
-    // convex/users.ts
-    import { mutation } from "./_generated/server";
-
-    export const getOrCreateUser = mutation(async (ctx) => {
-      const identity = await ctx.auth.getUserIdentity();
-      if (!identity) throw new Error("Not authenticated");
-
-      // identity.subject is the Ave identity UUID
-      const existing = await ctx.db
-        .query("users")
-        .withIndex("byAveId", q => q.eq("aveIdentityId", identity.subject))
-        .first();
-
-      if (existing) return existing;
-
-      return await ctx.db.insert("users", {
-        aveIdentityId: identity.subject,
-        name: identity.name ?? "Unknown",
-        email: identity.email,
-        imageUrl: identity.pictureUrl,
-      });
-    });
-    ```
-  </Step>
-</Steps>
-
-<Tip>
-  When you upgrade from Quick Ave to a registered app, update `applicationID` in `auth.config.ts` to your real clientId (e.g. `"app_xxxx"`). Everything else stays the same — the token format, claims, and JWKS endpoint do not change.
-</Tip>
+<Card title="Full Convex integration guide" icon="database" href="/guides/convex-custom-auth">
+  Exact config, wiring, token details, and Convex function examples for both Quick Ave and registered apps.
+</Card>
 
 ---
 
@@ -293,41 +203,14 @@ await handleQuickCallback({
 
 ---
 
-## Upgrading to the full OIDC flow
+## Ready to go beyond Quick Ave?
 
-Quick Ave and the full OIDC flow use the exact same token format, scopes, and API endpoints. When you are ready to upgrade:
-
-<Steps>
-  <Step title="Register an app in the developer portal">
-    Go to [devs.aveid.net](https://devs.aveid.net) and create an OAuth app. You will receive a `clientId` and optionally a `clientSecret`.
-  </Step>
-  <Step title="Replace startQuickSignIn">
-    ```ts
-    // Before
-    await startQuickSignIn();
-
-    // After
-    await startPkceLogin({ clientId: "app_xxxx", redirectUri: "https://yourapp.com/callback" });
-    ```
-  </Step>
-  <Step title="Replace handleQuickCallback">
-    ```ts
-    // Before
-    await handleQuickCallback();
-
-    // After
-    const tokens = await exchangeCode(config, { code, codeVerifier });
-    ```
-  </Step>
-  <Step title="Replace getQuickIdentity">
-    Store the full `TokenResponse` in your own session management. You gain refresh tokens, longer-lived sessions, and the `offline_access` scope.
-  </Step>
-</Steps>
-
-You gain: refresh tokens, app branding on the consent screen, E2EE support, the Connector (app-to-app delegation) flow, and custom token TTLs.
+<Card title="Upgrading to the standard OIDC flow" icon="arrow-right" href="/guides/quick-ave-to-standard">
+  Step-by-step guide to swapping Quick Ave for a registered app. Get refresh tokens, app branding, E2EE, and Connector access. The token format doesn't change — only the function calls.
+</Card>
 
 ---
 
 ## Full API reference
 
-See [Quick Ave functions in the SDK reference](/sdk/javascript-sdk#quick-ave).
+See [Quick Ave functions in the SDK reference](/sdk/javascript-sdk).

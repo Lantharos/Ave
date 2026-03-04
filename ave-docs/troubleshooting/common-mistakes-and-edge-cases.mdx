@@ -1,101 +1,108 @@
 ---
 title: "Common mistakes and edge cases"
-description: "Frequent implementation bugs, protocol mismatches, and concrete fixes."
+description: "Frequent integration bugs, protocol mismatches, and how to fix them."
 ---
 
-## Wrong API host
+<AccordionGroup>
+  <Accordion title="Wrong API host" icon="triangle-exclamation">
+    **Symptom:** Token requests fail or return an unexpected error page.
 
-Problem:
+    **Cause:** Sending API requests to `aveid.net` instead of `api.aveid.net`.
 
-- Sending token requests to `https://aveid.net/api/...`
+    **Fix:**
+    ```
+    ✅ POST https://api.aveid.net/api/oauth/token
+    ❌ POST https://aveid.net/api/oauth/token
+    ```
+  </Accordion>
 
-Fix:
+  <Accordion title="Wrong field casing on the token request" icon="triangle-exclamation">
+    **Symptom:** Token endpoint returns `400 invalid_request` even though you're sending the right values.
 
-- Use `https://api.aveid.net/api/...`
+    **Cause:** Ave uses camelCase body fields, not the snake_case used by most OAuth providers.
 
-## Wrong field casing on token request
+    **Fix:**
+    ```ts
+    {
+      "grantType": "authorization_code",  // not grant_type
+      "clientId": "YOUR_CLIENT_ID",       // not client_id
+      "redirectUri": "...",               // not redirect_uri
+      "codeVerifier": "..."               // not code_verifier
+    }
+    ```
+  </Accordion>
 
-Problem:
+  <Accordion title="PKCE verifier mismatch" icon="triangle-exclamation">
+    **Symptom:** Token exchange returns `invalid_grant`.
 
-- Using `grant_type`, `client_id`, `redirect_uri`
+    **Causes:**
+    - Base64url encoding bug in the verifier
+    - Stored verifier was overwritten before exchange (e.g. user opened a second tab)
+    - Multiple concurrent login flows racing
 
-Fix:
+    **Fix:** Generate one verifier per login intent, store it in `sessionStorage`, and clear it immediately after a single use.
+  </Accordion>
 
-- Use camelCase fields: `grantType`, `clientId`, `redirectUri`, `codeVerifier`, `refreshToken`
+  <Accordion title="Missing id_token in the response" icon="circle-info">
+    **Symptom:** Token response has `access_token` but no `id_token`.
 
-## PKCE verifier mismatch
+    **Cause:** The `openid` scope was not requested or was not granted for your app.
 
-Causes:
+    **Fix:** Add `openid` to your requested scopes:
+    ```
+    scope=openid profile email
+    ```
+  </Accordion>
 
-- Base64url encoding bug
-- Stored verifier overwritten
-- Multiple login tabs racing
+  <Accordion title="Refresh token suddenly returns invalid_grant" icon="triangle-exclamation">
+    **Symptom:** A refresh request that previously worked now returns `invalid_grant`.
 
-Fix:
+    **Possible causes:**
+    - Token expired (refresh tokens have a maximum lifetime)
+    - Token was revoked by the user or by the server
+    - Reuse detection triggered — you sent the same refresh token twice (rotation means the old one is immediately invalidated after first use)
 
-- One verifier per login intent, clear after single use
+    **Fix:** Treat `invalid_grant` on a refresh as a terminal session loss and re-authenticate the user. Store the **new** refresh token returned by every successful refresh immediately.
+  </Accordion>
 
-## Missing `id_token`
+  <Accordion title="Connector token exchange denied" icon="triangle-exclamation">
+    **Symptom:** Token exchange with `grantType: urn:ietf:params:oauth:grant-type:token-exchange` returns `access_denied` or `invalid_target`.
 
-Cause:
+    **Possible causes:**
+    - No active connector grant for this user
+    - The target resource is disabled
+    - Requested scope exceeds what the grant allows
+    - `subjectToken` was issued to a different client than expected
 
-- `openid` not requested/granted
+    **Fix:** Re-run the connector authorization flow (`https://aveid.net/connect`) with the correct `resource` and `scope`, making sure the source app's token is used as `subjectToken`.
+  </Accordion>
 
-Fix:
+  <Accordion title="E2EE app key fails to decode" icon="circle-info">
+    **Symptom:** `atob()` throws, or the decrypted key is garbage.
 
-- Include `openid` in requested scopes
+    **Cause:** The app key is delivered via URL fragment (`#app_key=...`). Browsers silently replace `+` with a space in fragment parameters, breaking base64 decoding.
 
-## Refresh token suddenly invalid
+    **Fix:**
+    ```ts
+    const fixed = rawKey.replace(/ /g, "+");
+    const bytes = atob(fixed);
+    ```
+    Always normalize base64 strings from URL fragments before decoding.
+  </Accordion>
 
-Possible causes:
+  <Accordion title="User profile data is stale" icon="circle-info">
+    **Symptom:** Display name, avatar, or email shown in your app is outdated.
 
-- Token expired
-- Token revoked
-- Token reuse detection
+    **Cause:** Profile data cached from the initial token exchange is never refreshed.
 
-Fix:
+    **Fix:** Re-fetch the profile from `/api/oauth/userinfo` on each login, or when you need fresh data.
+  </Accordion>
 
-- Treat as terminal session loss; re-authenticate user
+  <Accordion title="Data showing up under the wrong user" icon="triangle-exclamation">
+    **Symptom:** One user can see another user's data, or data is missing after a user changes identity.
 
-## Connector exchange denied
+    **Cause:** App is storing data keyed by `handle` (username) instead of `identityId`. Handles can change; `identityId` is stable.
 
-Possible causes:
-
-- No active grant
-- Resource disabled
-- Requested scope exceeds grant
-- Subject token issued to different client
-
-Fix:
-
-- Re-run connector authorization with correct resource/scope and correct source app token
-
-## E2EE app key decode fails
-
-Cause:
-
-- `+` turned into space when parsed from fragment
-
-Fix:
-
-- `replace(/ /g, "+")` before base64 decode
-
-## User profile drift
-
-Cause:
-
-- Caching profile forever
-
-Fix:
-
-- Re-fetch profile on login or call userinfo as needed
-
-## Storing data by user instead of identity
-
-Cause:
-
-- Assuming one identity per person
-
-Fix:
-
-- Partition by `identityId` to avoid cross-identity data bleed
+    **Fix:** Always key user data by the `sub` claim from the JWT (which is the `identityId`). Never rely on `handle` as a stable identifier.
+  </Accordion>
+</AccordionGroup>

@@ -1,53 +1,84 @@
 ---
 title: "How Ave works"
-description: "High-level architecture and protocol flow: identity, passkeys, OAuth/OIDC, connector delegation, and signing."
+description: "A plain-English walkthrough of Ave's architecture: passkey identity, OAuth/OIDC token flow, Connector delegation, Signing, and E2EE."
 ---
 
-## Architecture at a glance
+## The big picture
 
-Ave combines:
+Ave combines several things that usually live in separate systems:
 
-- Passwordless identity (passkey-based)
-- OAuth 2.0 + OIDC for app integration
-- Optional E2EE app-key delivery
-- Connector delegation (resource-scoped app-to-app access)
-- Identity-backed signing workflows
+<CardGroup cols={2}>
+  <Card title="Passwordless identity" icon="fingerprint">
+    Users authenticate with a passkey — no passwords, no SMS codes.
+  </Card>
+  <Card title="OAuth 2.0 + OIDC" icon="key">
+    Standard authorization code flow with PKCE, ID tokens, access tokens, and refresh tokens.
+  </Card>
+  <Card title="Connector delegation" icon="link">
+    One app can request scoped access to another app's resources on a user's behalf.
+  </Card>
+  <Card title="Signing" icon="pen-nib">
+    Apps can request cryptographic approval from a user — the user signs a payload with their Ed25519 key.
+  </Card>
+  <Card title="E2EE key delivery" icon="lock">
+    Per-app, per-identity encryption keys are delivered via URL fragment (`#app_key=...`) on the OAuth callback redirect — never in `/api/oauth/token` responses. The server never holds plaintext.
+  </Card>
+</CardGroup>
 
-## Core interaction model
+## The standard OAuth flow
 
 <Steps>
-  <Step title="User authenticates with identity">
-    User completes passkey-driven login and selects an identity.
+  <Step title="Your app redirects the user to Ave">
+    You construct a URL to `https://aveid.net/signin` with your `client_id`, `redirect_uri`, scopes, PKCE challenge, `state`, and `nonce`. The user is sent there.
   </Step>
-  <Step title="App receives authorization code">
-    App gets one-time code via redirect URI.
+  <Step title="The user authenticates">
+    The user completes passkey login and selects an identity in the Ave UI. Ave issues a short-lived, one-time authorization code.
   </Step>
-  <Step title="App exchanges code for tokens">
-    App receives opaque access token, JWT access token, optional ID/refresh tokens.
+  <Step title="Ave redirects back with a code">
+    Ave redirects to your `redirect_uri` with `?code=...&state=...`. Your app validates `state` before doing anything else.
   </Step>
-  <Step title="App consumes claims and APIs">
-    App uses token for userinfo/profile and application session establishment.
+  <Step title="Your app exchanges the code for tokens">
+    Your app (or server) sends the code to `POST https://api.aveid.net/api/oauth/token`. You get back access tokens, an ID token, and optionally a refresh token.
+  </Step>
+  <Step title="Your app uses the tokens">
+    Use `id_token` to establish a user session. Use `access_token` or `access_token_jwt` to call Ave APIs. Use `refresh_token` to get new tokens without re-authenticating.
   </Step>
 </Steps>
 
-## Optional extension paths
+## Optional extension flows
 
-### Connector delegation
+<AccordionGroup>
+  <Accordion title="Connector delegation — app-to-app access">
+    The Connector flow lets one app ("source") request delegated access to a resource owned by another app ("target"). The user approves once at `https://aveid.net/connect`. Afterward, the source app uses a **token-exchange grant** to get a delegated token scoped to that resource.
 
-Use connector flow when one app needs user-approved access to another app resource.
+    Use this when: your app needs to act on a user's behalf in another service that also uses Ave.
 
-### Signing
+    → [Full guide](/guides/connector-app-to-app)
+  </Accordion>
+  <Accordion title="Signing — cryptographic user approval">
+    Your server creates a signing request with a human-readable payload. The user sees the payload in the Ave UI and approves with their passkey. Ave returns an Ed25519 signature that you verify server-side before taking any irreversible action.
 
-Use signing flow when app needs cryptographic proof of identity approval on a payload.
+    Use this when: you need high-integrity proof that a specific person approved a specific action (e.g. financial transactions, permissions changes).
 
-### E2EE
+    → [Full guide](/guides/ave-signing)
+  </Accordion>
+  <Accordion title="E2EE — per-app encryption keys">
+    For apps that store encrypted user data, Ave can deliver a per-app, per-identity encryption key. During the authorization consent step, the Ave UI decrypts the server-stored key using the user's master key and passes the plaintext key as `#app_key=...` in the callback redirect fragment. Your server never sees plaintext key material.
 
-Use E2EE key handoff when app stores encrypted user data and must never persist plaintext keys server-side.
+    Use this when: you want users to own their data and you want to guarantee you can't read it.
 
-## Trust boundaries
+    → [Full guide](/guides/end-to-end-encryption)
+  </Accordion>
+</AccordionGroup>
 
-- Ave auth UI + identity system: user-facing trust boundary
-- Ave API: token issuance, validation, metadata, and signing endpoints
-- Integrator backend: app sessioning, business logic, and authorization decisions
+## Trust model
 
-The integrator should treat Ave tokens/signatures as verified identity signals, then enforce app-specific policy locally.
+| Layer | Who operates it | What it's responsible for |
+|---|---|---|
+| **Ave auth UI + identity system** | Ave | Passkey auth, identity selection, user consent |
+| **Ave API** | Ave | Token issuance, validation, signing, metadata |
+| **Your backend** | You | Session management, business logic, app-level authorization |
+
+<Note>
+  Ave tokens and signatures are **identity signals** — they tell you who the user is and what they approved. Enforcing what that identity is *allowed to do* in your app is still your responsibility.
+</Note>

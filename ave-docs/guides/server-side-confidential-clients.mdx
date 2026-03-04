@@ -1,52 +1,100 @@
 ---
 title: "Server-side confidential clients"
-description: "Implement authorization code exchange and refresh on trusted servers using client credentials."
+description: "Implement authorization code exchange and token refresh on a trusted server using a client secret."
 ---
 
-Confidential clients run token exchange on a backend that can keep secrets safely.
+A **confidential client** is an app whose server can store a `clientSecret` securely — a secret never exposed to browsers, mobile apps, or end users. Server-rendered apps, API backends, and background services are typical confidential clients.
 
-## Core flow
+<Note>
+  If any part of your app runs in a browser or on a user's device, use [PKCE](/guides/pkce-for-public-clients) instead. Client secrets in browser code are not secret.
+</Note>
 
-1. Redirect browser to `https://aveid.net/signin`
-2. Receive callback code on your server
-3. Exchange with `clientSecret`
-4. Store session server-side
-5. Refresh using rotated refresh tokens
+## Flow overview
 
-## Server helper example
+<Steps>
+  <Step title="Redirect the browser to Ave">
+    From your server, construct the authorization URL and redirect the user's browser to `https://aveid.net/signin`. You can still include PKCE parameters — this is actually recommended even for confidential clients, as defense-in-depth.
+  </Step>
+  <Step title="Receive the callback on your server">
+    Your server endpoint at the registered `redirect_uri` receives `?code=...&state=...`. Validate `state` against the value stored in the user's server session before proceeding.
+  </Step>
+  <Step title="Exchange the code with your client secret">
+    ```ts
+    import { exchangeCodeServer } from "@ave-id/sdk/server";
 
-```ts
-import { exchangeCodeServer, refreshTokenServer } from "@ave-id/sdk/server";
+    const tokens = await exchangeCodeServer(
+      {
+        clientId: process.env.AVE_CLIENT_ID!,
+        clientSecret: process.env.AVE_CLIENT_SECRET!,
+        redirectUri: "https://yourapp.com/callback",
+      },
+      { code }
+    );
+    ```
 
-const tokens = await exchangeCodeServer(
-  {
-    clientId: process.env.AVE_CLIENT_ID!,
-    clientSecret: process.env.AVE_CLIENT_SECRET!,
-    redirectUri: "https://yourapp.com/callback"
-  },
-  { code }
-);
-```
+    Or with raw HTTP:
 
-## Secret handling requirements
+    ```bash
+    POST https://api.aveid.net/api/oauth/token
+    Content-Type: application/json
 
-- Never ship `clientSecret` to browsers/apps
-- Store secrets in encrypted runtime config
-- Rotate secrets in developer portal and deployment env at the same time
-- Log token endpoint failures without logging raw token values
+    {
+      "grantType": "authorization_code",
+      "code": "AUTH_CODE",
+      "redirectUri": "https://yourapp.com/callback",
+      "clientId": "YOUR_CLIENT_ID",
+      "clientSecret": "YOUR_CLIENT_SECRET"
+    }
+    ```
+  </Step>
+  <Step title="Store tokens server-side and issue a session">
+    Store `access_token`, `access_token_jwt`, `id_token`, and `refresh_token` in your encrypted server-side session store. Issue your own session cookie to the browser.
 
-## Refresh token safety
+    Never send raw Ave tokens to the browser — issue your own short-lived session identifier instead.
+  </Step>
+  <Step title="Refresh silently when tokens expire">
+    ```ts
+    import { refreshTokenServer } from "@ave-id/sdk/server";
 
-Because Ave rotates refresh tokens, always replace stored refresh token after each successful refresh.
+    const newTokens = await refreshTokenServer(
+      {
+        clientId: process.env.AVE_CLIENT_ID!,
+        clientSecret: process.env.AVE_CLIENT_SECRET!,
+        redirectUri: "https://yourapp.com/callback",
+      },
+      { refreshToken: storedRefreshToken }
+    );
 
-If refresh fails with `invalid_grant`:
+    // Replace stored refresh token immediately
+    await storeRefreshToken(newTokens.refresh_token);
+    ```
+  </Step>
+</Steps>
 
-- Stop retry loops
-- Clear local session
-- Force full re-authentication
+## Client secret rules
 
-## Recommended server session strategy
+<Check>Store the secret in encrypted runtime config (environment variables, secrets manager)</Check>
+<Check>Never ship `clientSecret` to browsers, mobile apps, or frontend code</Check>
+<Check>Rotate secrets in the developer portal and your deployment environment at the same time</Check>
+<Check>Log token endpoint failures without logging raw token values or secrets</Check>
 
-- Keep OAuth tokens in encrypted server-side session store
-- Issue your own app session cookie to frontend
-- Optionally mint your own short-lived app JWT from validated Ave identity
+## Handling refresh token rotation
+
+Ave rotates refresh tokens on every use — the old token is immediately invalidated after a successful refresh. If you store the old token and try to reuse it, you'll get `invalid_grant`.
+
+**Best practice:**
+1. Store the new `refresh_token` from every refresh response before discarding the old one
+2. Use a database row lock or atomic update to prevent concurrent refreshes from the same token
+3. If refresh fails with `invalid_grant`: stop retry loops, clear the session, and force re-authentication
+
+## Recommended session architecture
+
+| Layer | What it holds |
+|---|---|
+| **Server session store** (encrypted) | `access_token`, `refresh_token`, `id_token`, token expiry |
+| **Browser** | Short-lived session cookie pointing to server session (HTTP-only, Secure, SameSite=Lax) |
+| **Your API** | Issues responses based on server-side session lookups — Ave tokens never cross to the client |
+
+<Tip>
+  You can also mint your own short-lived app JWT from the validated Ave `id_token` and send that to the browser. This decouples your session format from Ave's token format and gives you full control over expiry and claims.
+</Tip>

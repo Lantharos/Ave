@@ -988,10 +988,10 @@ app.post("/token", zValidator("json", z.discriminatedUnion("grantType", [
     response.refresh_token = refreshToken;
   }
   
-  // Include encrypted app key for E2EE apps
-  if (oauthApp.supportsE2ee && authCode.encryptedAppKey) {
-    response.encrypted_app_key = authCode.encryptedAppKey;
-  }
+  // Note: the app key is NOT included in the JSON token response.
+  // The Ave authorization UI decrypts the server-stored encrypted key using the user's master key
+  // during the consent step and passes the plaintext key to the app as #app_key=... in the
+  // callback redirect URL fragment — it never appears in server logs or JSON response bodies.
   
   return c.json(response);
 });
