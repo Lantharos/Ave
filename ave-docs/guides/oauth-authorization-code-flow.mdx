@@ -267,8 +267,20 @@ For any library or system that validates tokens manually, follow this order:
 
 ## Edge cases
 
-- Authorization codes expire in seconds — do not store and exchange later
-- Redirect URI must match exactly, including protocol and path
-- Missing `openid` scope means no `id_token` is returned
-- Missing `offline_access` scope means no `refresh_token` is returned
-- If your app requests `user_id` but does not have `allowUserIdScope` configured, the `uid` claim will not appear
+<AccordionGroup>
+  <Accordion title="Authorization code expires in seconds">
+    Don't store the code and exchange later. Exchange immediately after validating `state` on the callback page.
+  </Accordion>
+  <Accordion title="Redirect URI must match exactly">
+    Protocol, hostname, path, and query string must all match exactly. A trailing slash difference will cause `invalid_grant`. Register the exact URI you use.
+  </Accordion>
+  <Accordion title="Missing id_token">
+    The `openid` scope was not requested or was not granted. Add `openid` to your scope list.
+  </Accordion>
+  <Accordion title="Missing refresh_token">
+    The `offline_access` scope was not requested or was not granted. Add `offline_access` to your scope list.
+  </Accordion>
+  <Accordion title="uid claim missing from access_token_jwt">
+    The `user_id` scope was requested, but your app doesn't have `allowUserIdScope` configured in the developer portal, or the scope wasn't granted. The `uid` claim only appears when both conditions are met.
+  </Accordion>
+</AccordionGroup>

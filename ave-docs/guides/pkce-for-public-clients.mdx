@@ -1,60 +1,124 @@
 ---
 title: "PKCE for public clients"
-description: "Production-grade PKCE implementation for SPAs and mobile clients with replay-safe storage and callback handling."
+description: "Production-grade PKCE implementation for SPAs and mobile apps. Covers the security model, browser storage, common failures, and mobile-specific concerns."
 ---
 
-Use PKCE whenever you cannot safely store a client secret.
+PKCE (Proof Key for Code Exchange, pronounced "pixy") is required for any app that can't safely store a client secret — SPAs, mobile apps, desktop apps, and browser extensions.
 
 ## Why PKCE matters
 
-PKCE binds authorization code exchange to the same client that started login.
+Without PKCE, a leaked authorization code can be exchanged for tokens by anyone who intercepts it. PKCE binds the code exchange to the specific browser session that initiated the login:
 
-Without PKCE, leaked authorization codes are easier to misuse.
+1. Your app generates a random `code_verifier` string
+2. It hashes it to produce a `code_challenge` and sends that to Ave
+3. When exchanging the code for tokens, it sends the original `code_verifier`
+4. Ave hashes the verifier and checks it matches the stored challenge
 
-## Required pieces
+An attacker who intercepts the code can't exchange it without the original `code_verifier`, which never left your app.
 
-- High-entropy `code_verifier`
-- `code_challenge = BASE64URL(SHA256(code_verifier))`
-- `code_challenge_method=S256`
+## Implementation checklist
 
-## Browser implementation checklist
+<Check>Generate a high-entropy `code_verifier` (at least 43 characters, URL-safe)</Check>
+<Check>Hash it with SHA-256 and base64url-encode to get `code_challenge`</Check>
+<Check>Send `code_challenge` and `code_challenge_method=S256` in the authorization request</Check>
+<Check>Store `code_verifier` in `sessionStorage` (not `localStorage`)</Check>
+<Check>Also store `state` and `nonce` in `sessionStorage` alongside the verifier</Check>
+<Check>Clear all three immediately after a successful exchange — they are single-use</Check>
 
-- Generate verifier/challenge before redirect
-- Store verifier in short-lived session storage (not localStorage)
-- Store `state` and `nonce` alongside verifier
-- Remove all three immediately after successful exchange
+## Implementation with `@ave-id/sdk`
 
-## Example using `@ave-id/sdk`
+<Steps>
+  <Step title="Redirect the user">
+    ```ts
+    import { startPkceLogin } from "@ave-id/sdk/client";
 
-```ts
-import { startPkceLogin } from "@ave-id/sdk/client";
+    await startPkceLogin({
+      clientId: "YOUR_CLIENT_ID",
+      redirectUri: "https://yourapp.com/callback",
+      scope: "openid profile email offline_access",
+    });
+    // Automatically generates PKCE params, stores them in sessionStorage,
+    // and redirects to aveid.net/signin
+    ```
+  </Step>
+  <Step title="Handle the callback">
+    ```ts
+    import { exchangeCode } from "@ave-id/sdk";
 
-await startPkceLogin({
-  clientId: "YOUR_CLIENT_ID",
-  redirectUri: "https://yourapp.com/callback"
-});
-```
+    // On your /callback page:
+    const params = new URLSearchParams(window.location.search);
+    const code = params.get("code")!;
 
-Callback exchange:
+    // Retrieve stored PKCE params
+    const codeVerifier = sessionStorage.getItem("ave_code_verifier")!;
+    const state = sessionStorage.getItem("ave_state")!;
 
-```ts
-import { exchangeCode } from "@ave-id/sdk";
+    // Validate state before exchanging (CSRF protection)
+    const returnedState = params.get("state");
+    if (returnedState !== state) {
+      throw new Error("State mismatch — possible CSRF attack");
+    }
 
-const tokens = await exchangeCode(
-  { clientId: "YOUR_CLIENT_ID", redirectUri: "https://yourapp.com/callback" },
-  { code, codeVerifier }
-);
-```
+    // Clear immediately — single use
+    sessionStorage.removeItem("ave_code_verifier");
+    sessionStorage.removeItem("ave_state");
+
+    const tokens = await exchangeCode(
+      { clientId: "YOUR_CLIENT_ID", redirectUri: "https://yourapp.com/callback" },
+      { code, codeVerifier }
+    );
+    ```
+  </Step>
+</Steps>
 
 ## Common PKCE failures
 
-- Verifier lost after redirect (storage bug)
-- Verifier/challenge generated with non-URL-safe base64
-- `codeVerifier` omitted in token request
-- Callback handled twice (double exchange)
+<AccordionGroup>
+  <Accordion title="invalid_grant: code_verifier mismatch">
+    The `code_verifier` stored before the redirect doesn't match what you send at exchange time.
 
-## Mobile notes
+    **Most common causes:**
+    - User opened a second browser tab, overwriting the stored verifier
+    - `sessionStorage` was cleared between redirect and callback (e.g., redirect to a new window)
+    - Base64url encoding bug — the verifier must use URL-safe characters (`-` and `_`, not `+` and `/`)
 
-- Treat deep links as untrusted input; validate `state`
-- Use app lifecycle-safe storage for verifier/state/nonce
-- Guard against duplicate callback intents
+    **Fix:** Use the SDK helpers which handle encoding correctly. If rolling your own, ensure `btoa()` output is made URL-safe.
+  </Accordion>
+  <Accordion title="code_verifier missing from token request">
+    Token exchange returns `invalid_request` even though you're sending the code.
+
+    **Cause:** Forgetting to include `codeVerifier` in the token exchange request when the authorization request included a `code_challenge`.
+
+    **Fix:** Always include `codeVerifier` when using PKCE — even when using a confidential client that also sends a `clientSecret`.
+  </Accordion>
+  <Accordion title="Callback route handling twice">
+    Token exchange fires twice, and the second call fails with `invalid_grant` (code already used).
+
+    **Cause:** React strict mode, HMR, or a route that mounts twice.
+
+    **Fix:** Use a ref or state flag to ensure `exchangeCode` is called exactly once per page load. In React:
+
+    ```ts
+    const exchanged = useRef(false);
+    useEffect(() => {
+      if (exchanged.current) return;
+      exchanged.current = true;
+      handleCallback();
+    }, []);
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Mobile-specific concerns
+
+<AccordionGroup>
+  <Accordion title="Deep links and custom URI schemes">
+    If you use a deep link (`myapp://callback`) as your `redirect_uri`, validate `state` before trusting any parameters — deep links can be intercepted by other apps on the device.
+  </Accordion>
+  <Accordion title="App lifecycle and storage">
+    On iOS and Android, the app may be backgrounded or terminated between the authorization redirect and the callback. Use app-lifecycle-safe storage (e.g. encrypted shared preferences on Android, Keychain on iOS) rather than in-memory session storage.
+  </Accordion>
+  <Accordion title="Duplicate callback intents">
+    Some Android launchers can deliver the same deep link intent multiple times. Guard against this with the same deduplication pattern as the React strict mode fix above.
+  </Accordion>
+</AccordionGroup>
