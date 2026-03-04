@@ -1,53 +1,73 @@
 ---
 title: "Security best practices"
-description: "Hardening checklist for OAuth, OIDC token validation, connector delegation, and signing workflows."
+description: "Hardening checklist for OAuth, OIDC token validation, Connector delegation, and signing workflows."
 ---
 
-## OAuth request hardening
+<AccordionGroup>
+  <Accordion title="OAuth request hardening" icon="shield-halved" defaultOpen>
+    <Check>Always generate and verify `state` to prevent CSRF attacks</Check>
+    <Check>Always generate and verify `nonce` when requesting `id_token`</Check>
+    <Check>Use PKCE (`S256`) for every public client (SPA, mobile, desktop)</Check>
+    <Check>Register exact redirect URIs — no wildcards, no trailing-slash variations</Check>
+  </Accordion>
 
-- Always send and verify `state`
-- Always send and verify `nonce` when using OIDC
-- Use PKCE (`S256`) for every public client
-- Register exact redirect URIs only
+  <Accordion title="Token storage and handling" icon="vault">
+    <Check>Treat `access_token`, `access_token_jwt`, and `refresh_token` as secrets</Check>
+    <Check>Prefer server-side token storage (HTTP-only cookies, encrypted session)</Check>
+    <Check>If browser storage is necessary, use `sessionStorage` over `localStorage` — never `localStorage` for refresh tokens</Check>
+    <Check>Rotate app sessions after a refresh or privilege change</Check>
 
-## Token handling
+    <Warning>
+      `refresh_token` grants long-lived access. A leaked refresh token lets an attacker impersonate the user until it's revoked. Store it server-side whenever possible.
+    </Warning>
+  </Accordion>
 
-- Treat `access_token` and `refresh_token` as secrets
-- Prefer server-side token storage
-- If browser storage is required, prefer memory over persistent storage
-- Rotate sessions after refresh or privilege change
+  <Accordion title="ID token validation" icon="badge-check">
+    When validating an `id_token` JWT received from Ave, check all of the following:
 
-## Token validation
+    <Check>Signature valid against JWKS at `https://api.aveid.net/.well-known/jwks.json`</Check>
+    <Check>`iss` equals `https://api.aveid.net`</Check>
+    <Check>`aud` equals your `clientId` (or `origin:https://yourapp.com` for Quick Ave)</Check>
+    <Check>`exp` is in the future</Check>
+    <Check>`iat` is recent (within an acceptable clock skew)</Check>
+    <Check>`nonce` matches the value you sent at authorization time</Check>
+    <Check>Reject tokens with missing or unexpected values for any of the above</Check>
 
-- Validate ID token signature via JWKS
-- Validate `iss`, `aud`, `exp`, `iat`, and `nonce`
-- Reject tokens with missing critical claims
-- Keep service clocks synchronized
+    <Note>
+      Keep your service clocks synchronized (NTP). JWT validation is time-sensitive — a clock that's off by more than a few minutes will cause false rejections or accept expired tokens.
+    </Note>
+  </Accordion>
 
-## Connector safety
+  <Accordion title="Connector (delegation) safety" icon="link">
+    <Check>Request the minimum set of connector scopes your app actually needs</Check>
+    <Check>Pin to known `requestedResource` values — don't accept arbitrary resource keys from user input</Check>
+    <Check>Handle `access_denied` on token exchange as a normal user action (grant was revoked), not a system error</Check>
+    <Check>Never cache delegated tokens past their `expires_in` time</Check>
+  </Accordion>
 
-- Request minimum connector scopes
-- Pin to known `requestedResource` values
-- Handle revoked grants as normal user action, not system error
-- Never cache delegated tokens beyond expiry
+  <Accordion title="Signing safety" icon="pen-nib">
+    <Check>Include an anti-replay nonce or a unique operation ID in every signed payload</Check>
+    <Check>Set short expiration times for signing requests (default 300 s, max 3600 s)</Check>
+    <Check>Verify signatures server-side before performing any irreversible action</Check>
+    <Check>Use canonical, deterministic payload strings to avoid signature-mismatch bugs</Check>
 
-## Signing safety
+    <Warning>
+      Never perform side effects (transfers, permission changes, deletions) based solely on a pending signing request. Wait for `status: "signed"` **and** verify the Ed25519 signature before proceeding.
+    </Warning>
+  </Accordion>
 
-- Sign canonicalized payloads
-- Include anti-replay nonce or unique operation ID in payload
-- Set short expirations for signature requests
-- Verify signatures server-side before performing irreversible actions
+  <Accordion title="E2EE key safety" icon="lock">
+    <Check>Normalize base64 fragments before decoding — replace ` ` (space) with `+`</Check>
+    <Check>Remove key-bearing URL fragments from browser history immediately after parsing</Check>
+    <Check>Keep per-identity encrypted data partitions — never mix data across identities</Check>
+    <Check>Never log raw key material</Check>
+  </Accordion>
 
-## E2EE key safety
-
-- Normalize base64 fragment values (`+`/space issue)
-- Remove key-bearing URL fragments immediately
-- Keep per-identity encrypted data partitions
-- Never log raw key material
-
-## Operational controls
-
-- Monitor `invalid_grant` and `invalid_scope` spikes
-- Track refresh failure/reuse patterns
-- Alert on unusual signing denial/success anomalies
-- Rotate app credentials periodically
+  <Accordion title="Operational monitoring" icon="chart-line">
+    <Check>Monitor spikes in `invalid_grant` errors — may indicate token replay or reuse attacks</Check>
+    <Check>Monitor spikes in `invalid_scope` errors — may indicate misconfigured clients or probing</Check>
+    <Check>Track refresh token failure patterns to detect stolen tokens</Check>
+    <Check>Alert on unusual signing denial/approval anomalies</Check>
+    <Check>Rotate app credentials (`clientSecret`) periodically</Check>
+  </Accordion>
+</AccordionGroup>

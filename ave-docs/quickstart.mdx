@@ -1,31 +1,35 @@
 ---
 title: "Quickstart"
-description: "Set up Ave login from scratch: app registration, the authorization code flow, token exchange, and what to do with each token."
+description: "Set up Ave login from scratch: register an app, run the authorization code flow with PKCE, exchange the code for tokens, and use each token correctly."
 ---
+
+<Note>
+  Want to skip registration entirely? [Quick Ave](/guides/quick-ave) gets you working auth in 3 lines with no dashboard, no client ID, and no environment variables. Come back here when you need refresh tokens, app branding, or a confidential client.
+</Note>
 
 ## Prerequisites
 
 <Steps>
   <Step title="Create an app in the developer portal">
-    Go to [devs.aveid.net](https://devs.aveid.net) and create an OAuth app. You will receive:
+    Go to [devs.aveid.net](https://devs.aveid.net) and create an OAuth app. You'll receive:
 
-    - **Client ID** — used in all requests, safe to expose in browser code
-    - **Client secret** — server-only, never put this in browser or mobile code
+    - **Client ID** — used in all requests; safe to include in browser code
+    - **Client secret** — server-side only; never put this in browser or mobile code
 
     <Tip>
-      If you are building a SPA or any app where code runs in the browser, use PKCE instead of a client secret. PKCE does not require a secret.
+      Building a SPA or any app that runs code in the browser? Use PKCE instead of a client secret. PKCE doesn't require a secret.
     </Tip>
   </Step>
-  <Step title="Configure your redirect URI">
-    Register the exact callback URL where Ave will redirect after login (`https://yourapp.com/callback`). The URI must match exactly — no wildcards, no trailing slash differences.
+  <Step title="Register your redirect URI">
+    Add the exact callback URL where Ave should redirect after login (e.g. `https://yourapp.com/callback`). The URI must match exactly — no wildcards, no trailing-slash differences.
   </Step>
 </Steps>
 
 ## Login flow
 
 <Steps>
-  <Step title="Generate PKCE parameters and redirect">
-    Before redirecting the user, generate PKCE parameters. These prove that the same browser session that started the login is the one completing it.
+  <Step title="Generate PKCE parameters and redirect the user">
+    Before redirecting, generate PKCE parameters. They prove that the same browser session that started login is the one completing it.
 
     ```ts
     import { generateCodeVerifier, generateCodeChallenge, generateNonce } from "@ave-id/sdk";
@@ -33,9 +37,9 @@ description: "Set up Ave login from scratch: app registration, the authorization
     const codeVerifier = generateCodeVerifier();
     const codeChallenge = await generateCodeChallenge(codeVerifier);
     const state = crypto.randomUUID(); // CSRF protection
-    const nonce = generateNonce();     // ID token replay protection
+    const nonce = generateNonce();     // Replay protection for id_token
 
-    // Persist these — you need them when the user comes back
+    // Store these — you need them when the user returns
     sessionStorage.setItem("ave_code_verifier", codeVerifier);
     sessionStorage.setItem("ave_state", state);
     sessionStorage.setItem("ave_nonce", nonce);
@@ -53,11 +57,11 @@ description: "Set up Ave login from scratch: app registration, the authorization
     ```
 
     <Note>
-      `state` prevents CSRF attacks — without it, an attacker could trick your app into completing a login they initiated. `nonce` prevents replay attacks against the ID token. Both are short strings you generate randomly and store temporarily.
+      `state` prevents CSRF attacks — without it, an attacker can trick your app into completing a login they started. `nonce` prevents replay attacks against the ID token. Both are random strings you generate and store temporarily.
     </Note>
   </Step>
   <Step title="Handle the callback">
-    Ave redirects back to your `redirect_uri` with `?code=AUTH_CODE&state=YOUR_STATE`. Validate `state` before doing anything else.
+    Ave redirects to your `redirect_uri` with `?code=AUTH_CODE&state=YOUR_STATE`. Validate `state` before doing anything else.
 
     ```ts
     const params = new URLSearchParams(window.location.search);
@@ -71,18 +75,16 @@ description: "Set up Ave login from scratch: app registration, the authorization
       throw new Error("State mismatch — possible CSRF attack");
     }
 
-    // Clear state immediately — one-time use only
+    // Clear immediately — these are single-use
     sessionStorage.removeItem("ave_state");
     sessionStorage.removeItem("ave_code_verifier");
     ```
 
     <Warning>
-      The authorization code expires quickly (seconds). Do not queue the exchange — call the token endpoint immediately.
+      The authorization code expires in seconds. Don't queue the exchange — call the token endpoint immediately after validating `state`.
     </Warning>
   </Step>
   <Step title="Exchange the code for tokens">
-    Send the code to the token endpoint from your server (for confidential clients) or directly from the browser (for PKCE-only public clients).
-
     <Tabs>
       <Tab title="PKCE (public client)">
         ```ts
@@ -124,7 +126,7 @@ description: "Set up Ave login from scratch: app registration, the authorization
         ```
 
         <Warning>
-          All token endpoint fields use **camelCase** (`grantType`, `clientId`, `redirectUri`, `codeVerifier`) — not the snake_case you may be used to from other OAuth providers. The endpoint will return a `400` error if you send `grant_type` or `client_id`.
+          Ave uses **camelCase** fields (`grantType`, `clientId`, `redirectUri`, `codeVerifier`) — not the snake_case used by most OAuth providers. Sending `grant_type` or `client_id` returns a `400` error.
         </Warning>
       </Tab>
     </Tabs>
@@ -151,41 +153,42 @@ description: "Set up Ave login from scratch: app registration, the authorization
     }
     ```
 
-    You get **two different tokens** and they serve different purposes:
+    You get **two access tokens** with different purposes:
 
-    | Token | What it is | `aud` claim | Use for |
+    | Token | Format | `aud` claim | Use for |
     |---|---|---|---|
-    | `access_token` | Opaque string | – | Calling Ave's `/api/oauth/userinfo` endpoint |
-    | `access_token_jwt` | Signed JWT | `https://api.aveid.net` | Calling Ave API endpoints, Connector delegation |
-    | `id_token` | Signed OIDC JWT | **Your client ID** | Identity assertion, Convex auth |
-    | `refresh_token` | Opaque string | – | Getting new tokens without re-login |
+    | `access_token` | Opaque string | — | Calling Ave's `/api/oauth/userinfo` |
+    | `access_token_jwt` | Signed JWT | `https://api.aveid.net` | Your own API, Connector delegation |
+    | `id_token` | Signed OIDC JWT | **Your client ID** | User session, Convex auth |
+    | `refresh_token` | Opaque string | — | Getting new tokens without re-login |
 
     <Note>
-      `id_token` and `access_token_jwt` are both signed JWTs, but they have **different audiences**. The `id_token` audience (`aud`) is your `clientId`. The `access_token_jwt` audience is `https://api.aveid.net`. This matters a lot for Convex and any library that validates JWT audience.
-    </Note>
+      `id_token` and `access_token_jwt` are both signed JWTs with **different audiences**. The `id_token` audience is your `clientId`. The `access_token_jwt` audience is `https://api.aveid.net`. This matters for Convex and any library that validates JWT audience.
 
-    Only `id_token` is returned when you request the `openid` scope. Only `refresh_token` is returned when you request `offline_access`.
+      `id_token` is only returned when you request the `openid` scope. `refresh_token` is only returned with `offline_access`.
+    </Note>
   </Step>
-  <Step title="Establish your app session">
-    Use `id_token` or the `user` payload to create your app's own session:
+  <Step title="Create your app session">
+    Use `id_token` or the `user` object to create a session in your app:
 
     ```ts
-    // Option A: use the user object directly (quick start)
     const { user, id_token, access_token, refresh_token } = tokens;
-    // user.id is the identity UUID (stable identity identifier)
 
-    // Option B: validate id_token claims properly
-    // Fetch JWKS from https://api.aveid.net/.well-known/jwks.json
-    // Verify signature, iss, aud === YOUR_CLIENT_ID, exp, nonce
+    // Option A: use the user object directly (simplest)
+    // user.id is the identity UUID — use as your stable user key
+
+    // Option B: validate id_token claims for higher assurance
+    // 1. Fetch JWKS from https://api.aveid.net/.well-known/jwks.json
+    // 2. Verify signature, iss, aud === YOUR_CLIENT_ID, exp, nonce
     ```
 
-    Store `refresh_token` securely (HTTP-only cookie or server-side session) if you requested `offline_access`. Never store it in localStorage.
+    Store `refresh_token` securely (HTTP-only cookie or server-side session) if you requested `offline_access`. Never put it in `localStorage`.
   </Step>
 </Steps>
 
 ## Refresh tokens
 
-When `access_token` expires, exchange the refresh token for a new set.
+When the access token expires, exchange the refresh token for a new set without re-authenticating the user.
 
 ```ts
 import { refreshToken } from "@ave-id/sdk";
@@ -197,34 +200,43 @@ const newTokens = await refreshToken(
 ```
 
 <Warning>
-  Refresh tokens are **rotated** on every use — each successful refresh returns a new refresh token and invalidates the previous one. Store the new token immediately. If you reuse an old token, the server will return `invalid_grant` and may revoke related tokens as a security measure.
+  Refresh tokens are **rotated on every use** — each successful refresh returns a new refresh token and invalidates the previous one. Store the new token immediately after every refresh. Reusing an old refresh token triggers `invalid_grant` and may revoke related tokens as a security measure.
 </Warning>
 
-## Common errors
+## Error reference
 
-| Error | Cause |
-|---|---|
-| `invalid_client` | Client ID or secret mismatch |
-| `invalid_grant` | Bad/expired code, wrong `codeVerifier`, or replayed refresh token |
-| `invalid_request` | Missing required field (for example `codeVerifier` when PKCE is required) |
-| `invalid_scope` | Scope not allowed for this app |
-| `invalid_target` | Bad connector resource key |
-| `access_denied` | Connector grant missing or revoked |
+<AccordionGroup>
+  <Accordion title="invalid_client">
+    Client ID or client secret doesn't match any registered app.
+  </Accordion>
+  <Accordion title="invalid_grant">
+    The code or refresh token is bad, expired, or was already used. For refresh tokens, this may also mean reuse detection triggered.
+  </Accordion>
+  <Accordion title="invalid_request">
+    A required field is missing. Common cause: forgetting `codeVerifier` when PKCE is required.
+  </Accordion>
+  <Accordion title="invalid_scope">
+    A requested scope isn't allowed for this app. Check your app's scope allowlist in the developer portal.
+  </Accordion>
+  <Accordion title="invalid_target">
+    The Connector `requestedResource` key doesn't exist or isn't active.
+  </Accordion>
+  <Accordion title="access_denied">
+    The Connector grant is missing or was revoked. Re-run the Connector authorization flow.
+  </Accordion>
+</AccordionGroup>
 
 ## Next steps
 
 <CardGroup cols={2}>
-  <Card title="Quick Ave (no registration)" href="/guides/quick-ave">
-    Add Ave login to any site in minutes with no app registration. Great for prototyping — upgradeable to the full flow later.
-  </Card>
   <Card title="Token details" href="/guides/oauth-authorization-code-flow">
     Full JWT payload reference for `id_token` and `access_token_jwt`, validation steps, and refresh token rotation.
   </Card>
-  <Card title="Convex auth" href="/guides/convex-custom-auth">
-    Exactly how to wire Ave tokens into Convex, including which token to use and why.
-  </Card>
   <Card title="PKCE deep dive" href="/guides/pkce-for-public-clients">
     PKCE security model, browser storage guidance, and anti-patterns to avoid.
+  </Card>
+  <Card title="Convex auth" href="/guides/convex-custom-auth">
+    Exactly how to wire Ave tokens into Convex, including which token to use and why.
   </Card>
   <Card title="Scopes and claims" href="/guides/scopes-and-claims">
     Complete scope catalog with the exact JWT claims each scope adds.

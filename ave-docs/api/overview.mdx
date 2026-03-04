@@ -1,106 +1,101 @@
 ---
 title: "API overview"
-description: "Endpoint families, auth requirements, and request conventions for Ave OAuth/OIDC and Signing APIs."
+description: "Endpoint families, authentication requirements, and request conventions for the Ave OAuth/OIDC and Signing APIs."
 ---
 
 <CardGroup cols={3}>
-	<Card title="OAuth + OIDC" icon="key-round" href="/api/oauth-endpoints">
-		Token grants, userinfo, discovery, and delegation management endpoints.
-	</Card>
-	<Card title="Signing" icon="signature" href="/api/signing-endpoints">
-		Signature request lifecycle, verification, and user signing endpoints.
-	</Card>
-	<Card title="Security" icon="shield" href="/security/best-practices">
-		Hardening checklist for token handling, claims validation, and key safety.
-	</Card>
+  <Card title="OAuth + OIDC" icon="key" href="/api/oauth-endpoints">
+    Token grants, userinfo, discovery, and delegation management endpoints.
+  </Card>
+  <Card title="Signing" icon="pen-nib" href="/api/signing-endpoints">
+    Signature request lifecycle, verification, and key management.
+  </Card>
+  <Card title="Security" icon="shield" href="/security/best-practices">
+    Hardening checklist for token handling, claims validation, and key safety.
+  </Card>
 </CardGroup>
 
-## API host
+## Base URL
 
-- Base URL: `https://api.aveid.net`
+```
+https://api.aveid.net
+```
 
 <Note>
-	Use `api.aveid.net` for API calls and `aveid.net` for user-facing auth pages.
+  Use `api.aveid.net` for all API calls. Use `aveid.net` for user-facing auth pages (sign-in, Connector consent). Never mix the two.
 </Note>
 
 ## Request conventions
 
-- JSON request bodies
-- OAuth token endpoint expects **camelCase** body fields
-- Bearer auth where applicable
+All request bodies are JSON. The token endpoint uses **camelCase** field names.
 
 <CodeGroup>
-```bash OAuth token request
+```bash Token request
 curl -X POST https://api.aveid.net/api/oauth/token \
-	-H "Content-Type: application/json" \
-	-d '{
-		"grantType": "authorization_code",
-		"code": "AUTHORIZATION_CODE",
-		"redirectUri": "https://yourapp.com/callback",
-		"clientId": "YOUR_CLIENT_ID",
-		"codeVerifier": "PKCE_VERIFIER"
-	}'
+  -H "Content-Type: application/json" \
+  -d '{
+    "grantType": "authorization_code",
+    "code": "AUTHORIZATION_CODE",
+    "redirectUri": "https://yourapp.com/callback",
+    "clientId": "YOUR_CLIENT_ID",
+    "codeVerifier": "PKCE_VERIFIER"
+  }'
 ```
 
 ```bash Userinfo request
 curl https://api.aveid.net/api/oauth/userinfo \
-	-H "Authorization: Bearer ACCESS_TOKEN"
+  -H "Authorization: Bearer ACCESS_TOKEN"
 ```
 </CodeGroup>
 
-## Auth models by endpoint family
+## Authentication by endpoint family
 
-### Public OAuth/OIDC
+<AccordionGroup>
+  <Accordion title="Public OAuth/OIDC endpoints — no auth required">
+    These endpoints are public and require no credentials:
 
-- Discovery and JWKS: public
-- `/api/oauth/token`: public (client credentials / PKCE validated in payload)
-- `/api/oauth/userinfo`: requires bearer access token
-- `/api/oauth/app/:clientId`, `/api/oauth/resource/:resourceKey`: public metadata
+    - `GET /.well-known/openid-configuration` — OIDC discovery metadata
+    - `GET /.well-known/jwks.json` — JWT verification keys
+    - `GET /.well-known/webfinger` — issuer discovery
+    - `GET /api/oauth/app/:clientId` — app public metadata
+    - `GET /api/oauth/resource/:resourceKey` — Connector resource metadata
+    - `POST /api/oauth/token` — token grants (credentials validated in request body)
 
-### Session-authenticated OAuth management
+    Userinfo requires a bearer token:
+    - `GET /api/oauth/userinfo` — requires `Authorization: Bearer <access_token>`
+  </Accordion>
 
-Requires authenticated Ave session (bearer session token or Ave session cookie):
+  <Accordion title="Session-authenticated OAuth management endpoints">
+    These require an authenticated Ave session (bearer session token or Ave session cookie):
 
-- `/api/oauth/authorize`
-- `/api/oauth/authorizations`
-- `/api/oauth/authorization/:clientId`
-- `/api/oauth/delegations`
+    - `POST /api/oauth/authorize` — grant authorization and produce a redirect URL
+    - `GET /api/oauth/authorizations` — list active authorizations
+    - `GET /api/oauth/authorization/:clientId` — get authorization for a specific app
+    - `GET /api/oauth/delegations` — list active Connector grants
+    - `DELETE /api/oauth/delegations/:delegationId` — revoke a Connector grant
+  </Accordion>
 
-### Signing
+  <Accordion title="Signing endpoints — app credentials in body">
+    App-facing signing endpoints authenticate with `clientId` + `clientSecret` in the request body:
 
-- Public app endpoints: create request, poll status, verify, public key lookup
-- Session-authenticated identity-management endpoints: key management + end-user sign/deny request routes
+    - `POST /api/signing/request` — create a signing request
+    - `GET /api/signing/request/:requestId/status` — poll request status
+    - `GET /api/signing/public-key/:handle` — look up an identity's public key
+    - `POST /api/signing/verify` — verify a signature
 
-<Tabs>
-	<Tab title="Public endpoints">
-		- `/api/oauth/token`
-		- `/api/oauth/userinfo`
-		- `/.well-known/openid-configuration`
-		- `/.well-known/jwks.json`
-		- `/api/signing/request`
-		- `/api/signing/request/:requestId/status`
-		- `/api/signing/verify`
-	</Tab>
-	<Tab title="Session-auth endpoints">
-		- `/api/oauth/authorize`
-		- `/api/oauth/authorizations`
-		- `/api/oauth/delegations`
-		- `/api/signing/keys`
-		- `/api/signing/requests/:requestId/sign`
-		- `/api/signing/requests/:requestId/deny`
-	</Tab>
-</Tabs>
+    User-facing signing endpoints require a session token:
+    - `GET /api/signing/keys` — list the user's signing keys
+    - `POST /api/signing/keys/:identityId` — create a signing key
+    - `PUT /api/signing/keys/:identityId` — rotate a signing key
+    - `POST /api/signing/requests/:requestId/sign` — approve a request
+    - `POST /api/signing/requests/:requestId/deny` — deny a request
+  </Accordion>
+</AccordionGroup>
 
-## OIDC endpoints
+## CORS behavior
 
-- `GET /.well-known/openid-configuration`
-- `GET /.well-known/jwks.json`
-- `GET /.well-known/webfinger?resource=...`
-
-## CORS/origin behavior summary
-
-OAuth and OIDC paths are CORS-enabled with controlled origin resolution. Session-protected mutating requests with cookies enforce origin allowlisting.
+OAuth and OIDC paths are CORS-enabled with controlled origin resolution. Session-protected mutating endpoints with cookies enforce origin allowlisting.
 
 <Warning>
-	If you rely on cookie-based session auth for mutating endpoints, requests from disallowed origins are rejected.
+  If you use cookie-based session auth for mutating endpoints, requests from disallowed origins are rejected.
 </Warning>
