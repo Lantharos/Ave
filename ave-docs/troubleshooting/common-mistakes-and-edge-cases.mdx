@@ -22,7 +22,7 @@ description: "Frequent integration bugs, protocol mismatches, and how to fix the
     **Cause:** Ave uses camelCase body fields, not the snake_case used by most OAuth providers.
 
     **Fix:**
-    ```json
+    ```ts
     {
       "grantType": "authorization_code",  // not grant_type
       "clientId": "YOUR_CLIENT_ID",       // not client_id

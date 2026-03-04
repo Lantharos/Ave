@@ -72,15 +72,10 @@ Quick Ave and the standard OIDC flow use the **exact same token format, JWKS end
 
     const params = new URLSearchParams(window.location.search);
     const code = params.get("code")!;
-    const returnedState = params.get("state");
-
-    // Validate state (CSRF protection)
-    const savedState = sessionStorage.getItem("ave_state");
-    if (returnedState !== savedState) throw new Error("State mismatch");
-    sessionStorage.removeItem("ave_state");
 
     const codeVerifier = sessionStorage.getItem("ave_code_verifier")!;
     sessionStorage.removeItem("ave_code_verifier");
+    sessionStorage.removeItem("ave_nonce");
 
     const tokens = await exchangeCode(
       { clientId: "app_xxxx", redirectUri: "https://yourapp.com/callback" },
@@ -90,6 +85,10 @@ Quick Ave and the standard OIDC flow use the **exact same token format, JWKS end
     // Store tokens in your own session management
     // tokens.refresh_token is now available if you requested offline_access
     ```
+
+    <Note>
+      `startPkceLogin` does not generate or store a `state` value. If you need `state`-based CSRF protection, use `buildAuthorizeUrl` directly, generate a state with `crypto.randomUUID()`, store it yourself, and verify it here.
+    </Note>
 
     Unlike `handleQuickCallback`, `exchangeCode` returns the full `TokenResponse` — you manage your own session from here.
   </Step>

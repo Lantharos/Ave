@@ -78,7 +78,11 @@ window.location.href = url;
 
 ## `exchangeDelegatedToken(config, payload)`
 
-Exchanges a source app `access_token_jwt` for a short-lived delegated token scoped to the target resource. Use this for PKCE connector flows (public client).
+Exchanges a source app `access_token_jwt` for a short-lived delegated token scoped to the target resource. This is an OAuth token-exchange grant (`urn:ietf:params:oauth:grant-type:token-exchange`), not a PKCE flow.
+
+<Warning>
+  The `clientSecret` field in the payload must **never** be sent from browser code — it would expose your app's secret. For confidential clients, perform the token exchange server-side using `exchangeDelegatedTokenServer` from `@ave-id/sdk/server` instead.
+</Warning>
 
 ```ts
 function exchangeDelegatedToken(
@@ -141,7 +145,7 @@ async function startConnectorFlow(params: {
 }): Promise<void>
 ```
 
-Saves `ave_connector_state`, `ave_code_verifier`, and `ave_nonce` to `sessionStorage`. Read them back on your callback page.
+Saves `ave_connector_state` to `sessionStorage`. Read it back on your callback page and verify it matches the `state` parameter returned in the callback URL before exchanging the delegated token.
 
 ---
 

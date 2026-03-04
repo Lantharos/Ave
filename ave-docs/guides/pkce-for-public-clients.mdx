@@ -22,8 +22,8 @@ An attacker who intercepts the code can't exchange it without the original `code
 <Check>Hash it with SHA-256 and base64url-encode to get `code_challenge`</Check>
 <Check>Send `code_challenge` and `code_challenge_method=S256` in the authorization request</Check>
 <Check>Store `code_verifier` in `sessionStorage` (not `localStorage`)</Check>
-<Check>Also store `state` and `nonce` in `sessionStorage` alongside the verifier</Check>
-<Check>Clear all three immediately after a successful exchange — they are single-use</Check>
+<Check>If using CSRF protection via `state`: generate it yourself, store it in `sessionStorage`, include it in the authorize URL, and verify it on the callback — `startPkceLogin` does not manage `state`</Check>
+<Check>Clear stored values immediately after a successful exchange — they are single-use</Check>
 
 ## Implementation with `@ave-id/sdk`
 
@@ -49,25 +49,22 @@ An attacker who intercepts the code can't exchange it without the original `code
     const params = new URLSearchParams(window.location.search);
     const code = params.get("code")!;
 
-    // Retrieve stored PKCE params
+    // Retrieve stored PKCE verifier (startPkceLogin stores this)
     const codeVerifier = sessionStorage.getItem("ave_code_verifier")!;
-    const state = sessionStorage.getItem("ave_state")!;
-
-    // Validate state before exchanging (CSRF protection)
-    const returnedState = params.get("state");
-    if (returnedState !== state) {
-      throw new Error("State mismatch — possible CSRF attack");
-    }
 
     // Clear immediately — single use
     sessionStorage.removeItem("ave_code_verifier");
-    sessionStorage.removeItem("ave_state");
+    sessionStorage.removeItem("ave_nonce");
 
     const tokens = await exchangeCode(
       { clientId: "YOUR_CLIENT_ID", redirectUri: "https://yourapp.com/callback" },
       { code, codeVerifier }
     );
     ```
+
+    <Note>
+      `startPkceLogin` does not generate or store a `state` value. If you need `state`-based CSRF protection, use `buildAuthorizeUrl` directly, generate a `state` with `crypto.randomUUID()`, store it in `sessionStorage`, include it in the authorize URL, and verify it here before calling `exchangeCode`.
+    </Note>
   </Step>
 </Steps>
 

@@ -190,26 +190,27 @@ function buildSigningUrl(
 
 ## `openSigningPopup(config, requestId)`
 
-Opens a popup window for the signing flow. Returns a promise that resolves when the user signs, denies, or closes the popup.
+Opens a popup window for the signing flow. Returns a promise that resolves when the user signs, denies, or closes the popup. **Rejects with an `Error`** if the browser blocked the popup.
 
 ```ts
 function openSigningPopup(
   config: { issuer?: string },
   requestId: string
-): Promise<{ signed: boolean; signature?: string; publicKey?: string } | null>
+): Promise<{ signed: boolean; signature?: string; publicKey?: string }>
 ```
 
-Returns `null` if the browser blocked the popup (common on mobile and in some browsers without a direct user gesture).
-
 ```ts
-const result = await openSigningPopup({}, requestId);
+try {
+  const result = await openSigningPopup({}, requestId);
 
-if (result === null) {
-  // Popup was blocked — fall back to redirect or embed
-} else if (result.signed) {
-  // Verify server-side before taking action
-  await verifyOnServer(result.signature, result.publicKey);
-} else {
-  // User denied or closed
+  if (result.signed) {
+    // Verify server-side before taking action
+    await verifyOnServer(result.signature, result.publicKey);
+  } else {
+    // User denied or closed the popup
+  }
+} catch (err) {
+  // Popup was blocked by the browser — fall back to redirect or embed
+  window.location.href = buildSigningUrl({}, requestId);
 }
 ```

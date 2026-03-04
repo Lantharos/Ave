@@ -25,8 +25,8 @@ description: "Hardening checklist for OAuth, OIDC token validation, Connector de
   <Accordion title="ID token validation" icon="badge-check">
     When validating an `id_token` JWT received from Ave, check all of the following:
 
-    <Check>Signature valid against JWKS at `https://api.aveid.net/.well-known/jwks.json`</Check>
-    <Check>`iss` equals `https://api.aveid.net`</Check>
+    <Check>Signature valid against JWKS from the Ave OIDC discovery document (`{issuer}/.well-known/jwks.json`, where `issuer` is the `issuer` value from `/.well-known/openid-configuration`)</Check>
+    <Check>`iss` equals the `issuer` value from the Ave OIDC discovery document (e.g. `https://api.aveid.net` on the hosted service)</Check>
     <Check>`aud` equals your `clientId` (or `origin:https://yourapp.com` for Quick Ave)</Check>
     <Check>`exp` is in the future</Check>
     <Check>`iat` is recent (within an acceptable clock skew)</Check>

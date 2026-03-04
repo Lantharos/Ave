@@ -29,7 +29,7 @@ Most functions take a config object as the first argument:
 interface AveConfig {
   clientId: string;     // Your app's client ID
   redirectUri: string;  // Registered redirect URI
-  issuer?: string;      // Default: "https://aveid.net"
+  issuer?: string;      // Base URL for Ave user-facing pages (default: "https://aveid.net"). Do not set this to the API host "https://api.aveid.net".
 }
 ```
 
@@ -228,7 +228,11 @@ async function startPkceLogin(params: {
 }): Promise<void>
 ```
 
-Stores `ave_code_verifier`, `ave_state`, and `ave_nonce` in `sessionStorage`. Read them back on your callback page before calling `exchangeCode`.
+Stores `ave_code_verifier` and `ave_nonce` in `sessionStorage`. Read them back on your callback page before calling `exchangeCode`.
+
+<Note>
+  `startPkceLogin` does **not** generate or store a `state` value for CSRF protection. If your threat model requires state validation, use `buildAuthorizeUrl` directly, generate a `state` yourself with `crypto.randomUUID()`, store it in `sessionStorage`, include it in the authorize URL, and verify it on the callback.
+</Note>
 
 ---
 
@@ -286,13 +290,14 @@ interface TokenResponse {
   token_type: "Bearer";
   expires_in: number;        // Seconds until access_token expires
   scope: string;             // Space-separated granted scopes
-  user: {
+  user_id?: string;          // Present when user_id scope is granted
+  user?: {                   // May be absent depending on scopes/config
     id: string;
     handle: string;
     displayName: string;
     email?: string;
     avatarUrl?: string;
-  };
+  } | null;
 }
 ```
 

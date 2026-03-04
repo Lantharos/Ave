@@ -93,7 +93,7 @@ Scopes are space-separated strings requested during authorization. They control 
 
 The Ave token endpoint (`POST /api/oauth/token`) uses **camelCase** body fields — not the snake_case used by many other OAuth providers.
 
-```json
+```ts
 {
   "grantType": "authorization_code",   // not grant_type
   "clientId": "YOUR_CLIENT_ID",        // not client_id
