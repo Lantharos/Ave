@@ -142,11 +142,12 @@ export async function startQuickSignIn(options?: {
   const returnTo =
     options?.returnTo ??
     window.location.pathname + window.location.search + window.location.hash;
+  const callbackPathname = new URL(redirectUri, window.location.origin).pathname;
   try {
     const normalized = new URL(returnTo, window.location.origin);
     if (
       normalized.origin === window.location.origin &&
-      normalized.pathname !== QUICK_CALLBACK_PATH
+      normalized.pathname !== callbackPathname
     ) {
       sessionStorage.setItem(
         QUICK_RETURN_TO_KEY,
@@ -192,7 +193,10 @@ export async function finishQuickSignIn(options?: {
   const parsed = new URL(callbackUrl);
   const code = parsed.searchParams.get("code");
   const state = parsed.searchParams.get("state");
-  if (!code || !state) return null;
+  if (!code) return null;
+  if (!state) {
+    throw new Error("[Quick Ave] Missing state parameter — cannot verify CSRF protection.");
+  }
 
   const rawPkce = sessionStorage.getItem(QUICK_PKCE_KEY);
   if (!rawPkce) {
@@ -230,9 +234,12 @@ export async function finishQuickSignIn(options?: {
     }),
   });
 
-  sessionStorage.removeItem(QUICK_PKCE_KEY);
-
   if (!response.ok) {
+    // Only remove the PKCE entry if the server explicitly rejects the code (4xx),
+    // so transient network/5xx errors don't force the user to restart sign-in.
+    if (response.status >= 400 && response.status < 500) {
+      sessionStorage.removeItem(QUICK_PKCE_KEY);
+    }
     // response.json() may fail for non-JSON error bodies (e.g. HTML gateway errors)
     const data = await response.json().catch(() => ({})) as { error?: string; error_description?: string };
     const error = data.error;
@@ -250,6 +257,9 @@ export async function finishQuickSignIn(options?: {
     throw new Error(message);
   }
 
+  // Exchange succeeded — PKCE entry is no longer needed
+  sessionStorage.removeItem(QUICK_PKCE_KEY);
+
   const token = (await response.json()) as {
     access_token: string;
     access_token_jwt?: string;
@@ -266,6 +276,21 @@ export async function finishQuickSignIn(options?: {
 
   if (!token.user?.id) {
     throw new Error("[Quick Ave] Token exchange succeeded but no user identity was returned.");
+  }
+
+  // Validate id_token nonce to prevent replay attacks
+  if (token.id_token) {
+    let idPayload: { nonce?: string } | null = null;
+    try {
+      const payloadB64 = token.id_token.split(".")[1];
+      idPayload = JSON.parse(atob(payloadB64.replace(/-/g, "+").replace(/_/g, "/")));
+    } catch {
+      // Malformed JWT — treat as a tampered/invalid token
+      throw new Error("[Quick Ave] Malformed id_token — payload could not be decoded.");
+    }
+    if (idPayload?.nonce !== pkce.nonce) {
+      throw new Error("[Quick Ave] id_token nonce mismatch — possible replay attack.");
+    }
   }
 
   const identity: QuickIdentity = {

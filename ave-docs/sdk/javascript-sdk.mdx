@@ -56,6 +56,7 @@ Convenience wrapper: calls `finishQuickSignIn`, then redirects the user to where
 ```ts
 async function handleQuickCallback(options?: {
   issuer?: string;
+  redirectUri?: string;  // must match the redirectUri used in startQuickSignIn
   fallbackPath?: string; // where to go if no return-to is stored (default: "/")
 }): Promise<QuickIdentity | null>
 ```

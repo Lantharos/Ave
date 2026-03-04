@@ -280,6 +280,10 @@ app.post("/authorize", requireAuth, zValidator("json", z.object({
     if (!codeChallenge) {
       return c.json({ error: "invalid_request", error_description: "code_challenge is required for Quick Ave" }, 400);
     }
+    // Enforce strong PKCE method for Quick Ave: only S256 is allowed
+    if (codeChallengeMethod !== "S256") {
+      return c.json({ error: "invalid_request", error_description: "code_challenge_method must be S256 for Quick Ave" }, 400);
+    }
     oauthApp = buildQuickApp(clientId);
   } else {
     const [app] = await db
