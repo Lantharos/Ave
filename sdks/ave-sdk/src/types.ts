@@ -14,7 +14,6 @@ export interface TokenResponse {
     email?: string;
     avatarUrl?: string;
   };
-  encrypted_app_key?: string;
   user_id?: string;
 }
 

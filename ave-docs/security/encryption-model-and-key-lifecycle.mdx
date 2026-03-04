@@ -23,14 +23,23 @@ Ave's E2EE model gives each (app, identity) pair a **stable, isolated encryption
   <Step title="Grant storage">
     Ave stores the encrypted key context in the user's authorization record. The server never holds the plaintext.
   </Step>
-  <Step title="Token exchange">
-    On every successful token exchange, Ave returns the `encrypted_app_key` field in the token response. Your app decrypts it with the user's passkey to recover the session key.
-  </Step>
-  <Step title="Key import">
-    Your app normalizes the base64 key payload, decodes it, and imports it into the Web Crypto API.
+  <Step title="Key handoff via URL fragment">
+    After a successful authorization, Ave passes `encrypted_app_key` to your callback as a URL fragment (`#encrypted_app_key=...`). It is **not** included in the JSON token response — this ensures it never appears in server logs, proxy access logs, or JSON response bodies. Parse it from the fragment before exchanging the authorization code.
 
     ```ts
-    // Normalize base64 (URL fragments turn + into space)
+    // Parse the encrypted key from the URL fragment before clearing it
+    const hashParams = new URLSearchParams(window.location.hash.slice(1));
+    const rawKey = hashParams.get("encrypted_app_key");
+
+    // Clear the fragment from browser history immediately
+    window.history.replaceState({}, "", window.location.pathname + window.location.search);
+    ```
+  </Step>
+  <Step title="Key import">
+    Your app normalizes the base64 key payload (URL fragments can turn `+` into a space), decodes it, and imports it into the Web Crypto API.
+
+    ```ts
+    // Normalize base64 — URL fragments turn + into space
     const normalized = rawKey.replace(/ /g, "+");
     const keyBytes = Uint8Array.from(atob(normalized), c => c.charCodeAt(0));
 
@@ -74,10 +83,10 @@ Ave's E2EE model gives each (app, identity) pair a **stable, isolated encryption
 
 ## Fragment hygiene
 
-If `encrypted_app_key` ever arrives via a URL fragment (`#...`), browsers silently replace `+` with a space, which breaks base64 decoding.
+`encrypted_app_key` is always delivered as a URL fragment (`#encrypted_app_key=...`). Browsers silently replace `+` with a space in fragment parameters, which breaks base64 decoding.
 
 ```ts
-// Always do this before atob():
+// Always normalize before atob():
 const safe = rawKey.replace(/ /g, "+");
 ```
 

@@ -988,10 +988,9 @@ app.post("/token", zValidator("json", z.discriminatedUnion("grantType", [
     response.refresh_token = refreshToken;
   }
   
-  // Include encrypted app key for E2EE apps
-  if (oauthApp.supportsE2ee && authCode.encryptedAppKey) {
-    response.encrypted_app_key = authCode.encryptedAppKey;
-  }
+  // Note: encrypted_app_key is NOT included in the JSON token response.
+  // It is delivered exclusively via the URL fragment (#encrypted_app_key=...) on the callback
+  // redirect so it never appears in server logs, proxy access logs, or JSON response bodies.
   
   return c.json(response);
 });
