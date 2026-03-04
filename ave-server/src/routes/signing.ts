@@ -506,7 +506,7 @@ app.post("/request", zValidator("json", z.object({
   clientSecret: z.string().min(1),
   identityId: z.string().uuid(),
   payload: z.string().min(1).max(10000), // Max 10KB payload
-  metadata: z.record(z.unknown()).optional(),
+  metadata: z.record(z.string(), z.unknown()).optional(),
   expiresInSeconds: z.number().min(60).max(3600).default(300), // 5 min default, max 1 hour
 })), async (c) => {
   const { clientId, clientSecret, identityId, payload, metadata, expiresInSeconds } = c.req.valid("json");

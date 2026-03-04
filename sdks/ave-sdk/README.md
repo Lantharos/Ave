@@ -8,7 +8,30 @@ Typed helpers for Ave OAuth + OIDC flows.
 npm install @ave-id/sdk
 ```
 
-## Example
+## Quick Ave (no app registration)
+
+The fastest way to add Ave login — no developer portal, no client ID, no redirect-URI configuration. Works for rapid prototyping and upgrades cleanly to the full OIDC flow when you're ready.
+
+```ts
+// Protected page
+import { getQuickIdentity, startQuickSignIn } from "@ave-id/sdk/client";
+
+const user = getQuickIdentity();
+if (!user) await startQuickSignIn();
+
+console.log(user!.displayName, user!.email);
+```
+
+```ts
+// /ave/callback page (the default callback path)
+import { handleQuickCallback } from "@ave-id/sdk/client";
+
+await handleQuickCallback(); // exchanges code, stores identity, redirects user back
+```
+
+The `clientId` is derived from your site's origin (`origin:https://yourapp.com`). PKCE provides the security — no secret is ever required.
+
+## Full OIDC flow
 
 ```ts
 import {

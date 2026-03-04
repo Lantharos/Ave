@@ -134,7 +134,7 @@ export async function verifyJwt(token: string, audience?: string): Promise<Recor
   const valid = await crypto.subtle.verify(
     "RSASSA-PKCS1-v1_5",
     key,
-    signature,
+    new Uint8Array(signature),
     new TextEncoder().encode(data)
   );
 
