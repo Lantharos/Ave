@@ -67,7 +67,16 @@ function buildApp() {
   const app = new Hono<{ Bindings: Bindings }>();
 
   app.use("/api/oauth/*", cors({
-    origin: (origin) => resolveCorsOrigin(origin),
+    origin: (origin, c) => {
+      // The token and session-check endpoints are public OAuth endpoints that must be
+      // reachable from any origin (Quick Ave sites can be on any domain). PKCE provides
+      // the security; CORS restriction would only break legitimate callers.
+      const path = c.req.path;
+      if (path === "/api/oauth/token" || path === "/api/oauth/session/check") {
+        return origin || "https://aveid.net";
+      }
+      return resolveCorsOrigin(origin);
+    },
     credentials: true,
     allowMethods: ["GET", "POST", "OPTIONS"],
     allowHeaders: ["Content-Type", "Authorization"],

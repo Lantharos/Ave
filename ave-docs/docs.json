@@ -22,6 +22,7 @@
       {
         "group": "Guides",
         "pages": [
+          "guides/quick-ave",
           "guides/oauth-authorization-code-flow",
           "guides/scopes-and-claims",
           "guides/pkce-for-public-clients",

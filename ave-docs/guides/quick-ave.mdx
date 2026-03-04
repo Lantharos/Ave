@@ -1,0 +1,182 @@
+---
+title: "Quick Ave"
+description: "Add Ave authentication to any site in minutes — no app registration, no client secret, no redirect-URI configuration. Uses PKCE under the hood and is fully upgradeable to the standard OIDC flow."
+---
+
+Quick Ave is a zero-configuration authentication layer. It works the same way as shoo.dev: the SDK derives a `clientId` from your site's origin (`origin:https://yourapp.com`), generates PKCE parameters automatically, and handles everything from the initial redirect through to the token exchange and session monitoring. You don't register an app in the developer portal.
+
+<Note>
+  Quick Ave is designed for rapid prototyping and internal tooling. When you are ready to go to production — or need features like refresh tokens, app branding on the consent screen, E2EE, or the Connector flow — upgrade to the [standard OIDC flow](/quickstart) by replacing the Quick Ave calls with `startPkceLogin` / `exchangeCode` from the full SDK. No server changes required.
+</Note>
+
+## How it works
+
+1. Your page calls `startQuickSignIn()`. The SDK saves a PKCE verifier and a `state` nonce in `sessionStorage`, then redirects the user to `aveid.net/signin` with `client_id=origin:https://yourapp.com`.
+2. The user logs in (or confirms their existing session). Ave issues an authorization code.
+3. The user is redirected to `https://yourapp.com/ave/callback?code=…&state=…`.
+4. Your callback page calls `handleQuickCallback()`. The SDK verifies the state, exchanges the code for a 1-hour access token, stores the identity in `localStorage`, and redirects the user back to where they were.
+5. Your app reads the identity with `getQuickIdentity()` on every page load. A background session monitor can call `clearQuickIdentity()` and prompt the user to re-authenticate when the token expires.
+
+**Security model:** PKCE (S256) is the only authentication mechanism. There is no client secret. The server validates that the `redirect_uri` origin matches the `clientId` origin, so a malicious site cannot impersonate your `clientId`. Tokens are scoped to `openid profile email` and expire after one hour. Refresh tokens are not issued.
+
+---
+
+## Install
+
+```bash
+npm install @ave-id/sdk
+```
+
+---
+
+## Drop-in usage (three steps)
+
+### Step 1 — Protect a page
+
+Add this to any page that requires authentication:
+
+```ts
+import { getQuickIdentity, startQuickSignIn } from "@ave-id/sdk/client";
+
+const user = getQuickIdentity();
+
+if (!user) {
+  // Redirects to Ave. When the user comes back, handleQuickCallback()
+  // on your callback page will send them straight back here.
+  await startQuickSignIn();
+}
+
+// user is now a QuickIdentity
+console.log(user.displayName, user.email);
+```
+
+### Step 2 — Add a callback page at `/ave/callback`
+
+Create a page at exactly that path (the default). Its only job is to finish the sign-in:
+
+```ts
+import { handleQuickCallback } from "@ave-id/sdk/client";
+
+// Call once on page load — exchanges the code, stores the identity,
+// and redirects back to where the user came from.
+await handleQuickCallback();
+```
+
+In a **SPA** (React, Svelte, Vue …) add a route for `/ave/callback` that calls `handleQuickCallback()` on mount:
+
+```tsx
+// React example
+import { useEffect } from "react";
+import { handleQuickCallback } from "@ave-id/sdk/client";
+
+export default function AveCallback() {
+  useEffect(() => { handleQuickCallback(); }, []);
+  return <p>Signing in…</p>;
+}
+```
+
+### Step 3 — Sign out
+
+```ts
+import { clearQuickIdentity } from "@ave-id/sdk/client";
+
+clearQuickIdentity();
+// Optionally redirect to the homepage
+window.location.href = "/";
+```
+
+---
+
+## Reading the identity
+
+`getQuickIdentity()` returns `null` when the user is not signed in or the local token has expired. It never makes a network request.
+
+```ts
+const user = getQuickIdentity();
+
+if (user) {
+  console.log(user.userId);      // Ave identity UUID
+  console.log(user.handle);      // @handle
+  console.log(user.displayName); // display name
+  console.log(user.email);       // email (if granted)
+  console.log(user.avatarUrl);   // avatar URL (if set)
+  console.log(user.token);       // JWT access token — use as Bearer token
+}
+```
+
+---
+
+## Calling your own API
+
+The `token` field on `QuickIdentity` is a signed JWT (`access_token_jwt`) with audience `https://api.aveid.net`. Pass it as a Bearer token to your backend and verify it there:
+
+```ts
+const user = getQuickIdentity();
+
+const res = await fetch("/api/me", {
+  headers: { Authorization: `Bearer ${user!.token}` },
+});
+```
+
+On your server, verify the JWT:
+- `iss`: `https://api.aveid.net`
+- `aud`: `https://api.aveid.net`
+- `sub`: the user's Ave identity UUID
+- JWKS endpoint: `https://api.aveid.net/.well-known/jwks.json`
+
+---
+
+## Session monitoring
+
+Start a background check so your app reacts immediately when a token is revoked or the session ends:
+
+```ts
+import { startQuickSessionMonitor, clearQuickIdentity, startQuickSignIn } from "@ave-id/sdk/client";
+
+const monitor = startQuickSessionMonitor({
+  intervalMs: 60_000, // check every minute (default)
+  onLoginRequired({ reason }) {
+    clearQuickIdentity();
+    startQuickSignIn(); // re-authenticate
+  },
+  onError(err) {
+    console.warn("Session check failed:", err);
+  },
+});
+
+// Stop the monitor when your component unmounts
+// monitor.stop();
+```
+
+---
+
+## Custom callback path
+
+If you can't use `/ave/callback`, pass `redirectUri` to `startQuickSignIn` and the matching path to `handleQuickCallback`:
+
+```ts
+// Initiating sign-in
+await startQuickSignIn({ redirectUri: "https://yourapp.com/auth/callback" });
+
+// On your /auth/callback page
+await handleQuickCallback({ fallbackPath: "/dashboard" });
+```
+
+---
+
+## Upgrading to the full OIDC flow
+
+Quick Ave and the full OIDC flow use the exact same token format, scopes, and API endpoints. When you are ready to upgrade:
+
+1. [Register an app](/quickstart) in the developer portal.
+2. Replace `startQuickSignIn()` with `startPkceLogin({ clientId, redirectUri })`.
+3. Replace `handleQuickCallback()` with `exchangeCode(config, { code, codeVerifier })`.
+4. Replace `getQuickIdentity()` with your own session management that stores the `TokenResponse`.
+
+You gain: refresh tokens, app branding, E2EE support, the Connector (app-to-app delegation) flow, and custom token TTLs.
+
+---
+
+## Full API reference
+
+See [Quick Ave functions in the SDK reference](/sdk/javascript-sdk#quick-ave).

@@ -12,7 +12,7 @@ The SDK splits into three import paths:
 | Import | Contents | Runtime |
 |---|---|---|
 | `@ave-id/sdk` | Core OAuth, PKCE, Connector, Signing | Browser or Node |
-| `@ave-id/sdk/client` | `startPkceLogin`, `startConnectorFlow` | Browser only |
+| `@ave-id/sdk/client` | `startPkceLogin`, `startConnectorFlow`, Quick Ave helpers | Browser only |
 | `@ave-id/sdk/server` | `exchangeCodeServer`, `refreshTokenServer`, `exchangeDelegatedTokenServer` | Server only |
 
 <Warning>
@@ -495,5 +495,123 @@ try {
   if (err.message === "invalid_grant") {
     // Code expired or verifier mismatch
   }
+}
+```
+
+---
+
+## Quick Ave
+
+<Note>
+  Quick Ave requires no app registration. Import from `@ave-id/sdk/client`. For an end-to-end walkthrough see the [Quick Ave guide](/guides/quick-ave).
+</Note>
+
+### `startQuickSignIn(options?)`
+
+Generates PKCE parameters, saves the return-to URL, and redirects the user to Ave.
+
+```ts
+async function startQuickSignIn(options?: {
+  issuer?: string;       // default: "https://aveid.net"
+  scope?: string;        // default: "openid profile email"
+  redirectUri?: string;  // default: <origin>/ave/callback
+  returnTo?: string;     // default: current URL
+}): Promise<void>
+```
+
+---
+
+### `finishQuickSignIn(options?)`
+
+Exchanges the authorization code that Ave appended to your callback URL. Returns `null` when no `code` param is present, so it is safe to call on every page load.
+
+```ts
+async function finishQuickSignIn(options?: {
+  issuer?: string;
+  redirectUri?: string;
+  url?: string;          // override URL to parse (default: window.location.href)
+}): Promise<QuickIdentity | null>
+```
+
+---
+
+### `handleQuickCallback(options?)`
+
+Convenience wrapper: calls `finishQuickSignIn`, then redirects the user to where they were before `startQuickSignIn` was called.
+
+```ts
+async function handleQuickCallback(options?: {
+  issuer?: string;
+  fallbackPath?: string; // where to go if no return-to is stored (default: "/")
+}): Promise<QuickIdentity | null>
+```
+
+---
+
+### `getQuickIdentity(storageKey?)`
+
+Returns the cached `QuickIdentity` from `localStorage`, or `null` when not signed in or the token has expired locally. Makes no network request.
+
+```ts
+function getQuickIdentity(storageKey?: string): QuickIdentity | null
+```
+
+---
+
+### `clearQuickIdentity(storageKey?)`
+
+Removes the stored `QuickIdentity` (sign-out).
+
+```ts
+function clearQuickIdentity(storageKey?: string): void
+```
+
+---
+
+### `checkQuickSession(options?)`
+
+Validates the current token against the Ave server. Use this when you need a real-time check rather than relying on the local expiry.
+
+```ts
+async function checkQuickSession(options?: {
+  issuer?: string;
+  storageKey?: string;
+  token?: string;  // supply a token directly instead of reading from storage
+}): Promise<{
+  status: "active" | "login_required" | "unsupported";
+  reason?: string;
+}>
+```
+
+---
+
+### `startQuickSessionMonitor(options?)`
+
+Starts a periodic `checkQuickSession` loop. Fires `onLoginRequired` and stops itself when the session is no longer valid.
+
+```ts
+function startQuickSessionMonitor(options?: {
+  issuer?: string;
+  storageKey?: string;
+  intervalMs?: number;  // default: 60 000
+  onLoginRequired?: (result: { reason?: string }) => void;
+  onError?: (error: Error) => void;
+}): { stop: () => void }
+```
+
+---
+
+### `QuickIdentity`
+
+```ts
+interface QuickIdentity {
+  userId: string;        // Ave identity UUID
+  handle?: string;       // @handle
+  displayName?: string;
+  email?: string;
+  avatarUrl?: string;
+  token: string;         // JWT access token — use as Bearer token for your API
+  expiresIn: number;     // seconds until expiry
+  receivedAt: number;    // Unix ms when the token was stored
 }
 ```

@@ -100,11 +100,70 @@ function hasAllScopes(grantedScope: string, requestedScope: string): boolean {
   return parseScopes(requestedScope).every((scope) => granted.has(scope));
 }
 
+// ============================================
+// Quick Auth helpers — no app registration required.
+// clientId format: "origin:<origin>"  e.g. "origin:https://example.com"
+// Security is provided by PKCE; no client secret is needed or accepted.
+// ============================================
+const QUICK_AUTH_ACCESS_TOKEN_TTL_SECONDS = 3600;
+const QUICK_AUTH_SCOPES = ["openid", "profile", "email"];
+
+function isQuickClient(clientId: string): boolean {
+  return typeof clientId === "string" && clientId.startsWith("origin:");
+}
+
+function getQuickOrigin(clientId: string): string | null {
+  try {
+    const raw = clientId.slice("origin:".length);
+    return new URL(raw).origin;
+  } catch {
+    return null;
+  }
+}
+
+function buildQuickApp(clientId: string) {
+  return {
+    id: clientId,
+    clientId,
+    name: "Quick Ave",
+    description: null as string | null,
+    iconUrl: null as string | null,
+    websiteUrl: null as string | null,
+    clientSecretHash: "",
+    redirectUris: [] as string[],
+    allowedScopes: [...QUICK_AUTH_SCOPES],
+    accessTokenTtlSeconds: QUICK_AUTH_ACCESS_TOKEN_TTL_SECONDS,
+    refreshTokenTtlSeconds: 0,
+    allowUserIdScope: false,
+    supportsE2ee: false,
+    ownerId: null as string | null,
+    createdAt: new Date(),
+  };
+}
+
 
 // Public: Get OAuth app info (for authorization screen)
 app.get("/app/:clientId", async (c) => {
   const clientId = c.req.param("clientId");
-  
+
+  if (isQuickClient(clientId)) {
+    const quickOrigin = getQuickOrigin(clientId);
+    if (!quickOrigin) {
+      return c.json({ error: "App not found" }, 404);
+    }
+    return c.json({
+      app: {
+        id: clientId,
+        name: quickOrigin,
+        description: "Quick Ave — authenticate without app registration",
+        iconUrl: null,
+        websiteUrl: quickOrigin,
+        supportsE2ee: false,
+      },
+      resources: [],
+    });
+  }
+
   const [oauthApp] = await db
     .select({
       id: oauthApps.id,
@@ -201,21 +260,44 @@ app.post("/authorize", requireAuth, zValidator("json", z.object({
   } = c.req.valid("json");
 
   
-  // Find the OAuth app
-  const [oauthApp] = await db
-    .select()
-    .from(oauthApps)
-    .where(eq(oauthApps.clientId, clientId))
-    .limit(1);
-  
-  if (!oauthApp) {
-    return c.json({ error: "Invalid client_id" }, 400);
-  }
-  
-  // Validate redirect URI
-  const allowedUris = oauthApp.redirectUris as string[];
-  if (!allowedUris.includes(redirectUri)) {
-    return c.json({ error: "Invalid redirect_uri" }, 400);
+  // Find (or derive) the OAuth app
+  const isQuick = isQuickClient(clientId);
+  let oauthApp: ReturnType<typeof buildQuickApp> | typeof oauthApps.$inferSelect;
+
+  if (isQuick) {
+    const quickOrigin = getQuickOrigin(clientId);
+    if (!quickOrigin) {
+      return c.json({ error: "Invalid client_id" }, 400);
+    }
+    let redirectOrigin: string;
+    try { redirectOrigin = new URL(redirectUri).origin; } catch {
+      return c.json({ error: "Invalid redirect_uri" }, 400);
+    }
+    if (redirectOrigin !== quickOrigin) {
+      return c.json({ error: "Invalid redirect_uri" }, 400);
+    }
+    // PKCE is mandatory for Quick Auth (there is no client secret)
+    if (!codeChallenge) {
+      return c.json({ error: "invalid_request", error_description: "code_challenge is required for Quick Ave" }, 400);
+    }
+    oauthApp = buildQuickApp(clientId);
+  } else {
+    const [app] = await db
+      .select()
+      .from(oauthApps)
+      .where(eq(oauthApps.clientId, clientId))
+      .limit(1);
+
+    if (!app) {
+      return c.json({ error: "Invalid client_id" }, 400);
+    }
+    oauthApp = app;
+
+    // Validate redirect URI
+    const allowedUris = oauthApp.redirectUris as string[];
+    if (!allowedUris.includes(redirectUri)) {
+      return c.json({ error: "Invalid redirect_uri" }, 400);
+    }
   }
 
   const requestedScopes = parseScopes(scope);
@@ -236,42 +318,49 @@ app.post("/authorize", requireAuth, zValidator("json", z.object({
   if (!identity) {
     return c.json({ error: "Invalid identity" }, 400);
   }
-  
-  // Check if already authorized
-  const [existingAuth] = await db
-    .select()
-    .from(oauthAuthorizations)
-    .where(and(
-      eq(oauthAuthorizations.userId, user.id),
-      eq(oauthAuthorizations.appId, oauthApp.id),
-      eq(oauthAuthorizations.identityId, identityId),
-    ))
-    .limit(1);
-  
-  // For E2EE apps, require encrypted app key only if there's no existing authorization with a key
-  if (oauthApp.supportsE2ee && !encryptedAppKey && !existingAuth?.encryptedAppKey) {
-    return c.json({ error: "E2EE app requires encryptedAppKey" }, 400);
-  }
-  
-  if (!existingAuth) {
-    // Create new authorization with encrypted app key
-    await db.insert(oauthAuthorizations).values({
-      userId: user.id,
-      appId: oauthApp.id,
-      identityId,
-      encryptedAppKey: encryptedAppKey || null,
-    });
-  } else if (oauthApp.supportsE2ee && !existingAuth.encryptedAppKey && encryptedAppKey) {
-    // If existing auth doesn't have an app key but we're providing one now, update it
-    await db.update(oauthAuthorizations)
-      .set({ encryptedAppKey })
-      .where(eq(oauthAuthorizations.id, existingAuth.id));
+
+  // Track authorization (skipped for Quick Auth — no persistent app record)
+  let existingAuth: typeof oauthAuthorizations.$inferSelect | undefined;
+  if (!isQuick) {
+    const [found] = await db
+      .select()
+      .from(oauthAuthorizations)
+      .where(and(
+        eq(oauthAuthorizations.userId, user.id),
+        eq(oauthAuthorizations.appId, oauthApp.id),
+        eq(oauthAuthorizations.identityId, identityId),
+      ))
+      .limit(1);
+    existingAuth = found;
+
+    // For E2EE apps, require encrypted app key only if there's no existing authorization with a key
+    if (oauthApp.supportsE2ee && !encryptedAppKey && !existingAuth?.encryptedAppKey) {
+      return c.json({ error: "E2EE app requires encryptedAppKey" }, 400);
+    }
+
+    if (!existingAuth) {
+      // Create new authorization with encrypted app key
+      await db.insert(oauthAuthorizations).values({
+        userId: user.id,
+        appId: oauthApp.id,
+        identityId,
+        encryptedAppKey: encryptedAppKey || null,
+      });
+    } else if (oauthApp.supportsE2ee && !existingAuth.encryptedAppKey && encryptedAppKey) {
+      // If existing auth doesn't have an app key but we're providing one now, update it
+      await db.update(oauthAuthorizations)
+        .set({ encryptedAppKey })
+        .where(eq(oauthAuthorizations.id, existingAuth.id));
+    }
   }
 
   let delegationGrantId: string | undefined;
   let resolvedRequestedScope: string | undefined;
 
   if (connector) {
+    if (isQuick) {
+      return c.json({ error: "invalid_request", error_description: "Connector flow is not supported for Quick Ave" }, 400);
+    }
     if (!requestedResource || !requestedScope) {
       return c.json({ error: "invalid_request", error_description: "requestedResource and requestedScope are required for connector flow" }, 400);
     }
@@ -707,15 +796,25 @@ app.post("/token", zValidator("json", z.discriminatedUnion("grantType", [
     return c.json({ error: "invalid_grant", error_description: "Redirect URI mismatch" }, 400);
   }
   
-  // Find OAuth app
-  const [oauthApp] = await db
-    .select()
-    .from(oauthApps)
-    .where(eq(oauthApps.clientId, clientId))
-    .limit(1);
-  
-  if (!oauthApp) {
-    return c.json({ error: "invalid_client", error_description: "Client not found" }, 400);
+  // Find (or derive) the OAuth app
+  let oauthApp: ReturnType<typeof buildQuickApp> | typeof oauthApps.$inferSelect;
+  if (isQuickClient(clientId)) {
+    // Quick Auth: PKCE is mandatory — it must have been set at authorize time
+    if (!authCode.codeChallenge) {
+      return c.json({ error: "invalid_request", error_description: "PKCE is required for Quick Ave" }, 400);
+    }
+    oauthApp = buildQuickApp(clientId);
+  } else {
+    const [app] = await db
+      .select()
+      .from(oauthApps)
+      .where(eq(oauthApps.clientId, clientId))
+      .limit(1);
+
+    if (!app) {
+      return c.json({ error: "invalid_client", error_description: "Client not found" }, 400);
+    }
+    oauthApp = app;
   }
   
   // Verify client secret or PKCE code verifier
@@ -843,7 +942,7 @@ app.post("/token", zValidator("json", z.discriminatedUnion("grantType", [
     response.id_token = idToken;
   }
 
-  if (hasScope(authCode.scope, "offline_access")) {
+  if (hasScope(authCode.scope, "offline_access") && !isQuickClient(clientId)) {
     const refreshToken = generateRefreshToken();
     await db.insert(oauthRefreshTokens).values({
       userId: authCode.userId,
@@ -961,6 +1060,36 @@ app.get("/userinfo", async (c) => {
   response.iss = getIssuer();
 
   return c.json(response);
+});
+
+
+// Session check endpoint — used by Quick Ave session monitor and compatible with the
+// same interface shoo.dev exposes at /session/check.
+app.post("/session/check", async (c) => {
+  const authHeader = c.req.header("Authorization");
+  if (!authHeader?.startsWith("Bearer ")) {
+    return c.json({ error: "invalid_token", reason: "invalid_token" }, 401);
+  }
+
+  const token = authHeader.slice(7);
+
+  // Check in-memory opaque access tokens first
+  const record = accessTokens.get(token);
+  if (record) {
+    if (Date.now() > record.expiresAt) {
+      accessTokens.delete(token);
+      return c.json({ error: "invalid_token", reason: "expired" }, 401);
+    }
+    return c.json({ status: "active" });
+  }
+
+  // Fall back to JWT verification
+  const jwtPayload = await verifyJwt(token, getResourceAudience());
+  if (!jwtPayload) {
+    return c.json({ error: "invalid_token", reason: "invalid_token" }, 401);
+  }
+
+  return c.json({ status: "active" });
 });
 
 

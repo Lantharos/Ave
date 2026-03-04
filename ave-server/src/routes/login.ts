@@ -4,6 +4,7 @@ import { z } from "zod";
 import {
   generateAuthenticationOptions,
   verifyAuthenticationResponse,
+  type AuthenticatorTransportFuture,
 } from "@simplewebauthn/server";
 import { db, users, identities, passkeys, devices, sessions, loginRequests, trustCodes, activityLogs } from "../db";
 import { 
@@ -281,7 +282,7 @@ app.post("/passkey", zValidator("json", z.object({
         id: passkey.id,
         publicKey: Buffer.from(passkey.publicKey, "base64"),
         counter: passkey.counter,
-        transports: passkey.transports as AuthenticatorTransport[] | undefined,
+        transports: passkey.transports as AuthenticatorTransportFuture[] | undefined,
       },
     });
     
