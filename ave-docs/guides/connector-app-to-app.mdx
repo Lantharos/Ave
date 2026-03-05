@@ -148,7 +148,7 @@ The `access_token` from the exchange is a JWT with the following claims:
 
 ```json
 {
-  "iss": "https://api.aveid.net",
+  "iss": "https://aveid.net",
   "sub": "identity-uuid",
   "aud": "target-resource-audience",
   "exp": 1712345678,
@@ -165,7 +165,7 @@ The `access_token` from the exchange is a JWT with the following claims:
 The target resource should validate:
 - Signature against Ave's JWKS
 - `aud` matches its registered audience
-- `iss` is `https://api.aveid.net`
+- `iss` is `https://aveid.net`
 - `exp > now`
 - `scope` contains the required scope for the action
 - `cid` is a known/trusted source app (optional but recommended)

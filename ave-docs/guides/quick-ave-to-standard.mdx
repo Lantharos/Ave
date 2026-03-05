@@ -21,11 +21,11 @@ Quick Ave and the standard OIDC flow use the **exact same token format, JWKS end
 ## What stays the same
 
 - Token format — `id_token`, `access_token_jwt`, `access_token` have the same structure
-- OIDC discovery: `https://api.aveid.net/.well-known/openid-configuration`
-- JWKS endpoint: `https://api.aveid.net/.well-known/jwks.json`
+- OIDC discovery: `https://aveid.net/.well-known/openid-configuration`
+- JWKS endpoint: `https://aveid.net/.well-known/jwks.json`
 - Claims (`sub`, `iss`, `aud`, `name`, `email`, etc.) — same in both flows
 - All backend JWT validation code — no changes needed
-- Convex `domain` config — stays `https://api.aveid.net`
+- Convex `domain` config — stays `https://aveid.net`
 
 ## Upgrade steps
 
@@ -135,7 +135,7 @@ If you're using Convex, the only change is the `applicationID` in your `auth.con
 // Before (Quick Ave)
 export default {
   providers: [{
-    domain: "https://api.aveid.net",
+    domain: "https://aveid.net",
     applicationID: "origin:https://yourapp.com",  // derived from your origin
   }],
 };
@@ -143,7 +143,7 @@ export default {
 // After (Standard Ave)
 export default {
   providers: [{
-    domain: "https://api.aveid.net",
+    domain: "https://aveid.net",
     applicationID: "app_xxxx",  // your registered client ID
   }],
 };

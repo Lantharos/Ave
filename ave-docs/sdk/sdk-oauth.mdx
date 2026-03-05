@@ -284,7 +284,7 @@ The shape returned by `exchangeCode`, `exchangeCodeServer`, `refreshToken`, and 
 ```ts
 interface TokenResponse {
   access_token: string;      // Opaque bearer token for Ave API endpoints
-  access_token_jwt: string;  // Signed JWT (aud: https://api.aveid.net)
+  access_token_jwt: string;  // Signed JWT (aud: https://aveid.net)
   id_token?: string;         // OIDC JWT (aud: your clientId) — requires openid scope
   refresh_token?: string;    // Rotation token — requires offline_access scope
   token_type: "Bearer";

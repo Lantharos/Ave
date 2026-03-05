@@ -35,7 +35,7 @@ Ave is an **OAuth 2.0 + OpenID Connect provider** built around passkey-based, pa
 ## Key URLs
 
 <Warning>
-  Ave uses **two separate hosts**. The sign-in UI is on `aveid.net`. All API calls go to `api.aveid.net`. Mixing them up is the most common integration mistake.
+  Ave uses **two separate hosts**. The sign-in UI, OIDC discovery, and JWKS are on `aveid.net`. All API calls (token exchange, userinfo, signing) go to `api.aveid.net`.
 </Warning>
 
 <AccordionGroup>
@@ -50,8 +50,8 @@ Ave is an **OAuth 2.0 + OpenID Connect provider** built around passkey-based, pa
     |---|---|
     | OAuth token endpoint | `https://api.aveid.net/api/oauth/token` |
     | Userinfo endpoint | `https://api.aveid.net/api/oauth/userinfo` |
-    | OIDC discovery | `https://api.aveid.net/.well-known/openid-configuration` |
-    | JWKS (JWT verification keys) | `https://api.aveid.net/.well-known/jwks.json` |
+    | OIDC discovery | `https://aveid.net/.well-known/openid-configuration` |
+    | JWKS (JWT verification keys) | `https://aveid.net/.well-known/jwks.json` |
   </Accordion>
 </AccordionGroup>
 

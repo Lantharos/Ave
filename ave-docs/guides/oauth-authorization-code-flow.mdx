@@ -15,7 +15,7 @@ Ave returns two different JWTs on a successful token exchange. Understanding the
 
     ```json
     {
-      "iss": "https://api.aveid.net",
+      "iss": "https://aveid.net",
       "sub": "identity-uuid",
       "aud": "your_client_id",
       "exp": 1712345678,
@@ -43,9 +43,9 @@ Ave returns two different JWTs on a successful token exchange. Understanding the
 
     ```json
     {
-      "iss": "https://api.aveid.net",
+      "iss": "https://aveid.net",
       "sub": "identity-uuid",
-      "aud": "https://api.aveid.net",
+      "aud": "https://aveid.net",
       "exp": 1712345678,
       "iat": 1712342078,
       "scope": "openid profile email",
@@ -73,16 +73,16 @@ Ave returns two different JWTs on a successful token exchange. Understanding the
 </Tabs>
 
 <Note>
-  If you are building Convex auth, use `id_token`. Its `aud` is your `clientId`, which is what Convex validates against. The `access_token_jwt` has `aud: "https://api.aveid.net"` — Convex will reject it because the audience does not match your app.
+  If you are building Convex auth, use `id_token`. Its `aud` is your `clientId`, which is what Convex validates against. The `access_token_jwt` has `aud: "https://aveid.net"` — Convex will reject it because the audience does not match your app.
 </Note>
 
 ## Claim reference
 
 | Claim | Present in | Description |
 |---|---|---|
-| `iss` | Both JWTs | Always `https://api.aveid.net` |
+| `iss` | Both JWTs | Always `https://aveid.net` |
 | `sub` | Both JWTs | Identity UUID (changes per Ave identity) |
-| `aud` | Both JWTs | `clientId` in `id_token`; `https://api.aveid.net` in `access_token_jwt` |
+| `aud` | Both JWTs | `clientId` in `id_token`; `https://aveid.net` in `access_token_jwt` |
 | `exp` | Both JWTs | Expiry timestamp (Unix seconds) |
 | `iat` | Both JWTs | Issued-at timestamp |
 | `sid` | Both JWTs | Permanent user UUID (stable across all identities) |
@@ -174,12 +174,12 @@ Ave returns two different JWTs on a successful token exchange. Understanding the
 
     ```ts
     // Fetch JWKS (cache this — it rarely changes)
-    const { keys } = await fetch("https://api.aveid.net/.well-known/jwks.json").then(r => r.json());
+    const { keys } = await fetch("https://aveid.net/.well-known/jwks.json").then(r => r.json());
 
     // Validate using your JWT library (jose, jsonwebtoken, etc.)
     // Required checks:
     // 1. Signature valid against JWKS
-    // 2. iss === "https://api.aveid.net"
+    // 2. iss === "https://aveid.net"
     // 3. aud === YOUR_CLIENT_ID
     // 4. exp > Date.now() / 1000
     // 5. nonce === savedNonce (if you sent one)
@@ -227,16 +227,16 @@ The returned claims depend on the scopes your access token has. The response alw
 Fetch the discovery document to programmatically get endpoint URLs and signing key locations:
 
 ```bash
-GET https://api.aveid.net/.well-known/openid-configuration
+GET https://aveid.net/.well-known/openid-configuration
 ```
 
 ```json
 {
-  "issuer": "https://api.aveid.net",
+  "issuer": "https://aveid.net",
   "authorization_endpoint": "https://aveid.net/signin",
   "token_endpoint": "https://api.aveid.net/api/oauth/token",
   "userinfo_endpoint": "https://api.aveid.net/api/oauth/userinfo",
-  "jwks_uri": "https://api.aveid.net/.well-known/jwks.json",
+  "jwks_uri": "https://aveid.net/.well-known/jwks.json",
   "scopes_supported": ["openid", "profile", "email", "offline_access", "user_id"],
   "response_types_supported": ["code"],
   "id_token_signing_alg_values_supported": ["RS256"]
@@ -249,7 +249,7 @@ For any library or system that validates tokens manually, follow this order:
 
 <Steps>
   <Step title="Fetch JWKS">
-    `GET https://api.aveid.net/.well-known/jwks.json`. Cache the response and re-fetch only when you encounter an unknown `kid`.
+    `GET https://aveid.net/.well-known/jwks.json`. Cache the response and re-fetch only when you encounter an unknown `kid`.
   </Step>
   <Step title="Verify signature">
     Use the key matching the `kid` in the token header. Ave signs with RS256.
@@ -258,7 +258,7 @@ For any library or system that validates tokens manually, follow this order:
     Verify `exp > now` and `iat <= now`. Use a small clock tolerance (60 seconds) to handle drift.
   </Step>
   <Step title="Verify issuer and audience">
-    `iss` must equal `https://api.aveid.net`. `aud` must equal your client ID. Reject anything else.
+    `iss` must equal `https://aveid.net`. `aud` must equal your client ID. Reject anything else.
   </Step>
   <Step title="Verify nonce">
     If you sent a `nonce` in the authorization request, the `id_token` must contain the same value. This prevents replay attacks.

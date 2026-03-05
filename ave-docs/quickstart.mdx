@@ -158,12 +158,12 @@ description: "Set up Ave login from scratch: register an app, run the authorizat
     | Token | Format | `aud` claim | Use for |
     |---|---|---|---|
     | `access_token` | Opaque string | — | Calling Ave's `/api/oauth/userinfo` |
-    | `access_token_jwt` | Signed JWT | `https://api.aveid.net` | Your own API, Connector delegation |
+    | `access_token_jwt` | Signed JWT | `https://aveid.net` | Your own API, Connector delegation |
     | `id_token` | Signed OIDC JWT | **Your client ID** | User session, Convex auth |
     | `refresh_token` | Opaque string | — | Getting new tokens without re-login |
 
     <Note>
-      `id_token` and `access_token_jwt` are both signed JWTs with **different audiences**. The `id_token` audience is your `clientId`. The `access_token_jwt` audience is `https://api.aveid.net`. This matters for Convex and any library that validates JWT audience.
+      `id_token` and `access_token_jwt` are both signed JWTs with **different audiences**. The `id_token` audience is your `clientId`. The `access_token_jwt` audience is `https://aveid.net`. This matters for Convex and any library that validates JWT audience.
 
       `id_token` is only returned when you request the `openid` scope. `refresh_token` is only returned with `offline_access`.
     </Note>
@@ -178,7 +178,7 @@ description: "Set up Ave login from scratch: register an app, run the authorizat
     // user.id is the identity UUID — use as your stable user key
 
     // Option B: validate id_token claims for higher assurance
-    // 1. Fetch JWKS from https://api.aveid.net/.well-known/jwks.json
+    // 1. Fetch JWKS from https://aveid.net/.well-known/jwks.json
     // 2. Verify signature, iss, aud === YOUR_CLIENT_ID, exp, nonce
     ```
 

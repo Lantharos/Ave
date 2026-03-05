@@ -9,8 +9,8 @@ COOKIE_SECURE=true
 INTERNAL_API_TOKEN=change-me
 
 # OIDC
-OIDC_ISSUER=https://api.aveid.net
-OIDC_RESOURCE_AUDIENCE=https://api.aveid.net
+OIDC_ISSUER=https://aveid.net
+OIDC_RESOURCE_AUDIENCE=https://aveid.net
 OIDC_DISCOVERY_BASE=https://api.aveid.net
 OIDC_KID=ave-oidc-v1
 OIDC_PRIVATE_KEY_PEM=

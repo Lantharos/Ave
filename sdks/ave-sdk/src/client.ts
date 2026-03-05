@@ -94,7 +94,7 @@ export interface QuickIdentity {
    * Suitable for prototypes and low-risk internal tooling — pass it as a Bearer
    * token to your own API. For production or security-sensitive deployments,
    * always verify server-side: check `iss`, `aud`, `exp`, and the JWT signature
-   * against the JWKS endpoint (`https://api.aveid.net/.well-known/jwks.json`).
+   * against the JWKS endpoint (`https://aveid.net/.well-known/jwks.json`).
    * Upgrade to the standard OIDC flow for confidential or high-security use cases.
    */
   token: string;

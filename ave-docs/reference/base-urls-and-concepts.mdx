@@ -11,12 +11,13 @@ description: "The key concepts you need before integrating: domain split, identi
 
 | Host | Used for |
 |---|---|
-| `aveid.net` | User-facing pages (sign-in, Connector consent) |
-| `api.aveid.net` | All API calls (token exchange, userinfo, JWKS, signing) |
+| `aveid.net` | User-facing pages (sign-in, Connector consent), OIDC discovery, JWKS |
+| `api.aveid.net` | API calls (token exchange, userinfo, signing) |
 
 ```
 ✅ POST https://api.aveid.net/api/oauth/token
-❌ POST https://aveid.net/api/oauth/token   ← wrong host
+✅ GET  https://aveid.net/.well-known/openid-configuration
+❌ POST https://aveid.net/api/oauth/token   ← token API is on api.aveid.net
 ```
 
 ## Identity model
@@ -45,13 +46,13 @@ A successful token exchange returns up to four tokens, each with a different pur
     ```
   </Accordion>
   <Accordion title="access_token_jwt — signed JWT for your backend">
-    A signed JWT with `aud: https://api.aveid.net`. Use this when calling Ave API endpoints that accept JWTs, or when your own backend wants to verify the token locally.
+    A signed JWT with `aud: https://aveid.net`. Use this when calling Ave API endpoints that accept JWTs, or when your own backend wants to verify the token locally.
 
     ```
     access_token_jwt: "eyJ..."
     ```
 
-    Verify using the `jwks_uri` from your issuer's OIDC discovery document (`{issuer}/.well-known/openid-configuration`). For the default Ave issuer this is `https://api.aveid.net/.well-known/jwks.json`.
+    Verify using the `jwks_uri` from your issuer's OIDC discovery document (`{issuer}/.well-known/openid-configuration`). For Ave, this is `https://aveid.net/.well-known/jwks.json`.
   </Accordion>
   <Accordion title="id_token — OIDC identity token">
     A signed JWT with `aud` set to **your `clientId`**. Use this to establish a user session in your app, or with OIDC-aware services like Convex. Only returned when `openid` scope is granted.
@@ -70,7 +71,7 @@ A successful token exchange returns up to four tokens, each with a different pur
 </AccordionGroup>
 
 <Note>
-  `id_token` and `access_token_jwt` are both JWTs but have **different audiences**. The `id_token` audience is your `clientId`. The `access_token_jwt` audience is `https://api.aveid.net`. This matters for any library that validates JWT audience.
+  `id_token` and `access_token_jwt` are both JWTs but have **different audiences**. The `id_token` audience is your `clientId`. The `access_token_jwt` audience is `https://aveid.net`. This matters for any library that validates JWT audience.
 </Note>
 
 ## Scopes

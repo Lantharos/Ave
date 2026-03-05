@@ -30,7 +30,7 @@ crons = ["0 3 * * *"]
 [vars]
 DEV_PORTAL_CLIENT_ID = "app_baca6051065b203e594c6dc020c22c7d"
 OIDC_DISCOVERY_BASE = "https://api.aveid.net"
-OIDC_ISSUER = "https://api.aveid.net"
+OIDC_ISSUER = "https://aveid.net"
 OIDC_PUBLIC_KEY_PEM = """-----BEGIN PUBLIC KEY-----
 MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAwxGPnw24+LgRdFflk5/b
 vC4JiY/+wxjuWR/EQeVPh+FYqrIaQc38xHcG6Rh0FiTPuudfcKwzD1xSxzg0TPFU
@@ -40,7 +40,7 @@ Cb5F04hLsbDhnGXKCzUD/mHWwHgqCW1Ptq/yD9CMy770FGLHbRW7ZkiDpAOXXAIg
 r8x0bddlxRJ3lbpAIOj2husbjhC+BebvJF5VhpsysuRAL+9jJoAvLkWGTkxJ2VtJ
 QwIDAQAB
 -----END PUBLIC KEY-----"""
-OIDC_RESOURCE_AUDIENCE = "https://api.aveid.net"
+OIDC_RESOURCE_AUDIENCE = "https://aveid.net"
 PORT = "3000"
 R2_ACCESS_KEY_ID = "512a49d5cc0ed42a7ba949f8d9d622ae"
 R2_ACCOUNT_ID = "2e3bfcbc9512a7ab1ea3a9cb9a474b30"

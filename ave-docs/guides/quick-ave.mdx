@@ -121,7 +121,7 @@ if (user) {
 
 ## Calling your own API
 
-The `token` field on `QuickIdentity` is a signed JWT (`access_token_jwt`) with audience `https://api.aveid.net`. Pass it as a Bearer token to your backend and verify it there:
+The `token` field on `QuickIdentity` is a signed JWT (`access_token_jwt`) with audience `https://aveid.net`. Pass it as a Bearer token to your backend and verify it there:
 
 ```ts
 const user = getQuickIdentity();
@@ -132,11 +132,11 @@ const res = await fetch("/api/me", {
 ```
 
 On your server, verify the JWT:
-- `iss`: `https://api.aveid.net`
-- `aud`: `https://api.aveid.net`
+- `iss`: `https://aveid.net`
+- `aud`: `https://aveid.net`
 - `sub`: the user's Ave identity UUID
 - `quick`: `true` — always present in Quick Ave tokens, absent in Standard tokens
-- JWKS endpoint: `https://api.aveid.net/.well-known/jwks.json`
+- JWKS endpoint: `https://aveid.net/.well-known/jwks.json`
 
 <Note>
   The `quick: true` claim lets your API middleware distinguish Quick tokens from Standard tokens. If you have endpoints that require a fully registered app (e.g. app-specific data, Connector delegation, or higher-assurance flows), reject requests where `quick === true`:
