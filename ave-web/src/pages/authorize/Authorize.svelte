@@ -773,7 +773,7 @@
                             </svg>
                         </button>
                         {:else}
-                        <div class="bg-[#171717] p-1.5 md:p-[10px] items-center rounded-full flex flex-row gap-2 md:gap-[15px]">
+                        <div class="bg-[#171717] p-1.5 md:p-[10px] pr-4 md:pr-[20px] items-center rounded-full flex flex-row gap-2 md:gap-[15px]">
                             {#if selectedIdentity.avatarUrl}
                                 <img src={selectedIdentity.avatarUrl} alt="User Avatar" class="w-8 h-8 md:w-[50px] md:h-[50px] rounded-full object-cover"/>
                             {:else}
