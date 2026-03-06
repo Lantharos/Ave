@@ -1150,7 +1150,12 @@ app.get("/authorizations", requireAuth, async (c) => {
 app.get("/authorization/:clientId", requireAuth, async (c) => {
   const user = c.get("user")!;
   const clientId = c.req.param("clientId");
-  
+
+  // Quick Auth clients (origin: prefix) never have stored authorizations
+  if (isQuickClient(clientId)) {
+    return c.json({ authorization: null });
+  }
+
   // Find the app
   const [oauthApp] = await db
     .select()

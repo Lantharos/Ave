@@ -86,6 +86,12 @@
 
     });
 
+    const isQuickAuth = $derived(params.clientId.startsWith("origin:"));
+    const quickOriginHostname = $derived.by(() => {
+        if (!isQuickAuth) return null;
+        try { return new URL(params.clientId.slice("origin:".length)).hostname; } catch { return null; }
+    });
+
     let appInfo = $state<{
         name: string;
         description?: string;
@@ -611,7 +617,13 @@
                 disabled={authorizing}
                 title="Go back"
             >
-                {#if appInfo?.iconUrl}
+                {#if isQuickAuth}
+                    <div class="w-full h-full bg-[#1a1a2e] flex items-center justify-center transition-opacity group-hover:opacity-0">
+                        <svg class="w-6 h-6 md:w-[40px] md:h-[40px]" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M13 2L4.5 13.5H11L10 22L19.5 10.5H13L13 2Z" fill="#6C8EFF" stroke="#6C8EFF" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                    </div>
+                {:else if appInfo?.iconUrl}
                     <img src={appInfo.iconUrl} alt="{appInfo.name} Logo" class="w-full h-full object-cover transition-opacity group-hover:opacity-0"/>
                 {:else}
                     <div class="w-full h-full bg-[#171717] flex items-center justify-center transition-opacity group-hover:opacity-0">
@@ -626,9 +638,18 @@
                 </div>
             </button>
             <div class="flex flex-col gap-1 md:gap-[10px]">
-                <h1 class="font-poppins text-2xl md:text-[48px] text-white">
-                    {appInfo?.name || "Loading..."}
-                </h1>
+                {#if isQuickAuth}
+                    <div class="flex flex-row items-center gap-2 md:gap-[12px]">
+                        <h1 class="font-poppins text-2xl md:text-[48px] text-white">
+                            {quickOriginHostname || appInfo?.name || "Loading..."}
+                        </h1>
+                        <span class="text-[10px] md:text-[13px] font-poppins font-semibold text-[#6C8EFF] bg-[#6C8EFF]/10 border border-[#6C8EFF]/30 rounded-full px-2 py-0.5 md:px-[10px] md:py-[3px] uppercase tracking-wide whitespace-nowrap">Quick Ave</span>
+                    </div>
+                {:else}
+                    <h1 class="font-poppins text-2xl md:text-[48px] text-white">
+                        {appInfo?.name || "Loading..."}
+                    </h1>
+                {/if}
                 {#if appInfo?.websiteUrl}
                     <a href={appInfo.websiteUrl} target="_blank" rel="noopener noreferrer" class="font-poppins text-base md:text-[24px] text-[#878787] hover:text-[#FFFFFF] transition-colors">
                         {new URL(appInfo.websiteUrl).hostname}
@@ -642,7 +663,19 @@
                 You're signing in securely through Ave.
             </h2>
 
-            {#if appInfo?.description}
+            {#if isQuickAuth}
+                <div class="p-4 md:p-[30px] bg-[#1a1a2e]/60 flex flex-col gap-2 md:gap-[10px] border border-[#6C8EFF]/20 rounded-[20px] md:rounded-[32px]">
+                    <h3 class="font-poppins flex flex-row gap-2 md:gap-[10px] text-sm md:text-[20px] text-[#6C8EFF] items-center">
+                        <svg class="w-4 h-4 md:w-6 md:h-6 shrink-0" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M13 2L4.5 13.5H11L10 22L19.5 10.5H13L13 2Z" fill="#6C8EFF" stroke="#6C8EFF" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                        No app registration required
+                    </h3>
+                    <p class="font-poppins text-xs md:text-[18px] text-[#666666]">
+                        This site uses Quick Ave — a lightweight sign-in that doesn't require a registered app. Your identity is shared only with <span class="text-[#878787]">{quickOriginHostname}</span>.
+                    </p>
+                </div>
+            {:else if appInfo?.description}
                 <p class="font-poppins text-xs md:text-[20px] text-[#666666]">
                     {appInfo.description}
                 </p>
