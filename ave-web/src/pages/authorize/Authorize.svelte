@@ -639,12 +639,9 @@
             </button>
             <div class="flex flex-col gap-1 md:gap-[10px]">
                 {#if isQuickAuth}
-                    <div class="flex flex-row items-center gap-2 md:gap-[12px]">
-                        <h1 class="font-poppins text-2xl md:text-[48px] text-white">
-                            {quickOriginHostname || appInfo?.name || "Loading..."}
-                        </h1>
-                        <span class="text-[10px] md:text-[13px] font-poppins font-semibold text-[#6C8EFF] bg-[#6C8EFF]/10 border border-[#6C8EFF]/30 rounded-full px-2 py-0.5 md:px-[10px] md:py-[3px] uppercase tracking-wide whitespace-nowrap">Quick Ave</span>
-                    </div>
+                    <h1 class="font-poppins text-2xl md:text-[48px] text-white">
+                        {quickOriginHostname || appInfo?.name || "Loading..."}
+                    </h1>
                 {:else}
                     <h1 class="font-poppins text-2xl md:text-[48px] text-white">
                         {appInfo?.name || "Loading..."}
@@ -669,10 +666,10 @@
                         <svg class="w-4 h-4 md:w-6 md:h-6 shrink-0" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                             <path d="M13 2L4.5 13.5H11L10 22L19.5 10.5H13L13 2Z" fill="#6C8EFF" stroke="#6C8EFF" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
                         </svg>
-                        No app registration required
+                        Quick Ave
                     </h3>
                     <p class="font-poppins text-xs md:text-[18px] text-[#666666]">
-                        This site uses Quick Ave — a lightweight sign-in that doesn't require a registered app. Your identity is shared only with <span class="text-[#878787]">{quickOriginHostname}</span>.
+                        Sign in without creating an account on <span class="text-[#878787]">{quickOriginHostname}</span>. Ave verifies your identity and shares only what you approve.
                     </p>
                 </div>
             {:else if appInfo?.description}
@@ -682,18 +679,16 @@
             {/if}
 
             {#if appInfo?.supportsE2ee}
-                <div class="flex flex-col gap-2 md:gap-[10px]">
-                    <div class="p-4 md:p-[30px] bg-[#171717]/80 flex flex-col gap-2 md:gap-[10px] border-2 border-[#32A94C] rounded-[20px] md:rounded-[32px]">
-                        <h3 class="font-poppins flex flex-row gap-2 md:gap-[10px] text-sm md:text-[24px] text-[#32A94C] items-center">
-                            <svg class="w-5 h-5 md:w-9 md:h-9" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                <path d="M10.5 15V10.5C10.5 8.51088 11.2902 6.60322 12.6967 5.1967C14.1032 3.79018 16.0109 3 18 3C19.9891 3 21.8968 3.79018 23.3033 5.1967C24.7098 6.60322 25.5 8.51088 25.5 10.5V15M19.5 24C19.5 24.8284 18.8284 25.5 18 25.5C17.1716 25.5 16.5 24.8284 16.5 24C16.5 23.1716 17.1716 22.5 18 22.5C18.8284 22.5 19.5 23.1716 19.5 24ZM7.5 15H28.5C30.1569 15 31.5 16.3431 31.5 18V30C31.5 31.6569 30.1569 33 28.5 33H7.5C5.84315 33 4.5 31.6569 4.5 30V18C4.5 16.3431 5.84315 15 7.5 15Z" stroke="#32A94C" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
-                            </svg>
-                            End-to-End Encrypted
-                        </h3>
-                        <p class="font-poppins text-xs md:text-[22px] text-[#878787]">
-                            This app requests encryption keys from Ave each time you log in, ensuring your data stays end-to-end encrypted.
-                        </p>
-                    </div>
+                <div class="p-4 md:p-[30px] bg-[#0d1f12]/60 flex flex-col gap-2 md:gap-[10px] border border-[#32A94C]/20 rounded-[20px] md:rounded-[32px]">
+                    <h3 class="font-poppins flex flex-row gap-2 md:gap-[10px] text-sm md:text-[20px] text-[#32A94C] items-center">
+                        <svg class="w-4 h-4 md:w-6 md:h-6 shrink-0" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M7 10V7C7 5.67392 7.52678 4.40215 8.46447 3.46447C9.40215 2.52678 10.6739 2 12 2C13.3261 2 14.5979 2.52678 15.5355 3.46447C16.4732 4.40215 17 5.67392 17 7V10M13 16C13 16.5523 12.5523 17 12 17C11.4477 17 11 16.5523 11 16C11 15.4477 11.4477 15 12 15C12.5523 15 13 15.4477 13 16ZM5 10H19C20.1046 10 21 10.8954 21 12V20C21 21.1046 20.1046 22 19 22H5C3.89543 22 3 21.1046 3 20V12C3 10.8954 3.89543 10 5 10Z" stroke="#32A94C" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                        End-to-End Encrypted
+                    </h3>
+                    <p class="font-poppins text-xs md:text-[18px] text-[#666666]">
+                        This app requests encryption keys from Ave each time you sign in, keeping your data end-to-end encrypted at all times.
+                    </p>
                 </div>
             {/if}
         </div>
@@ -756,8 +751,9 @@
                 <h1 class="text-white text-xl md:text-[48px] font-bold font-poppins">Sign in as</h1>
 
 
-                    <!-- Identity dropdown -->
+                    <!-- Identity selector -->
                     <div class="relative w-full md:w-auto">
+                        {#if $identitiesStore.length > 1}
                         <button 
                             class="bg-[#171717] p-1.5 md:p-[10px] items-center rounded-full flex flex-row gap-2 md:gap-[15px] hover:bg-[#242424] cursor-pointer transition-colors duration-300"
                             onclick={() => { identityDropdownOpen = !identityDropdownOpen; }}
@@ -776,7 +772,21 @@
                                 <path d="M6 9L12 15L18 9" stroke="#C7C7C7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
                             </svg>
                         </button>
-                        
+                        {:else}
+                        <div class="bg-[#171717] p-1.5 md:p-[10px] items-center rounded-full flex flex-row gap-2 md:gap-[15px]">
+                            {#if selectedIdentity.avatarUrl}
+                                <img src={selectedIdentity.avatarUrl} alt="User Avatar" class="w-8 h-8 md:w-[50px] md:h-[50px] rounded-full object-cover"/>
+                            {:else}
+                                <div class="w-8 h-8 md:w-[50px] md:h-[50px] rounded-full bg-[#222222] flex items-center justify-center">
+                                    <Text type="h" size={20} mobileSize={14} color="#878787">{selectedIdentity.displayName[0]}</Text>
+                                </div>
+                            {/if}
+                            <span class="text-white text-base md:text-[24px] font-poppins font-semibold">
+                                {selectedIdentity.displayName}
+                            </span>
+                        </div>
+                        {/if}
+
                         {#if identityDropdownOpen && $identitiesStore.length > 1}
                             <div class="absolute top-full left-0 mt-2 md:mt-[10px] bg-[#171717] rounded-[16px] overflow-hidden z-50 min-w-full">
                                 {#each $identitiesStore as identity}
@@ -831,14 +841,14 @@
                 <!-- svelte-ignore a11y_no_static_element_interactions -->
                 <div 
                     id="auth-slider"
-                    class="rounded-full bg-[#171717]/80 border-[3px] md:border-[6px] border-[#171717]/80 w-full relative h-[50px] md:h-[82px] touch-none select-none"
+                    class="rounded-full bg-[#171717] w-full relative h-[50px] md:h-[82px] touch-none select-none"
                     onpointerdown={handleSliderStart}
                     onpointermove={handleSliderMove}
                     onpointerup={handleSliderEnd}
                     onpointercancel={handleSliderEnd}
                 >
                     <div 
-                        class="w-[44px] h-[44px] md:w-[70px] md:h-[70px] bg-white rounded-full cursor-grab flex items-center justify-center absolute top-0 left-0 z-10 pointer-events-none {sliderActive ? '' : 'transition-[transform] duration-300'}"
+                        class="w-[44px] h-[44px] md:w-[70px] md:h-[70px] bg-white rounded-full cursor-grab flex items-center justify-center absolute top-[3px] left-[3px] md:top-[6px] md:left-[6px] z-10 pointer-events-none {sliderActive ? '' : 'transition-[transform] duration-300'}"
                         style="transform: translateX({sliderMaxTravel > 0 ? sliderPosition * sliderMaxTravel : sliderPosition * 100}px);"
                     >
                         {#if authorizing}
