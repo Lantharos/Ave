@@ -7,7 +7,7 @@ import { eq, and, isNull } from "drizzle-orm";
 import { randomUUID, timingSafeEqual } from "crypto";
 import { hashSessionToken } from "../lib/crypto";
 import { getIssuer, getResourceAudience, getJwtPublicJwk, signJwt, verifyJwt, hashToken } from "../lib/oidc";
-import { consumeAuthorizationCode, deleteAccessToken, getAccessToken, setAccessToken, setAuthorizationCode } from "../lib/oauth-store";
+import { consumeAuthorizationCode, getAccessToken, setAccessToken, setAuthorizationCode } from "../lib/oauth-store";
 
 const app = new Hono();
 export const oidcRoutes = new Hono();

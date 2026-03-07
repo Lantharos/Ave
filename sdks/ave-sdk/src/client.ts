@@ -195,7 +195,7 @@ export async function finishPkceLogin(options: {
     idToken: token.id_token,
   });
 
-  if (options.cleanUrl !== false) {
+  if (options.cleanUrl !== false && typeof window !== "undefined" && typeof history !== "undefined") {
     const cleanUrl = new URL(window.location.href);
     cleanUrl.searchParams.delete("code");
     cleanUrl.searchParams.delete("state");

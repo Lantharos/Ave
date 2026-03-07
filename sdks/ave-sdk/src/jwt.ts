@@ -19,6 +19,25 @@ function getDefaultJwksUrl(issuer?: string): string {
   return `${getApiBase(issuer)}/.well-known/jwks.json`;
 }
 
+function getGlobalFetch(): typeof fetch | null {
+  return (
+    globalThis as typeof globalThis & {
+      fetch?: typeof fetch;
+    }
+  ).fetch ?? null;
+}
+
+function getDefaultOidcConfiguration(options: {
+  issuer?: string;
+  expectedIssuer?: string;
+  jwksUrl?: string;
+}): OidcConfiguration {
+  return {
+    issuer: options.expectedIssuer ?? getApiBase(options.issuer),
+    jwks_uri: options.jwksUrl ?? getDefaultJwksUrl(options.issuer),
+  };
+}
+
 function parseCacheControlMaxAge(cacheControl: string | null): number | null {
   if (!cacheControl) return null;
   const match = cacheControl.match(/max-age=(\d+)/i);
@@ -122,19 +141,17 @@ async function resolveOidcConfiguration(options: VerifyJwtOptions): Promise<Oidc
     };
   }
 
-  const fetcher = options.fetcher ?? fetch;
+  const fetcher = options.fetcher ?? getGlobalFetch();
   const discoveryUrl = options.discoveryUrl ?? getDiscoveryUrl(options.issuer);
+
+  if (!fetcher) {
+    return getDefaultOidcConfiguration(options);
+  }
 
   try {
     return await getCachedJson<OidcConfiguration>(discoveryCache, discoveryUrl, fetcher);
   } catch {
-    if (!options.expectedIssuer && !options.jwksUrl) {
-      return null;
-    }
-    return {
-      issuer: options.expectedIssuer ?? options.issuer ?? DEFAULT_ISSUER,
-      jwks_uri: options.jwksUrl ?? getDefaultJwksUrl(options.issuer),
-    };
+    return getDefaultOidcConfiguration(options);
   }
 }
 
@@ -143,7 +160,10 @@ export async function fetchJwks(options: {
   jwksUrl?: string;
   fetcher?: typeof fetch;
 } = {}): Promise<JwksResponse> {
-  const fetcher = options.fetcher ?? fetch;
+  const fetcher = options.fetcher ?? getGlobalFetch();
+  if (!fetcher) {
+    throw new Error("No fetch implementation available for JWKS retrieval");
+  }
   const jwksUrl = options.jwksUrl ?? getDefaultJwksUrl(options.issuer);
   return getCachedJson<JwksResponse>(jwksCache, jwksUrl, fetcher);
 }
