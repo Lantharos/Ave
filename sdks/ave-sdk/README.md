@@ -103,4 +103,4 @@ if (!claims) {
 }
 ```
 
-`verifyJwt()` uses Ave's issuer/discovery defaults when `issuer` is omitted, fetches JWKS automatically, validates the RS256 signature, checks `iss`, `exp`, optional `nbf`, and enforces the `aud` / `nonce` values you provide.
+`verifyJwt()` uses Ave's issuer/discovery default when `issuer` is omitted, fetches JWKS automatically, validates the RS256 signature, checks `iss`, `exp`, optional `nbf`, and enforces the `aud` / `nonce` values you provide.

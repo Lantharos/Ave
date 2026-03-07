@@ -232,6 +232,7 @@ function createWebSocketResponse(request: Request, requestDatabase: D1Database |
 
 export class ApiAppDurableObject {
   constructor(
+    // Stored as an instance property so fetch() can access state.storage for OAuth storage binding.
     private readonly state: DurableObjectState,
     private readonly env: Bindings
   ) {

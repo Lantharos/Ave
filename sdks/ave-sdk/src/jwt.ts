@@ -128,6 +128,14 @@ export async function fetchJwks(options: {
   return getCachedJson<JwksResponse>(jwksCache, jwksUrl, fetcher);
 }
 
+/**
+ * Verify an Ave JWT with OIDC discovery + JWKS.
+ *
+ * Issuer resolution order:
+ * 1. `options.expectedIssuer`
+ * 2. `options.issuer`
+ * 3. the Ave default issuer (`https://aveid.net`)
+ */
 export async function verifyJwt<T extends JwtPayload = AveJwtClaims>(
   token: string,
   options: VerifyJwtOptions = {},

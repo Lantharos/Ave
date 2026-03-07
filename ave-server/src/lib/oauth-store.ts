@@ -32,8 +32,10 @@ export type AccessTokenRecord = {
   nonce?: string;
 };
 
-// Mirror the request-scoped DB pattern so OAuth storage is bound to the
-// current Durable Object request rather than shared at module scope.
+/**
+ * Mirror the request-scoped DB pattern so OAuth storage is bound to the
+ * current Durable Object request rather than shared at module scope.
+ */
 const oauthStorage = new AsyncLocalStorage<DurableObjectStorage>();
 
 function key(namespace: "auth-code" | "access-token", id: string): string {
@@ -43,7 +45,7 @@ function key(namespace: "auth-code" | "access-token", id: string): string {
 function getStorage(): DurableObjectStorage {
   const storage = oauthStorage.getStore();
   if (!storage) {
-    throw new Error("OAuth storage is only available inside the API Durable Object request context. Wrap the operation with runWithOAuthStorage().");
+    throw new Error("OAuth storage not initialized. This function must be called within runWithOAuthStorage().");
   }
   return storage;
 }

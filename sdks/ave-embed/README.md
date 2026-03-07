@@ -109,6 +109,8 @@ openAveSheet({
 });
 ```
 
+`sessionStorage` is a good default for PKCE because it is tab-scoped, but remember it is cleared when the tab/window is closed. If you need longer-lived persistence, store the verifier/state somewhere more durable and weigh the security trade-offs carefully.
+
 On your callback route, parse `code` and `state`, validate the stored state, then call `exchangeCode()` with the stored verifier. If you want the SDK to manage PKCE state/nonce for you automatically, use `startPkceLogin()` / `finishPkceLogin()` directly instead of an embed flow.
 
 ### Popup window (desktop)
