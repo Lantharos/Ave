@@ -112,7 +112,7 @@ async function resolveOidcConfiguration(options: VerifyJwtOptions): Promise<Oidc
       return null;
     }
     return {
-      issuer: options.expectedIssuer ?? getApiBase(options.issuer),
+      issuer: options.expectedIssuer ?? options.issuer ?? DEFAULT_ISSUER,
       jwks_uri: options.jwksUrl ?? getDefaultJwksUrl(options.issuer),
     };
   }

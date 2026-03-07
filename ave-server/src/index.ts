@@ -23,6 +23,7 @@ import signingRoutes from "./routes/signing";
 import { SESSION_COOKIE_NAME } from "./lib/session-cookie";
 import { initDb, runWithDb } from "./db";
 import { initChallengeStorage } from "./lib/challenge-store";
+import { initOAuthStorage } from "./lib/oauth-store";
 
 import uploadRoutes from "./routes/upload";
 
@@ -235,6 +236,7 @@ export class ApiAppDurableObject {
     private readonly env: Bindings
   ) {
     initChallengeStorage(state.storage);
+    initOAuthStorage(state.storage);
   }
 
   async fetch(request: Request): Promise<Response> {

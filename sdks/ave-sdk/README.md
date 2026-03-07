@@ -94,7 +94,6 @@ const tokens = await exchangeCodeServer({
 import { verifyJwt } from "@ave-id/sdk";
 
 const claims = await verifyJwt(token, {
-  issuer: "https://aveid.net",
   audience: "origin:https://yourapp.com", // or your registered client ID / API audience
   nonce: "EXPECTED_NONCE", // optional, for id_token validation
 });
@@ -104,4 +103,4 @@ if (!claims) {
 }
 ```
 
-`verifyJwt()` uses OIDC discovery + JWKS automatically, validates the RS256 signature, checks `iss`, `exp`, optional `nbf`, and enforces the `aud` / `nonce` values you provide.
+`verifyJwt()` uses Ave's issuer/discovery defaults when `issuer` is omitted, fetches JWKS automatically, validates the RS256 signature, checks `iss`, `exp`, optional `nbf`, and enforces the `aud` / `nonce` values you provide.

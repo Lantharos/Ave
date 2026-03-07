@@ -7,7 +7,7 @@ import { eq, and, isNull } from "drizzle-orm";
 import { randomUUID, timingSafeEqual } from "crypto";
 import { hashSessionToken } from "../lib/crypto";
 import { getIssuer, getResourceAudience, getJwtPublicJwk, signJwt, verifyJwt, hashToken } from "../lib/oidc";
-
+import { deleteAccessToken, deleteAuthorizationCode, getAccessToken, getAuthorizationCode, setAccessToken, setAuthorizationCode } from "../lib/oauth-store";
 
 const app = new Hono();
 export const oidcRoutes = new Hono();
@@ -29,40 +29,9 @@ oidcRoutes.get("/webfinger", (c) => {
   });
 });
 
-
-// In-memory store for authorization codes (in production, use Redis)
-const authorizationCodes = new Map<string, {
-  userId: string;
-  appId: string;
-  identityId: string;
-  redirectUri: string;
-  scope: string;
-  expiresAt: number;
-  codeChallenge?: string;
-  codeChallengeMethod?: string;
-  encryptedAppKey?: string; // E2EE: encrypted app key to return to the app
-  nonce?: string;
-  requestedResource?: string;
-  requestedScope?: string;
-  communicationMode?: "user_present" | "background";
-  delegationGrantId?: string;
-}>();
-
-
 function getDiscoveryBase(): string {
   return process.env.OIDC_DISCOVERY_BASE || "https://api.aveid.net";
 }
-
-// In-memory access token store (replace with Redis in production)
-const accessTokens = new Map<string, {
-  userId: string;
-  identityId: string;
-  appId: string;
-  scope: string;
-  expiresAt: number;
-  redirectUri: string;
-  nonce?: string;
-}>();
 
 // Generate authorization code
 function generateAuthCode(): string {
@@ -459,7 +428,7 @@ app.post("/authorize", requireAuth, zValidator("json", z.object({
   // Either from the new authorization or from an existing one
   const finalEncryptedAppKey = encryptedAppKey || existingAuth?.encryptedAppKey || undefined;
   
-  authorizationCodes.set(code, {
+  await setAuthorizationCode(code, {
     userId: user.id,
     appId: oauthApp.id,
     identityId,
@@ -554,13 +523,13 @@ app.post("/token", zValidator("json", z.discriminatedUnion("grantType", [
       scope: string;
     } | null = null;
 
-    const inMemorySubject = accessTokens.get(subjectToken);
-    if (inMemorySubject) {
+    const storedOpaqueSubject = await getAccessToken(subjectToken);
+    if (storedOpaqueSubject) {
       subject = {
-        userId: inMemorySubject.userId,
-        identityId: inMemorySubject.identityId,
-        sourceAppId: inMemorySubject.appId,
-        scope: inMemorySubject.scope,
+        userId: storedOpaqueSubject.userId,
+        identityId: storedOpaqueSubject.identityId,
+        sourceAppId: storedOpaqueSubject.appId,
+        scope: storedOpaqueSubject.scope,
       };
     } else {
       const jwtPayload = await verifyJwt(subjectToken, getResourceAudience());
@@ -722,7 +691,7 @@ app.post("/token", zValidator("json", z.discriminatedUnion("grantType", [
     const refreshTokenTtl = oauthApp.refreshTokenTtlSeconds || 30 * 24 * 60 * 60;
 
     const accessToken = generateAccessToken();
-    accessTokens.set(accessToken, {
+    await setAccessToken(accessToken, {
       userId: storedRefresh.userId,
       identityId: storedRefresh.identityId,
       appId: storedRefresh.appId,
@@ -802,14 +771,9 @@ app.post("/token", zValidator("json", z.discriminatedUnion("grantType", [
 
   
   // Find authorization code
-  const authCode = authorizationCodes.get(code);
+  const authCode = await getAuthorizationCode(code);
   if (!authCode) {
     return c.json({ error: "invalid_grant", error_description: "Authorization code not found" }, 400);
-  }
-  
-  if (Date.now() > authCode.expiresAt) {
-    authorizationCodes.delete(code);
-    return c.json({ error: "invalid_grant", error_description: "Authorization code expired" }, 400);
   }
   
   if (authCode.redirectUri !== redirectUri) {
@@ -912,14 +876,14 @@ app.post("/token", zValidator("json", z.discriminatedUnion("grantType", [
 
   
   // Delete used code
-  authorizationCodes.delete(code);
+  await deleteAuthorizationCode(code);
   
   // Generate access token
   const accessToken = generateAccessToken();
   const accessTokenTtl = oauthApp.accessTokenTtlSeconds || 3600;
   const refreshTokenTtl = oauthApp.refreshTokenTtlSeconds || 30 * 24 * 60 * 60;
 
-  accessTokens.set(accessToken, {
+  await setAccessToken(accessToken, {
     userId: authCode.userId,
     identityId: authCode.identityId,
     appId: authCode.appId,
@@ -1050,7 +1014,7 @@ app.get("/userinfo", async (c) => {
   }
 
   const token = authHeader.slice(7);
-  let record = accessTokens.get(token);
+  let record = await getAccessToken(token);
 
   if (!record) {
     const jwtPayload = await verifyJwt(token, getResourceAudience());
@@ -1066,11 +1030,6 @@ app.get("/userinfo", async (c) => {
       expiresAt: (typeof jwtPayload.exp === "number" ? jwtPayload.exp * 1000 : 0),
       redirectUri: "",
     };
-  }
-
-  if (Date.now() > record.expiresAt) {
-    accessTokens.delete(token);
-    return c.json({ error: "invalid_token" }, 401);
   }
 
   const [identity] = await db
@@ -1124,13 +1083,9 @@ app.post("/session/check", async (c) => {
 
   const token = authHeader.slice(7);
 
-  // Check in-memory opaque access tokens first
-  const record = accessTokens.get(token);
+  // Check stored opaque access tokens first
+  const record = await getAccessToken(token);
   if (record) {
-    if (Date.now() > record.expiresAt) {
-      accessTokens.delete(token);
-      return c.json({ error: "invalid_token", reason: "expired" }, 401);
-    }
     return c.json({ status: "active" });
   }
 
