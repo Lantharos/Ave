@@ -162,7 +162,7 @@ export async function fetchJwks(options: {
 } = {}): Promise<JwksResponse> {
   const fetcher = options.fetcher ?? getGlobalFetch();
   if (!fetcher) {
-    throw new Error("No fetch implementation available for JWKS retrieval");
+    throw new Error("No fetch implementation available for JWKS retrieval. Please provide a fetcher option or ensure fetch is available in the global scope.");
   }
   const jwksUrl = options.jwksUrl ?? getDefaultJwksUrl(options.issuer);
   return getCachedJson<JwksResponse>(jwksCache, jwksUrl, fetcher);
