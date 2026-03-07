@@ -83,8 +83,14 @@ function isValidPkceCodeVerifier(value: string): boolean {
 }
 
 function timingSafeEqualString(a: string, b: string): boolean {
-  if (a.length !== b.length) return false;
-  return timingSafeEqual(Buffer.from(a), Buffer.from(b));
+  const aBuffer = Buffer.from(a);
+  const bBuffer = Buffer.from(b);
+  const maxLength = Math.max(aBuffer.length, bBuffer.length);
+  const paddedA = Buffer.alloc(maxLength);
+  const paddedB = Buffer.alloc(maxLength);
+  aBuffer.copy(paddedA);
+  bBuffer.copy(paddedB);
+  return timingSafeEqual(paddedA, paddedB) && aBuffer.length === bBuffer.length;
 }
 
 // Generate refresh token

@@ -20,6 +20,8 @@ interface StoredPkceState {
 
 function storePkceState(value: StoredPkceState): void {
   sessionStorage.setItem(PKCE_STORAGE_KEY, JSON.stringify(value));
+  // Keep the legacy keys in sync so existing PKCE integrations that still read
+  // them directly can migrate to finishPkceLogin() without breaking.
   sessionStorage.setItem(PKCE_VERIFIER_KEY, value.verifier);
   sessionStorage.setItem(PKCE_NONCE_KEY, value.nonce);
   sessionStorage.setItem(PKCE_STATE_KEY, value.state);
@@ -151,6 +153,8 @@ export async function finishPkceLogin(options: {
   issuer?: string;
   /** Override the callback URL to parse (defaults to window.location.href) */
   url?: string;
+  /** Set to false to keep the code/state parameters in the current URL */
+  cleanUrl?: boolean;
 }): Promise<import("./types").TokenResponse | null> {
   const callbackUrl = options.url ?? window.location.href;
   const parsed = new URL(callbackUrl);
@@ -188,10 +192,12 @@ export async function finishPkceLogin(options: {
     idToken: token.id_token,
   });
 
-  const cleanUrl = new URL(window.location.href);
-  cleanUrl.searchParams.delete("code");
-  cleanUrl.searchParams.delete("state");
-  history.replaceState({}, "", cleanUrl.toString());
+  if (options.cleanUrl !== false) {
+    const cleanUrl = new URL(window.location.href);
+    cleanUrl.searchParams.delete("code");
+    cleanUrl.searchParams.delete("state");
+    history.replaceState({}, "", cleanUrl.toString());
+  }
 
   return token;
 }

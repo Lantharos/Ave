@@ -38,20 +38,25 @@ function getCachedJson<T>(
     return cached.value;
   }
 
-  const value = (async () => {
+  let value!: Promise<T>;
+  value = (async () => {
     const response = await fetcher(url);
     if (!response.ok) {
       throw new Error(`Failed to fetch ${url} (${response.status})`);
     }
     const ttlMs = parseCacheControlMaxAge(response.headers.get("cache-control")) ?? DEFAULT_CACHE_TTL_MS;
     const body = await response.json() as T;
-    cache.set(url, {
-      expiresAt: Date.now() + ttlMs,
-      value: Promise.resolve(body),
-    });
+    if (cache.get(url)?.value === value) {
+      cache.set(url, {
+        expiresAt: Date.now() + ttlMs,
+        value: Promise.resolve(body),
+      });
+    }
     return body;
   })().catch((error) => {
-    cache.delete(url);
+    if (cache.get(url)?.value === value) {
+      cache.delete(url);
+    }
     throw error;
   });
 
