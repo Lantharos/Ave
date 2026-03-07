@@ -4,7 +4,7 @@ import { z } from "zod";
 import { db, oauthApps, oauthAuthorizations, oauthRefreshTokens, identities, activityLogs, oauthResources, oauthDelegationGrants, oauthDelegationAuditLogs } from "../db";
 import { requireAuth } from "../middleware/auth";
 import { eq, and, isNull } from "drizzle-orm";
-import { randomUUID } from "crypto";
+import { randomUUID, timingSafeEqual } from "crypto";
 import { hashSessionToken } from "../lib/crypto";
 import { getIssuer, getResourceAudience, getJwtPublicJwk, signJwt, verifyJwt, hashToken } from "../lib/oidc";
 
@@ -76,6 +76,15 @@ function generateAccessToken(): string {
   const bytes = new Uint8Array(32);
   crypto.getRandomValues(bytes);
   return Buffer.from(bytes).toString("base64url");
+}
+
+function isValidPkceCodeVerifier(value: string): boolean {
+  return /^[A-Za-z0-9._~-]{43,128}$/.test(value);
+}
+
+function timingSafeEqualString(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  return timingSafeEqual(Buffer.from(a), Buffer.from(b));
 }
 
 // Generate refresh token
@@ -854,6 +863,9 @@ app.post("/token", zValidator("json", z.discriminatedUnion("grantType", [
     if (!codeVerifier) {
       return c.json({ error: "invalid_request", error_description: "Code verifier required" }, 400);
     }
+    if (!isValidPkceCodeVerifier(codeVerifier)) {
+      return c.json({ error: "invalid_request", error_description: "Code verifier must be 43-128 characters and use the PKCE character set" }, 400);
+    }
     
     let computedChallenge: string;
     if (authCode.codeChallengeMethod === "S256") {
@@ -865,7 +877,7 @@ app.post("/token", zValidator("json", z.discriminatedUnion("grantType", [
       computedChallenge = codeVerifier;
     }
     
-    if (computedChallenge !== authCode.codeChallenge) {
+    if (!timingSafeEqualString(computedChallenge, authCode.codeChallenge)) {
       return c.json({ error: "invalid_grant", error_description: "Code verifier mismatch" }, 400);
     }
   } else if (clientSecret) {

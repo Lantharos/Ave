@@ -1,5 +1,70 @@
 export type Scope = "openid" | "profile" | "email" | "offline_access" | "user_id";
 
+export interface JwtHeader {
+  alg?: string;
+  typ?: string;
+  kid?: string;
+}
+
+export interface JwtPayload {
+  sub?: string;
+  iss?: string;
+  aud?: string | string[];
+  exp?: number;
+  iat?: number;
+  nbf?: number;
+  nonce?: string;
+  [key: string]: unknown;
+}
+
+export interface AveJwtClaims extends JwtPayload {
+  scope?: string;
+  cid?: string;
+  sid?: string;
+  uid?: string;
+  quick?: boolean;
+}
+
+export interface AveIdTokenClaims extends JwtPayload {
+  auth_time?: number;
+  azp?: string;
+  sid?: string;
+  name?: string;
+  preferred_username?: string;
+  email?: string;
+  picture?: string;
+}
+
+export interface JwkKey {
+  kid?: string;
+  kty: string;
+  use?: string;
+  alg?: string;
+  n?: string;
+  e?: string;
+}
+
+export interface JwksResponse {
+  keys: JwkKey[];
+}
+
+export interface OidcConfiguration {
+  issuer: string;
+  jwks_uri: string;
+}
+
+export interface VerifyJwtOptions {
+  issuer?: string;
+  expectedIssuer?: string;
+  audience?: string | string[];
+  nonce?: string;
+  jwksUrl?: string;
+  jwks?: JwksResponse;
+  discoveryUrl?: string;
+  clockSkewSeconds?: number;
+  fetcher?: typeof fetch;
+}
+
 export interface TokenResponse {
   access_token: string;
   access_token_jwt: string;
