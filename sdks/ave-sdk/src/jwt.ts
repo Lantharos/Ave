@@ -71,8 +71,28 @@ function getCachedJson<T>(
 function base64UrlDecode(input: string): Uint8Array {
   const normalized = input.replace(/-/g, "+").replace(/_/g, "/");
   const padded = normalized + "=".repeat((4 - (normalized.length % 4)) % 4);
-  const binary = atob(padded);
-  return Uint8Array.from(binary, (char) => char.charCodeAt(0));
+
+  if (typeof atob === "function") {
+    const binary = atob(padded);
+    return Uint8Array.from(binary, (char) => char.charCodeAt(0));
+  }
+
+  const bufferCtor = (
+    globalThis as typeof globalThis & {
+      Buffer?: {
+        from(input: string, encoding: string): Uint8Array;
+      };
+    }
+  ).Buffer;
+  if (bufferCtor) {
+    return new Uint8Array(bufferCtor.from(padded, "base64"));
+  }
+
+  throw new Error("No base64 decoder available in this environment");
+}
+
+function getSubtleCrypto(): SubtleCrypto | null {
+  return globalThis.crypto?.subtle ?? null;
 }
 
 function parseJwtPart<T>(value: string): T | null {
@@ -201,9 +221,14 @@ export async function verifyJwt<T extends JwtPayload = AveJwtClaims>(
     return null;
   }
 
+  const subtle = getSubtleCrypto();
+  if (!subtle) {
+    return null;
+  }
+
   let cryptoKey: CryptoKey;
   try {
-    cryptoKey = await crypto.subtle.importKey(
+    cryptoKey = await subtle.importKey(
       "jwk",
       jwk as JsonWebKey,
       { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
@@ -216,7 +241,7 @@ export async function verifyJwt<T extends JwtPayload = AveJwtClaims>(
 
   try {
     const signature = new Uint8Array(base64UrlDecode(signatureSegment));
-    const valid = await crypto.subtle.verify(
+    const valid = await subtle.verify(
       "RSASSA-PKCS1-v1_5",
       cryptoKey,
       signature,

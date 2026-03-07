@@ -7,7 +7,7 @@ import { eq, and, isNull } from "drizzle-orm";
 import { randomUUID, timingSafeEqual } from "crypto";
 import { hashSessionToken } from "../lib/crypto";
 import { getIssuer, getResourceAudience, getJwtPublicJwk, signJwt, verifyJwt, hashToken } from "../lib/oidc";
-import { deleteAccessToken, deleteAuthorizationCode, getAccessToken, getAuthorizationCode, setAccessToken, setAuthorizationCode } from "../lib/oauth-store";
+import { consumeAuthorizationCode, deleteAccessToken, getAccessToken, setAccessToken, setAuthorizationCode } from "../lib/oauth-store";
 
 const app = new Hono();
 export const oidcRoutes = new Hono();
@@ -771,7 +771,7 @@ app.post("/token", zValidator("json", z.discriminatedUnion("grantType", [
 
   
   // Find authorization code
-  const authCodeResult = await getAuthorizationCode(code);
+  const authCodeResult = await consumeAuthorizationCode(code);
   if (!authCodeResult.value) {
     return c.json({
       error: "invalid_grant",
@@ -878,10 +878,6 @@ app.post("/token", zValidator("json", z.discriminatedUnion("grantType", [
     return c.json({ error: "invalid_scope", error_description: `Invalid scopes: ${invalidScopes.join(", ")}` }, 400);
   }
 
-  
-  // Delete used code
-  await deleteAuthorizationCode(code);
-  
   // Generate access token
   const accessToken = generateAccessToken();
   const accessTokenTtl = oauthApp.accessTokenTtlSeconds || 3600;

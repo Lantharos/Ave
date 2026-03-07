@@ -11,7 +11,30 @@ interface DurableObjectNamespace {
 
 interface DurableObjectStorage {
   get<T = unknown>(key: string): Promise<T | undefined>;
-  put<T = unknown>(key: string, value: T): Promise<void>;
+  put<T = unknown>(
+    key: string,
+    value: T,
+    options?: {
+      expiration?: number;
+      expirationTtl?: number;
+    },
+  ): Promise<void>;
+  delete(key: string): Promise<boolean>;
+  transaction<T>(
+    callback: (txn: DurableObjectTransaction) => Promise<T>
+  ): Promise<T>;
+}
+
+interface DurableObjectTransaction {
+  get<T = unknown>(key: string): Promise<T | undefined>;
+  put<T = unknown>(
+    key: string,
+    value: T,
+    options?: {
+      expiration?: number;
+      expirationTtl?: number;
+    },
+  ): Promise<void>;
   delete(key: string): Promise<boolean>;
 }
 

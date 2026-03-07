@@ -63,10 +63,16 @@ async function setRecord<T>(
   value: T,
   expiresAt: number,
 ): Promise<void> {
-  await getStorage().put(key(namespace, id), {
-    value,
-    expiresAt,
-  } satisfies StoredOAuthRecord<T>);
+  await getStorage().put(
+    key(namespace, id),
+    {
+      value,
+      expiresAt,
+    } satisfies StoredOAuthRecord<T>,
+    {
+      expiration: Math.floor(expiresAt / 1000),
+    },
+  );
 }
 
 async function getRecord<T>(
@@ -78,6 +84,22 @@ async function getRecord<T>(
 
 async function deleteRecord(namespace: "auth-code" | "access-token", id: string): Promise<void> {
   await getStorage().delete(key(namespace, id));
+}
+
+async function takeRecord<T>(
+  namespace: "auth-code" | "access-token",
+  id: string,
+): Promise<StoredOAuthRecord<T> | null> {
+  const storageKey = key(namespace, id);
+  return getStorage().transaction(async (txn) => {
+    const record = (await txn.get<StoredOAuthRecord<T>>(storageKey)) ?? null;
+    if (!record) {
+      return null;
+    }
+
+    await txn.delete(storageKey);
+    return record;
+  });
 }
 
 export async function setAuthorizationCode(id: string, value: AuthorizationCodeRecord): Promise<void> {
@@ -94,6 +116,20 @@ export async function getAuthorizationCode(id: string): Promise<{
   }
   if (Date.now() > record.expiresAt) {
     await deleteAuthorizationCode(id);
+    return { value: null, expired: true };
+  }
+  return { value: record.value, expired: false };
+}
+
+export async function consumeAuthorizationCode(id: string): Promise<{
+  value: AuthorizationCodeRecord | null;
+  expired: boolean;
+}> {
+  const record = await takeRecord<AuthorizationCodeRecord>("auth-code", id);
+  if (!record) {
+    return { value: null, expired: false };
+  }
+  if (Date.now() > record.expiresAt) {
     return { value: null, expired: true };
   }
   return { value: record.value, expired: false };
