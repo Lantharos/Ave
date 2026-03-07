@@ -29,7 +29,7 @@ import { handleQuickCallback } from "@ave-id/sdk/client";
 await handleQuickCallback(); // exchanges code, stores identity, redirects user back
 ```
 
-The `clientId` is derived from your site's origin (`origin:https://yourapp.com`). PKCE provides the security — no secret is ever required.
+The `clientId` is derived from your site's origin (`origin:https://yourapp.com`). PKCE provides the security — no secret is ever required. Quick Ave now verifies returned JWTs client-side against Ave's OIDC discovery document + JWKS before storing the session.
 
 ## Full OIDC flow
 
@@ -58,13 +58,21 @@ window.location.href = url;
 ## Client helpers
 
 ```ts
-import { startPkceLogin } from "@ave-id/sdk/client";
+import { finishPkceLogin, startPkceLogin } from "@ave-id/sdk/client";
 
 await startPkceLogin({
   clientId: "YOUR_CLIENT_ID",
   redirectUri: "https://yourapp.com/callback",
 });
+
+// On your callback page:
+const tokens = await finishPkceLogin({
+  clientId: "YOUR_CLIENT_ID",
+  redirectUri: "https://yourapp.com/callback",
+});
 ```
+
+`startPkceLogin()` now generates and stores both `state` and `nonce` by default, and `finishPkceLogin()` validates the callback `state`, exchanges the authorization code, and verifies any returned `id_token` / `access_token_jwt` with Ave's JWKS.
 
 ## Server helpers
 
@@ -79,3 +87,20 @@ const tokens = await exchangeCodeServer({
   code: "CODE_FROM_CALLBACK",
 });
 ```
+
+## Verify JWTs with the SDK
+
+```ts
+import { verifyJwt } from "@ave-id/sdk";
+
+const claims = await verifyJwt(token, {
+  audience: "origin:https://yourapp.com", // or your registered client ID / API audience
+  nonce: "EXPECTED_NONCE", // optional, for id_token validation
+});
+
+if (!claims) {
+  throw new Error("Invalid Ave JWT");
+}
+```
+
+`verifyJwt()` uses Ave's issuer/discovery default when `issuer` is omitted, fetches JWKS automatically, validates the RS256 signature, checks `iss`, `exp`, optional `nbf`, and enforces the `aud` / `nonce` values you provide. Server usage requires runtime `fetch` and WebCrypto (`globalThis.crypto.subtle`), which are built into current Workers/browsers and modern Node releases.

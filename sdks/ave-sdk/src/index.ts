@@ -1,5 +1,8 @@
 export type Scope = "openid" | "profile" | "email" | "offline_access" | "user_id";
 
+export { fetchJwks, verifyJwt } from "./jwt";
+export type { AveIdTokenClaims, AveJwtClaims, JwkKey, JwksResponse, JwtHeader, JwtPayload, OidcConfiguration, VerifyJwtOptions } from "./types";
+
 export interface AveConfig {
   clientId: string;
   redirectUri: string;

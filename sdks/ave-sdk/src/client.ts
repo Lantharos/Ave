@@ -1,17 +1,132 @@
-import { buildAuthorizeUrl, buildConnectorUrl, generateCodeChallenge, generateCodeVerifier, generateNonce, getApiBase } from "./index";
+import { buildAuthorizeUrl, buildConnectorUrl, exchangeCode, generateCodeChallenge, generateCodeVerifier, generateNonce, getApiBase } from "./index";
+import { verifyJwt } from "./jwt";
+import type { AveIdTokenClaims, AveJwtClaims, TokenResponse } from "./types";
+
+export { fetchJwks, verifyJwt } from "./jwt";
+export type { VerifyJwtOptions } from "./types";
+
+// PKCE_STORAGE_KEY is the new canonical SDK storage entry.
+// The individual keys are kept only for backwards compatibility with older
+// integrations that still read the verifier/nonce directly from sessionStorage.
+const PKCE_STORAGE_KEY = "ave_pkce";
+const PKCE_VERIFIER_KEY = "ave_code_verifier";
+const PKCE_NONCE_KEY = "ave_nonce";
+const PKCE_STATE_KEY = "ave_state";
+const PKCE_MAX_AGE_MS = 10 * 60 * 1000;
+
+interface StoredPkceState {
+  verifier: string;
+  state: string;
+  nonce: string;
+  createdAt: number;
+}
+
+function storePkceState(value: StoredPkceState): void {
+  sessionStorage.setItem(PKCE_STORAGE_KEY, JSON.stringify(value));
+  // Keep the legacy keys in sync so existing PKCE integrations that still read
+  // them directly can migrate to finishPkceLogin() without breaking.
+  sessionStorage.setItem(PKCE_VERIFIER_KEY, value.verifier);
+  sessionStorage.setItem(PKCE_NONCE_KEY, value.nonce);
+  sessionStorage.setItem(PKCE_STATE_KEY, value.state);
+}
+
+function clearPkceState(): void {
+  sessionStorage.removeItem(PKCE_STORAGE_KEY);
+  sessionStorage.removeItem(PKCE_VERIFIER_KEY);
+  sessionStorage.removeItem(PKCE_NONCE_KEY);
+  sessionStorage.removeItem(PKCE_STATE_KEY);
+}
+
+function readPkceState(): StoredPkceState {
+  const rawState = sessionStorage.getItem(PKCE_STORAGE_KEY);
+  if (!rawState) {
+    throw new Error("[Ave] Missing PKCE verifier. Call startPkceLogin first.");
+  }
+
+  let pkce: StoredPkceState;
+  try {
+    pkce = JSON.parse(rawState) as StoredPkceState;
+  } catch {
+    clearPkceState();
+    throw new Error("[Ave] PKCE verifier is corrupted.");
+  }
+
+  if (
+    typeof pkce.verifier !== "string" ||
+    typeof pkce.state !== "string" ||
+    typeof pkce.nonce !== "string" ||
+    typeof pkce.createdAt !== "number"
+  ) {
+    clearPkceState();
+    throw new Error("[Ave] PKCE verifier is corrupted.");
+  }
+
+  if (Date.now() - pkce.createdAt > PKCE_MAX_AGE_MS) {
+    clearPkceState();
+    throw new Error("[Ave] PKCE verifier expired. Call startPkceLogin again.");
+  }
+
+  return pkce;
+}
+
+async function verifyReturnedTokens(params: {
+  issuer?: string;
+  clientId: string;
+  expectedNonce: string;
+  expectedSubject?: string;
+  idToken?: string;
+  accessTokenJwt?: string;
+}): Promise<void> {
+  if (params.idToken) {
+    const idPayload = await verifyJwt<AveIdTokenClaims>(params.idToken, {
+      issuer: params.issuer,
+      audience: params.clientId,
+      nonce: params.expectedNonce,
+    });
+
+    if (!idPayload) {
+      throw new Error("[Ave] Invalid id_token — signature or claims validation failed.");
+    }
+
+    if (params.expectedSubject && idPayload.sub !== params.expectedSubject) {
+      throw new Error("[Ave] id_token subject mismatch.");
+    }
+  }
+
+  if (params.accessTokenJwt) {
+    const accessPayload = await verifyJwt<AveJwtClaims>(params.accessTokenJwt, {
+      issuer: params.issuer,
+    });
+
+    if (!accessPayload) {
+      throw new Error("[Ave] Invalid access_token_jwt — signature or claims validation failed.");
+    }
+
+    if (params.expectedSubject && accessPayload.sub !== params.expectedSubject) {
+      throw new Error("[Ave] access_token_jwt subject mismatch.");
+    }
+  }
+}
 
 export async function startPkceLogin(params: {
   clientId: string;
   redirectUri: string;
   scope?: string;
   issuer?: string;
+  state?: string;
+  nonce?: string;
 }): Promise<void> {
   const verifier = generateCodeVerifier();
   const challenge = await generateCodeChallenge(verifier);
-  const nonce = generateNonce();
+  const nonce = params.nonce ?? generateNonce();
+  const state = params.state ?? generateNonce();
 
-  sessionStorage.setItem("ave_code_verifier", verifier);
-  sessionStorage.setItem("ave_nonce", nonce);
+  storePkceState({
+    verifier,
+    nonce,
+    state,
+    createdAt: Date.now(),
+  });
 
   const url = buildAuthorizeUrl(
     {
@@ -21,6 +136,7 @@ export async function startPkceLogin(params: {
     },
     {
       scope: (params.scope || "openid profile email").split(" ") as any,
+      state,
       nonce,
       codeChallenge: challenge,
       codeChallengeMethod: "S256",
@@ -28,6 +144,65 @@ export async function startPkceLogin(params: {
   );
 
   window.location.href = url;
+}
+
+/**
+ * Complete the standard PKCE/OIDC callback.
+ * Returns null when no authorization code is present in the URL.
+ */
+export async function finishPkceLogin(options: {
+  clientId: string;
+  redirectUri: string;
+  issuer?: string;
+  /** Override the callback URL to parse (defaults to window.location.href) */
+  url?: string;
+  /** Set to false to keep the code/state parameters in the current URL */
+  cleanUrl?: boolean;
+}): Promise<TokenResponse | null> {
+  const callbackUrl = options.url ?? window.location.href;
+  const parsed = new URL(callbackUrl);
+  const code = parsed.searchParams.get("code");
+  const state = parsed.searchParams.get("state");
+  if (!code) return null;
+  if (!state) {
+    throw new Error("[Ave] Missing state parameter — cannot verify CSRF protection.");
+  }
+
+  const pkce = readPkceState();
+  if (pkce.state !== state) {
+    throw new Error("[Ave] State mismatch — possible CSRF attack.");
+  }
+
+  const token = await exchangeCode(
+    {
+      clientId: options.clientId,
+      redirectUri: options.redirectUri,
+      issuer: options.issuer,
+    },
+    {
+      code,
+      codeVerifier: pkce.verifier,
+    },
+  );
+
+  clearPkceState();
+
+  await verifyReturnedTokens({
+    issuer: options.issuer,
+    clientId: options.clientId,
+    expectedNonce: pkce.nonce,
+    accessTokenJwt: token.access_token_jwt,
+    idToken: token.id_token,
+  });
+
+  if (options.cleanUrl !== false && typeof window !== "undefined" && typeof window.history !== "undefined") {
+    const cleanUrl = new URL(window.location.href);
+    cleanUrl.searchParams.delete("code");
+    cleanUrl.searchParams.delete("state");
+    history.replaceState({}, "", cleanUrl.toString());
+  }
+
+  return token;
 }
 
 export async function startConnectorFlow(params: {
@@ -278,20 +453,14 @@ export async function finishQuickSignIn(options?: {
     throw new Error("[Quick Ave] Token exchange succeeded but no user identity was returned.");
   }
 
-  // Validate id_token nonce to prevent replay attacks
-  if (token.id_token) {
-    let idPayload: { nonce?: string } | null = null;
-    try {
-      const payloadB64 = token.id_token.split(".")[1];
-      idPayload = JSON.parse(atob(payloadB64.replace(/-/g, "+").replace(/_/g, "/")));
-    } catch {
-      // Malformed JWT — treat as a tampered/invalid token
-      throw new Error("[Quick Ave] Malformed id_token — payload could not be decoded.");
-    }
-    if (idPayload?.nonce !== pkce.nonce) {
-      throw new Error("[Quick Ave] id_token nonce mismatch — possible replay attack.");
-    }
-  }
+  await verifyReturnedTokens({
+    issuer: options?.issuer,
+    clientId: deriveQuickClientId(redirectUri),
+    expectedNonce: pkce.nonce,
+    expectedSubject: token.user.id,
+    accessTokenJwt: token.access_token_jwt,
+    idToken: token.id_token,
+  });
 
   const identity: QuickIdentity = {
     userId: token.user.id,

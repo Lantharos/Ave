@@ -5,6 +5,9 @@ export interface ServerConfig {
   redirectUri: string;
 }
 
+export { fetchJwks, verifyJwt } from "./jwt";
+export type { VerifyJwtOptions } from "./types";
+
 export interface TokenResponse {
   access_token: string;
   access_token_jwt: string;
