@@ -771,10 +771,14 @@ app.post("/token", zValidator("json", z.discriminatedUnion("grantType", [
 
   
   // Find authorization code
-  const authCode = await getAuthorizationCode(code);
-  if (!authCode) {
-    return c.json({ error: "invalid_grant", error_description: "Authorization code not found" }, 400);
+  const authCodeResult = await getAuthorizationCode(code);
+  if (!authCodeResult.value) {
+    return c.json({
+      error: "invalid_grant",
+      error_description: authCodeResult.expired ? "Authorization code expired" : "Authorization code not found",
+    }, 400);
   }
+  const authCode = authCodeResult.value;
   
   if (authCode.redirectUri !== redirectUri) {
     return c.json({ error: "invalid_grant", error_description: "Redirect URI mismatch" }, 400);

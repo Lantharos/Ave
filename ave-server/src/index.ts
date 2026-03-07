@@ -23,7 +23,7 @@ import signingRoutes from "./routes/signing";
 import { SESSION_COOKIE_NAME } from "./lib/session-cookie";
 import { initDb, runWithDb } from "./db";
 import { initChallengeStorage } from "./lib/challenge-store";
-import { initOAuthStorage } from "./lib/oauth-store";
+import { runWithOAuthStorage } from "./lib/oauth-store";
 
 import uploadRoutes from "./routes/upload";
 
@@ -232,37 +232,38 @@ function createWebSocketResponse(request: Request, requestDatabase: D1Database |
 
 export class ApiAppDurableObject {
   constructor(
-    state: DurableObjectState,
+    private readonly state: DurableObjectState,
     private readonly env: Bindings
   ) {
-    initChallengeStorage(state.storage);
-    initOAuthStorage(state.storage);
+    initChallengeStorage(this.state.storage);
   }
 
   async fetch(request: Request): Promise<Response> {
     initDb(this.env.DB);
     const requestDatabase = createRequestDatabase(this.env.DB);
 
-    return runWithDb(requestDatabase, async () => {
-      const url = new URL(request.url);
+    return runWithOAuthStorage(this.state.storage, () =>
+      runWithDb(requestDatabase, async () => {
+        const url = new URL(request.url);
 
-      if (url.pathname === "/ws" && isWebSocketUpgrade(request)) {
-        return createWebSocketResponse(request, requestDatabase);
-      }
-
-      if (url.pathname === "/__internal/cleanup" && request.method === "POST") {
-        const expectedToken = this.env.INTERNAL_API_TOKEN;
-        const providedToken = request.headers.get("x-internal-token");
-        if (expectedToken && expectedToken !== providedToken) {
-          return new Response("Forbidden", { status: 403 });
+        if (url.pathname === "/ws" && isWebSocketUpgrade(request)) {
+          return createWebSocketResponse(request, requestDatabase);
         }
 
-        const result = await cleanupStaleDevices();
-        return Response.json({ success: true, ...result });
-      }
+        if (url.pathname === "/__internal/cleanup" && request.method === "POST") {
+          const expectedToken = this.env.INTERNAL_API_TOKEN;
+          const providedToken = request.headers.get("x-internal-token");
+          if (expectedToken && expectedToken !== providedToken) {
+            return new Response("Forbidden", { status: 403 });
+          }
 
-      return app.fetch(request, this.env);
-    });
+          const result = await cleanupStaleDevices();
+          return Response.json({ success: true, ...result });
+        }
+
+        return app.fetch(request, this.env);
+      })
+    );
   }
 }
 

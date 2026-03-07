@@ -1,3 +1,5 @@
+import { AsyncLocalStorage } from "node:async_hooks";
+
 type StoredOAuthRecord<T> = {
   value: T;
   expiresAt: number;
@@ -30,15 +32,27 @@ export type AccessTokenRecord = {
   nonce?: string;
 };
 
-let durableStorage: DurableObjectStorage | null = null;
-const memoryFallback = new Map<string, StoredOAuthRecord<unknown>>();
+// Mirror the request-scoped DB pattern so OAuth storage is bound to the
+// current Durable Object request rather than shared at module scope.
+const oauthStorage = new AsyncLocalStorage<DurableObjectStorage>();
 
 function key(namespace: "auth-code" | "access-token", id: string): string {
   return `oauth:${namespace}:${id}`;
 }
 
-export function initOAuthStorage(storage: DurableObjectStorage): void {
-  durableStorage = storage;
+function getStorage(): DurableObjectStorage {
+  const storage = oauthStorage.getStore();
+  if (!storage) {
+    throw new Error("OAuth storage is only available inside the API Durable Object request context. Wrap the operation with runWithOAuthStorage().");
+  }
+  return storage;
+}
+
+export async function runWithOAuthStorage<T>(
+  storage: DurableObjectStorage,
+  callback: () => Promise<T>,
+): Promise<T> {
+  return oauthStorage.run(storage, callback);
 }
 
 async function setRecord<T>(
@@ -47,47 +61,40 @@ async function setRecord<T>(
   value: T,
   expiresAt: number,
 ): Promise<void> {
-  const record: StoredOAuthRecord<T> = { value, expiresAt };
-  const storageKey = key(namespace, id);
-  if (durableStorage) {
-    await durableStorage.put(storageKey, record);
-    return;
-  }
-  memoryFallback.set(storageKey, record as StoredOAuthRecord<unknown>);
+  await getStorage().put(key(namespace, id), {
+    value,
+    expiresAt,
+  } satisfies StoredOAuthRecord<T>);
 }
 
 async function getRecord<T>(
   namespace: "auth-code" | "access-token",
   id: string,
 ): Promise<StoredOAuthRecord<T> | null> {
-  const storageKey = key(namespace, id);
-  if (durableStorage) {
-    return (await durableStorage.get<StoredOAuthRecord<T>>(storageKey)) ?? null;
-  }
-  return (memoryFallback.get(storageKey) as StoredOAuthRecord<T> | undefined) ?? null;
+  return (await getStorage().get<StoredOAuthRecord<T>>(key(namespace, id))) ?? null;
 }
 
 async function deleteRecord(namespace: "auth-code" | "access-token", id: string): Promise<void> {
-  const storageKey = key(namespace, id);
-  if (durableStorage) {
-    await durableStorage.delete(storageKey);
-    return;
-  }
-  memoryFallback.delete(storageKey);
+  await getStorage().delete(key(namespace, id));
 }
 
 export async function setAuthorizationCode(id: string, value: AuthorizationCodeRecord): Promise<void> {
   await setRecord("auth-code", id, value, value.expiresAt);
 }
 
-export async function getAuthorizationCode(id: string): Promise<AuthorizationCodeRecord | null> {
+export async function getAuthorizationCode(id: string): Promise<{
+  value: AuthorizationCodeRecord | null;
+  expired: boolean;
+}> {
   const record = await getRecord<AuthorizationCodeRecord>("auth-code", id);
-  if (!record) return null;
+  if (!record) {
+    return { value: null, expired: false };
+  }
   if (Date.now() > record.expiresAt) {
     await deleteAuthorizationCode(id);
-    return null;
+    return { value: null, expired: true };
   }
-  return record.value;
+  return { value: record.value, expired: false };
 }
 
 export async function deleteAuthorizationCode(id: string): Promise<void> {
