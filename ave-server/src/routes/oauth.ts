@@ -90,7 +90,8 @@ function timingSafeEqualString(a: string, b: string): boolean {
   const paddedB = Buffer.alloc(maxLength);
   aBuffer.copy(paddedA);
   bBuffer.copy(paddedB);
-  return timingSafeEqual(paddedA, paddedB) && aBuffer.length === bBuffer.length;
+  const lengthMismatch = aBuffer.length ^ bBuffer.length;
+  return timingSafeEqual(paddedA, paddedB) && lengthMismatch === 0;
 }
 
 // Generate refresh token

@@ -1,10 +1,13 @@
 import { buildAuthorizeUrl, buildConnectorUrl, exchangeCode, generateCodeChallenge, generateCodeVerifier, generateNonce, getApiBase } from "./index";
 import { verifyJwt } from "./jwt";
-import type { AveIdTokenClaims, AveJwtClaims } from "./types";
+import type { AveIdTokenClaims, AveJwtClaims, TokenResponse } from "./types";
 
 export { fetchJwks, verifyJwt } from "./jwt";
 export type { VerifyJwtOptions } from "./types";
 
+// PKCE_STORAGE_KEY is the new canonical SDK storage entry.
+// The individual keys are kept only for backwards compatibility with older
+// integrations that still read the verifier/nonce directly from sessionStorage.
 const PKCE_STORAGE_KEY = "ave_pkce";
 const PKCE_VERIFIER_KEY = "ave_code_verifier";
 const PKCE_NONCE_KEY = "ave_nonce";
@@ -155,7 +158,7 @@ export async function finishPkceLogin(options: {
   url?: string;
   /** Set to false to keep the code/state parameters in the current URL */
   cleanUrl?: boolean;
-}): Promise<import("./types").TokenResponse | null> {
+}): Promise<TokenResponse | null> {
   const callbackUrl = options.url ?? window.location.href;
   const parsed = new URL(callbackUrl);
   const code = parsed.searchParams.get("code");

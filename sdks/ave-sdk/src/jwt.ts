@@ -38,32 +38,32 @@ function getCachedJson<T>(
     return cached.value;
   }
 
-  let value!: Promise<T>;
-  value = (async () => {
+  const entry: { expiresAt: number; value: Promise<T> } = {
+    expiresAt: Date.now() + DEFAULT_CACHE_TTL_MS,
+    value: Promise.resolve(undefined as unknown as T),
+  };
+
+  const value = (async () => {
     const response = await fetcher(url);
     if (!response.ok) {
       throw new Error(`Failed to fetch ${url} (${response.status})`);
     }
     const ttlMs = parseCacheControlMaxAge(response.headers.get("cache-control")) ?? DEFAULT_CACHE_TTL_MS;
     const body = await response.json() as T;
-    if (cache.get(url)?.value === value) {
-      cache.set(url, {
-        expiresAt: Date.now() + ttlMs,
-        value: Promise.resolve(body),
-      });
+    if (cache.get(url) === entry) {
+      entry.expiresAt = Date.now() + ttlMs;
+      entry.value = Promise.resolve(body);
     }
     return body;
   })().catch((error) => {
-    if (cache.get(url)?.value === value) {
+    if (cache.get(url) === entry) {
       cache.delete(url);
     }
     throw error;
   });
 
-  cache.set(url, {
-    expiresAt: Date.now() + DEFAULT_CACHE_TTL_MS,
-    value,
-  });
+  entry.value = value;
+  cache.set(url, entry);
 
   return value;
 }
