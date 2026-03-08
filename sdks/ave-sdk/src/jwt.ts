@@ -1,4 +1,4 @@
-import type { AveJwtClaims, JwkKey, JwksResponse, JwtHeader, JwtPayload, OidcConfiguration, VerifyJwtOptions } from "./types";
+import type { AveJwtClaims, JwkKey, JwksResponse, JwtHeader, JwtPayload, OidcConfiguration, VerifyJwtOptions } from "./types.js";
 
 const DEFAULT_ISSUER = "https://aveid.net";
 const DEFAULT_CACHE_TTL_MS = 5 * 60 * 1000;

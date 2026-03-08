@@ -1,9 +1,9 @@
-import { buildAuthorizeUrl, buildConnectorUrl, exchangeCode, generateCodeChallenge, generateCodeVerifier, generateNonce, getApiBase } from "./index";
-import { verifyJwt } from "./jwt";
-import type { AveIdTokenClaims, AveJwtClaims, TokenResponse } from "./types";
+import { buildAuthorizeUrl, buildConnectorUrl, exchangeCode, generateCodeChallenge, generateCodeVerifier, generateNonce, getApiBase } from "./index.js";
+import { verifyJwt } from "./jwt.js";
+import type { AveIdTokenClaims, AveJwtClaims, TokenResponse } from "./types.js";
 
-export { fetchJwks, verifyJwt } from "./jwt";
-export type { VerifyJwtOptions } from "./types";
+export { fetchJwks, verifyJwt } from "./jwt.js";
+export type { VerifyJwtOptions } from "./types.js";
 
 // PKCE_STORAGE_KEY is the new canonical SDK storage entry.
 // The individual keys are kept only for backwards compatibility with older

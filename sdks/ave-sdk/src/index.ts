@@ -1,7 +1,7 @@
 export type Scope = "openid" | "profile" | "email" | "offline_access" | "user_id";
 
-export { fetchJwks, verifyJwt } from "./jwt";
-export type { AveIdTokenClaims, AveJwtClaims, JwkKey, JwksResponse, JwtHeader, JwtPayload, OidcConfiguration, VerifyJwtOptions } from "./types";
+export { fetchJwks, verifyJwt } from "./jwt.js";
+export type { AveIdTokenClaims, AveJwtClaims, JwkKey, JwksResponse, JwtHeader, JwtPayload, OidcConfiguration, VerifyJwtOptions } from "./types.js";
 
 export interface AveConfig {
   clientId: string;
@@ -78,7 +78,7 @@ export function buildConnectorUrl(config: AveConfig, params: {
 export async function exchangeCode(config: AveConfig, payload: {
   code: string;
   codeVerifier?: string;
-}): Promise<import("./types").TokenResponse> {
+}): Promise<import("./types.js").TokenResponse> {
   const apiBase = getApiBase(config.issuer);
   const response = await fetch(`${apiBase}/api/oauth/token`, {
     method: "POST",
@@ -100,7 +100,7 @@ export async function exchangeCode(config: AveConfig, payload: {
   return response.json();
 }
 
-export async function refreshToken(config: AveConfig, payload: { refreshToken: string }): Promise<import("./types").TokenResponse> {
+export async function refreshToken(config: AveConfig, payload: { refreshToken: string }): Promise<import("./types.js").TokenResponse> {
   const apiBase = getApiBase(config.issuer);
   const response = await fetch(`${apiBase}/api/oauth/token`, {
     method: "POST",
@@ -129,7 +129,7 @@ export async function exchangeDelegatedToken(
     actor?: Record<string, unknown>;
     clientSecret?: string;
   }
-): Promise<import("./types").DelegationTokenResponse> {
+): Promise<import("./types.js").DelegationTokenResponse> {
   const apiBase = getApiBase(config.issuer);
   const response = await fetch(`${apiBase}/api/oauth/token`, {
     method: "POST",
@@ -156,7 +156,7 @@ export async function exchangeDelegatedToken(
 export async function listDelegations(
   config: { issuer?: string },
   sessionToken: string
-): Promise<import("./types").DelegationGrant[]> {
+): Promise<import("./types.js").DelegationGrant[]> {
   const apiBase = getApiBase(config.issuer);
   const response = await fetch(`${apiBase}/api/oauth/delegations`, {
     headers: {
@@ -192,7 +192,7 @@ export async function revokeDelegation(
   }
 }
 
-export async function fetchUserInfo(config: AveConfig, accessToken: string): Promise<import("./types").UserInfo> {
+export async function fetchUserInfo(config: AveConfig, accessToken: string): Promise<import("./types.js").UserInfo> {
   const apiBase = getApiBase(config.issuer);
   const response = await fetch(`${apiBase}/api/oauth/userinfo`, {
     headers: { Authorization: `Bearer ${accessToken}` },
@@ -240,7 +240,7 @@ export async function createSignatureRequest(
     metadata?: Record<string, unknown>;
     expiresInSeconds?: number;
   }
-): Promise<import("./types").SignatureRequest> {
+): Promise<import("./types.js").SignatureRequest> {
   const apiBase = getApiBase(config.issuer);
   
   const response = await fetch(`${apiBase}/api/signing/request`, {
@@ -270,7 +270,7 @@ export async function createSignatureRequest(
 export async function getSignatureStatus(
   config: { clientId: string; issuer?: string },
   requestId: string
-): Promise<import("./types").SignatureResult> {
+): Promise<import("./types.js").SignatureResult> {
   const apiBase = getApiBase(config.issuer);
   
   const response = await fetch(
