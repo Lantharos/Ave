@@ -61,36 +61,25 @@ Quick Ave and the standard OIDC flow use the **exact same token format, JWKS end
     `startPkceLogin` works the same way as `startQuickSignIn` — it generates PKCE params, stores them in `sessionStorage`, and redirects to Ave.
   </Step>
 
-  <Step title="Replace handleQuickCallback with exchangeCode">
+  <Step title="Replace handleQuickCallback with finishPkceLogin">
     ```ts
     // Before (Quick Ave) — on your /ave/callback page
     import { handleQuickCallback } from "@ave-id/sdk/client";
     await handleQuickCallback();
 
     // After (Standard Ave) — on your callback page
-    import { exchangeCode } from "@ave-id/sdk";
+    import { finishPkceLogin } from "@ave-id/sdk/client";
 
-    const params = new URLSearchParams(window.location.search);
-    const code = params.get("code")!;
-
-    const codeVerifier = sessionStorage.getItem("ave_code_verifier")!;
-    sessionStorage.removeItem("ave_code_verifier");
-    sessionStorage.removeItem("ave_nonce");
-
-    const tokens = await exchangeCode(
-      { clientId: "app_xxxx", redirectUri: "https://yourapp.com/callback" },
-      { code, codeVerifier }
-    );
+    const tokens = await finishPkceLogin({
+      clientId: "app_xxxx",
+      redirectUri: "https://yourapp.com/callback",
+    });
 
     // Store tokens in your own session management
     // tokens.refresh_token is now available if you requested offline_access
     ```
 
-    <Note>
-      `startPkceLogin` does not generate or store a `state` value. If you need `state`-based CSRF protection, use `buildAuthorizeUrl` directly, generate a state with `crypto.randomUUID()`, store it yourself, and verify it here.
-    </Note>
-
-    Unlike `handleQuickCallback`, `exchangeCode` returns the full `TokenResponse` — you manage your own session from here.
+    Unlike `handleQuickCallback`, `finishPkceLogin` returns the full `TokenResponse` instead of a `QuickIdentity` — you manage your own session from here. State verification and token validation happen automatically, just like they did in Quick Ave.
   </Step>
 
   <Step title="Replace getQuickIdentity with your own session management">

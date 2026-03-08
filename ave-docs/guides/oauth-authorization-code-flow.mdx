@@ -99,101 +99,138 @@ Ave returns two different JWTs on a successful token exchange. Understanding the
 
 ## Full flow
 
-<Steps>
-  <Step title="Create request context">
-    Generate `state`, `nonce`, and PKCE parameters before redirecting. Store them temporarily in `sessionStorage` (browser) or your server session.
+There are two ways to implement this — the SDK handles all the boilerplate for browser apps, or you can wire each step manually when you need full control (server-side flows, custom storage, non-browser environments).
+
+<Tabs>
+  <Tab title="SDK (recommended)">
+    Two function calls cover the entire flow. `startPkceLogin` generates PKCE, nonce, and state; stores them in `sessionStorage`; and redirects. `finishPkceLogin` verifies the returned state, exchanges the code, and validates the returned tokens — all in one call.
 
     ```ts
-    import { generateCodeVerifier, generateCodeChallenge, generateNonce } from "@ave-id/sdk";
+    // login page
+    import { startPkceLogin } from "@ave-id/sdk/client";
 
-    const codeVerifier = generateCodeVerifier();
-    const codeChallenge = await generateCodeChallenge(codeVerifier);
-    const state = crypto.randomUUID();
-    const nonce = generateNonce();
-
-    sessionStorage.setItem("ave_verifier", codeVerifier);
-    sessionStorage.setItem("ave_state", state);
-    sessionStorage.setItem("ave_nonce", nonce);
-    ```
-  </Step>
-  <Step title="Redirect to Ave">
-    Build the authorization URL and redirect the user.
-
-    ```ts
-    import { buildAuthorizeUrl } from "@ave-id/sdk";
-
-    const url = buildAuthorizeUrl(
-      { clientId: "YOUR_CLIENT_ID", redirectUri: "https://yourapp.com/callback" },
-      {
-        scope: ["openid", "profile", "email", "offline_access"],
-        codeChallenge,
-        codeChallengeMethod: "S256",
-        state,
-        nonce,
-      }
-    );
-
-    window.location.href = url;
-    ```
-  </Step>
-  <Step title="Handle callback securely">
-    Ave redirects to your `redirect_uri` with `?code=...&state=...`.
-
-    ```ts
-    const params = new URLSearchParams(window.location.search);
-    const code = params.get("code");
-    const returnedState = params.get("state");
-    const savedState = sessionStorage.getItem("ave_state");
-    const codeVerifier = sessionStorage.getItem("ave_verifier");
-    const savedNonce = sessionStorage.getItem("ave_nonce");
-
-    if (!returnedState || returnedState !== savedState) {
-      throw new Error("State mismatch — possible CSRF attack");
-    }
-
-    // Clear immediately — they are one-time use
-    sessionStorage.removeItem("ave_state");
-    sessionStorage.removeItem("ave_verifier");
-    sessionStorage.removeItem("ave_nonce");
-    ```
-  </Step>
-  <Step title="Exchange authorization code">
-    ```ts
-    import { exchangeCode } from "@ave-id/sdk";
-
-    const tokens = await exchangeCode(
-      { clientId: "YOUR_CLIENT_ID", redirectUri: "https://yourapp.com/callback" },
-      { code, codeVerifier }
-    );
+    await startPkceLogin({
+      clientId: "YOUR_CLIENT_ID",
+      redirectUri: "https://yourapp.com/callback",
+      scope: "openid profile email offline_access",
+    });
     ```
 
-    The response includes `access_token`, `access_token_jwt`, `id_token`, `refresh_token`, `expires_in`, `scope`, and `user`.
-  </Step>
-  <Step title="Validate id_token and create session">
-    For security-critical systems, validate the `id_token` before trusting it. Use `verifyJwt` from the SDK — it handles JWKS fetching, RS256 signature verification, and all required claim checks automatically.
-
     ```ts
-    import { verifyJwt } from "@ave-id/sdk";
+    // /callback page
+    import { finishPkceLogin } from "@ave-id/sdk/client";
 
-    const claims = await verifyJwt(tokens.id_token, {
-      audience: "YOUR_CLIENT_ID",
-      nonce: savedNonce, // the nonce you stored before redirecting
+    const tokens = await finishPkceLogin({
+      clientId: "YOUR_CLIENT_ID",
+      redirectUri: "https://yourapp.com/callback",
     });
 
-    if (!claims) {
-      throw new Error("Invalid id_token — signature or claims validation failed.");
+    if (tokens) {
+      // tokens.id_token, tokens.access_token, tokens.refresh_token, etc.
+      // Token signatures and claims are already verified — create your session.
     }
-
-    // claims.sub    — identity UUID (use as your primary key)
-    // claims.email  — verified email (requires email scope)
-    // claims.name   — display name (requires profile scope)
     ```
 
-    <Tip>
-      `verifyJwt` checks signature, issuer (`https://aveid.net`), audience, expiry, and nonce in one call. It caches the JWKS for 5 minutes. For manual validation or non-JS environments, see the validation sequence below.
-    </Tip>
-  </Step>
-</Steps>
+    <Note>
+      `finishPkceLogin` verifies the `id_token` and `access_token_jwt` signatures internally using `verifyJwt`. You do not need a separate validation step. It returns `null` when no `code` param is present, so it's safe to call on every page load.
+    </Note>
+  </Tab>
+  <Tab title="Manual">
+    Use the individual helpers when you need full control — for example, server-side token exchange, custom `sessionStorage` keys, or non-browser environments.
+
+    <Steps>
+      <Step title="Create request context">
+        Generate `state`, `nonce`, and PKCE parameters before redirecting. Store them in `sessionStorage` (browser) or your server session.
+
+        ```ts
+        import { generateCodeVerifier, generateCodeChallenge, generateNonce } from "@ave-id/sdk";
+
+        const codeVerifier = generateCodeVerifier();
+        const codeChallenge = await generateCodeChallenge(codeVerifier);
+        const state = generateNonce();
+        const nonce = generateNonce();
+
+        sessionStorage.setItem("ave_verifier", codeVerifier);
+        sessionStorage.setItem("ave_state", state);
+        sessionStorage.setItem("ave_nonce", nonce);
+        ```
+      </Step>
+      <Step title="Redirect to Ave">
+        Build the authorization URL and redirect the user.
+
+        ```ts
+        import { buildAuthorizeUrl } from "@ave-id/sdk";
+
+        const url = buildAuthorizeUrl(
+          { clientId: "YOUR_CLIENT_ID", redirectUri: "https://yourapp.com/callback" },
+          {
+            scope: ["openid", "profile", "email", "offline_access"],
+            codeChallenge,
+            codeChallengeMethod: "S256",
+            state,
+            nonce,
+          }
+        );
+
+        window.location.href = url;
+        ```
+      </Step>
+      <Step title="Handle callback securely">
+        Ave redirects to your `redirect_uri` with `?code=...&state=...`. Verify `state` before touching anything else.
+
+        ```ts
+        const params = new URLSearchParams(window.location.search);
+        const code = params.get("code");
+        const returnedState = params.get("state");
+        const savedState = sessionStorage.getItem("ave_state");
+        const codeVerifier = sessionStorage.getItem("ave_verifier");
+        const savedNonce = sessionStorage.getItem("ave_nonce");
+
+        if (!returnedState || returnedState !== savedState) {
+          throw new Error("State mismatch — possible CSRF attack");
+        }
+
+        // Clear immediately — single use
+        sessionStorage.removeItem("ave_state");
+        sessionStorage.removeItem("ave_verifier");
+        sessionStorage.removeItem("ave_nonce");
+        ```
+      </Step>
+      <Step title="Exchange authorization code">
+        ```ts
+        import { exchangeCode } from "@ave-id/sdk";
+
+        const tokens = await exchangeCode(
+          { clientId: "YOUR_CLIENT_ID", redirectUri: "https://yourapp.com/callback" },
+          { code, codeVerifier }
+        );
+        ```
+
+        The response includes `access_token`, `access_token_jwt`, `id_token`, `refresh_token`, `expires_in`, `scope`, and `user`.
+      </Step>
+      <Step title="Validate id_token and create session">
+        Validate the `id_token` before trusting it. `verifyJwt` handles JWKS fetching, RS256 signature verification, and all required claim checks.
+
+        ```ts
+        import { verifyJwt } from "@ave-id/sdk";
+
+        const claims = await verifyJwt(tokens.id_token, {
+          audience: "YOUR_CLIENT_ID",
+          nonce: savedNonce,
+        });
+
+        if (!claims) {
+          throw new Error("Invalid id_token — signature or claims validation failed.");
+        }
+
+        // claims.sub    — identity UUID (use as your primary key)
+        // claims.email  — verified email (requires email scope)
+        // claims.name   — display name (requires profile scope)
+        ```
+      </Step>
+    </Steps>
+  </Tab>
+</Tabs>
 
 ## Refresh token flow
 

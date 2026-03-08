@@ -27,6 +27,10 @@ description: "Set up Ave login from scratch: register an app, run the authorizat
 
 ## Login flow
 
+<Tip>
+  Using `@ave-id/sdk`? `startPkceLogin` and `finishPkceLogin` handle all of these steps automatically — PKCE generation, storage, state verification, code exchange, and token validation. The steps below show what's happening under the hood.
+</Tip>
+
 <Steps>
   <Step title="Generate PKCE parameters and redirect the user">
     Before redirecting, generate PKCE parameters. They prove that the same browser session that started login is the one completing it.
@@ -172,14 +176,22 @@ description: "Set up Ave login from scratch: register an app, run the authorizat
     Use `id_token` or the `user` object to create a session in your app:
 
     ```ts
+    import { verifyJwt } from "@ave-id/sdk";
+
     const { user, id_token, access_token, refresh_token } = tokens;
+    const savedNonce = sessionStorage.getItem("ave_nonce");
+    sessionStorage.removeItem("ave_nonce");
 
     // Option A: use the user object directly (simplest)
     // user.id is the identity UUID — use as your stable user key
 
-    // Option B: validate id_token claims for higher assurance
-    // 1. Fetch JWKS from https://aveid.net/.well-known/jwks.json
-    // 2. Verify signature, iss, aud === YOUR_CLIENT_ID, exp, nonce
+    // Option B: validate id_token for higher assurance
+    const claims = await verifyJwt(id_token, {
+      audience: "YOUR_CLIENT_ID",
+      nonce: savedNonce,
+    });
+    if (!claims) throw new Error("Invalid id_token");
+    // claims.sub, claims.email, claims.name, etc.
     ```
 
     Store `refresh_token` securely (HTTP-only cookie or server-side session) if you requested `offline_access`. Never put it in `localStorage`.
