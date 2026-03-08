@@ -21,8 +21,8 @@ An attacker who intercepts the code can't exchange it without the original `code
 <Check>Generate a high-entropy `code_verifier` (at least 43 characters, URL-safe)</Check>
 <Check>Hash it with SHA-256 and base64url-encode to get `code_challenge`</Check>
 <Check>Send `code_challenge` and `code_challenge_method=S256` in the authorization request</Check>
-<Check>Store `code_verifier` in `sessionStorage` (not `localStorage`)</Check>
-<Check>If using CSRF protection via `state`: generate it yourself, store it in `sessionStorage`, include it in the authorize URL, and verify it on the callback — `startPkceLogin` does not manage `state`</Check>
+<Check>Store `code_verifier`, `state`, and `nonce` in `sessionStorage` (not `localStorage`)</Check>
+<Check>Verify the returned `state` on the callback before exchanging the code — prevents CSRF attacks</Check>
 <Check>Clear stored values immediately after a successful exchange — they are single-use</Check>
 
 ## Implementation with `@ave-id/sdk`
@@ -37,34 +37,26 @@ An attacker who intercepts the code can't exchange it without the original `code
       redirectUri: "https://yourapp.com/callback",
       scope: "openid profile email offline_access",
     });
-    // Automatically generates PKCE params, stores them in sessionStorage,
-    // and redirects to aveid.net/signin
+    // Automatically generates PKCE verifier/challenge, nonce, and state,
+    // stores them in sessionStorage, and redirects to aveid.net/signin
     ```
   </Step>
   <Step title="Handle the callback">
     ```ts
-    import { exchangeCode } from "@ave-id/sdk";
+    import { finishPkceLogin } from "@ave-id/sdk/client";
 
     // On your /callback page:
-    const params = new URLSearchParams(window.location.search);
-    const code = params.get("code")!;
+    const tokens = await finishPkceLogin({
+      clientId: "YOUR_CLIENT_ID",
+      redirectUri: "https://yourapp.com/callback",
+    });
 
-    // Retrieve stored PKCE verifier (startPkceLogin stores this)
-    const codeVerifier = sessionStorage.getItem("ave_code_verifier")!;
-
-    // Clear immediately — single use
-    sessionStorage.removeItem("ave_code_verifier");
-    sessionStorage.removeItem("ave_nonce");
-
-    const tokens = await exchangeCode(
-      { clientId: "YOUR_CLIENT_ID", redirectUri: "https://yourapp.com/callback" },
-      { code, codeVerifier }
-    );
+    if (tokens) {
+      // tokens.id_token, tokens.access_token, tokens.refresh_token, etc.
+    }
     ```
 
-    <Note>
-      `startPkceLogin` does not generate or store a `state` value. If you need `state`-based CSRF protection, use `buildAuthorizeUrl` directly, generate a `state` with `crypto.randomUUID()`, store it in `sessionStorage`, include it in the authorize URL, and verify it here before calling `exchangeCode`.
-    </Note>
+    `finishPkceLogin` reads the stored PKCE state, verifies the returned `state` against the stored value (CSRF check), exchanges the code, verifies the returned tokens, and clears `sessionStorage`. It returns `null` when no `code` param is present — safe to call on every page load.
   </Step>
 </Steps>
 

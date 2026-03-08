@@ -13,9 +13,9 @@ npm install @ave-id/sdk
 
 | Import | Contents | Runtime |
 |---|---|---|
-| `@ave-id/sdk` | Core OAuth, PKCE helpers | Browser or Node |
-| `@ave-id/sdk/client` | `startPkceLogin` — browser redirect helper | Browser only |
-| `@ave-id/sdk/server` | `exchangeCodeServer`, `refreshTokenServer` — uses `clientSecret` | Server only |
+| `@ave-id/sdk` | Core OAuth, PKCE helpers, `verifyJwt`, `fetchJwks` | Browser or Node |
+| `@ave-id/sdk/client` | `startPkceLogin`, `finishPkceLogin` — browser redirect helpers | Browser only |
+| `@ave-id/sdk/server` | `exchangeCodeServer`, `refreshTokenServer`, `verifyJwt` — uses `clientSecret` | Server only |
 
 <Warning>
   Never import from `@ave-id/sdk/server` in browser code. Those functions require your `clientSecret`, which must never be exposed to the client.
@@ -211,7 +211,7 @@ Returns `UserInfo` with `sub`, `name?`, `preferred_username?`, `email?`, `pictur
 
 ---
 
-## Client helper
+## Client helpers
 
 Import from `@ave-id/sdk/client`. Browser-only.
 
@@ -225,14 +225,140 @@ async function startPkceLogin(params: {
   redirectUri: string;
   scope?: string;
   issuer?: string;
+  state?: string;   // optional — auto-generated if omitted
+  nonce?: string;   // optional — auto-generated if omitted
 }): Promise<void>
 ```
 
-Stores `ave_code_verifier` and `ave_nonce` in `sessionStorage`. Read them back on your callback page before calling `exchangeCode`.
+Automatically generates a PKCE verifier/challenge, a `nonce` for ID token replay protection, and a `state` value for CSRF protection — unless you supply your own. All three are stored in `sessionStorage` and retrieved automatically by `finishPkceLogin`.
+
+---
+
+### `finishPkceLogin(options)`
+
+Handles the OAuth callback: reads stored PKCE state, verifies the returned `state` against the stored value, exchanges the authorization code, verifies the returned tokens, and cleans up `sessionStorage`. Returns `null` when no `code` parameter is present — safe to call on every page load.
+
+```ts
+async function finishPkceLogin(options: {
+  clientId: string;
+  redirectUri: string;
+  issuer?: string;
+  url?: string;        // override the callback URL to parse (default: window.location.href)
+  cleanUrl?: boolean;  // remove code/state from the URL after exchange (default: true)
+}): Promise<TokenResponse | null>
+```
+
+```ts
+import { startPkceLogin, finishPkceLogin } from "@ave-id/sdk/client";
+
+// On your login page:
+await startPkceLogin({
+  clientId: "YOUR_CLIENT_ID",
+  redirectUri: "https://yourapp.com/callback",
+  scope: "openid profile email offline_access",
+});
+
+// On your /callback page:
+const tokens = await finishPkceLogin({
+  clientId: "YOUR_CLIENT_ID",
+  redirectUri: "https://yourapp.com/callback",
+});
+
+if (tokens) {
+  // User is signed in — tokens.id_token, tokens.access_token, etc.
+}
+```
+
+---
+
+## JWT verification
+
+These functions are available in `@ave-id/sdk`, `@ave-id/sdk/client`, and `@ave-id/sdk/server`.
+
+### `verifyJwt(token, options?)`
+
+Verifies an Ave-issued JWT: parses the token, fetches the OIDC discovery document, validates the RS256 signature against the JWKS, and checks issuer, expiry, audience, and nonce claims. Returns the decoded payload on success or `null` on any validation failure.
+
+```ts
+async function verifyJwt<T extends JwtPayload = AveJwtClaims>(
+  token: string,
+  options?: VerifyJwtOptions,
+): Promise<T | null>
+```
+
+```ts
+interface VerifyJwtOptions {
+  issuer?: string;             // Base issuer URL (default: "https://aveid.net")
+  expectedIssuer?: string;     // Exact issuer string to validate iss claim against
+  audience?: string | string[]; // Expected aud claim (e.g. your clientId)
+  nonce?: string;              // Expected nonce claim (replay protection)
+  jwksUrl?: string;            // Override JWKS endpoint URL
+  jwks?: JwksResponse;         // Pre-fetched JWKS (skips network call)
+  discoveryUrl?: string;       // Override OIDC discovery endpoint
+  clockSkewSeconds?: number;   // Clock tolerance for exp/iat checks (default: 30)
+  fetcher?: typeof fetch;      // Custom fetch implementation
+}
+```
+
+<ParamField path="token" type="string" required>
+  The raw JWT string to verify.
+</ParamField>
+
+<ParamField path="options.audience" type="string | string[]">
+  Expected `aud` claim. Pass your `clientId` when verifying `id_token`. Pass `"https://aveid.net"` when verifying `access_token_jwt`.
+</ParamField>
+
+<ParamField path="options.nonce" type="string">
+  Expected `nonce` claim. Pass the nonce you sent in the authorization request to prevent replay attacks.
+</ParamField>
+
+<ParamField path="options.clockSkewSeconds" type="number" default="30">
+  Tolerance in seconds applied to `exp` and `nbf` checks to handle clock drift between servers.
+</ParamField>
+
+Returns `Promise<T | null>` — the decoded payload typed as `T`, or `null` if any check fails (invalid signature, expired, issuer mismatch, audience mismatch, nonce mismatch, or malformed token).
+
+```ts
+import { verifyJwt } from "@ave-id/sdk";
+
+// Verify an id_token on your server after code exchange:
+const claims = await verifyJwt(tokens.id_token, {
+  audience: "YOUR_CLIENT_ID",
+  nonce: savedNonce,
+});
+
+if (!claims) {
+  throw new Error("Invalid id_token");
+}
+
+// claims.sub — identity UUID
+// claims.email, claims.name, etc.
+```
 
 <Note>
-  `startPkceLogin` does **not** generate or store a `state` value for CSRF protection. If your threat model requires state validation, use `buildAuthorizeUrl` directly, generate a `state` yourself with `crypto.randomUUID()`, store it in `sessionStorage`, include it in the authorize URL, and verify it on the callback.
+  `verifyJwt` fetches the OIDC discovery document and JWKS automatically and caches both for 5 minutes. For server environments with no global `fetch`, pass a `fetcher` option.
 </Note>
+
+---
+
+### `fetchJwks(options?)`
+
+Fetches and caches the Ave JWKS (JSON Web Key Set). Used internally by `verifyJwt`. Useful if you need direct access to the signing keys.
+
+```ts
+async function fetchJwks(options?: {
+  issuer?: string;
+  jwksUrl?: string;
+  fetcher?: typeof fetch;
+}): Promise<JwksResponse>
+```
+
+```ts
+import { fetchJwks } from "@ave-id/sdk";
+
+const { keys } = await fetchJwks();
+// keys: JwkKey[] — RSA public keys used to verify Ave JWTs
+```
 
 ---
 

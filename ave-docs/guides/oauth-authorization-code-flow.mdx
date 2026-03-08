@@ -170,23 +170,27 @@ Ave returns two different JWTs on a successful token exchange. Understanding the
     The response includes `access_token`, `access_token_jwt`, `id_token`, `refresh_token`, `expires_in`, `scope`, and `user`.
   </Step>
   <Step title="Validate id_token and create session">
-    For security-critical systems, validate the `id_token` before trusting it.
+    For security-critical systems, validate the `id_token` before trusting it. Use `verifyJwt` from the SDK — it handles JWKS fetching, RS256 signature verification, and all required claim checks automatically.
 
     ```ts
-    // Fetch JWKS (cache this — it rarely changes)
-    const { keys } = await fetch("https://aveid.net/.well-known/jwks.json").then(r => r.json());
+    import { verifyJwt } from "@ave-id/sdk";
 
-    // Validate using your JWT library (jose, jsonwebtoken, etc.)
-    // Required checks:
-    // 1. Signature valid against JWKS
-    // 2. iss === "https://aveid.net"
-    // 3. aud === YOUR_CLIENT_ID
-    // 4. exp > Date.now() / 1000
-    // 5. nonce === savedNonce (if you sent one)
+    const claims = await verifyJwt(tokens.id_token, {
+      audience: "YOUR_CLIENT_ID",
+      nonce: savedNonce, // the nonce you stored before redirecting
+    });
+
+    if (!claims) {
+      throw new Error("Invalid id_token — signature or claims validation failed.");
+    }
+
+    // claims.sub    — identity UUID (use as your primary key)
+    // claims.email  — verified email (requires email scope)
+    // claims.name   — display name (requires profile scope)
     ```
 
     <Tip>
-      Libraries like `jose` handle JWKS fetching and validation automatically. Pass `issuer`, `audience` (your client ID), and `clockTolerance` options.
+      `verifyJwt` checks signature, issuer (`https://aveid.net`), audience, expiry, and nonce in one call. It caches the JWKS for 5 minutes. For manual validation or non-JS environments, see the validation sequence below.
     </Tip>
   </Step>
 </Steps>
