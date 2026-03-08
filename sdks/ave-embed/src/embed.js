@@ -1,9 +1,61 @@
 const DEFAULT_THEME = "dark";
 
+// ============================================
+// Internal PKCE & token exchange helpers
+// ============================================
+
+async function _generateVerifier() {
+  const bytes = new Uint8Array(32);
+  crypto.getRandomValues(bytes);
+  return btoa(String.fromCharCode(...bytes))
+    .replace(/\+/g, "-").replace(/\//g, "_").replace(/=/g, "");
+}
+
+async function _generateChallenge(verifier) {
+  const hash = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(verifier));
+  return btoa(String.fromCharCode(...new Uint8Array(hash)))
+    .replace(/\+/g, "-").replace(/\//g, "_").replace(/=/g, "");
+}
+
+function _generateNonce() {
+  const bytes = new Uint8Array(24);
+  crypto.getRandomValues(bytes);
+  return btoa(String.fromCharCode(...bytes))
+    .replace(/\+/g, "-").replace(/\//g, "_").replace(/=/g, "");
+}
+
+function _getApiBase(issuer) {
+  return (issuer ?? "https://aveid.net").replace("https://aveid.net", "https://api.aveid.net");
+}
+
+async function _exchangeCode({ clientId, redirectUri, issuer, code, codeVerifier }) {
+  const res = await fetch(`${_getApiBase(issuer)}/api/oauth/token`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ grantType: "authorization_code", code, redirectUri, clientId, codeVerifier }),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error ?? "token_exchange_failed");
+  }
+  return res.json();
+}
+
+// Lightweight nonce check — decodes payload without signature verification.
+// Pass the token to verifyJwt from @ave-id/sdk for full cryptographic validation.
+function _checkNonce(token, expectedNonce) {
+  try {
+    const payload = JSON.parse(atob(token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/")));
+    return payload.nonce === expectedNonce;
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Mount Ave auth embed as an inline iframe
  */
-export function mountAveEmbed({
+export async function mountAveEmbed({
   container,
   clientId,
   redirectUri,
@@ -12,12 +64,19 @@ export function mountAveEmbed({
   theme = DEFAULT_THEME,
   width = "100%",
   height = 720,
+  onTokens,
   onSuccess,
   onError,
   onClose,
 }) {
   if (!container) {
     throw new Error("container is required");
+  }
+
+  let verifier, nonce;
+  if (onTokens) {
+    verifier = await _generateVerifier();
+    nonce = _generateNonce();
   }
 
   const iframe = document.createElement("iframe");
@@ -29,6 +88,13 @@ export function mountAveEmbed({
     theme,
   });
 
+  if (verifier) {
+    const challenge = await _generateChallenge(verifier);
+    params.set("code_challenge", challenge);
+    params.set("code_challenge_method", "S256");
+    params.set("nonce", nonce);
+  }
+
   iframe.src = `${issuer}/signin?${params.toString()}`;
   iframe.style.width = width;
   iframe.style.height = typeof height === "number" ? `${height}px` : height;
@@ -39,12 +105,26 @@ export function mountAveEmbed({
 
   container.appendChild(iframe);
 
-  const messageHandler = (event) => {
+  const messageHandler = async (event) => {
     if (event.origin !== issuer) return;
     const data = event.data || {};
 
     if (data.type === "ave:success") {
-      onSuccess?.(data.payload);
+      if (onTokens) {
+        try {
+          const code = new URL(data.payload.redirectUrl).searchParams.get("code");
+          const tokens = await _exchangeCode({ clientId, redirectUri, issuer, code, codeVerifier: verifier });
+          if (tokens.id_token && !_checkNonce(tokens.id_token, nonce)) {
+            onError?.({ error: "nonce_mismatch", message: "id_token nonce mismatch — possible replay attack" });
+            return;
+          }
+          onTokens(tokens);
+        } catch (err) {
+          onError?.({ error: err.message ?? "token_exchange_failed", message: err.message });
+        }
+      } else {
+        onSuccess?.(data.payload);
+      }
     }
 
     if (data.type === "ave:error") {
@@ -73,7 +153,7 @@ export function mountAveEmbed({
 /**
  * Open Ave auth as a modal sheet overlay
  */
-export function openAveSheet({
+export async function openAveSheet({
   clientId,
   redirectUri,
   scope = "openid profile email",
@@ -82,12 +162,22 @@ export function openAveSheet({
   codeChallenge,
   codeChallengeMethod,
   extraParams = {},
+  onTokens,
   onSuccess,
   onError,
   onClose,
 }) {
   let resolved = false;
   let popup = null;
+
+  // Auto-generate PKCE when onTokens is used
+  let autoVerifier, autoNonce;
+  if (onTokens) {
+    autoVerifier = await _generateVerifier();
+    autoNonce = _generateNonce();
+    codeChallenge = await _generateChallenge(autoVerifier);
+    codeChallengeMethod = "S256";
+  }
 
   // Create overlay backdrop
   const overlay = document.createElement("div");
@@ -162,6 +252,9 @@ export function openAveSheet({
   if (codeChallengeMethod) {
     params.set("code_challenge_method", codeChallengeMethod);
   }
+  if (autoNonce) {
+    params.set("nonce", autoNonce);
+  }
 
   iframe.src = `${issuer}/signin?${params.toString()}`;
   iframe.style.cssText = `
@@ -219,7 +312,7 @@ export function openAveSheet({
     if (e.target === overlay) close();
   };
 
-  const messageHandler = (event) => {
+  const messageHandler = async (event) => {
     if (event.origin !== issuer) return;
     const data = event.data || {};
 
@@ -244,7 +337,21 @@ export function openAveSheet({
     if (data.type === "ave:success") {
       resolved = true;
       close();
-      onSuccess?.(data.payload);
+      if (onTokens) {
+        try {
+          const code = new URL(data.payload.redirectUrl).searchParams.get("code");
+          const tokens = await _exchangeCode({ clientId, redirectUri, issuer, code, codeVerifier: autoVerifier });
+          if (tokens.id_token && !_checkNonce(tokens.id_token, autoNonce)) {
+            onError?.({ error: "nonce_mismatch", message: "id_token nonce mismatch — possible replay attack" });
+            return;
+          }
+          onTokens(tokens);
+        } catch (err) {
+          onError?.({ error: err.message ?? "token_exchange_failed", message: err.message });
+        }
+      } else {
+        onSuccess?.(data.payload);
+      }
     }
 
     if (data.type === "ave:error") {
@@ -273,7 +380,7 @@ export function openAveSheet({
 /**
  * Open Ave auth as a popup window (for desktop)
  */
-export function openAvePopup({
+export async function openAvePopup({
   clientId,
   redirectUri,
   scope = "openid profile email",
@@ -283,10 +390,20 @@ export function openAvePopup({
   codeChallengeMethod,
   width = 450,
   height = 650,
+  onTokens,
   onSuccess,
   onError,
   onClose,
 }) {
+  // Auto-generate PKCE when onTokens is used
+  let autoVerifier, autoNonce;
+  if (onTokens) {
+    autoVerifier = await _generateVerifier();
+    autoNonce = _generateNonce();
+    codeChallenge = await _generateChallenge(autoVerifier);
+    codeChallengeMethod = "S256";
+  }
+
   const params = new URLSearchParams({
     client_id: clientId,
     redirect_uri: redirectUri,
@@ -300,6 +417,9 @@ export function openAvePopup({
   }
   if (codeChallengeMethod) {
     params.set("code_challenge_method", codeChallengeMethod);
+  }
+  if (autoNonce) {
+    params.set("nonce", autoNonce);
   }
 
   const left = (window.innerWidth - width) / 2 + window.screenX;
@@ -316,14 +436,28 @@ export function openAvePopup({
     return null;
   }
 
-  const messageHandler = (event) => {
+  const messageHandler = async (event) => {
     if (event.origin !== issuer) return;
     const data = event.data || {};
 
     if (data.type === "ave:success") {
       popup.close();
       window.removeEventListener("message", messageHandler);
-      onSuccess?.(data.payload);
+      if (onTokens) {
+        try {
+          const code = new URL(data.payload.redirectUrl).searchParams.get("code");
+          const tokens = await _exchangeCode({ clientId, redirectUri, issuer, code, codeVerifier: autoVerifier });
+          if (tokens.id_token && !_checkNonce(tokens.id_token, autoNonce)) {
+            onError?.({ error: "nonce_mismatch", message: "id_token nonce mismatch — possible replay attack" });
+            return;
+          }
+          onTokens(tokens);
+        } catch (err) {
+          onError?.({ error: err.message ?? "token_exchange_failed", message: err.message });
+        }
+      } else {
+        onSuccess?.(data.payload);
+      }
     }
 
     if (data.type === "ave:error") {

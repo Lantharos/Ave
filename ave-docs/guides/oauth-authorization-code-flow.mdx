@@ -78,6 +78,9 @@ Ave returns two different JWTs on a successful token exchange. Understanding the
 
 ## Claim reference
 
+<AccordionGroup>
+  <Accordion title="Full claim reference">
+
 | Claim | Present in | Description |
 |---|---|---|
 | `iss` | Both JWTs | Always `https://aveid.net` |
@@ -97,13 +100,16 @@ Ave returns two different JWTs on a successful token exchange. Understanding the
 | `scope` | `access_token_jwt` only | Space-separated granted scopes |
 | `uid` | `access_token_jwt` only | User UUID (only if `user_id` scope + app config) |
 
+  </Accordion>
+</AccordionGroup>
+
 ## Full flow
 
-There are two ways to implement this — the SDK handles all the boilerplate for browser apps, or you can wire each step manually when you need full control (server-side flows, custom storage, non-browser environments).
+There are three ways to implement this — pick what fits your setup.
 
 <Tabs>
   <Tab title="SDK (recommended)">
-    Two function calls cover the entire flow. `startPkceLogin` generates PKCE, nonce, and state; stores them in `sessionStorage`; and redirects. `finishPkceLogin` verifies the returned state, exchanges the code, and validates the returned tokens — all in one call.
+    Two function calls cover the entire flow. `startPkceLogin` generates PKCE, nonce, and state; stores them in `sessionStorage`; and redirects. `finishPkceLogin` reads them back, verifies the returned state, exchanges the code, and validates the returned tokens.
 
     ```ts
     // login page
@@ -132,11 +138,53 @@ There are two ways to implement this — the SDK handles all the boilerplate for
     ```
 
     <Note>
-      `finishPkceLogin` verifies the `id_token` and `access_token_jwt` signatures internally using `verifyJwt`. You do not need a separate validation step. It returns `null` when no `code` param is present, so it's safe to call on every page load.
+      `finishPkceLogin` verifies token signatures internally — no separate validation step needed. It returns `null` when there's no `code` in the URL, so it's safe to mount on your callback route without guarding against non-callback page loads.
+    </Note>
+  </Tab>
+  <Tab title="Embed">
+    Use `@ave-id/embed` to show Ave login in a sheet or popup without leaving the page. Pass `onTokens` and PKCE, state, and code exchange are all handled automatically.
+
+    ```ts
+    import { openAveSheet } from "@ave-id/embed";
+
+    // Show as a bottom sheet — openAvePopup works the same way
+    const { close } = await openAveSheet({
+      clientId: "YOUR_CLIENT_ID",
+      redirectUri: "https://yourapp.com/callback",
+      scope: "openid profile email offline_access",
+      onTokens: (tokens) => {
+        // tokens.id_token, tokens.access_token, tokens.refresh_token, etc.
+        // Token signatures and claims are already verified — create your session.
+      },
+      onError: ({ error, message }) => {
+        console.error(error, message);
+      },
+    });
+    ```
+
+    For an inline embed on a dedicated auth page:
+
+    ```ts
+    import { mountAveEmbed } from "@ave-id/embed";
+
+    const { destroy } = await mountAveEmbed({
+      container: document.getElementById("auth-container"),
+      clientId: "YOUR_CLIENT_ID",
+      redirectUri: "https://yourapp.com/callback",
+      onTokens: (tokens) => {
+        destroy();
+        // Create your session
+      },
+      onError: ({ error }) => console.error(error),
+    });
+    ```
+
+    <Note>
+      `onTokens` requires no PKCE setup — the embed handles it. For full cryptographic validation of the returned `id_token`, pass it to `verifyJwt` from `@ave-id/sdk` after receiving tokens.
     </Note>
   </Tab>
   <Tab title="Manual">
-    Use the individual helpers when you need full control — for example, server-side token exchange, custom `sessionStorage` keys, or non-browser environments.
+    Use the individual helpers when you need full control — server-side token exchange, custom storage, or non-browser environments.
 
     <Steps>
       <Step title="Create request context">
@@ -263,48 +311,51 @@ Authorization: Bearer ACCESS_TOKEN
 
 The returned claims depend on the scopes your access token has. The response always includes `sub` (identity UUID).
 
-## OIDC discovery
+## OIDC discovery & manual token validation
 
-Fetch the discovery document to programmatically get endpoint URLs and signing key locations:
+<AccordionGroup>
+  <Accordion title="OIDC discovery document">
+    Fetch the discovery document to programmatically get endpoint URLs and signing key locations:
 
-```bash
-GET https://aveid.net/.well-known/openid-configuration
-```
+    ```bash
+    GET https://aveid.net/.well-known/openid-configuration
+    ```
 
-```json
-{
-  "issuer": "https://aveid.net",
-  "authorization_endpoint": "https://aveid.net/signin",
-  "token_endpoint": "https://api.aveid.net/api/oauth/token",
-  "userinfo_endpoint": "https://api.aveid.net/api/oauth/userinfo",
-  "jwks_uri": "https://aveid.net/.well-known/jwks.json",
-  "scopes_supported": ["openid", "profile", "email", "offline_access", "user_id"],
-  "response_types_supported": ["code"],
-  "id_token_signing_alg_values_supported": ["RS256"]
-}
-```
+    ```json
+    {
+      "issuer": "https://aveid.net",
+      "authorization_endpoint": "https://aveid.net/signin",
+      "token_endpoint": "https://api.aveid.net/api/oauth/token",
+      "userinfo_endpoint": "https://api.aveid.net/api/oauth/userinfo",
+      "jwks_uri": "https://aveid.net/.well-known/jwks.json",
+      "scopes_supported": ["openid", "profile", "email", "offline_access", "user_id"],
+      "response_types_supported": ["code"],
+      "id_token_signing_alg_values_supported": ["RS256"]
+    }
+    ```
+  </Accordion>
+  <Accordion title="Manual ID token validation sequence">
+    For non-JS environments or any library that validates tokens without the SDK, follow this order:
 
-## ID token validation sequence
-
-For any library or system that validates tokens manually, follow this order:
-
-<Steps>
-  <Step title="Fetch JWKS">
-    `GET https://aveid.net/.well-known/jwks.json`. Cache the response and re-fetch only when you encounter an unknown `kid`.
-  </Step>
-  <Step title="Verify signature">
-    Use the key matching the `kid` in the token header. Ave signs with RS256.
-  </Step>
-  <Step title="Check timestamps">
-    Verify `exp > now` and `iat <= now`. Use a small clock tolerance (60 seconds) to handle drift.
-  </Step>
-  <Step title="Verify issuer and audience">
-    `iss` must equal `https://aveid.net`. `aud` must equal your client ID. Reject anything else.
-  </Step>
-  <Step title="Verify nonce">
-    If you sent a `nonce` in the authorization request, the `id_token` must contain the same value. This prevents replay attacks.
-  </Step>
-</Steps>
+    <Steps>
+      <Step title="Fetch JWKS">
+        `GET https://aveid.net/.well-known/jwks.json`. Cache the response and re-fetch only when you encounter an unknown `kid`.
+      </Step>
+      <Step title="Verify signature">
+        Use the key matching the `kid` in the token header. Ave signs with RS256.
+      </Step>
+      <Step title="Check timestamps">
+        Verify `exp > now` and `iat <= now`. Use a small clock tolerance (60 seconds) to handle drift.
+      </Step>
+      <Step title="Verify issuer and audience">
+        `iss` must equal `https://aveid.net`. `aud` must equal your client ID. Reject anything else.
+      </Step>
+      <Step title="Verify nonce">
+        If you sent a `nonce` in the authorization request, the `id_token` must contain the same value. This prevents replay attacks.
+      </Step>
+    </Steps>
+  </Accordion>
+</AccordionGroup>
 
 ## Edge cases
 

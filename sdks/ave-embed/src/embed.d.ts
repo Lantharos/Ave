@@ -11,6 +11,24 @@ export type AveAuthErrorPayload = {
   [key: string]: unknown;
 };
 
+export type AveTokenResponse = {
+  access_token: string;
+  access_token_jwt: string;
+  id_token?: string;
+  refresh_token?: string;
+  token_type: "Bearer";
+  expires_in: number;
+  scope: string;
+  user_id?: string;
+  user?: {
+    id: string;
+    handle: string;
+    displayName: string;
+    email?: string;
+    avatarUrl?: string;
+  } | null;
+};
+
 export type AveSigningSignedPayload = {
   [key: string]: unknown;
 };
@@ -28,16 +46,19 @@ export type MountAveEmbedOptions = {
   theme?: AveTheme;
   width?: string;
   height?: number | string;
+  /** Receive tokens directly — PKCE is handled automatically. Use instead of onSuccess. */
+  onTokens?: (tokens: AveTokenResponse) => void;
+  /** Legacy: receives { redirectUrl } — exchange the code manually. Use onTokens for the simpler path. */
   onSuccess?: (payload: AveAuthSuccessPayload) => void;
   onError?: (payload: AveAuthErrorPayload) => void;
   onClose?: () => void;
 };
 
-export function mountAveEmbed(options: MountAveEmbedOptions): {
+export function mountAveEmbed(options: MountAveEmbedOptions): Promise<{
   iframe: HTMLIFrameElement;
   destroy: () => void;
   postMessage: (payload: unknown) => void;
-};
+}>;
 
 export type OpenAveSheetOptions = {
   clientId: string;
@@ -45,18 +66,23 @@ export type OpenAveSheetOptions = {
   scope?: string;
   issuer?: string;
   theme?: AveTheme;
+  /** Only used when onTokens is not provided. */
   codeChallenge?: string;
+  /** Only used when onTokens is not provided. */
   codeChallengeMethod?: string;
   extraParams?: Record<string, string>;
+  /** Receive tokens directly — PKCE is handled automatically. Use instead of onSuccess. */
+  onTokens?: (tokens: AveTokenResponse) => void;
+  /** Legacy: receives { redirectUrl } — exchange the code manually. Use onTokens for the simpler path. */
   onSuccess?: (payload: AveAuthSuccessPayload) => void;
   onError?: (payload: AveAuthErrorPayload) => void;
   onClose?: () => void;
 };
 
-export function openAveSheet(options: OpenAveSheetOptions): {
+export function openAveSheet(options: OpenAveSheetOptions): Promise<{
   close: () => void;
   iframe: HTMLIFrameElement;
-};
+}>;
 
 export type OpenAvePopupOptions = {
   clientId: string;
@@ -64,19 +90,24 @@ export type OpenAvePopupOptions = {
   scope?: string;
   issuer?: string;
   theme?: AveTheme;
+  /** Only used when onTokens is not provided. */
   codeChallenge?: string;
+  /** Only used when onTokens is not provided. */
   codeChallengeMethod?: string;
   width?: number;
   height?: number;
+  /** Receive tokens directly — PKCE is handled automatically. Use instead of onSuccess. */
+  onTokens?: (tokens: AveTokenResponse) => void;
+  /** Legacy: receives { redirectUrl } — exchange the code manually. Use onTokens for the simpler path. */
   onSuccess?: (payload: AveAuthSuccessPayload) => void;
   onError?: (payload: AveAuthErrorPayload) => void;
   onClose?: () => void;
 };
 
-export function openAvePopup(options: OpenAvePopupOptions): {
+export function openAvePopup(options: OpenAvePopupOptions): Promise<{
   popup: Window;
   close: () => void;
-} | null;
+} | null>;
 
 export type OpenAveConnectorOptions = {
   clientId: string;
