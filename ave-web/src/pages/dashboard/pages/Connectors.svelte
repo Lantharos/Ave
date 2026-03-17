@@ -23,7 +23,7 @@
   let revokingId = $state<string | null>(null);
 
   function formatModeLabel(mode: Delegation["communicationMode"]) {
-    return mode === "background" ? "Background" : "User Present";
+    return mode === "background" ? "Background" : "User present";
   }
 
   function formatIssuedDate(value: string) {
@@ -104,79 +104,69 @@
       <Text type="p" size={18} color="#666666">No active connector grants.</Text>
     </div>
   {:else}
-    <div class="rounded-[20px] md:rounded-[36px] border border-[#1F1F1F] bg-[#141414]/80 p-3 md:p-[24px]">
-      <div class="flex flex-col gap-1 md:gap-[6px] pb-4 md:pb-[20px]">
-        <Text type="hd" size={16} mobileSize={13} color="#878787">ACTIVE GRANTS</Text>
-        <Text type="p" size={16} mobileSize={13} color="#666666">
-          Review which apps can request delegated access through Ave Connector.
-        </Text>
-      </div>
-
-    <div class="grid grid-cols-1 xl:grid-cols-2 gap-4 md:gap-[20px]">
+    <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 md:gap-[20px]">
       {#each delegations as delegation}
         <div class="flex flex-col gap-[3px] h-full">
-          <div class="flex flex-col h-full rounded-[20px] md:rounded-[28px] bg-[#171717] border border-[#222222] p-4 md:p-[24px] gap-4 md:gap-[20px]">
-            <div class="flex items-start justify-between gap-4">
-              <div class="min-w-0 flex flex-col gap-1 md:gap-[6px]">
-                <div class="flex items-center gap-3 min-w-0">
+          <div class="flex flex-col bg-[#171717] rounded-[20px] md:rounded-[24px] p-4 md:p-[20px] gap-3 md:gap-[10px] h-full">
+            <div class="flex items-start gap-3 min-w-0">
+              <div class="w-[40px] md:w-[50px] aspect-square shrink-0">
                   {#if delegation.sourceAppIconUrl}
                     <img
                       src={delegation.sourceAppIconUrl}
                       alt={`${delegation.sourceAppName} icon`}
-                      class="w-10 h-10 rounded-[14px] object-cover border border-[#2A2A2A] bg-[#111111]"
+                      class="w-full h-full rounded-[12px] object-cover"
                     />
                   {:else}
-                    <div class="w-10 h-10 rounded-[14px] border border-[#2A2A2A] bg-[#101010] flex items-center justify-center">
-                      <Text type="hd" size={14} mobileSize={12} color="#D3D3D3">
+                    <div class="w-full h-full rounded-[12px] bg-[#111111] flex items-center justify-center">
+                      <Text type="hd" size={18} mobileSize={14} color="#D3D3D3">
                         {delegation.sourceAppName.slice(0, 1)}
                       </Text>
                     </div>
                   {/if}
+              </div>
 
-                  <div class="min-w-0">
-                    <Text type="h" size={22} mobileSize={18} weight="bold" color="#FFFFFF" cclass="truncate">
-                      {delegation.sourceAppName}
-                    </Text>
-                    <Text type="p" size={14} mobileSize={12} color="#878787" cclass="truncate">
-                      {delegation.targetResourceName}
-                    </Text>
-                  </div>
-                </div>
-
-                <div class="flex flex-wrap gap-2 pt-1">
-                  <span class="px-3 py-1 rounded-full bg-[#111111] border border-[#272727] text-[11px] md:text-[12px] font-semibold text-[#D3D3D3] uppercase tracking-[0.08em]">
-                    {formatModeLabel(delegation.communicationMode)}
-                  </span>
-                  <span class="px-3 py-1 rounded-full bg-[#111111] border border-[#272727] text-[11px] md:text-[12px] font-semibold text-[#878787] uppercase tracking-[0.08em]">
-                    Issued {formatIssuedDate(delegation.createdAt)}
-                  </span>
-                </div>
+              <div class="min-w-0 flex-1">
+                <Text type="h" size={20} mobileSize={16} weight="bold" color="#FFFFFF" cclass="truncate">
+                  {delegation.sourceAppName}
+                </Text>
+                <Text type="p" size={16} mobileSize={13} color="#B9BBBE" cclass="truncate">
+                  {delegation.targetResourceName}
+                </Text>
               </div>
             </div>
 
-            <div class="grid grid-cols-1 gap-3 md:gap-[12px]">
-              <div class="rounded-[18px] border border-[#242424] bg-[#101010] px-4 py-3 md:px-[18px] md:py-[16px]">
-                <Text type="hd" size={13} mobileSize={11} color="#878787">RESOURCE</Text>
-                <Text type="p" size={18} mobileSize={14} weight="semibold" color="#FFFFFF" cclass="mt-1 break-all">
+            <div class="flex flex-col gap-2 md:gap-[10px]">
+              <div class="bg-[#111111] rounded-[16px] px-4 md:px-[20px] py-3 md:py-[15px]">
+                <Text type="p" size={14} mobileSize={11} color="#666666">Resource</Text>
+                <Text type="h" size={18} mobileSize={14} weight="bold" color="#FFFFFF">
                   {delegation.targetResourceKey}
                 </Text>
               </div>
 
-              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 md:gap-[12px]">
-                <div class="rounded-[18px] border border-[#242424] bg-[#101010] px-4 py-3 md:px-[18px] md:py-[16px]">
-                  <Text type="hd" size={13} mobileSize={11} color="#878787">SCOPE</Text>
-                  <Text type="p" size={16} mobileSize={13} weight="medium" color="#D3D3D3" cclass="mt-1 break-all">
-                    {delegation.scope}
-                  </Text>
-                </div>
-
-                <div class="rounded-[18px] border border-[#242424] bg-[#101010] px-4 py-3 md:px-[18px] md:py-[16px]">
-                  <Text type="hd" size={13} mobileSize={11} color="#878787">SOURCE</Text>
-                  <Text type="p" size={16} mobileSize={13} weight="medium" color="#D3D3D3" cclass="mt-1 break-all">
-                    {formatWebsite(delegation.sourceAppWebsiteUrl) ?? delegation.sourceAppClientId}
-                  </Text>
-                </div>
+              <div class="bg-[#111111] rounded-[16px] px-4 md:px-[20px] py-3 md:py-[15px]">
+                <Text type="p" size={14} mobileSize={11} color="#666666">Scope</Text>
+                <Text type="p" size={16} mobileSize={13} color="#B9BBBE" cclass="break-all">
+                  {delegation.scope}
+                </Text>
               </div>
+
+              <div class="bg-[#111111] rounded-[16px] px-4 md:px-[20px] py-3 md:py-[15px]">
+                <Text type="p" size={14} mobileSize={11} color="#666666">Source</Text>
+                <Text type="p" size={16} mobileSize={13} color="#B9BBBE" cclass="break-all">
+                  {formatWebsite(delegation.sourceAppWebsiteUrl) ?? delegation.sourceAppClientId}
+                </Text>
+              </div>
+
+              <div class="bg-[#111111] rounded-[16px] px-4 md:px-[20px] py-3 md:py-[15px]">
+                <Text type="p" size={14} mobileSize={11} color="#666666">Mode</Text>
+                <Text type="p" size={16} mobileSize={13} color="#B9BBBE">
+                  {formatModeLabel(delegation.communicationMode)}
+                </Text>
+              </div>
+
+              <Text type="p" size={14} mobileSize={11} color="#666666" cclass="px-1">
+                Issued {formatIssuedDate(delegation.createdAt)}
+              </Text>
             </div>
           </div>
 
@@ -193,7 +183,6 @@
           </button>
         </div>
       {/each}
-    </div>
     </div>
   {/if}
 </div>
