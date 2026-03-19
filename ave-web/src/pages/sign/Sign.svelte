@@ -297,8 +297,7 @@
             if (!supportsStorageAccessApi()) {
                 const opened = openSigningPopupHere();
                 if (!opened) {
-                    storageAccessError = "Popup blocked. Allow popups to continue.";
-                    needsStorageAccess = true;
+                    fallbackToTopLevelSigning();
                     return;
                 }
                 redirectingToLogin = true;
@@ -312,8 +311,7 @@
             if (!granted) {
                 const opened = openSigningPopupHere();
                 if (!opened) {
-                    storageAccessError = "Popup blocked. Allow popups to continue.";
-                    needsStorageAccess = true;
+                    fallbackToTopLevelSigning();
                     return;
                 }
                 redirectingToLogin = true;
@@ -326,8 +324,7 @@
             if (!initOk) {
                 const opened = openSigningPopupHere();
                 if (!opened) {
-                    storageAccessError = "Popup blocked. Allow popups to continue.";
-                    needsStorageAccess = true;
+                    fallbackToTopLevelSigning();
                     return;
                 }
                 redirectingToLogin = true;
@@ -339,8 +336,7 @@
             if (!authState) {
                 const opened = openSigningPopupHere();
                 if (!opened) {
-                    storageAccessError = "Popup blocked. Allow popups to continue.";
-                    needsStorageAccess = true;
+                    fallbackToTopLevelSigning();
                     return;
                 }
                 redirectingToLogin = true;
@@ -357,6 +353,12 @@
 
     function handleStorageAccessContinue() {
         requestStorageAccessFromUserAction();
+    }
+
+    function fallbackToTopLevelSigning() {
+        const fallbackUrl = new URL(window.location.href);
+        fallbackUrl.searchParams.delete("embed");
+        window.location.assign(fallbackUrl.toString());
     }
 
     function formatPayload(payload: string): string {
@@ -394,10 +396,11 @@
 
 {#if needsStorageAccess}
     <StorageAccessGate
-        title="Open sign-in"
-        message={storageAccessError || "We couldn't open the sign-in popup. Please allow popups and try again."}
-        cta="Open sign-in"
+        title={`Continue to ${app?.name || "your app"}`}
+        message={storageAccessError || "Signing needs a full browser window on this device. We'll continue there and bring you back after sign-in."}
+        cta="Continue"
         busy={requestingStorageAccess}
+        iconUrl={app?.iconUrl || null}
         onclick={handleStorageAccessContinue}
     />
 {:else if needsMasterKey}

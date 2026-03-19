@@ -17,6 +17,7 @@
     const returnUrl = getReturnUrl();
     let pendingOauth = $state<{ clientId: string; redirectUri: string; scope: string; state?: string; nonce?: string; embed?: boolean; codeChallenge?: string; codeChallengeMethod?: string } | null>(null);
     let pendingAuthContext = $state<PendingAuthContext | null>(null);
+    let authContextReady = $state(returnUrl ? !(returnUrl.startsWith("/authorize") || returnUrl.startsWith("/signin")) : true);
 
     
     onMount(() => {
@@ -48,6 +49,7 @@
 
         void loadPendingAuthContext().then((context) => {
             pendingAuthContext = context;
+            authContextReady = true;
         });
     });
 
@@ -149,7 +151,18 @@
     {/if}
 
     {#if currentPage === "login"}
-        <LoginStart onNext={handleLoginStart} onError={setError} appName={pendingAuthContext?.appName ?? null} />
+        {#if authContextReady}
+            <LoginStart
+                onNext={handleLoginStart}
+                onError={setError}
+                appName={pendingAuthContext?.appName ?? null}
+                appIconUrl={pendingAuthContext?.appIconUrl ?? null}
+            />
+        {:else}
+            <div class="w-full h-full flex items-center justify-center">
+                <div class="w-12 h-12 border-4 border-transparent border-t-white rounded-full animate-spin"></div>
+            </div>
+        {/if}
     {:else if currentPage === "methods"}
         <LoginMethods 
             identity={foundIdentity}

@@ -4,7 +4,7 @@
     import { api, type Identity } from "../../../lib/api";
     import { goto } from "@mateothegreat/svelte5-router";
 
-    let { onNext, onError, appName = null } = $props<{ 
+    let { onNext, onError, appName = null, appIconUrl = null } = $props<{ 
         onNext?: (data: {
             handle: string;
             identity: Identity;
@@ -15,6 +15,7 @@
         }) => void;
         onError?: (error: string) => void;
         appName?: string | null;
+        appIconUrl?: string | null;
     }>();
     
     // Get return URL to preserve when going to register
@@ -73,6 +74,13 @@
 
 <div class="w-full md:w-auto h-auto flex flex-col items-center z-10 px-4 md:px-0">
     {#if appName}
+        <div class="w-14 h-14 md:w-[72px] md:h-[72px] rounded-[18px] md:rounded-[24px] bg-[#171717] flex items-center justify-center mb-4 md:mb-6 overflow-hidden">
+            {#if appIconUrl}
+                <img src={appIconUrl} alt={appName} class="w-full h-full object-cover" />
+            {:else}
+                <span class="text-white text-xl md:text-[28px] font-semibold">{appName[0]?.toUpperCase()}</span>
+            {/if}
+        </div>
         <h1 class="font-black text-2xl md:text-[36px] text-[#FFFFFF]/80 text-center">SIGN IN TO CONTINUE TO {appName}</h1>
         <h2 class="font-normal text-sm md:text-[18px] text-[#878787] mt-2 md:mt-[10px] mb-1 text-center">
             Enter your handle to continue.

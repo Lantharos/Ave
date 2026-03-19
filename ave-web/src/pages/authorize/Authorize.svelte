@@ -31,6 +31,12 @@
 		return !!popup;
 	}
 
+    function fallbackToTopLevelAuthorize() {
+        const fallbackUrl = new URL(window.location.href);
+        fallbackUrl.searchParams.delete("embed");
+        window.location.assign(fallbackUrl.toString());
+    }
+
 	async function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T | null> {
 		let timer: number | undefined;
 		try {
@@ -472,7 +478,7 @@
         }
     }
 
-    async function requestStorageAccessFromUserAction() {
+	async function requestStorageAccessFromUserAction() {
 		if (requestingStorageAccess) return;
 		storageAccessAttempted = true;
 		requestingStorageAccess = true;
@@ -482,8 +488,7 @@
 			if (!supportsStorageAccessApi()) {
 				const opened = openAuthPopupHere();
 				if (!opened) {
-					storageAccessError = "Popup blocked. Allow popups to continue.";
-					needsStorageAccess = true;
+					fallbackToTopLevelAuthorize();
 					return;
 				}
 				redirectingToLogin = true;
@@ -497,8 +502,7 @@
 			if (!granted) {
 				const opened = openAuthPopupHere();
 				if (!opened) {
-					storageAccessError = "Popup blocked. Allow popups to continue.";
-					needsStorageAccess = true;
+					fallbackToTopLevelAuthorize();
 					return;
 				}
 				redirectingToLogin = true;
@@ -511,8 +515,7 @@
 			if (!initOk) {
 				const opened = openAuthPopupHere();
 				if (!opened) {
-					storageAccessError = "Popup blocked. Allow popups to continue.";
-					needsStorageAccess = true;
+					fallbackToTopLevelAuthorize();
 					return;
 				}
 				redirectingToLogin = true;
@@ -524,8 +527,7 @@
 			if (!authState.isAuthenticated) {
 				const opened = openAuthPopupHere();
 				if (!opened) {
-					storageAccessError = "Popup blocked. Allow popups to continue.";
-					needsStorageAccess = true;
+					fallbackToTopLevelAuthorize();
 					return;
 				}
 				redirectingToLogin = true;
@@ -564,10 +566,11 @@
 
 {#if needsStorageAccess}
 	<StorageAccessGate
-		title="Open sign-in"
-		message={storageAccessError || "We couldn't open the sign-in popup. Please allow popups and try again."}
-		cta="Open sign-in"
+		title={`Continue to ${appInfo?.name || quickOriginHostname || "your app"}`}
+		message={storageAccessError || "Sign in needs a full browser window on this device. We'll continue there and bring you back after sign-in."}
+		cta="Continue"
 		busy={requestingStorageAccess}
+        iconUrl={appInfo?.iconUrl || null}
 		onclick={handleStorageAccessContinue}
 	/>
 	{:else if autoAuthorizing}

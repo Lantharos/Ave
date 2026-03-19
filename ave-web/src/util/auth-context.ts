@@ -3,6 +3,7 @@ import { getReturnUrl } from "./return-url";
 
 export interface PendingAuthContext {
   appName: string | null;
+  appIconUrl: string | null;
   clientId: string | null;
   isQuickAuth: boolean;
   originHostname: string | null;
@@ -38,6 +39,7 @@ export async function loadPendingAuthContext(): Promise<PendingAuthContext | nul
       const origin = new URL(clientId.slice("origin:".length));
       return {
         appName: origin.hostname,
+        appIconUrl: null,
         clientId,
         isQuickAuth: true,
         originHostname: origin.hostname,
@@ -45,6 +47,7 @@ export async function loadPendingAuthContext(): Promise<PendingAuthContext | nul
     } catch {
       return {
         appName: null,
+        appIconUrl: null,
         clientId,
         isQuickAuth: true,
         originHostname: null,
@@ -56,6 +59,7 @@ export async function loadPendingAuthContext(): Promise<PendingAuthContext | nul
     const appData = await api.oauth.getApp(clientId);
     return {
       appName: appData.app.name,
+      appIconUrl: appData.app.iconUrl || null,
       clientId,
       isQuickAuth: false,
       originHostname: null,
@@ -63,6 +67,7 @@ export async function loadPendingAuthContext(): Promise<PendingAuthContext | nul
   } catch {
     return {
       appName: null,
+      appIconUrl: null,
       clientId,
       isQuickAuth: false,
       originHostname: null,
