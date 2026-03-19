@@ -446,6 +446,9 @@
                     tryAutoStorageAccess();
                     return;
                 }
+                if (loadingAppInfo && !appInfo && !quickOriginHostname) {
+                    return;
+                }
                 needsStorageAccess = true;
 				return;
 			}
@@ -587,20 +590,14 @@
 </script>
 
 {#if needsStorageAccess}
-    {#if loadingAppInfo && !appInfo && !quickOriginHostname}
-        <div class="bg-[#090909] min-h-screen-fixed flex items-center justify-center p-6 md:p-[50px]">
-            <div class="w-[48px] h-[48px] border-2 border-[#FFFFFF] border-t-transparent rounded-full animate-spin"></div>
-        </div>
-    {:else}
-        <StorageAccessGate
-            title={`Sign in to continue to ${appDisplayName()}`}
-            message={storageAccessError || `We'll open a secure browser page so you can finish sign-in for ${appDisplayName()} and come right back.`}
-            cta="Continue in browser"
-            busy={requestingStorageAccess}
-            iconUrl={appInfo?.iconUrl || null}
-            onclick={handleStorageAccessContinue}
-        />
-    {/if}
+    <StorageAccessGate
+        title={`Sign in to continue to ${appDisplayName()}`}
+        message={storageAccessError || `We'll open a secure browser page so you can finish sign-in for ${appDisplayName()} and come right back.`}
+        cta="Continue in browser"
+        busy={requestingStorageAccess}
+        iconUrl={appInfo?.iconUrl || null}
+        onclick={handleStorageAccessContinue}
+    />
     {:else if autoAuthorizing}
 	    <div class="bg-[#090909] min-h-screen-fixed flex items-center justify-center p-6 md:p-[50px]">
 	        <div class="flex flex-col items-center text-center gap-4">
