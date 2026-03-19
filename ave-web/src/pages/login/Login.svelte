@@ -198,5 +198,5 @@
         />
     {/if}
 
-    <AuroraBackdrop preset="login" cclass="absolute bottom-0 left-0 w-full pointer-events-none select-none" />
+    <AuroraBackdrop preset="login" mobileHeight={620} cclass="absolute bottom-0 left-0 w-full pointer-events-none select-none" />
 </div>

@@ -46,7 +46,7 @@
         "reg-enrollment": { colorStops: ["#858585", "#696969", "#464646"], amplitude: 1.0, blend: 0.5, height: 420, position: "bottom", opacity: 1 },
     };
 
-    let { preset = "home", cclass = "" } = $props<{ preset?: PresetName; cclass?: string }>();
+    let { preset = "home", cclass = "", mobileHeight = null } = $props<{ preset?: PresetName; cclass?: string; mobileHeight?: number | null }>();
     let container: HTMLDivElement | null = null;
     const activePreset = $derived(presets[preset as PresetName]);
 
@@ -255,7 +255,7 @@ void main() {
 <div
     bind:this={container}
     class={`aurora-backdrop ${cclass} ${activePreset.position === "top" ? "aurora-top" : "aurora-bottom"}`}
-    style={`height: ${activePreset.height}px;`}
+    style={`--aurora-height: ${activePreset.height}px; --aurora-mobile-height: ${mobileHeight ? `${mobileHeight}px` : `${activePreset.height}px`};`}
 ></div>
 
 <style>
@@ -263,6 +263,7 @@ void main() {
         position: absolute;
         left: 0;
         width: 100%;
+        height: var(--aurora-height);
         pointer-events: none;
         user-select: none;
         z-index: 0;
@@ -278,6 +279,13 @@ void main() {
     .aurora-top {
         top: 0;
     }
+
+    @media (max-width: 768px) {
+        .aurora-backdrop {
+            height: var(--aurora-mobile-height, var(--aurora-height));
+        }
+    }
+
     @media (prefers-reduced-motion: reduce) {
         .aurora-backdrop {
             display: none;
