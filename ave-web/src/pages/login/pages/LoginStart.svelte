@@ -81,7 +81,7 @@
                 <span class="text-white text-xl md:text-[28px] font-semibold">{appName[0]?.toUpperCase()}</span>
             </div>
         {/if}
-        <h1 class="font-black text-2xl md:text-[36px] text-[#FFFFFF]/80 text-center">CONTINUE TO {appName}</h1>
+        <h1 class="font-black text-2xl md:text-[36px] text-[#FFFFFF]/80 text-center">CONTINUE TO {appName.toUpperCase()}</h1>
         <h2 class="font-normal text-sm md:text-[18px] text-[#878787] mt-2 md:mt-[10px] mb-1 text-center">
             Sign in with your handle.
         </h2>

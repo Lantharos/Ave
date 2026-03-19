@@ -228,12 +228,12 @@
     <div class="relative w-full min-h-screen-fixed overflow-y-auto hide-scrollbar scroll-smooth bg-[#090909]">
         <AuroraBackdrop
                 preset={bgA}
-                mobileHeight={500}
+                mobileHeight={400}
                 cclass={`absolute bottom-0 inset-x-0 h-[700px] transition-opacity duration-300 will-change-[opacity] select-none pointer-events-none transform-gpu ${!showA ? "opacity-0" : ""}`}
         />
         <AuroraBackdrop
                 preset={bgB || bgA}
-                mobileHeight={500}
+                mobileHeight={400}
                 cclass={`absolute bottom-0 inset-x-0 h-[700px] transition-opacity duration-300 will-change-[opacity] select-none pointer-events-none transform-gpu ${showA ? "opacity-0" : ""}`}
         />
 

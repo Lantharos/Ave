@@ -132,6 +132,7 @@
     let storageAccessAttempted = $state(false);
     let launchedExternalApp = $state(false);
     let loadingAppInfo = $state(false);
+    let resolvedAppInfo = $state(false);
 
     const embedPopup = $derived.by(() => params.embed && !!window.opener);
     const embedSheet = $derived.by(() => params.embed && !embedPopup);
@@ -141,7 +142,7 @@
     }
 
     async function ensureAppInfo() {
-        if (!params.clientId || appInfo || loadingAppInfo) {
+        if (!params.clientId || appInfo || loadingAppInfo || resolvedAppInfo) {
             return;
         }
 
@@ -153,6 +154,7 @@
             console.warn("[Authorize] Failed to load app info early.", err);
         } finally {
             loadingAppInfo = false;
+            resolvedAppInfo = true;
         }
     }
 
@@ -440,18 +442,18 @@
         void ensureAppInfo();
 		if (!$isAuthenticated) {
 			if (redirectingToLogin) return;
-			if (embedSheet) {
-				if (requestingStorageAccess) return;
+            if (embedSheet) {
+                if (requestingStorageAccess) return;
                 if (!storageAccessAttempted) {
                     tryAutoStorageAccess();
                     return;
                 }
-                if (loadingAppInfo && !appInfo && !quickOriginHostname) {
+                if (!resolvedAppInfo && !appInfo && !quickOriginHostname) {
                     return;
                 }
                 needsStorageAccess = true;
-				return;
-			}
+                return;
+            }
 			// Redirect to login, then come back
 			setReturnUrl(window.location.pathname + window.location.search);
 			redirectingToLogin = true;
