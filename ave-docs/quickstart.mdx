@@ -7,6 +7,24 @@ description: "Set up Ave login from scratch: register an app, run the authorizat
   Want to skip registration entirely? [Quick Ave](/guides/quick-ave) gets you working auth in 3 lines with no dashboard, no client ID, and no environment variables. Come back here when you need refresh tokens, app branding, or a confidential client.
 </Note>
 
+## Recommended integration
+
+For most web apps, start with the embed flow so people stay inside your app while signing in.
+
+```ts
+import { startAveAuth } from "@ave-id/embed";
+
+startAveAuth({
+  clientId: "YOUR_CLIENT_ID",
+  redirectUri: "https://yourapp.com/callback",
+  onSuccess: ({ redirectUrl }) => {
+    window.location.assign(redirectUrl);
+  },
+});
+```
+
+`startAveAuth()` opens the Ave sheet first, escalates to a popup if a top-level browser context is required, and falls back to a redirect if the popup is blocked. You can omit the clientId to start with Quick Ave without any registration.
+
 ## Prerequisites
 
 <Steps>

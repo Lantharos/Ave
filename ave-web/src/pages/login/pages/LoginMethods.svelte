@@ -209,8 +209,8 @@
         {/if}
 
         <ActionCard 
-            action="USE TRUST CODES" 
-            description="Enter your trust codes to sign in." 
+            action="USE RECOVERY CODE" 
+            description="Use a one-time recovery code if you can't use your passkeys." 
             buttons={[
                 { icon: "/icons/chevron-right-68.svg", color: "#FFFFFF", onClick: handleTrustCode },
             ]} 

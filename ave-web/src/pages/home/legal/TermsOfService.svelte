@@ -19,7 +19,7 @@
             Ave allows you to:
             * Create and manage a digital identity.
             * Authenticate across participating apps and platforms.
-            * Manage connected devices and security layers (passkeys, trust codes, etc.).
+            * Manage connected devices and security layers (passkeys, recovery codes, etc.).
             Ave is not a social network or cloud storage provider. You are responsible for managing your own credentials and recovery methods.
         </LegalSec>
         <LegalSec title="Who can use Ave?">

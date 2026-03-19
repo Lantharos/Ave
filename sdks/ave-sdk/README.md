@@ -10,6 +10,8 @@ npm install @ave-id/sdk
 
 ## Quick Ave (no app registration)
 
+If you want the sign-in UI to stay inside your app, pair the SDK with `@ave-id/embed` and use `startAveAuth()` as the default entry point.
+
 The fastest way to add Ave login — no developer portal, no client ID, no redirect-URI configuration. Works for rapid prototyping and upgrades cleanly to the full OIDC flow when you're ready.
 
 ```ts

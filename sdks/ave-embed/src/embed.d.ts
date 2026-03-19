@@ -109,6 +109,22 @@ export function openAvePopup(options: OpenAvePopupOptions): Promise<{
   close: () => void;
 } | null>;
 
+export type StartAveAuthOptions =
+  | (Omit<MountAveEmbedOptions, "clientId"> & { clientId?: string })
+  | (Omit<OpenAveSheetOptions, "clientId"> & { clientId?: string });
+
+export function startAveAuth(options: StartAveAuthOptions): Promise<
+  | {
+      iframe: HTMLIFrameElement;
+      destroy: () => void;
+      postMessage: (payload: unknown) => void;
+    }
+  | {
+      close: () => void;
+      iframe: HTMLIFrameElement;
+    }
+>;
+
 export type OpenAveConnectorOptions = {
   clientId: string;
   redirectUri: string;

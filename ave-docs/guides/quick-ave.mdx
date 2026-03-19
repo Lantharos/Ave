@@ -11,6 +11,23 @@ Quick Ave is a zero-configuration authentication layer. The SDK derives a `clien
 
 ## How it works
 
+## Recommended UX
+
+If you want Quick Ave to feel native to your app instead of a redirect-first flow, open it with the embed package:
+
+```ts
+import { startAveAuth } from "@ave-id/embed";
+
+startAveAuth({
+  redirectUri: "https://yourapp.com/ave/callback",
+  onSuccess: ({ redirectUrl }) => {
+    window.location.assign(redirectUrl);
+  },
+});
+```
+
+That keeps the user on your page first, opens a popup only when the browser requires it, and still lands on the same callback route.
+
 <Steps>
   <Step title="Initiate sign-in">
     Your page calls `startQuickSignIn()`. The SDK saves a PKCE verifier and a `state` nonce in `sessionStorage`, then redirects the user to `aveid.net/signin` with `client_id=origin:https://yourapp.com`.

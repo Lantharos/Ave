@@ -12,23 +12,18 @@
  */
 
 import { createHash, randomBytes } from "crypto";
+import { TRUST_CODE_WORDS } from "./trust-code-words";
 
-// Generate a trust code in format XXXXX-XXXXX-XXXXX-XXXXX-XXXXX
+// Generate a trust code in format ALPHA-BRAVO-CHARLIE-DELTA
 export function generateTrustCode(): string {
-  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // Removed confusing chars: 0, O, I, 1
-  const segments = 5;
-  const segmentLength = 5;
-  
+  const segments = 4;
   const parts: string[] = [];
+
   for (let i = 0; i < segments; i++) {
-    let segment = "";
-    for (let j = 0; j < segmentLength; j++) {
-      const randomIndex = randomBytes(1)[0] % chars.length;
-      segment += chars[randomIndex];
-    }
-    parts.push(segment);
+    const randomIndex = randomBytes(1)[0] % TRUST_CODE_WORDS.length;
+    parts.push(TRUST_CODE_WORDS[randomIndex]);
   }
-  
+
   return parts.join("-");
 }
 

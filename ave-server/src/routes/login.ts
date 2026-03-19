@@ -12,16 +12,57 @@ import {
   hashSessionToken,
   generateChallenge,
   verifyTrustCode,
-  hashTrustCode,
 } from "../lib/crypto";
 import { clearSessionCookie, setSessionCookie, SESSION_COOKIE_NAME } from "../lib/session-cookie";
-import { eq, and, gt, desc } from "drizzle-orm";
+import { eq, and, gt, desc, isNull } from "drizzle-orm";
 import { notifyLoginRequest } from "../lib/websocket";
 import { sendLoginRequestNotification, sendAccountEventNotification, type PushSubscription } from "../lib/webpush";
 import { deleteChallenge, getChallenge, setChallenge } from "../lib/challenge-store";
 import { createQrLoginToken, verifyQrLoginToken } from "../lib/qr-login-token";
 
 const app = new Hono();
+
+async function getUnusedTrustCodes(userId: string) {
+  return db
+    .select()
+    .from(trustCodes)
+    .where(and(eq(trustCodes.userId, userId), isNull(trustCodes.usedAt)));
+}
+
+async function findUnusedTrustCode(userId: string, code: string) {
+  const userTrustCodes = await getUnusedTrustCodes(userId);
+  let matchedCode: (typeof userTrustCodes)[number] | null = null;
+
+  for (const trustCode of userTrustCodes) {
+    if (verifyTrustCode(code, trustCode.codeHash)) {
+      matchedCode = trustCode;
+      break;
+    }
+  }
+
+  if (!matchedCode) {
+    return {
+      matchedCode: null,
+      availableCodes: userTrustCodes.length,
+    };
+  }
+
+  return {
+    matchedCode,
+    availableCodes: userTrustCodes.length,
+  };
+}
+
+async function markTrustCodeUsed(userId: string, trustCodeId: string) {
+  await db
+    .update(trustCodes)
+    .set({ usedAt: new Date() })
+    .where(eq(trustCodes.id, trustCodeId));
+
+  const remainingCodes = await getUnusedTrustCodes(userId);
+
+  return remainingCodes.length;
+}
 
 /**
  * Get or create a device for a user
@@ -667,56 +708,28 @@ app.post("/trust-code", zValidator("json", z.object({
     return c.json({ error: "Account not found" }, 404);
   }
   
-  // Find and verify trust code
-  const userTrustCodes = await db
-    .select()
-    .from(trustCodes)
-    .where(eq(trustCodes.userId, identity.userId));
-  
-  console.log(`[Trust Code Login] User ${identity.handle} (${identity.userId})`);
-  console.log(`[Trust Code Login] Found ${userTrustCodes.length} trust code(s) in database`);
-  console.log(`[Trust Code Login] Provided code: ${code}`);
-  console.log(`[Trust Code Login] Provided code hash: ${hashTrustCode(code)}`);
-  
-  if (userTrustCodes.length === 0) {
-    console.log(`[Trust Code Login] ERROR: No trust codes found for this user!`);
+  const { matchedCode, availableCodes } = await findUnusedTrustCode(identity.userId, code);
+
+  if (availableCodes === 0) {
     return c.json({ 
-      error: `No trust codes found for your account. You may need to regenerate them from the Security page.` 
+      error: "No recovery codes are available for your account. Set them up from Security on a signed-in device." 
     }, 400);
   }
-  
-  let matchedCode = null;
-  for (const tc of userTrustCodes) {
-    console.log(`[Trust Code Login] Checking code ${tc.id.substring(0, 8)}... stored hash: ${tc.codeHash}`);
-    const matches = verifyTrustCode(code, tc.codeHash);
-    console.log(`[Trust Code Login] Matches: ${matches}`);
-    if (matches) {
-      matchedCode = tc;
-      break;
-    }
-  }
-  
+
   if (!matchedCode) {
-    console.log(`[Trust Code Login] ERROR: None of the ${userTrustCodes.length} code(s) matched!`);
-    // Log failed attempt
     await db.insert(activityLogs).values({
       userId: identity.userId,
       action: "trust_code_failed",
-      details: { reason: "invalid_code", trustCodesCount: userTrustCodes.length },
+      details: { reason: "invalid_code", trustCodesCount: availableCodes },
       ipAddress: c.req.header("x-forwarded-for") || c.req.header("x-real-ip"),
       userAgent: c.req.header("user-agent"),
       severity: "warning",
     });
     
     return c.json({ 
-      error: `Invalid trust code. You have ${userTrustCodes.length} trust code(s) registered.` 
+      error: `That recovery code is invalid or already used. ${availableCodes} recovery code(s) remaining.` 
     }, 400);
   }
-  
-  console.log(`[Trust Code Login] SUCCESS: Matched code ${matchedCode.id.substring(0, 8)}`);
-  
-  // Don't mark code as used - trust codes are reusable
-  // This allows users to use the same code multiple times
   
   // Get user for encrypted master key backup
   const [user] = await db
@@ -767,12 +780,18 @@ app.post("/trust-code", zValidator("json", z.object({
     .select()
     .from(identities)
     .where(eq(identities.userId, identity.userId));
-  
-  // Count remaining codes (all codes, since they're reusable)
-  const remainingCodes = await db
-    .select()
-    .from(trustCodes)
-    .where(eq(trustCodes.userId, identity.userId));
+
+  const remainingCodes = await markTrustCodeUsed(identity.userId, matchedCode.id);
+
+  await db.insert(activityLogs).values({
+    userId: identity.userId,
+    action: "trust_code_used",
+    details: { remainingCodes },
+    deviceId: deviceRecord.id,
+    ipAddress: c.req.header("x-forwarded-for") || c.req.header("x-real-ip"),
+    userAgent: c.req.header("user-agent"),
+    severity: "warning",
+  });
   
   return c.json({
     success: true,
@@ -793,7 +812,8 @@ app.post("/trust-code", zValidator("json", z.object({
       bannerUrl: i.bannerUrl,
       isPrimary: i.isPrimary,
     })),
-    remainingTrustCodes: remainingCodes.length,
+    remainingTrustCodes: remainingCodes ?? 0,
+    remainingRecoveryCodes: remainingCodes ?? 0,
   });
 });
 
@@ -816,38 +836,25 @@ app.post("/recover-key", zValidator("json", z.object({
     return c.json({ error: "Account not found" }, 404);
   }
   
-  // Find and verify trust code
-  const userTrustCodes = await db
-    .select()
-    .from(trustCodes)
-    .where(eq(trustCodes.userId, identity.userId));
-  
-  if (userTrustCodes.length === 0) {
+  const { matchedCode, availableCodes } = await findUnusedTrustCode(identity.userId, code);
+
+  if (availableCodes === 0) {
     return c.json({ 
-      error: "No trust codes found for your account." 
+      error: "No recovery codes are available for your account." 
     }, 400);
   }
-  
-  let matchedCode = null;
-  for (const tc of userTrustCodes) {
-    if (verifyTrustCode(code, tc.codeHash)) {
-      matchedCode = tc;
-      break;
-    }
-  }
-  
+
   if (!matchedCode) {
-    // Log failed attempt
     await db.insert(activityLogs).values({
       userId: identity.userId,
       action: "key_recovery_failed",
-      details: { reason: "invalid_code" },
+      details: { reason: "invalid_code", trustCodesCount: availableCodes },
       ipAddress: c.req.header("x-forwarded-for") || c.req.header("x-real-ip"),
       userAgent: c.req.header("user-agent"),
       severity: "warning",
     });
     
-    return c.json({ error: "Invalid trust code." }, 400);
+    return c.json({ error: `That recovery code is invalid or already used. ${availableCodes} recovery code(s) remaining.` }, 400);
   }
   
   // Get user for encrypted master key backup
@@ -868,12 +875,25 @@ app.post("/recover-key", zValidator("json", z.object({
     details: { method: "trust_code" },
     ipAddress: c.req.header("x-forwarded-for") || c.req.header("x-real-ip"),
     userAgent: c.req.header("user-agent"),
-    severity: "info",
+    severity: "warning",
+  });
+
+  const remainingCodes = await markTrustCodeUsed(identity.userId, matchedCode.id);
+
+  await db.insert(activityLogs).values({
+    userId: identity.userId,
+    action: "trust_code_used",
+    details: { remainingCodes, context: "key_recovery" },
+    ipAddress: c.req.header("x-forwarded-for") || c.req.header("x-real-ip"),
+    userAgent: c.req.header("user-agent"),
+    severity: "warning",
   });
   
   return c.json({
     success: true,
     encryptedMasterKeyBackup: user.encryptedMasterKeyBackup,
+    remainingTrustCodes: remainingCodes ?? 0,
+    remainingRecoveryCodes: remainingCodes ?? 0,
   });
 });
 

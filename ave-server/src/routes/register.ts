@@ -6,10 +6,8 @@ import {
   verifyRegistrationResponse,
   type VerifiedRegistrationResponse,
 } from "@simplewebauthn/server";
-import { db, users, identities, passkeys, devices, sessions, trustCodes, activityLogs } from "../db";
+import { db, users, identities, passkeys, devices, sessions, activityLogs } from "../db";
 import { 
-  generateTrustCode, 
-  hashTrustCode, 
   generateSessionToken, 
   hashSessionToken,
 } from "../lib/crypto";
@@ -141,13 +139,12 @@ app.post("/complete", zValidator("json", completeRegistrationSchema), async (c) 
   // D1 in this runtime path does not support SQL BEGIN/COMMIT from Drizzle transactions.
   // Execute writes sequentially and best-effort rollback user row on failure.
   let createdUserId: string | null = null;
-  let result: {
-    user: typeof users.$inferSelect;
-    identity: typeof identities.$inferSelect;
-    device: typeof devices.$inferSelect;
-    sessionToken: string;
-    trustCodes: string[];
-  };
+    let result: {
+      user: typeof users.$inferSelect;
+      identity: typeof identities.$inferSelect;
+      device: typeof devices.$inferSelect;
+      sessionToken: string;
+    };
 
   try {
     // Create user (no encryptedMasterKeyBackup yet - will be set after client encrypts with real trust codes)
@@ -200,21 +197,6 @@ app.post("/complete", zValidator("json", completeRegistrationSchema), async (c) 
       })
       .returning();
 
-    // Generate trust codes (2 codes)
-    const codes: string[] = [];
-    for (let i = 0; i < 2; i++) {
-      const code = generateTrustCode();
-      codes.push(code);
-      const hash = hashTrustCode(code);
-      console.log(`[Registration] Generated trust code ${i + 1}: ${code} -> hash: ${hash.substring(0, 10)}...`);
-      await db.insert(trustCodes).values({
-        userId: user.id,
-        codeHash: hash,
-      });
-    }
-
-    console.log(`[Registration] Created ${codes.length} trust codes for user ${user.id}`);
-
     // Create session
     const sessionToken = generateSessionToken();
     const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
@@ -246,7 +228,6 @@ app.post("/complete", zValidator("json", completeRegistrationSchema), async (c) 
       identity,
       device,
       sessionToken,
-      trustCodes: codes,
     };
   } catch (error) {
     if (createdUserId) {
@@ -267,7 +248,7 @@ app.post("/complete", zValidator("json", completeRegistrationSchema), async (c) 
   return c.json({
     success: true,
     sessionToken: result.sessionToken,
-    trustCodes: result.trustCodes,
+    trustCodes: [],
     user: {
       id: result.user.id,
     },

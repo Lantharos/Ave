@@ -28,6 +28,47 @@ function _getApiBase(issuer) {
   return (issuer ?? "https://aveid.net").replace("https://aveid.net", "https://api.aveid.net");
 }
 
+function _deriveQuickClientId(redirectUri) {
+  try {
+    return `origin:${new URL(redirectUri ?? window.location.href).origin}`;
+  } catch {
+    return `origin:${window.location.origin}`;
+  }
+}
+
+function _buildAuthUrl({
+  clientId,
+  redirectUri,
+  scope = "openid profile email",
+  issuer = "https://aveid.net",
+  theme = DEFAULT_THEME,
+  codeChallenge,
+  codeChallengeMethod,
+  extraParams = {},
+  nonce,
+}) {
+  const params = new URLSearchParams({
+    client_id: clientId,
+    redirect_uri: redirectUri,
+    scope,
+    embed: "1",
+    theme,
+    ...extraParams,
+  });
+
+  if (codeChallenge) {
+    params.set("code_challenge", codeChallenge);
+  }
+  if (codeChallengeMethod) {
+    params.set("code_challenge_method", codeChallengeMethod);
+  }
+  if (nonce) {
+    params.set("nonce", nonce);
+  }
+
+  return `${issuer}/signin?${params.toString()}`;
+}
+
 async function _exchangeCode({ clientId, redirectUri, issuer, code, codeVerifier }) {
   const res = await fetch(`${_getApiBase(issuer)}/api/oauth/token`, {
     method: "POST",
@@ -80,22 +121,28 @@ export async function mountAveEmbed({
   }
 
   const iframe = document.createElement("iframe");
-  const params = new URLSearchParams({
-    client_id: clientId,
-    redirect_uri: redirectUri,
-    scope,
-    embed: "1",
-    theme,
-  });
 
   if (verifier) {
     const challenge = await _generateChallenge(verifier);
-    params.set("code_challenge", challenge);
-    params.set("code_challenge_method", "S256");
-    params.set("nonce", nonce);
+    iframe.src = _buildAuthUrl({
+      clientId,
+      redirectUri,
+      scope,
+      issuer,
+      theme,
+      codeChallenge: challenge,
+      codeChallengeMethod: "S256",
+      nonce,
+    });
+  } else {
+    iframe.src = _buildAuthUrl({
+      clientId,
+      redirectUri,
+      scope,
+      issuer,
+      theme,
+    });
   }
-
-  iframe.src = `${issuer}/signin?${params.toString()}`;
   iframe.style.width = width;
   iframe.style.height = typeof height === "number" ? `${height}px` : height;
   iframe.style.border = "0";
@@ -237,26 +284,17 @@ export async function openAveSheet({
 
   // Create iframe
   const iframe = document.createElement("iframe");
-  const params = new URLSearchParams({
-    client_id: clientId,
-    redirect_uri: redirectUri,
+  iframe.src = _buildAuthUrl({
+    clientId,
+    redirectUri,
     scope,
-    embed: "1",
+    issuer,
     theme,
-    ...extraParams,
+    codeChallenge,
+    codeChallengeMethod,
+    extraParams,
+    nonce: autoNonce,
   });
-  
-  if (codeChallenge) {
-    params.set("code_challenge", codeChallenge);
-  }
-  if (codeChallengeMethod) {
-    params.set("code_challenge_method", codeChallengeMethod);
-  }
-  if (autoNonce) {
-    params.set("nonce", autoNonce);
-  }
-
-  iframe.src = `${issuer}/signin?${params.toString()}`;
   iframe.style.cssText = `
     width: 100%;
     height: calc(90vh - 50px);
@@ -329,6 +367,12 @@ export async function openAveSheet({
           "ave_auth",
           `width=${width},height=${height},left=${left},top=${top},menubar=no,toolbar=no,location=no,status=no`
         );
+        if (!popup) {
+          resolved = true;
+          close();
+          window.location.assign(iframe.src);
+          return;
+        }
       }
       popup?.focus?.();
       return;
@@ -404,29 +448,21 @@ export async function openAvePopup({
     codeChallengeMethod = "S256";
   }
 
-  const params = new URLSearchParams({
-    client_id: clientId,
-    redirect_uri: redirectUri,
-    scope,
-    embed: "1",
-    theme,
-  });
-  
-  if (codeChallenge) {
-    params.set("code_challenge", codeChallenge);
-  }
-  if (codeChallengeMethod) {
-    params.set("code_challenge_method", codeChallengeMethod);
-  }
-  if (autoNonce) {
-    params.set("nonce", autoNonce);
-  }
-
   const left = (window.innerWidth - width) / 2 + window.screenX;
   const top = (window.innerHeight - height) / 2 + window.screenY;
+  const authUrl = _buildAuthUrl({
+    clientId,
+    redirectUri,
+    scope,
+    issuer,
+    theme,
+    codeChallenge,
+    codeChallengeMethod,
+    nonce: autoNonce,
+  });
 
   const popup = window.open(
-    `${issuer}/signin?${params.toString()}`,
+    authUrl,
     "ave_auth",
     `width=${width},height=${height},left=${left},top=${top},menubar=no,toolbar=no,location=no,status=no`
   );
@@ -594,6 +630,19 @@ export function openAveConnectorPopup({
       window.removeEventListener("message", messageHandler);
     },
   };
+}
+
+export async function startAveAuth(options) {
+  const normalizedOptions = {
+    ...options,
+    clientId: options.clientId ?? _deriveQuickClientId(options.redirectUri),
+  };
+
+  if (options.container) {
+    return mountAveEmbed(normalizedOptions);
+  }
+
+  return openAveSheet(normalizedOptions);
 }
 
 // ============================================

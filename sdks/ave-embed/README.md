@@ -8,6 +8,26 @@ Lightweight iframe embed for Ave sign-in with postMessage callbacks.
 npm install @ave-id/embed
 ```
 
+## Recommended default
+
+Use `startAveAuth()` unless you specifically need an always-mounted iframe.
+
+It starts with the sheet flow, opens a popup when Ave needs a top-level browser context, and falls back to a redirect if the popup is blocked.
+
+```js
+import { startAveAuth } from "@ave-id/embed";
+
+startAveAuth({
+  redirectUri: "https://yourapp.com/callback",
+  onSuccess: ({ redirectUrl }) => {
+    window.location.assign(redirectUrl);
+  },
+});
+```
+
+If you want tokens directly in the browser, use `onTokens` instead of `onSuccess`.
+If you omit `clientId`, `startAveAuth()` automatically uses the Quick Ave format for the current origin.
+
 ## How to choose an embed mode
 
 - **`mountAveEmbed`**: permanent inline sign-in area inside your page layout
@@ -55,7 +75,7 @@ const sheet = openAveSheet({
 // sheet?.close();
 ```
 
-This is the recommended default for most apps. The sheet keeps the user on the current page, works well on mobile, and automatically falls back to a popup when a full browser auth step is required.
+This is the lower-level version of `startAveAuth()`. The sheet keeps the user on the current page, works well on mobile, automatically falls back to a popup when a full browser auth step is required, and redirects if the popup is blocked.
 
 ### Sheet + server callback route
 

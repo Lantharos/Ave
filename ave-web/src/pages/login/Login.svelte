@@ -10,11 +10,13 @@
     import { getReturnUrl, clearReturnUrl } from "../../util/return-url";
     import type { Identity, Device } from "../../lib/api";
     import { onMount } from "svelte";
+    import { loadPendingAuthContext, type PendingAuthContext } from "../../util/auth-context";
 
     let currentPage = $state<"login" | "methods" | "trust-code" | "waiting">("login");
     
     const returnUrl = getReturnUrl();
     let pendingOauth = $state<{ clientId: string; redirectUri: string; scope: string; state?: string; nonce?: string; embed?: boolean; codeChallenge?: string; codeChallengeMethod?: string } | null>(null);
+    let pendingAuthContext = $state<PendingAuthContext | null>(null);
 
     
     onMount(() => {
@@ -43,6 +45,10 @@
             }
             safeGoto(goto, pendingOauth ? "/signin" : "/dashboard");
         }
+
+        void loadPendingAuthContext().then((context) => {
+            pendingAuthContext = context;
+        });
     });
 
     let error = $state("");
@@ -143,7 +149,7 @@
     {/if}
 
     {#if currentPage === "login"}
-        <LoginStart onNext={handleLoginStart} onError={setError} />
+        <LoginStart onNext={handleLoginStart} onError={setError} appName={pendingAuthContext?.appName ?? null} />
     {:else if currentPage === "methods"}
         <LoginMethods 
             identity={foundIdentity}

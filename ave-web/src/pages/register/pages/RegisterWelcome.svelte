@@ -2,7 +2,7 @@
     import Text from "../../../components/Text.svelte";
     import Button from "../../../components/Button.svelte";
 
-    let { onNext } = $props<{ onNext?: () => void }>();
+    let { onNext, appName = null } = $props<{ onNext?: () => void; appName?: string | null }>();
     function goNext() {
         onNext?.();
     }
@@ -11,10 +11,20 @@
 <div class="w-full min-h-screen-fixed flex flex-col items-center justify-center px-6 md:px-[150px] py-12 md:py-[150px] gap-12 md:gap-[150px]">
     <div class="flex flex-col md:flex-row w-full items-start justify-between gap-8 md:gap-[100px]">
         <div class="flex flex-col w-full md:w-[55%] items-start justify-start gap-4 md:gap-[20px]">
-            <h1 class="font-medium text-white text-2xl md:text-[48px]">
-                Welcome to Ave.<br />
-                Your new digital identity.
-            </h1>
+            {#if appName}
+                <h1 class="font-medium text-white text-2xl md:text-[48px]">
+                    Create your account<br />
+                    to continue to {appName}.
+                </h1>
+                <p class="text-[#666666] text-sm md:text-[16px]">
+                    Secure sign-in powered by Ave.
+                </p>
+            {:else}
+                <h1 class="font-medium text-white text-2xl md:text-[48px]">
+                    Welcome to Ave.<br />
+                    Your new digital identity.
+                </h1>
+            {/if}
 
             <p class="font-normal text-[#878787] text-base md:text-[24px]">
                 Ave keeps who you are safe on your own device, never on ours.

@@ -237,7 +237,7 @@
                         console.warn("[Authorize] Existing encrypted app key could not be decrypted.", keyError);
                         clearMasterKey();
                         needsMasterKey = true;
-                        masterKeyError = "Your local encryption key doesn't match this account. Recover your key with passkey unlock or a trust code.";
+                        masterKeyError = "Your local encryption key doesn't match this account. Recover your key with passkey unlock or a recovery code.";
                         authorizing = false;
                         sliderPosition = 0;
                         return;
@@ -657,7 +657,7 @@
 
         <div class="flex flex-col gap-3 md:gap-[20px] mt-6 md:mt-0">
             <h2 class="font-poppins text-base md:text-[32px] text-[#878787]">
-                You're signing in securely through Ave.
+                Create your account or sign in securely.
             </h2>
 
             {#if isQuickAuth}
@@ -669,12 +669,12 @@
                         Quick Ave
                     </h3>
                     <p class="font-poppins text-xs md:text-[18px] text-[#666666]">
-                        Sign in without creating an account on <span class="text-[#878787]">{quickOriginHostname}</span>. Ave verifies your identity and shares only what you approve.
+                        Create your account for <span class="text-[#878787]">{quickOriginHostname}</span> without leaving the flow. Secure sign-in is powered by Ave and only shares what you approve.
                     </p>
                 </div>
             {:else if appInfo?.description}
                 <p class="font-poppins text-xs md:text-[20px] text-[#666666]">
-                    {appInfo.description}
+                    {appInfo.description} Secure sign-in is powered by Ave.
                 </p>
             {/if}
 
@@ -728,10 +728,10 @@
                             safeGoto(goto, "/login");
                         }}
                     >
-                        Sign In with Trust Code
+                        Sign In with Recovery Code
                     </button>
                     <p class="text-[#666666] text-[14px] text-center">
-                        Use your trust code to restore your encryption key on this device.
+                        Use a one-time recovery code to restore your encryption key on this device.
                     </p>
                 </div>
             </div>

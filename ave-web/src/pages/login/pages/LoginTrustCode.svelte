@@ -29,7 +29,7 @@
 
     async function handleSubmit() {
         if (!code.trim()) {
-            onError?.("Please enter your trust code");
+            onError?.("Please enter a recovery code");
             return;
         }
 
@@ -81,7 +81,7 @@
                     );
                     onSuccess?.();
                 } else {
-                    onError?.("Failed to recover encryption key. Please check your trust code.");
+                    onError?.("Failed to recover encryption key. Please check your recovery code.");
                 }
             } else {
                 // Normal trust code login flow
@@ -127,7 +127,7 @@
                 onSuccess?.();
             }
         } catch (e: any) {
-            onError?.(e.message || "Invalid trust code");
+            onError?.(e.message || "Invalid recovery code");
         } finally {
             isLoading = false;
         }
@@ -145,12 +145,12 @@
         {#if isRecoveryMode}
             <h1 class="font-black text-2xl md:text-[36px] text-[#FFFFFF]/80">RECOVER ENCRYPTION KEY</h1>
             <p class="text-[#878787] text-sm md:text-base mt-2">
-                Enter a trust code to restore your encryption key on this device.
+                Enter a recovery code to restore your encryption key on this device.
             </p>
         {:else}
-            <h1 class="font-black text-2xl md:text-[36px] text-[#FFFFFF]/80">ENTER YOUR TRUST CODE</h1>
+            <h1 class="font-black text-2xl md:text-[36px] text-[#FFFFFF]/80">ENTER A RECOVERY CODE</h1>
             <p class="text-[#878787] text-sm md:text-base mt-2">
-                Enter one of your backup trust codes to sign in.
+                Enter one of your one-time recovery codes to sign in.
             </p>
         {/if}
     </div>
@@ -165,17 +165,17 @@
     {/if}
 
     <div class="w-full p-5 md:p-[30px] bg-[#171717]/80 rounded-[24px] md:rounded-[32px]">
-        <Text type="hd" size={16} color="#878787">TRUST CODE</Text>
+        <Text type="hd" size={16} color="#878787">RECOVERY CODE</Text>
         <input 
             type="text" 
             class="w-full bg-[#111111] rounded-full mt-2 md:mt-[10px] px-4 md:px-[20px] py-3 md:py-[15px] text-white focus:outline-none font-mono text-base md:text-lg tracking-wider"
-            placeholder="XXXXX-XXXXX-XXXXX"
+            placeholder="ALPHA-BRAVO-CHARLIE-DELTA"
             bind:value={code}
             onkeydown={handleKeydown}
             disabled={isLoading}
         />
         <p class="text-[#555] text-xs md:text-sm mt-2">
-            Trust codes can be reused and never expire.
+            Each recovery code works once.
         </p>
     </div>
 

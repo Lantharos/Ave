@@ -21,7 +21,7 @@
             Ave is built around <span class="italic">minimal data processing</span>. We only process:
                * Cryptographic identifiers (like your UUID or key fingerprints) to verify your identity.
                * Device metadata to link trusted devices.
-               * Recovery data, such as hashed trust codes or encrypted answers to security questions.
+               * Recovery data, such as hashed recovery codes or encrypted answers to security questions.
             <br><br>
             We do <span class="font-black">NOT</span> collect:
                * IP addresses for tracking

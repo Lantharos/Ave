@@ -12,21 +12,21 @@
     import { 
         generateMasterKey, 
         createMasterKeyBackup,
-        storeMasterKey,
         encryptMasterKeyWithPrf,
     } from "../../lib/crypto";
     import { registerPasskey, getDeviceInfo } from "../../lib/webauthn";
     import { auth, isAuthenticated } from "../../stores/auth";
     import { getReturnUrl, clearReturnUrl } from "../../util/return-url";
     import { goto } from "@mateothegreat/svelte5-router";
+    import { loadPendingAuthContext, type PendingAuthContext } from "../../util/auth-context";
 
     // Registration state
-    let currentPage: keyof typeof pageBg = "welcome";
-    let loaded = false;
-    let error = "";
+    let currentPage = $state<keyof typeof pageBg>("welcome");
+    let loaded = $state(false);
+    let error = $state("");
     
     // Collected data across steps
-    let identityData = {
+    let identityData = $state({
         displayName: "",
         handle: "",
         email: "",
@@ -34,14 +34,16 @@
         avatarUrl: "",
         bannerUrl: "",
         bannerColor: "#FFFFFF",
-    };
+    });
 
     let tempUserId = "";
     let webauthnOptions: PublicKeyCredentialCreationOptions | null = null;
     let webauthnCredential: Credential | null = null;
     let masterKey: CryptoKey | null = null;
-    let trustCodes: string[] = [];
-    let isCompletingRegistration = false;
+    let trustCodes = $state<string[]>([]);
+    let isCompletingRegistration = $state(false);
+    let isSettingUpRecovery = $state(false);
+    let pendingAuthContext = $state<PendingAuthContext | null>(null);
     
     // PRF extension data for encrypting master key with passkey
     let prfSupported = false;
@@ -51,15 +53,15 @@
         welcome: "reg-welcome",
         identity: "reg-identity",
         passkey: "reg-passkey",
-        codes: "reg-codes",
         legal: "reg-legal",
         setup: "reg-finishing",
         enrollment: "reg-enrollment",
+        codes: "reg-codes",
     } as const;
 
-    let bgA: typeof pageBg[keyof typeof pageBg] = pageBg[currentPage];
-    let bgB: typeof pageBg[keyof typeof pageBg] | "" = "";
-    let showA = true;
+    let bgA = $state<typeof pageBg[keyof typeof pageBg]>(pageBg.welcome);
+    let bgB = $state<typeof pageBg[keyof typeof pageBg] | "">("");
+    let showA = $state(true);
 
     function setPage(page: keyof typeof pageBg) {
         const next = pageBg[page];
@@ -76,6 +78,8 @@
             goto("/dashboard");
             return;
         }
+
+        pendingAuthContext = await loadPendingAuthContext();
         
         // No image preloads needed for blob backdrops
         loaded = true;
@@ -168,9 +172,6 @@
                 prfEncryptedMasterKey, // Send PRF-encrypted master key if available
             });
             
-            // Store the real trust codes from server
-            trustCodes = result.trustCodes;
-            
             // Store master key and login
             await auth.login(
                 result.sessionToken,
@@ -179,14 +180,7 @@
                 masterKey
             );
             
-            // Step 2: Now create the encrypted backup with REAL trust codes and send it to the server
-            const encryptedBackup = await createMasterKeyBackup(masterKey, trustCodes);
-            await api.register.finalizeBackup(encryptedBackup);
-            
-            console.log("[Registration] Master key backup finalized with real trust codes");
-            
-            // Go to codes page to show REAL trust codes
-            setPage("codes");
+            setPage("enrollment");
         } catch (e: any) {
             error = e.message || "Registration failed. Please try again.";
             setPage("legal");
@@ -204,6 +198,29 @@
             return;
         }
         goto("/dashboard");
+    }
+
+    async function handleRecoverySetup() {
+        if (!masterKey || isSettingUpRecovery) {
+            return;
+        }
+
+        try {
+            isSettingUpRecovery = true;
+            error = "";
+
+            const result = await api.security.issueRecoveryCodes();
+            trustCodes = result.codes;
+
+            const encryptedBackup = await createMasterKeyBackup(masterKey, result.codes);
+            await api.register.finalizeBackup(encryptedBackup);
+
+            setPage("codes");
+        } catch (e: any) {
+            error = e.message || "Failed to set up recovery.";
+        } finally {
+            isSettingUpRecovery = false;
+        }
     }
 </script>
 
@@ -227,7 +244,7 @@
             {/if}
             
             {#if currentPage === "welcome"}
-                <RegisterWelcome onNext={() => setPage("identity")} />
+                <RegisterWelcome onNext={() => setPage("identity")} appName={pendingAuthContext?.appName ?? null} />
             {:else if currentPage === "identity"}
                 <RegisterIdentity 
                     initialData={identityData}
@@ -237,13 +254,17 @@
                 <RegisterPasskey onNext={handlePasskeySetup} />
 
             {:else if currentPage === "codes"}
-                <RegisterCodes {trustCodes} onNext={() => setPage("enrollment")} />
+                <RegisterCodes {trustCodes} onNext={handleEnrollmentComplete} />
             {:else if currentPage === "legal"}
                 <RegisterLegal onNext={handleLegalAccept} disabled={isCompletingRegistration} />
             {:else if currentPage === "setup"}
                 <RegisterFinishing />
             {:else if currentPage === "enrollment"}
-                <RegisterEnrollment onComplete={handleEnrollmentComplete} />
+                <RegisterEnrollment
+                    onComplete={handleEnrollmentComplete}
+                    onSetupRecovery={handleRecoverySetup}
+                    settingUpRecovery={isSettingUpRecovery}
+                />
             {/if}
         </div>
     </div>

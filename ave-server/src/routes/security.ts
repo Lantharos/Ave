@@ -7,7 +7,7 @@ import {
   generateTrustCode, 
   hashTrustCode
 } from "../lib/crypto";
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, isNull } from "drizzle-orm";
 import {
   generateRegistrationOptions,
   verifyRegistrationResponse,
@@ -18,6 +18,40 @@ import { isAllowedWebauthnOrigin } from "../lib/webauthn-origin";
 import { deleteChallenge, getChallenge, setChallenge } from "../lib/challenge-store";
 
 const app = new Hono();
+const RECOVERY_CODE_COUNT = 5;
+
+async function countUnusedTrustCodes(userId: string): Promise<number> {
+  const userTrustCodes = await db
+    .select({ id: trustCodes.id })
+    .from(trustCodes)
+    .where(and(eq(trustCodes.userId, userId), isNull(trustCodes.usedAt)));
+
+  return userTrustCodes.length;
+}
+
+async function countAllTrustCodes(userId: string): Promise<number> {
+  const userTrustCodes = await db
+    .select({ id: trustCodes.id })
+    .from(trustCodes)
+    .where(eq(trustCodes.userId, userId));
+
+  return userTrustCodes.length;
+}
+
+async function createTrustCodes(userId: string): Promise<string[]> {
+  const codes: string[] = [];
+
+  for (let i = 0; i < RECOVERY_CODE_COUNT; i++) {
+    const code = generateTrustCode();
+    codes.push(code);
+    await db.insert(trustCodes).values({
+      userId,
+      codeHash: hashTrustCode(code),
+    });
+  }
+
+  return codes;
+}
 
 // All routes require authentication
 app.use("*", requireAuth);
@@ -33,11 +67,8 @@ app.get("/", async (c) => {
     .where(eq(passkeys.userId, user.id))
     .orderBy(desc(passkeys.createdAt));
   
-  // Get trust codes count (all codes, since they're reusable)
-  const userTrustCodes = await db
-    .select()
-    .from(trustCodes)
-    .where(eq(trustCodes.userId, user.id));
+  const trustCodesRemaining = await countUnusedTrustCodes(user.id);
+  const totalTrustCodes = await countAllTrustCodes(user.id);
   
   return c.json({
     passkeys: userPasskeys.map((pk) => ({
@@ -47,7 +78,9 @@ app.get("/", async (c) => {
       lastUsedAt: pk.lastUsedAt,
       deviceType: pk.deviceType,
     })),
-    trustCodesRemaining: userTrustCodes.length,
+    trustCodesRemaining,
+    recoveryCodesRemaining: trustCodesRemaining,
+    hasRecoveryCodes: totalTrustCodes > 0,
     securityQuestionIds: [],
   });
 });
@@ -395,36 +428,56 @@ app.delete("/passkeys/:passkeyId", async (c) => {
   return c.json({ success: true });
 });
 
+app.post("/trust-codes/issue", async (c) => {
+  const user = c.get("user")!;
+
+  const trustCodesRemaining = await countUnusedTrustCodes(user.id);
+  if (trustCodesRemaining > 0) {
+    return c.json({ error: "Recovery codes are already set up for this account." }, 400);
+  }
+
+  const codes = await createTrustCodes(user.id);
+
+  await db.insert(activityLogs).values({
+    userId: user.id,
+    action: "trust_codes_created",
+    details: { count: codes.length },
+    deviceId: user.deviceId,
+    ipAddress: c.req.header("x-forwarded-for") || c.req.header("x-real-ip"),
+    userAgent: c.req.header("user-agent"),
+    severity: "warning",
+  });
+
+  return c.json({
+    codes,
+    recoveryCodesRemaining: codes.length,
+    trustCodesRemaining: codes.length,
+  });
+});
+
 // Regenerate trust codes
 app.post("/trust-codes/regenerate", async (c) => {
   const user = c.get("user")!;
-  
-  // Delete old codes
+
   await db.delete(trustCodes).where(eq(trustCodes.userId, user.id));
-  
-  // Generate new codes
-  const codes: string[] = [];
-  for (let i = 0; i < 2; i++) {
-    const code = generateTrustCode();
-    codes.push(code);
-    await db.insert(trustCodes).values({
-      userId: user.id,
-      codeHash: hashTrustCode(code),
-    });
-  }
-  
+  const codes = await createTrustCodes(user.id);
+
   // Log activity
   await db.insert(activityLogs).values({
     userId: user.id,
     action: "trust_codes_regenerated",
-    details: {},
+    details: { count: codes.length },
     deviceId: user.deviceId,
     ipAddress: c.req.header("x-forwarded-for") || c.req.header("x-real-ip"),
     userAgent: c.req.header("user-agent"),
     severity: "warning",
   });
   
-  return c.json({ codes });
+  return c.json({
+    codes,
+    recoveryCodesRemaining: codes.length,
+    trustCodesRemaining: codes.length,
+  });
 });
 
 // Security questions were removed from Ave.

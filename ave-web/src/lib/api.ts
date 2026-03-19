@@ -299,6 +299,7 @@ export const api = {
         device: Device;
         identities: Identity[];
         remainingTrustCodes: number;
+        remainingRecoveryCodes: number;
       }>("/api/login/trust-code", {
         method: "POST",
         body: JSON.stringify(data),
@@ -313,6 +314,8 @@ export const api = {
       request<{
         success: boolean;
         encryptedMasterKeyBackup: string;
+        remainingTrustCodes: number;
+        remainingRecoveryCodes: number;
       }>("/api/login/recover-key", {
         method: "POST",
         body: JSON.stringify(data),
@@ -400,9 +403,17 @@ export const api = {
       request<{
         passkeys: Passkey[];
         trustCodesRemaining: number;
+        recoveryCodesRemaining: number;
+        hasRecoveryCodes: boolean;
         securityQuestionIds: number[];
       }>("/api/security"),
     
+    issueRecoveryCodes: () =>
+      request<{ codes: string[]; trustCodesRemaining: number; recoveryCodesRemaining: number }>(
+        "/api/security/trust-codes/issue",
+        { method: "POST" }
+      ),
+
     registerPasskey: () =>
       request<{ options: PublicKeyCredentialCreationOptions }>(
         "/api/security/passkeys/register",
@@ -433,9 +444,12 @@ export const api = {
       }),
     
     regenerateTrustCodes: () =>
-      request<{ codes: string[] }>("/api/security/trust-codes/regenerate", {
+      request<{ codes: string[]; trustCodesRemaining: number; recoveryCodesRemaining: number }>(
+        "/api/security/trust-codes/regenerate",
+        {
         method: "POST",
-      }),
+        }
+      ),
     
     updateSecurityQuestions: (
       questions: { questionId: number; answer: string }[]

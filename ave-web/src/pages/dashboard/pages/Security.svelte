@@ -4,16 +4,18 @@
     import Passkey from "./components/Passkey.svelte";
     import { api, type Passkey as PasskeyType } from "../../../lib/api";
     import { registerPasskey, authenticateWithPasskey } from "../../../lib/webauthn";
-    import { loadMasterKey, encryptMasterKeyWithPrf } from "../../../lib/crypto";
+    import { loadMasterKey, encryptMasterKeyWithPrf, createMasterKeyBackup } from "../../../lib/crypto";
     import { getPushStatus, subscribeToPushNotifications, unsubscribeFromPushNotifications, getPushSupportDetails } from "../../../lib/push";
 
     let passkeys = $state<PasskeyType[]>([]);
-    let trustCodesRemaining = $state(0);
+    let recoveryCodesRemaining = $state(0);
+    let hasRecoveryCodes = $state(false);
     let loading = $state(true);
     let error = $state<string | null>(null);
     let deletingPasskeyId = $state<string | null>(null);
     let addingPasskey = $state(false);
     let regeneratingCodes = $state(false);
+    let issuingCodes = $state(false);
     let showNewCodes = $state(false);
     let newCodes = $state<string[]>([]);
 
@@ -30,7 +32,8 @@
             error = null;
             const data = await api.security.get();
             passkeys = data.passkeys;
-            trustCodesRemaining = data.trustCodesRemaining;
+            recoveryCodesRemaining = data.recoveryCodesRemaining;
+            hasRecoveryCodes = data.hasRecoveryCodes;
         } catch (err) {
             error = err instanceof Error ? err.message : "Failed to load security data";
         } finally {
@@ -139,8 +142,35 @@
         }
     }
 
+    async function finalizeRecoveryCodes(codes: string[]) {
+        const masterKey = await loadMasterKey();
+        if (!masterKey) {
+            throw new Error("Your encryption key is not available on this device. Sign in on a trusted device before changing recovery codes.");
+        }
+
+        const encryptedBackup = await createMasterKeyBackup(masterKey, codes);
+        await api.register.finalizeBackup(encryptedBackup);
+    }
+
+    async function handleIssueCodes() {
+        try {
+            issuingCodes = true;
+            error = null;
+            const result = await api.security.issueRecoveryCodes();
+            await finalizeRecoveryCodes(result.codes);
+            newCodes = result.codes;
+            recoveryCodesRemaining = result.recoveryCodesRemaining;
+            hasRecoveryCodes = true;
+            showNewCodes = true;
+        } catch (err) {
+            error = err instanceof Error ? err.message : "Failed to set up recovery codes";
+        } finally {
+            issuingCodes = false;
+        }
+    }
+
     async function handleRegenerateCodes() {
-        if (!confirm("Are you sure? This will invalidate your existing trust codes.")) {
+        if (!confirm("Are you sure? This will replace your current recovery codes.")) {
             return;
         }
 
@@ -148,8 +178,10 @@
             regeneratingCodes = true;
             error = null;
             const result = await api.security.regenerateTrustCodes();
+            await finalizeRecoveryCodes(result.codes);
             newCodes = result.codes;
-            trustCodesRemaining = result.codes.length;
+            recoveryCodesRemaining = result.recoveryCodesRemaining;
+            hasRecoveryCodes = true;
             showNewCodes = true;
         } catch (err) {
             error = err instanceof Error ? err.message : "Failed to regenerate codes";
@@ -169,6 +201,18 @@
             pushPermission = "denied";
             pushSubscribed = false;
         }
+    }
+
+    function recoveryDescription(): string {
+        if (!hasRecoveryCodes) {
+            return "Create one-time recovery codes so you can get back in if you lose access to your passkeys.";
+        }
+
+        if (recoveryCodesRemaining === 0) {
+            return "Your last set has been used up. Generate a new set before you need recovery again.";
+        }
+
+        return `Emergency access for when you lose your passkeys. You have ${recoveryCodesRemaining} one-time code(s) remaining.`;
     }
 
     function pushDescription(): string {
@@ -264,7 +308,7 @@
     <div class="flex flex-col gap-2 md:gap-[10px]">
         <div class="flex flex-col flex-grow bg-[#171717] p-3 md:p-[40px] rounded-[20px] md:rounded-[36px]">
             <Text type="h" size={24} mobileSize={18} weight="bold">Passkeys</Text>
-            <p class="text-[#878787] text-sm md:text-[18px]">Passkeys are unique, highly secure tokens that provide quick and convenient access to your account or services. They act as a trusted key to unlock your account, often used in scenarios such as account recovery or emergency access.</p>
+            <p class="text-[#878787] text-sm md:text-[18px]">Passkeys are the main way you sign in. They stay tied to your devices and let Ave verify it’s really you.</p>
             <div class="flex flex-col gap-2 md:gap-[10px] mt-3 md:mt-[20px]">
                 {#if loading}
                     <div class="flex justify-center py-3 md:py-[20px]">
@@ -303,18 +347,33 @@
     <div class="h-[1px] bg-[#202020] w-full"></div>
 
     <div class="flex flex-col gap-2 md:gap-[10px]">
-        <ActionCard 
-            action="TRUST CODES" 
-            description="Trust codes can be used to recover your account. You have {trustCodesRemaining} code(s)." 
-            buttons={[
-                { 
-                    icon: "/icons/refresh-56.svg", 
-                    color: "#FFFFFF", 
-                    onClick: handleRegenerateCodes,
-                    loading: regeneratingCodes 
-                },
-            ]}
-        />
+        {#if hasRecoveryCodes}
+            <ActionCard 
+                action="RECOVERY CODES" 
+                description={recoveryDescription()} 
+                buttons={[
+                    { 
+                        icon: "/icons/refresh-56.svg", 
+                        color: "#FFFFFF", 
+                        onClick: handleRegenerateCodes,
+                        loading: regeneratingCodes 
+                    },
+                ]} 
+            />
+        {:else}
+            <ActionCard 
+                action="SET UP RECOVERY" 
+                description={recoveryDescription()} 
+                buttons={[
+                    { 
+                        icon: "/icons/chevron-right-68.svg", 
+                        color: "#FFFFFF", 
+                        onClick: handleIssueCodes,
+                        loading: issuingCodes 
+                    },
+                ]} 
+            />
+        {/if}
     </div>
 
     <div class="h-[1px] bg-[#202020] w-full"></div>
@@ -375,15 +434,15 @@
 {#if showNewCodes}
     <div class="fixed inset-0 bg-black/80 flex items-center justify-center z-50 backdrop-blur-sm p-4">
         <div class="bg-[#171717] rounded-[24px] md:rounded-[36px] p-6 md:p-[40px] max-w-[500px] w-full">
-            <Text type="h" size={24} weight="bold">New Trust Codes</Text>
+            <Text type="h" size={24} weight="bold">Recovery Codes</Text>
             <p class="text-[#878787] text-sm md:text-[16px] mt-2 md:mt-[10px]">
-                Save these codes in a secure place. They will not be shown again.
+                Save these somewhere safe. Each code works once, and this set will not be shown again.
             </p>
             
             <div class="flex flex-col gap-2 md:gap-[10px] mt-4 md:mt-[20px]">
-                {#each newCodes as code}
+                {#each newCodes as code, index}
                     <div class="bg-[#111111] rounded-[16px] px-4 md:px-[20px] py-3 md:py-[15px] font-mono text-center">
-                        <Text type="p" size={18} color="#FFFFFF">{code}</Text>
+                        <Text type="p" size={18} color="#FFFFFF">{index + 1}. {code}</Text>
                     </div>
                 {/each}
             </div>
