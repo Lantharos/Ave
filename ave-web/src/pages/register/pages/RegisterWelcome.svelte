@@ -74,7 +74,9 @@
     </div>
 
     <div class="flex flex-col gap-6 md:gap-[40px] w-full md:w-[40%]">
-        <h2 class="font-black text-[#D3D3D3] text-2xl md:text-[36px] self-center">{appName ? "CONTINUE" : "ARE YOU READY?"}</h2>
+        {#if !appName}
+            <h2 class="font-black text-[#D3D3D3] text-2xl md:text-[36px] self-center">ARE YOU READY?</h2>
+        {/if}
 
         <Button
                 text={appName ? "CONTINUE" : "LET'S GO!"}
