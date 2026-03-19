@@ -610,12 +610,12 @@
 			{/if}
 	    </div>
 	{:else}
-<div class="bg-[#090909] min-h-screen-fixed flex flex-col md:flex-row md:items-stretch items-center gap-6 md:gap-[50px] p-6 md:p-[50px] relative overflow-auto">
+<div class="bg-[#090909] min-h-screen-fixed flex flex-col md:flex-row md:items-stretch items-center gap-6 md:gap-[50px] p-6 md:p-[50px] relative overflow-auto hide-scrollbar">
     <div class="flex-1 z-10 flex flex-col items-start justify-start md:justify-between p-4 md:p-[50px] w-full">
         <div class="flex flex-row gap-4 md:gap-[20px] items-start">
             <!-- App icon that becomes back button on hover -->
             <button 
-                class="group relative w-12 h-12 md:w-[80px] md:h-[80px] rounded-[12px] md:rounded-[16px] overflow-hidden cursor-pointer transition-transform hover:scale-105"
+                class="group relative w-12 h-12 md:w-[80px] md:h-[80px] overflow-hidden cursor-pointer transition-transform hover:scale-105"
                 onclick={handleDeny}
                 disabled={authorizing}
                 title="Go back"

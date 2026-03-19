@@ -14,6 +14,17 @@ html, body, #app {
     min-height: calc(var(--vh, 1vh) * 100);
 }
 
+html,
+body {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+}
+
+html::-webkit-scrollbar,
+body::-webkit-scrollbar {
+    display: none;
+}
+
 .h-screen-fixed {
     height: 100vh;
     height: calc(var(--vh, 1vh) * 100);
@@ -77,6 +88,15 @@ html {
     border: none;
     cursor: pointer;
     padding: 8px;
+}
+
+.hide-scrollbar {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+}
+
+.hide-scrollbar::-webkit-scrollbar {
+    display: none;
 }
 
 @media (max-width: 768px) {

@@ -225,7 +225,7 @@
 </script>
 
 {#if loaded}
-    <div class="relative w-full min-h-screen-fixed overflow-y-auto scroll-smooth bg-[#090909]">
+    <div class="relative w-full min-h-screen-fixed overflow-y-auto hide-scrollbar scroll-smooth bg-[#090909]">
         <AuroraBackdrop
                 preset={bgA}
                 cclass={`absolute bottom-0 inset-x-0 h-[700px] transition-opacity duration-300 will-change-[opacity] select-none pointer-events-none transform-gpu ${!showA ? "opacity-0" : ""}`}
@@ -244,14 +244,18 @@
             {/if}
             
             {#if currentPage === "welcome"}
-                <RegisterWelcome onNext={() => setPage("identity")} appName={pendingAuthContext?.appName ?? null} />
+                <RegisterWelcome
+                    onNext={() => setPage("identity")}
+                    appName={pendingAuthContext?.appName ?? null}
+                    appIconUrl={pendingAuthContext?.appIconUrl ?? null}
+                />
             {:else if currentPage === "identity"}
                 <RegisterIdentity 
                     initialData={identityData}
                     onNext={handleIdentityNext} 
                 />
             {:else if currentPage === "passkey"}
-                <RegisterPasskey onNext={handlePasskeySetup} />
+                <RegisterPasskey onNext={handlePasskeySetup} appName={pendingAuthContext?.appName ?? null} />
 
             {:else if currentPage === "codes"}
                 <RegisterCodes {trustCodes} onNext={handleEnrollmentComplete} />
