@@ -13,9 +13,7 @@
     <div class="w-full max-w-[520px] p-6 md:p-[36px]">
         <div class="flex flex-col gap-3 items-center text-center">
             {#if iconUrl}
-                <div class="w-14 h-14 md:w-[72px] md:h-[72px] bg-[#171717] overflow-hidden flex items-center justify-center">
-                    <img src={iconUrl} alt="" class="w-full h-full object-cover" />
-                </div>
+                <img src={iconUrl} alt="" class="h-14 w-auto md:h-[72px] object-contain" />
             {/if}
             <Text type="h" size={24} color="#FFFFFF">{title}</Text>
             <Text type="p" size={16} color="#878787">{message}</Text>

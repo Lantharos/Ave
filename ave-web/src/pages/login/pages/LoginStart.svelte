@@ -74,13 +74,13 @@
 
 <div class="w-full md:w-auto h-auto flex flex-col items-center z-10 px-4 md:px-0">
     {#if appName}
-        <div class="w-14 h-14 md:w-[72px] md:h-[72px] bg-[#171717] flex items-center justify-center mb-4 md:mb-6 overflow-hidden">
-            {#if appIconUrl}
-                <img src={appIconUrl} alt={appName} class="w-full h-full object-cover" />
-            {:else}
+        {#if appIconUrl}
+            <img src={appIconUrl} alt={appName} class="h-14 w-auto md:h-[72px] mb-4 md:mb-6 object-contain" />
+        {:else}
+            <div class="w-14 h-14 md:w-[72px] md:h-[72px] flex items-center justify-center mb-4 md:mb-6 overflow-hidden">
                 <span class="text-white text-xl md:text-[28px] font-semibold">{appName[0]?.toUpperCase()}</span>
-            {/if}
-        </div>
+            </div>
+        {/if}
         <h1 class="font-black text-2xl md:text-[36px] text-[#FFFFFF]/80 text-center">CONTINUE TO {appName}</h1>
         <h2 class="font-normal text-sm md:text-[18px] text-[#878787] mt-2 md:mt-[10px] mb-1 text-center">
             Sign in with your handle.

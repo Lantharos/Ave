@@ -13,9 +13,7 @@
         <div class="flex flex-col w-full md:w-[55%] items-start justify-start gap-4 md:gap-[20px]">
             {#if appName}
                 {#if appIconUrl}
-                    <div class="w-14 h-14 md:w-[72px] md:h-[72px] bg-[#171717] overflow-hidden flex items-center justify-center mb-2 md:mb-4">
-                        <img src={appIconUrl} alt={appName} class="w-full h-full object-cover" />
-                    </div>
+                    <img src={appIconUrl} alt={appName} class="h-14 w-auto md:h-[72px] mb-2 md:mb-4 object-contain" />
                 {/if}
                 <h1 class="font-medium text-white text-2xl md:text-[48px]">
                     Continue to {appName}.<br />

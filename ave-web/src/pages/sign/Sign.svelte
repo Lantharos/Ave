@@ -396,9 +396,9 @@
 
 {#if needsStorageAccess}
     <StorageAccessGate
-        title={`Continue to ${app?.name || "your app"}`}
-        message={storageAccessError || "Signing needs a full browser window on this device. We'll continue there and bring you back after sign-in."}
-        cta="Continue"
+        title={`Continue signing for ${app?.name || "this app"}`}
+        message={storageAccessError || `We'll open a secure browser page so you can finish this request for ${app?.name || "this app"} and come right back.`}
+        cta="Continue in browser"
         busy={requestingStorageAccess}
         iconUrl={app?.iconUrl || null}
         onclick={handleStorageAccessContinue}

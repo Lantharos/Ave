@@ -120,20 +120,41 @@
     let autoAuthorizing = $state(false);
     let completed = $state(false);
     let error = $state<string | null>(null);
-	let sliderPosition = $state(0);
-	let sliderActive = $state(false);
-	let needsMasterKey = $state(false);
-	let unlockingMasterKey = $state(false);
-	let masterKeyError = $state<string | null>(null);
-	let needsStorageAccess = $state(false);
-	let redirectingToLogin = $state(false);
-	let requestingStorageAccess = $state(false);
-	let storageAccessError = $state<string | null>(null);
-	let storageAccessAttempted = $state(false);
-	let launchedExternalApp = $state(false);
+    let sliderPosition = $state(0);
+    let sliderActive = $state(false);
+    let needsMasterKey = $state(false);
+    let unlockingMasterKey = $state(false);
+    let masterKeyError = $state<string | null>(null);
+    let needsStorageAccess = $state(false);
+    let redirectingToLogin = $state(false);
+    let requestingStorageAccess = $state(false);
+    let storageAccessError = $state<string | null>(null);
+    let storageAccessAttempted = $state(false);
+    let launchedExternalApp = $state(false);
+    let loadingAppInfo = $state(false);
 
-	const embedPopup = $derived.by(() => params.embed && !!window.opener);
-	const embedSheet = $derived.by(() => params.embed && !embedPopup);
+    const embedPopup = $derived.by(() => params.embed && !!window.opener);
+    const embedSheet = $derived.by(() => params.embed && !embedPopup);
+
+    function appDisplayName() {
+        return appInfo?.name || quickOriginHostname || "this app";
+    }
+
+    async function ensureAppInfo() {
+        if (!params.clientId || appInfo || loadingAppInfo) {
+            return;
+        }
+
+        loadingAppInfo = true;
+        try {
+            const appData = await api.oauth.getApp(params.clientId);
+            appInfo = appData.app;
+        } catch (err) {
+            console.warn("[Authorize] Failed to load app info early.", err);
+        } finally {
+            loadingAppInfo = false;
+        }
+    }
 
     // Load app info
     async function loadAppInfo() {
@@ -415,7 +436,8 @@
 			window.location.replace(`/connect${window.location.search}`);
 			return;
 		}
-		if (completed) return;
+        if (completed) return;
+        void ensureAppInfo();
 		if (!$isAuthenticated) {
 			if (redirectingToLogin) return;
 			if (embedSheet) {
@@ -542,9 +564,9 @@
 		}
 	}
 
-	function handleStorageAccessContinue() {
+    function handleStorageAccessContinue() {
         requestStorageAccessFromUserAction();
-	}
+    }
 
 	async function handleUnlockMasterKey() {
 		if (unlockingMasterKey) return;
@@ -565,15 +587,15 @@
 </script>
 
 {#if needsStorageAccess}
-	<StorageAccessGate
-		title={`Continue to ${appInfo?.name || quickOriginHostname || "your app"}`}
-		message={storageAccessError || "Sign in needs a full browser window on this device. We'll continue there and bring you back after sign-in."}
-		cta="Continue"
-		busy={requestingStorageAccess}
+    <StorageAccessGate
+        title={`Sign in to continue to ${appDisplayName()}`}
+        message={storageAccessError || `We'll open a secure browser page so you can finish sign-in for ${appDisplayName()} and come right back.`}
+        cta="Continue in browser"
+        busy={requestingStorageAccess}
         iconUrl={appInfo?.iconUrl || null}
-		onclick={handleStorageAccessContinue}
-	/>
-	{:else if autoAuthorizing}
+        onclick={handleStorageAccessContinue}
+    />
+    {:else if autoAuthorizing}
 	    <div class="bg-[#090909] min-h-screen-fixed flex items-center justify-center p-6 md:p-[50px]">
 	        <div class="flex flex-col items-center text-center gap-4">
 				{#if launchedExternalApp}
