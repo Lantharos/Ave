@@ -2,7 +2,10 @@ import { Context, Next } from "hono";
 import { db, sessions, devices, users } from "../db";
 import { eq, and, gt } from "drizzle-orm";
 import { hashSessionToken } from "../lib/crypto";
-import { SESSION_COOKIE_NAME } from "../lib/session-cookie";
+import { SESSION_COOKIE_NAME, setSessionCookie } from "../lib/session-cookie";
+
+const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+const SESSION_REFRESH_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 
 function getCookieValue(cookieHeader: string, name: string): string | null {
   const parts = cookieHeader.split(";");
@@ -66,6 +69,17 @@ export async function authMiddleware(c: Context, next: Next) {
     if (!session) {
       c.set("user", null);
       return next();
+    }
+
+    const refreshedExpiresAt = new Date(Date.now() + SESSION_TTL_MS);
+    if (new Date(session.expiresAt).getTime() - Date.now() < SESSION_REFRESH_WINDOW_MS) {
+      await db
+        .update(sessions)
+        .set({ expiresAt: refreshedExpiresAt })
+        .where(eq(sessions.id, session.id));
+
+      setSessionCookie(c, token, refreshedExpiresAt);
+      session.expiresAt = refreshedExpiresAt;
     }
     
     // Update device last seen if we have a device
