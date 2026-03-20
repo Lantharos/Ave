@@ -161,6 +161,13 @@ export async function fetchOrganizations(organizationId?: string): Promise<{
   return request(`/api/organizations${query}`);
 }
 
+export async function createOrganization(name: string): Promise<{ organization: WorkspaceSummary }> {
+  return request("/api/organizations", {
+    method: "POST",
+    body: JSON.stringify({ name }),
+  });
+}
+
 export async function fetchOrganization(organizationId: string): Promise<WorkspaceState> {
   const data = await request<{ organization: WorkspaceState }>(`/api/organizations/${organizationId}`);
   return mapWorkspaceState(data.organization);

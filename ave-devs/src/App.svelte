@@ -6,16 +6,17 @@
   import SignInPage from "./pages/SignInPage.svelte";
   import AppsPage from "./pages/AppsPage.svelte";
   import TeamPage from "./pages/TeamPage.svelte";
-  import SettingsPage from "./pages/SettingsPage.svelte";
   import CreateAppPage from "./pages/CreateAppPage.svelte";
   import AppDetailPage from "./pages/AppDetailPage.svelte";
   import AppOverviewPage from "./pages/AppOverviewPage.svelte";
   import AppIdentitiesPage from "./pages/AppIdentitiesPage.svelte";
   import AppActivityPage from "./pages/AppActivityPage.svelte";
+  import Input from "./components/Input.svelte";
   import TopBar from "./components/TopBar.svelte";
   import Subnav from "./components/Subnav.svelte";
   import {
     checkSession,
+    createOrganization,
     createApp,
     createResource,
     deleteApp,
@@ -40,7 +41,7 @@
   } from "./lib/api";
   import type { WorkspaceRole, WorkspaceState, WorkspaceSummary } from "./lib/portal";
 
-  type WorkspaceSection = "applications" | "organization" | "settings";
+  type WorkspaceSection = "applications" | "organization";
   type AppSection = "overview" | "identities" | "activity" | "configure";
 
   let workspaceSection: WorkspaceSection = $state("applications");
@@ -56,6 +57,9 @@
   let appBundles: Record<string, AppOverviewBundle> = $state({});
   let deleteTarget: DevApp | null = $state(null);
   let createModalOpen = $state(false);
+  let createOrganizationModalOpen = $state(false);
+  let newOrganizationName = $state("");
+  let creatingOrganization = $state(false);
   let loading = $state(true);
   let appLoading = $state(false);
   let error = $state("");
@@ -86,7 +90,6 @@
   const workspaceNav = $derived([
     { id: "applications", label: "Applications", badge: apps.length },
     { id: "organization", label: "Organization", badge: activeWorkspaceMembers },
-    { id: "settings", label: "Settings" },
   ]);
 
   const appNav = $derived([
@@ -225,6 +228,7 @@
     appEvents = [];
     deleteTarget = null;
     createModalOpen = false;
+    createOrganizationModalOpen = false;
     newSecret = null;
     workspaceSection = "applications";
     appSection = "overview";
@@ -236,6 +240,7 @@
     appIdentities = [];
     appEvents = [];
     createModalOpen = false;
+    createOrganizationModalOpen = false;
     workspaceSection = section;
   }
 
@@ -247,6 +252,7 @@
     appBundles = {};
     appLoading = false;
     createModalOpen = false;
+    createOrganizationModalOpen = false;
     workspaceSection = "applications";
     await loadPortal(organizationId);
   }
@@ -259,6 +265,7 @@
       appEvents = [];
       appLoading = false;
       createModalOpen = false;
+      createOrganizationModalOpen = false;
       workspaceSection = "applications";
       return;
     }
@@ -545,6 +552,25 @@
       error = err instanceof Error ? err.message : "Failed to upload workspace logo";
     }
   }
+
+  async function handleCreateOrganization() {
+    const name = newOrganizationName.trim();
+    if (!name) return;
+
+    creatingOrganization = true;
+
+    try {
+      const result = await createOrganization(name);
+      newOrganizationName = "";
+      createOrganizationModalOpen = false;
+      await loadPortal(result.organization.id);
+      workspaceSection = "organization";
+    } catch (err) {
+      error = err instanceof Error ? err.message : "Failed to create organization";
+    } finally {
+      creatingOrganization = false;
+    }
+  }
 </script>
 
 {#if !authenticated}
@@ -565,7 +591,7 @@
         onselectapp={openApp}
         onopenapps={() => openWorkspace("applications")}
         onopenteam={() => openWorkspace("organization")}
-        onopensettings={() => openWorkspace("settings")}
+        oncreateorganization={() => (createOrganizationModalOpen = true)}
         oncreateapp={() => (createModalOpen = true)}
         onsignout={handleSignOut}
       />
@@ -615,7 +641,45 @@
         </div>
       {/if}
 
-      <main class="flex-1 {selectedAppId || workspaceSection !== 'applications' ? 'rounded-[32px] bg-[#0d0d0d]/76 px-5 py-7 md:px-8 md:py-9 backdrop-blur-[24px]' : 'px-0 py-2 md:py-3'}">
+      {#if createOrganizationModalOpen}
+        <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 backdrop-blur-sm">
+          <div class="w-full max-w-[560px] rounded-[32px] bg-[#131313] p-6 md:p-8 shadow-[0_32px_120px_rgba(0,0,0,0.55)]">
+            <div class="flex flex-col gap-6">
+              <div class="flex items-start justify-between gap-4">
+                <div>
+                  <h2 class="m-0 text-[28px] font-black tracking-tight text-white">Create organization</h2>
+                  <p class="m-0 mt-2 text-[15px] text-[#7d7d7d]">Start a separate workspace for another team or product.</p>
+                </div>
+                <button aria-label="Close create organization modal" class="flex h-10 w-10 items-center justify-center rounded-full border-0 bg-white/[0.04] text-[#9a9a9a] cursor-pointer transition-colors duration-300 hover:bg-white/[0.08] hover:text-white" onclick={() => {
+                  createOrganizationModalOpen = false;
+                  newOrganizationName = "";
+                }}>
+                  <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+
+              <label class="flex flex-col gap-3">
+                <span class="text-[14px] text-[#8a8a8a]">Organization name</span>
+                <Input bind:value={newOrganizationName} placeholder="New workspace" />
+              </label>
+
+              <div class="flex justify-end gap-3">
+                <button class="rounded-full border-0 bg-transparent px-5 py-2.5 text-[14px] text-[#8d8d8d] cursor-pointer transition-colors duration-300 hover:bg-white/[0.04] hover:text-white" onclick={() => {
+                  createOrganizationModalOpen = false;
+                  newOrganizationName = "";
+                }}>Cancel</button>
+                <button class="rounded-full border-0 bg-[#B9BBBE] px-5 py-2.5 text-[14px] font-black text-[#090909] cursor-pointer transition-colors duration-300 hover:bg-[#A1A1A1] disabled:opacity-50 disabled:pointer-events-none" onclick={handleCreateOrganization} disabled={creatingOrganization || !newOrganizationName.trim()}>
+                  {creatingOrganization ? "Creating..." : "Create organization"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      {/if}
+
+      <main class="flex-1 px-0 py-1 md:py-2">
         {#if selectedApp && appLoading && !appInsights && appSection !== "configure"}
           <div class="flex flex-col gap-5">
             <div class="flex items-center gap-4">
@@ -661,7 +725,6 @@
             ondelete={(app) => (deleteTarget = app)}
             oncreateResource={handleCreateResource}
             ondeleteResource={handleDeleteResource}
-            onback={() => openWorkspace("applications")}
             oncopy={handleCopy}
             saving={saveState === "saving"}
             saved={saveState === "saved"}
@@ -680,14 +743,8 @@
             {workspace}
             oninvite={handleInvite}
             onchangerole={handleRoleChange}
-          />
-        {:else if workspaceSection === "settings"}
-          <SettingsPage
-            {workspace}
-            appCount={apps.length}
-            onrename={handleWorkspaceRename}
-            onadddomain={handleDomainAdd}
             onuploadlogo={handleWorkspaceLogoUpload}
+            onrename={handleWorkspaceRename}
           />
         {/if}
       </main>

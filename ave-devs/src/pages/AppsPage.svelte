@@ -23,12 +23,6 @@
       : apps,
   );
 
-  const overview = $derived({
-    total: apps.length,
-    secure: apps.filter((app) => app.supportsE2ee).length,
-    identities: apps.reduce((count, app) => count + (app.identityCount || 0), 0),
-  });
-
   function getWebsiteHost(value?: string) {
     if (!value) return "Not set";
 
@@ -49,30 +43,9 @@
     <Button variant="primary" size="sm" onclick={oncreate}>Create application</Button>
   </div>
 
-  <div class="grid gap-4 md:grid-cols-3">
-    <Card>
-      <div class="flex flex-col gap-2">
-        <span class="text-[14px] text-[#7d7d7d]">Applications</span>
-        <span class="text-[32px] font-black text-white">{overview.total}</span>
-      </div>
-    </Card>
-    <Card>
-      <div class="flex flex-col gap-2">
-        <span class="text-[14px] text-[#7d7d7d]">E2EE</span>
-        <span class="text-[32px] font-black text-white">{overview.secure}</span>
-      </div>
-    </Card>
-    <Card>
-      <div class="flex flex-col gap-2">
-        <span class="text-[14px] text-[#7d7d7d]">Identities</span>
-        <span class="text-[32px] font-black text-white">{overview.identities}</span>
-      </div>
-    </Card>
-  </div>
-
   {#if loading}
     <Card>
-      <div class="flex items-center gap-4 py-10">
+      <div class="flex items-center gap-4 py-5">
         <div class="h-6 w-6 rounded-full border-2 border-white/10 border-t-white/60 animate-spin"></div>
         <span class="text-[16px] text-[#7d7d7d]">Loading applications</span>
       </div>

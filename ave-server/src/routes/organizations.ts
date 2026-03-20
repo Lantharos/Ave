@@ -5,6 +5,7 @@ import { and, eq, inArray } from "drizzle-orm";
 import { db, identities, oauthApps, organizationMembers, organizations } from "../db";
 import { requireAuth } from "../middleware/auth";
 import {
+  createOrganization,
   ensurePersonalOrganization,
   getOrganizationMemberships,
   requireOrganizationAccess,
@@ -78,6 +79,30 @@ app.get("/", async (c) => {
     })),
     currentOrganizationId,
   });
+});
+
+app.post("/", zValidator("json", z.object({
+  name: z.string().min(2).max(80),
+})), async (c) => {
+  const user = c.get("user")!;
+  const payload = c.req.valid("json");
+
+  const organization = await createOrganization(user.id, payload.name.trim());
+
+  return c.json({
+    organization: {
+      id: organization.id,
+      name: organization.name,
+      logoUrl: organization.logoUrl,
+      slug: organization.slug,
+      plan: organization.plan,
+      verifiedDomains: (organization.verifiedDomains as string[] | null) || [],
+      appLimit: organization.appLimit,
+      role: "owner",
+      appCount: 0,
+      memberCount: 1,
+    },
+  }, 201);
 });
 
 app.get("/:organizationId", async (c) => {

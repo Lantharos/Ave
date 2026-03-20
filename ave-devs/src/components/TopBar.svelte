@@ -15,7 +15,7 @@
     onselectapp: (appId: string | null) => void;
     onopenapps: () => void;
     onopenteam: () => void;
-    onopensettings: () => void;
+    oncreateorganization: () => void;
     oncreateapp: () => void;
     onsignout: () => void;
   }
@@ -30,7 +30,7 @@
     onselectapp,
     onopenapps,
     onopenteam,
-    onopensettings,
+    oncreateorganization,
     oncreateapp,
     onsignout,
   }: Props = $props();
@@ -130,7 +130,6 @@
 
       <div class="flex items-center gap-2 flex-wrap">
         <Button variant="ghost" size="sm" onclick={onopenteam}>Invite</Button>
-        <Button variant="primary" size="sm" onclick={oncreateapp}>Create app</Button>
         <button
           aria-label="Sign out"
           class="flex h-11 w-11 items-center justify-center overflow-hidden rounded-full border-0 bg-white/[0.04] text-white cursor-pointer transition-colors duration-300 hover:bg-white/[0.08]"
@@ -189,8 +188,8 @@
           }}>Organization</button>
           <button class="rounded-[24px] border-0 bg-white/[0.03] px-5 py-4 text-left text-[15px] text-white cursor-pointer transition-colors duration-300 hover:bg-white/[0.05]" onclick={() => {
             closeMenus();
-            onopensettings();
-          }}>Settings</button>
+            oncreateorganization();
+          }}>Create organization</button>
         </div>
       </div>
     </div>

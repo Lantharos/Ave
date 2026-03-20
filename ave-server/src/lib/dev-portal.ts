@@ -92,6 +92,32 @@ export async function ensurePersonalOrganization(userId: string) {
   return organization;
 }
 
+export async function createOrganization(userId: string, name: string) {
+  const slug = await createUniqueSlug(name);
+
+  const [organization] = await db
+    .insert(organizations)
+    .values({
+      name,
+      slug,
+      ownerUserId: userId,
+      verifiedDomains: [],
+      appLimit: 12,
+      plan: "core",
+    })
+    .returning();
+
+  await db.insert(organizationMembers).values({
+    organizationId: organization.id,
+    userId,
+    role: "owner",
+    status: "active",
+    invitedByUserId: userId,
+  });
+
+  return organization;
+}
+
 export async function getOrganizationMemberships(userId: string) {
   await ensurePersonalOrganization(userId);
 

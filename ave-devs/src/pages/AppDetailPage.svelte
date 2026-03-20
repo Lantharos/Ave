@@ -11,7 +11,6 @@
     onsave: (app: DevApp & { redirectUrisText?: string }) => void;
     onrotate: (appId: string) => void;
     ondelete: (app: DevApp) => void;
-    onback: () => void;
     oncopy: (text: string) => void;
     oncreateResource: (appId: string, resource: {
       resourceKey: string;
@@ -33,7 +32,6 @@
     onsave,
     onrotate,
     ondelete,
-    onback,
     oncopy,
     oncreateResource,
     ondeleteResource,
@@ -111,20 +109,9 @@
 </script>
 
 <div class="flex flex-col gap-8 md:gap-10">
-  <div class="flex items-center gap-4">
-    <button
-      aria-label="Go back"
-      class="flex h-11 w-11 items-center justify-center rounded-full border-0 bg-white/[0.05] cursor-pointer transition-colors duration-300 hover:bg-white/[0.08]"
-      onclick={onback}
-    >
-      <svg class="h-5 w-5 text-[#909090]" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-        <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7" />
-      </svg>
-    </button>
-    <div>
-      <h1 class="m-0 text-[30px] md:text-[40px] font-black tracking-tight text-white">Configure {app.name}</h1>
-      <p class="m-0 mt-2 text-[14px] md:text-[16px] text-[#7d7d7d]">Everything a developer expects to inspect before they trust the integration in production.</p>
-    </div>
+  <div>
+    <h1 class="m-0 text-[30px] md:text-[40px] font-black tracking-tight text-white">Configure {app.name}</h1>
+    <p class="m-0 mt-2 text-[14px] md:text-[16px] text-[#7d7d7d]">Credentials, redirect URLs, token settings, and connected resources.</p>
   </div>
 
   <Card>
