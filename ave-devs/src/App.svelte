@@ -661,8 +661,25 @@
       {/if}
 
       {#if createModalOpen}
-        <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 backdrop-blur-sm">
-          <div class="max-h-[calc(100vh-48px)] w-full max-w-[980px] overflow-y-auto rounded-[32px] bg-[#131313] p-6 md:p-8 shadow-[0_32px_120px_rgba(0,0,0,0.55)]">
+        <div
+          class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 backdrop-blur-sm"
+          role="button"
+          tabindex="0"
+          onclick={(event) => {
+            if (event.currentTarget === event.target && !creating) {
+              createModalOpen = false;
+            }
+          }}
+          onkeydown={(event) => {
+            if (event.currentTarget === event.target && (event.key === "Escape" || event.key === "Enter" || event.key === " ")) {
+              event.preventDefault();
+              if (!creating) {
+                createModalOpen = false;
+              }
+            }
+          }}
+        >
+          <div class="hide-scrollbar max-h-[calc(100vh-48px)] w-full max-w-[980px] overflow-y-auto rounded-[32px] bg-[#131313] p-6 md:p-8 shadow-[0_32px_120px_rgba(0,0,0,0.55)]">
             <CreateAppPage
               oncreate={handleCreate}
               oncancel={() => (createModalOpen = false)}
@@ -673,7 +690,24 @@
       {/if}
 
       {#if createOrganizationModalOpen}
-        <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 backdrop-blur-sm">
+        <div
+          class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 backdrop-blur-sm"
+          role="button"
+          tabindex="0"
+          onclick={(event) => {
+            if (event.currentTarget !== event.target) return;
+            createOrganizationModalOpen = false;
+            newOrganizationName = "";
+          }}
+          onkeydown={(event) => {
+            if (event.currentTarget !== event.target) return;
+            if (event.key === "Escape" || event.key === "Enter" || event.key === " ") {
+              event.preventDefault();
+              createOrganizationModalOpen = false;
+              newOrganizationName = "";
+            }
+          }}
+        >
           <div class="w-full max-w-[560px] rounded-[32px] bg-[#131313] p-6 md:p-8 shadow-[0_32px_120px_rgba(0,0,0,0.55)]">
             <div class="flex flex-col gap-6">
               <div class="flex items-start justify-between gap-4">
@@ -714,28 +748,28 @@
         {#if selectedApp && appLoading && !appInsights && appSection !== "configure"}
           <div class="flex flex-col gap-5">
             <div class="flex items-center gap-4">
-              <div class="h-12 w-12 rounded-[18px] bg-white/[0.05] animate-pulse"></div>
+              <div class="h-12 w-12 rounded-[18px] bg-[#141414] animate-pulse"></div>
               <div class="flex flex-col gap-2">
-                <div class="h-5 w-40 rounded-full bg-white/[0.05] animate-pulse"></div>
-                <div class="h-4 w-64 rounded-full bg-white/[0.04] animate-pulse"></div>
+                <div class="h-5 w-40 rounded-full bg-[#171717] animate-pulse"></div>
+                <div class="h-4 w-64 rounded-full bg-[#151515] animate-pulse"></div>
               </div>
             </div>
             <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
               {#each Array.from({ length: 4 }) as _, index (index)}
-                <div class="rounded-[28px] bg-white/[0.03] p-6">
-                  <div class="h-4 w-24 rounded-full bg-white/[0.05] animate-pulse"></div>
-                  <div class="mt-5 h-10 w-20 rounded-full bg-white/[0.06] animate-pulse"></div>
-                  <div class="mt-4 h-4 w-32 rounded-full bg-white/[0.04] animate-pulse"></div>
+                <div class="rounded-[28px] bg-[#111111] p-6">
+                  <div class="h-4 w-24 rounded-full bg-[#171717] animate-pulse"></div>
+                  <div class="mt-5 h-10 w-20 rounded-full bg-[#1a1a1a] animate-pulse"></div>
+                  <div class="mt-4 h-4 w-32 rounded-full bg-[#151515] animate-pulse"></div>
                 </div>
               {/each}
             </div>
             <div class="grid gap-4 xl:grid-cols-2">
               {#each Array.from({ length: 2 }) as _, index (index)}
-                <div class="rounded-[28px] bg-white/[0.03] p-6">
-                  <div class="h-5 w-36 rounded-full bg-white/[0.05] animate-pulse"></div>
+                <div class="rounded-[28px] bg-[#111111] p-6">
+                  <div class="h-5 w-36 rounded-full bg-[#171717] animate-pulse"></div>
                   <div class="mt-6 space-y-3">
                     {#each Array.from({ length: 3 }) as __, itemIndex (itemIndex)}
-                      <div class="h-16 rounded-[20px] bg-white/[0.04] animate-pulse"></div>
+                      <div class="h-16 rounded-[20px] bg-[#151515] animate-pulse"></div>
                     {/each}
                   </div>
                 </div>
@@ -804,22 +838,22 @@
       <div class="rounded-[30px] bg-[#0d0d0d]/88 px-5 py-5 backdrop-blur-[24px]">
         <div class="flex items-center justify-between gap-4">
           <div class="flex items-center gap-3">
-            <div class="h-14 w-14 rounded-full bg-white/[0.05] animate-pulse"></div>
+            <div class="h-14 w-14 rounded-full bg-[#141414] animate-pulse"></div>
             <div class="space-y-2">
-              <div class="h-5 w-40 rounded-full bg-white/[0.05] animate-pulse"></div>
-              <div class="h-4 w-28 rounded-full bg-white/[0.04] animate-pulse"></div>
+              <div class="h-5 w-40 rounded-full bg-[#171717] animate-pulse"></div>
+              <div class="h-4 w-28 rounded-full bg-[#151515] animate-pulse"></div>
             </div>
           </div>
-          <div class="h-11 w-11 rounded-full bg-white/[0.05] animate-pulse"></div>
+          <div class="h-11 w-11 rounded-full bg-[#141414] animate-pulse"></div>
         </div>
       </div>
 
       <div class="rounded-[32px] bg-[#0d0d0d]/76 px-5 py-8 md:px-8 md:py-10 backdrop-blur-[24px]">
         <div class="space-y-5">
-          <div class="h-6 w-40 rounded-full bg-white/[0.05] animate-pulse"></div>
+          <div class="h-6 w-40 rounded-full bg-[#171717] animate-pulse"></div>
           <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             {#each Array.from({ length: 6 }) as _, index (index)}
-              <div class="h-[220px] rounded-[28px] bg-white/[0.03] animate-pulse"></div>
+              <div class="h-[220px] rounded-[28px] bg-[#111111] animate-pulse"></div>
             {/each}
           </div>
         </div>

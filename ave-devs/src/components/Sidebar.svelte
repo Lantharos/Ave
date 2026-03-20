@@ -56,7 +56,7 @@
   </svg>
 </button>
 
-<div id="mobile-nav" class="hidden fixed inset-0 z-40 bg-[#090909] p-6 pt-16 overflow-auto md:hidden">
+<div id="mobile-nav" class="hide-scrollbar hidden fixed inset-0 z-40 bg-[#090909] p-6 pt-16 overflow-auto md:hidden">
   <div class="flex flex-col gap-4">
     <span class="text-[14px] font-black text-[#878787]">APPS</span>
     {#each navItems as item}

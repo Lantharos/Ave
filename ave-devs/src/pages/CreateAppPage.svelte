@@ -33,7 +33,7 @@
     iconUrl: "",
     redirectUris: "",
     supportsE2ee: false,
-    allowUserIdScope: true,
+    allowUserIdScope: false,
     accessTokenTtlSeconds: 3600,
     refreshTokenTtlSeconds: 30 * 24 * 60 * 60,
     allowedScopes: [...defaultScopes],
@@ -95,7 +95,12 @@
 
     <div class="flex flex-col gap-5 pt-2">
       <Toggle bind:checked={form.supportsE2ee} label="Enable end-to-end encryption" />
-      <Toggle bind:checked={form.allowUserIdScope} label="Allow user_id scope" />
+      <div class="flex flex-col gap-2">
+        <Toggle bind:checked={form.allowUserIdScope} label="Allow user_id scope (discouraged)" />
+        <p class="m-0 text-[13px] md:text-[14px] text-[#878787]/60">
+          Leave this off unless an integration specifically requires a stable internal user ID.
+        </p>
+      </div>
     </div>
 
     <div class="flex justify-end pt-8 mt-4 border-t border-white/[0.06]">

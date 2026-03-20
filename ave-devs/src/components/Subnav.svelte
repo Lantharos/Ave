@@ -14,7 +14,7 @@
   let { items, active, onselect }: Props = $props();
 </script>
 
-<nav class="flex items-center gap-1 md:gap-2 overflow-x-auto pb-1">
+<nav class="hide-scrollbar flex items-center gap-1 md:gap-2 overflow-x-auto pb-1">
   {#each items as item}
     <button
       class="group relative shrink-0 border-0 bg-transparent px-3 py-2 md:px-4 md:py-3 text-[14px] md:text-[16px] font-medium cursor-pointer transition-colors duration-300 {active === item.id ? 'text-white' : 'text-[#7a7a7a] hover:text-[#b9bbbe]'}"

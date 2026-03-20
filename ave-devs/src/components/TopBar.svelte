@@ -156,7 +156,7 @@
       </div>
 
       <div class="grid gap-3 md:grid-cols-[1.15fr_0.85fr]">
-        <div class="flex max-h-[420px] flex-col gap-2 overflow-y-auto rounded-[26px] bg-white/[0.03] p-2">
+        <div class="hide-scrollbar flex max-h-[420px] flex-col gap-2 overflow-y-auto rounded-[26px] bg-white/[0.03] p-2">
           {#each organizations as organization}
             <button
               class="flex items-center justify-between gap-4 rounded-[22px] border-0 px-4 py-4 text-left cursor-pointer transition-colors duration-300 {organization.id === currentOrganizationId ? 'bg-white/[0.07]' : 'bg-transparent hover:bg-white/[0.05]'}"
