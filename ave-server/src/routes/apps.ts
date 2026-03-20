@@ -45,7 +45,7 @@ const baseAppSchema = z.object({
   accessTokenTtlSeconds: z.number().int().min(300).max(86400).optional(),
   refreshTokenTtlSeconds: z.number().int().min(3600).max(60 * 60 * 24 * 365).optional(),
   allowUserIdScope: z.boolean().optional(),
-  organizationId: z.string().uuid().optional(),
+  organizationId: z.string().min(1).optional(),
 });
 
 const resourceSchema = z.object({

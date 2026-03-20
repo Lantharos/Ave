@@ -119,6 +119,16 @@ class ApiError extends Error {
   }
 }
 
+function getApiErrorMessage(payload: unknown): string {
+  if (!payload || typeof payload !== "object") return "Request failed";
+  const error = "error" in payload ? payload.error : undefined;
+  if (typeof error === "string" && error.trim()) return error;
+  if (error && typeof error === "object" && "message" in error && typeof error.message === "string" && error.message.trim()) {
+    return error.message;
+  }
+  return "Request failed";
+}
+
 async function request<T>(
   endpoint: string,
   options: RequestInit = {},
@@ -137,7 +147,7 @@ async function request<T>(
   const data = await response.json();
 
   if (!response.ok) {
-    throw new ApiError(response.status, data.error || "Request failed");
+    throw new ApiError(response.status, getApiErrorMessage(data));
   }
 
   return data as T;
