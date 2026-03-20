@@ -6,7 +6,6 @@ import { db, identities, oauthApps, organizationMembers, organizations } from ".
 import { requireAuth } from "../middleware/auth";
 import {
   createOrganization,
-  ensurePersonalOrganization,
   getOrganizationMemberships,
   requireOrganizationAccess,
   type OrganizationRole,
@@ -20,8 +19,6 @@ const roleSchema = z.enum(["owner", "admin", "viewer"]);
 
 app.get("/", async (c) => {
   const user = c.get("user")!;
-  await ensurePersonalOrganization(user.id);
-
   const memberships = await getOrganizationMemberships(user.id);
   const organizationIds = memberships.map((membership) => membership.organization.id);
 

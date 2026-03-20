@@ -1,9 +1,9 @@
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
-import { db, oauthApps, oauthAuthorizations, oauthRefreshTokens, identities, activityLogs, oauthResources, oauthDelegationGrants, oauthDelegationAuditLogs } from "../db";
+import { db, oauthApps, oauthAuthorizations, oauthRefreshTokens, identities, activityLogs, appAnalyticsEvents, oauthResources, oauthDelegationGrants, oauthDelegationAuditLogs } from "../db";
 import { requireAuth } from "../middleware/auth";
-import { eq, and, isNull } from "drizzle-orm";
+import { eq, and, isNull, desc } from "drizzle-orm";
 import { randomUUID, timingSafeEqual } from "crypto";
 import { hashSessionToken } from "../lib/crypto";
 import { getIssuer, getResourceAudience, getJwtPublicJwk, signJwt, verifyJwt, hashToken } from "../lib/oidc";
@@ -310,6 +310,7 @@ app.post("/authorize", requireAuth, zValidator("json", z.object({
 
   // Track authorization (skipped for Quick Auth — no persistent app record)
   let existingAuth: typeof oauthAuthorizations.$inferSelect | undefined;
+  let createdAuthorization = false;
   if (!isQuick) {
     const [found] = await db
       .select()
@@ -333,12 +334,29 @@ app.post("/authorize", requireAuth, zValidator("json", z.object({
         userId: user.id,
         appId: oauthApp.id,
         identityId,
+        lastAuthorizedAt: new Date(),
+        authorizationCount: 1,
+        lastAuthMethod: user.authMethod || "unknown",
         encryptedAppKey: encryptedAppKey || null,
       });
+      createdAuthorization = true;
     } else if (oauthApp.supportsE2ee && !existingAuth.encryptedAppKey && encryptedAppKey) {
       // If existing auth doesn't have an app key but we're providing one now, update it
       await db.update(oauthAuthorizations)
-        .set({ encryptedAppKey })
+        .set({
+          encryptedAppKey,
+          lastAuthorizedAt: new Date(),
+          authorizationCount: existingAuth.authorizationCount + 1,
+          lastAuthMethod: user.authMethod || "unknown",
+        })
+        .where(eq(oauthAuthorizations.id, existingAuth.id));
+    } else {
+      await db.update(oauthAuthorizations)
+        .set({
+          lastAuthorizedAt: new Date(),
+          authorizationCount: existingAuth.authorizationCount + 1,
+          lastAuthMethod: user.authMethod || "unknown",
+        })
         .where(eq(oauthAuthorizations.id, existingAuth.id));
     }
   }
@@ -450,6 +468,7 @@ app.post("/authorize", requireAuth, zValidator("json", z.object({
   await db.insert(activityLogs).values({
     userId: user.id,
     action: "oauth_authorized",
+    appId: oauthApp.id,
     details: {
       appName: oauthApp.name,
       appId: oauthApp.id,
@@ -462,6 +481,17 @@ app.post("/authorize", requireAuth, zValidator("json", z.object({
     userAgent: c.req.header("user-agent"),
     severity: "info",
   });
+
+  if (!isQuick && createdAuthorization) {
+    await db.insert(appAnalyticsEvents).values({
+      appId: oauthApp.id,
+      identityId,
+      eventType: "authorization_added",
+      authMethod: user.authMethod || "unknown",
+      severity: "info",
+      metadata: { scope },
+    });
+  }
   
   // Build redirect URL with code
   const redirectUrl = new URL(redirectUri);
@@ -1155,6 +1185,7 @@ app.get("/authorization/:clientId", requireAuth, async (c) => {
       eq(oauthAuthorizations.userId, user.id),
       eq(oauthAuthorizations.appId, oauthApp.id),
     ))
+    .orderBy(desc(oauthAuthorizations.lastAuthorizedAt))
     .limit(1);
   
   if (!authorization) {
@@ -1199,6 +1230,7 @@ app.delete("/authorizations/:authId", requireAuth, async (c) => {
   await db.insert(activityLogs).values({
     userId: user.id,
     action: "oauth_revoked",
+    appId: auth.appId,
     details: {
       appName: oauthApp?.name,
       appId: auth.appId,
@@ -1208,6 +1240,14 @@ app.delete("/authorizations/:authId", requireAuth, async (c) => {
     ipAddress: c.req.header("x-forwarded-for") || c.req.header("x-real-ip"),
     userAgent: c.req.header("user-agent"),
     severity: "warning",
+  });
+
+  await db.insert(appAnalyticsEvents).values({
+    appId: auth.appId,
+    identityId: auth.identityId,
+    eventType: "authorization_revoked",
+    severity: "warning",
+    metadata: {},
   });
   
   return c.json({ success: true });

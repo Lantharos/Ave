@@ -3,9 +3,10 @@ import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import { db, activityLogs } from "../db";
 import { requireAuth } from "../middleware/auth";
-import { eq, desc, like, and, gte, lte } from "drizzle-orm";
+import { eq, desc, like, and, gte, lte, lt } from "drizzle-orm";
 
 const app = new Hono();
+const ACTIVITY_RETENTION_DAYS = 5;
 
 // All routes require authentication
 app.use("*", requireAuth);
@@ -62,3 +63,9 @@ app.get("/", zValidator("query", z.object({
 });
 
 export default app;
+
+export async function cleanupExpiredActivityLogs() {
+  const cutoff = new Date(Date.now() - ACTIVITY_RETENTION_DAYS * 24 * 60 * 60 * 1000);
+  await db.delete(activityLogs).where(lt(activityLogs.createdAt, cutoff));
+  return { retentionDays: ACTIVITY_RETENTION_DAYS };
+}

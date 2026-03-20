@@ -15,7 +15,6 @@
   import TopBar from "./components/TopBar.svelte";
   import Subnav from "./components/Subnav.svelte";
   import {
-    checkSession,
     createOrganization,
     createApp,
     createResource,
@@ -109,12 +108,8 @@
 
   async function init() {
     loading = true;
-    const hasSession = await checkSession();
-    authenticated = hasSession;
-
-    if (hasSession) {
-      await loadPortal();
-    }
+    authenticated = true;
+    await loadPortal();
 
     loading = false;
   }
@@ -154,6 +149,8 @@
         workspace = null;
         organizations = [];
         currentOrganizationId = null;
+      } else {
+        authenticated = true;
       }
       error = err instanceof Error ? err.message : "Failed to load portal";
     } finally {

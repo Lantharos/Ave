@@ -149,7 +149,7 @@
       <div class="flex flex-col gap-5">
         <div>
           <h2 class="m-0 text-[22px] font-semibold text-white">Latest changes</h2>
-          <p class="m-0 mt-2 text-[14px] leading-6 text-[#7d7d7d]">Recent events that changed the app’s state.</p>
+          <p class="m-0 mt-2 text-[14px] leading-6 text-[#7d7d7d]">Recent events that changed the app's state.</p>
         </div>
 
         <div class="flex flex-col gap-3">

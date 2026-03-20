@@ -217,17 +217,7 @@ export async function fetchApps(organizationId?: string): Promise<DevApp[]> {
 }
 
 export async function fetchAppOverview(appId: string): Promise<AppOverviewBundle> {
-  const [insights, identities, activity] = await Promise.all([
-    request<{ insights: AppInsightSnapshot }>(`/api/apps/${appId}/insights`),
-    request<{ identities: AppIdentityRecord[] }>(`/api/apps/${appId}/identities`),
-    request<{ events: AppEvent[] }>(`/api/apps/${appId}/activity`),
-  ]);
-
-  return {
-    insights: insights.insights,
-    identities: identities.identities,
-    events: activity.events,
-  };
+  return request<AppOverviewBundle>(`/api/apps/${appId}/overview`);
 }
 
 export async function createApp(
@@ -280,15 +270,6 @@ export async function deleteResource(
   return request(`/api/apps/${appId}/resources/${resourceId}`, {
     method: "DELETE",
   });
-}
-
-export async function checkSession(): Promise<boolean> {
-  try {
-    await request<{ organizations: WorkspaceSummary[] }>("/api/organizations");
-    return true;
-  } catch {
-    return false;
-  }
 }
 
 export async function uploadWorkspaceLogo(organizationId: string, file: File): Promise<{ logoUrl: string }> {

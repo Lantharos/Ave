@@ -36,6 +36,34 @@
       "when": 1774090800000,
       "tag": "0004_workspace_logos",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1774976400000,
+      "tag": "0005_activity_logs_app_id",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1774977300000,
+      "tag": "0006_app_analytics_events",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1774978200000,
+      "tag": "0007_oauth_authorization_stats",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1774979100000,
+      "tag": "0008_normalize_app_analytics",
+      "breakpoints": true
     }
   ]
 }

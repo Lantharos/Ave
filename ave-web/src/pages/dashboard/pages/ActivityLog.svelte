@@ -73,6 +73,7 @@
 <div class="flex flex-col gap-4 md:gap-[40px] w-full z-10 px-3 md:px-[60px] py-4 md:py-[40px] bg-[#111111]/60 rounded-[24px] md:rounded-[64px] backdrop-blur-[20px]">
     <div class="flex flex-col gap-1 md:gap-[10px]">
         <Text type="h" size={48} mobileSize={28} weight="bold">Activity Log</Text>
+        <Text type="p" size={14} mobileSize={12} color="#666666">Activity is kept for 5 days and then removed automatically.</Text>
     </div>
 
     {#if error}

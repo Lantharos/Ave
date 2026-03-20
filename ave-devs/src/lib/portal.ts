@@ -92,6 +92,8 @@ export function getActivityLabel(action: string): string {
   const labels: Record<string, string> = {
     oauth_authorized: "Authorization approved",
     oauth_revoked: "Authorization revoked",
+    authorization_added: "Authorization added",
+    authorization_revoked: "Authorization revoked",
     login: "Sign-in completed",
     login_approved: "Sign-in approved",
     login_denied: "Sign-in denied",

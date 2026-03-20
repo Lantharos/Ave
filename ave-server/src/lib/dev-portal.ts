@@ -153,11 +153,27 @@ export async function backfillOwnedAppsOrganization(userId: string) {
 }
 
 export async function requireOrganizationAccess(userId: string, organizationId: string, minimumRole: OrganizationRole = "viewer") {
-  const memberships = await getOrganizationMemberships(userId);
-  const membership = memberships.find((entry) => entry.organization.id === organizationId);
+  const [membership] = await db
+    .select({
+      memberId: organizationMembers.id,
+      role: organizationMembers.role,
+      status: organizationMembers.status,
+      invitedEmail: organizationMembers.invitedEmail,
+      organization: organizations,
+    })
+    .from(organizationMembers)
+    .innerJoin(organizations, eq(organizations.id, organizationMembers.organizationId))
+    .where(
+      and(
+        eq(organizationMembers.userId, userId),
+        eq(organizationMembers.organizationId, organizationId),
+        eq(organizationMembers.status, "active"),
+      ),
+    )
+    .limit(1);
 
   if (!membership) return null;
-  if (roleRank[membership.role] < roleRank[minimumRole]) return null;
+  if (roleRank[membership.role as OrganizationRole] < roleRank[minimumRole]) return null;
 
   return membership;
 }

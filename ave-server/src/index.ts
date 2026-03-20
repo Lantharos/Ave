@@ -13,7 +13,7 @@ import loginRoutes from "./routes/login";
 import devicesRoutes, { cleanupStaleDevices } from "./routes/devices";
 import identitiesRoutes from "./routes/identities";
 import securityRoutes from "./routes/security";
-import activityRoutes from "./routes/activity";
+import activityRoutes, { cleanupExpiredActivityLogs } from "./routes/activity";
 import mydataRoutes from "./routes/mydata";
 import oauthRoutes, { oidcRoutes } from "./routes/oauth";
 import appsRoutes from "./routes/apps";
@@ -260,8 +260,11 @@ export class ApiAppDurableObject {
             return new Response("Forbidden", { status: 403 });
           }
 
-          const result = await cleanupStaleDevices();
-          return Response.json({ success: true, ...result });
+          const [deviceCleanup, activityCleanup] = await Promise.all([
+            cleanupStaleDevices(),
+            cleanupExpiredActivityLogs(),
+          ]);
+          return Response.json({ success: true, ...deviceCleanup, activityRetentionDays: activityCleanup.retentionDays });
         }
 
         return app.fetch(request, this.env);

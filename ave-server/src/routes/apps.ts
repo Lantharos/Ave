@@ -3,7 +3,7 @@ import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import { and, desc, eq, inArray, isNull } from "drizzle-orm";
 import {
-  activityLogs,
+  appAnalyticsEvents,
   db,
   identities,
   oauthApps,
@@ -136,6 +136,160 @@ async function listAppResources(appIds: string[]) {
     .where(inArray(oauthResources.ownerAppId, appIds));
 }
 
+async function getAppInsights(appId: string, redirectUris: string[]) {
+  const [authorizations, refreshTokens, analyticsEvents, delegations, resources] = await Promise.all([
+    db.select().from(oauthAuthorizations).where(eq(oauthAuthorizations.appId, appId)),
+    db.select().from(oauthRefreshTokens).where(eq(oauthRefreshTokens.appId, appId)),
+    db
+      .select()
+      .from(appAnalyticsEvents)
+      .where(eq(appAnalyticsEvents.appId, appId)),
+    db.select().from(oauthDelegationGrants).where(and(eq(oauthDelegationGrants.sourceAppId, appId), isNull(oauthDelegationGrants.revokedAt))),
+    db.select().from(oauthResources).where(eq(oauthResources.ownerAppId, appId)),
+  ]);
+
+  const methodCounts = {
+    passkey: 0,
+    deviceApproval: 0,
+    trustCode: 0,
+    unknown: 0,
+  };
+
+  for (const authorization of authorizations) {
+    const method = authorization.lastAuthMethod;
+    if (method === "passkey") methodCounts.passkey += 1;
+    else if (method === "device_approval") methodCounts.deviceApproval += 1;
+    else if (method === "trust_code") methodCounts.trustCode += 1;
+    else methodCounts.unknown += 1;
+  }
+
+  const totalMethodEvents = methodCounts.passkey + methodCounts.deviceApproval + methodCounts.trustCode + methodCounts.unknown;
+  const instantRate = totalMethodEvents
+    ? Math.round(((methodCounts.passkey + methodCounts.deviceApproval) / totalMethodEvents) * 100)
+    : 0;
+
+  const now = Date.now();
+  const weekAgo = now - 7 * 24 * 60 * 60 * 1000;
+  const httpsRedirects = redirectUris.filter((uri) => uri.startsWith("https://")).length;
+
+  return {
+    totalIdentities: new Set(authorizations.map((entry) => entry.identityId)).size,
+    totalAuthorizations: authorizations.reduce((total, entry) => total + (entry.authorizationCount || 0), 0),
+    weeklyAuthorizations: authorizations.filter((entry) => new Date(entry.lastAuthorizedAt).getTime() >= weekAgo).length,
+    activeRefreshTokens: refreshTokens.filter((entry) => !entry.revokedAt && new Date(entry.expiresAt).getTime() > now).length,
+    instantSignInRate: instantRate,
+    methodCounts,
+    redirectSecurityRate: redirectUris.length ? Math.round((httpsRedirects / redirectUris.length) * 100) : 0,
+    resources: resources.length,
+    activeDelegations: delegations.length,
+    revocations: analyticsEvents.filter((entry) => entry.eventType === "authorization_revoked").length,
+  };
+}
+
+async function getAppIdentities(appId: string) {
+  const authorizations = await db
+    .select()
+    .from(oauthAuthorizations)
+    .where(eq(oauthAuthorizations.appId, appId));
+
+  const identityIds = [...new Set(authorizations.map((entry) => entry.identityId))];
+  if (!identityIds.length) {
+    return [];
+  }
+
+  const [identityRows, refreshTokens] = await Promise.all([
+    db.select().from(identities).where(inArray(identities.id, identityIds)),
+    db.select().from(oauthRefreshTokens).where(and(eq(oauthRefreshTokens.appId, appId), inArray(oauthRefreshTokens.identityId, identityIds))),
+  ]);
+
+  const authorizationStats = new Map<string, { firstSeen: Date; lastSeen: Date; authorizations: number; lastMethod: string | null }>();
+  for (const authorization of authorizations) {
+    const createdAt = new Date(authorization.createdAt);
+    const lastAuthorizedAt = new Date(authorization.lastAuthorizedAt);
+    const existing = authorizationStats.get(authorization.identityId);
+    if (!existing) {
+      authorizationStats.set(authorization.identityId, {
+        firstSeen: createdAt,
+        lastSeen: lastAuthorizedAt,
+        authorizations: authorization.authorizationCount || 0,
+        lastMethod: authorization.lastAuthMethod || null,
+      });
+      continue;
+    }
+
+    if (createdAt < existing.firstSeen) existing.firstSeen = createdAt;
+    if (lastAuthorizedAt > existing.lastSeen) existing.lastSeen = lastAuthorizedAt;
+    existing.authorizations += authorization.authorizationCount || 0;
+    if (lastAuthorizedAt >= existing.lastSeen) {
+      existing.lastMethod = authorization.lastAuthMethod || existing.lastMethod;
+    }
+  }
+
+  const refreshCountByIdentityId = new Map<string, { count: number; lastActive: Date | null }>();
+  for (const token of refreshTokens) {
+    const createdAt = new Date(token.createdAt);
+    const existing = refreshCountByIdentityId.get(token.identityId) || { count: 0, lastActive: null };
+    existing.count += 1;
+    if (!existing.lastActive || createdAt > existing.lastActive) {
+      existing.lastActive = createdAt;
+    }
+    refreshCountByIdentityId.set(token.identityId, existing);
+  }
+
+  return identityRows.map((identity) => {
+    const authorization = authorizationStats.get(identity.id);
+    const refresh = refreshCountByIdentityId.get(identity.id);
+    return {
+      id: identity.id,
+      displayName: identity.displayName,
+      handle: identity.handle,
+      email: identity.email,
+      avatarUrl: identity.avatarUrl,
+      isPrimary: identity.isPrimary,
+      firstSeen: authorization?.firstSeen || identity.createdAt,
+        lastActive: refresh?.lastActive || authorization?.lastSeen || identity.createdAt,
+        signInCount: (authorization?.authorizations || 0) + (refresh?.count || 0),
+        authorizationCount: authorization?.authorizations || 0,
+        refreshCount: refresh?.count || 0,
+        lastMethod: authorization?.lastMethod || null,
+      };
+    });
+}
+
+async function getAppActivity(appId: string) {
+  const [analyticsEvents, delegationLogs] = await Promise.all([
+    db
+      .select()
+      .from(appAnalyticsEvents)
+      .where(eq(appAnalyticsEvents.appId, appId))
+      .orderBy(desc(appAnalyticsEvents.createdAt))
+      .limit(100),
+    db.select().from(oauthDelegationAuditLogs).where(eq(oauthDelegationAuditLogs.sourceAppId, appId)).orderBy(desc(oauthDelegationAuditLogs.createdAt)),
+  ]);
+
+  const appLogs = analyticsEvents.map((event) => ({
+    id: event.id,
+    action: event.eventType,
+    details: event.metadata,
+    severity: event.severity,
+    createdAt: event.createdAt,
+    source: "activity" as const,
+  }));
+
+  const delegationEvents = delegationLogs.map((log) => ({
+    id: log.id,
+    action: log.eventType,
+    details: log.details,
+    severity: "info" as const,
+    createdAt: log.createdAt,
+    source: "delegation" as const,
+  }));
+
+  return [...appLogs, ...delegationEvents].sort(
+    (left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime(),
+  );
+}
+
 app.use("*", requireDevUser);
 
 app.get("/", async (c) => {
@@ -229,56 +383,8 @@ app.get("/:appId/insights", async (c) => {
   if (!accessible) {
     return c.json({ error: "App not found" }, 404);
   }
-
-  const [authorizations, refreshTokens, allLogs, delegations, resources] = await Promise.all([
-    db.select().from(oauthAuthorizations).where(eq(oauthAuthorizations.appId, appId)),
-    db.select().from(oauthRefreshTokens).where(eq(oauthRefreshTokens.appId, appId)),
-    db.select().from(activityLogs).orderBy(desc(activityLogs.createdAt)),
-    db.select().from(oauthDelegationGrants).where(and(eq(oauthDelegationGrants.sourceAppId, appId), isNull(oauthDelegationGrants.revokedAt))),
-    db.select().from(oauthResources).where(eq(oauthResources.ownerAppId, appId)),
-  ]);
-
-  const appActivity = allLogs.filter((entry) => (entry.details?.appId as string | undefined) === appId);
-  const methodCounts = {
-    passkey: 0,
-    deviceApproval: 0,
-    trustCode: 0,
-    unknown: 0,
-  };
-
-  for (const log of appActivity) {
-    if (log.action !== "oauth_authorized") continue;
-    const method = log.details?.authMethod;
-    if (method === "passkey") methodCounts.passkey += 1;
-    else if (method === "device_approval") methodCounts.deviceApproval += 1;
-    else if (method === "trust_code") methodCounts.trustCode += 1;
-    else methodCounts.unknown += 1;
-  }
-
-  const totalMethodEvents = methodCounts.passkey + methodCounts.deviceApproval + methodCounts.trustCode + methodCounts.unknown;
-  const instantRate = totalMethodEvents
-    ? Math.round(((methodCounts.passkey + methodCounts.deviceApproval) / totalMethodEvents) * 100)
-    : 0;
-
-  const now = Date.now();
-  const weekAgo = now - 7 * 24 * 60 * 60 * 1000;
-  const httpsRedirects = (accessible.app.redirectUris as string[]).filter((uri) => uri.startsWith("https://")).length;
-
   return c.json({
-    insights: {
-      totalIdentities: new Set(authorizations.map((entry) => entry.identityId)).size,
-      totalAuthorizations: authorizations.length,
-      weeklyAuthorizations: authorizations.filter((entry) => new Date(entry.createdAt).getTime() >= weekAgo).length,
-      activeRefreshTokens: refreshTokens.filter((entry) => !entry.revokedAt && new Date(entry.expiresAt).getTime() > now).length,
-      instantSignInRate: instantRate,
-      methodCounts,
-      redirectSecurityRate: accessible.app.redirectUris.length
-        ? Math.round((httpsRedirects / accessible.app.redirectUris.length) * 100)
-        : 0,
-      resources: resources.length,
-      activeDelegations: delegations.length,
-      revocations: appActivity.filter((entry) => entry.action === "oauth_revoked").length,
-    },
+    insights: await getAppInsights(appId, accessible.app.redirectUris as string[]),
   });
 });
 
@@ -290,83 +396,7 @@ app.get("/:appId/identities", async (c) => {
   if (!accessible) {
     return c.json({ error: "App not found" }, 404);
   }
-
-  const authorizations = await db
-    .select()
-    .from(oauthAuthorizations)
-    .where(eq(oauthAuthorizations.appId, appId));
-
-  const identityIds = [...new Set(authorizations.map((entry) => entry.identityId))];
-  if (!identityIds.length) {
-    return c.json({ identities: [] });
-  }
-
-  const [identityRows, refreshTokens, authActivity] = await Promise.all([
-    db.select().from(identities).where(inArray(identities.id, identityIds)),
-    db.select().from(oauthRefreshTokens).where(and(eq(oauthRefreshTokens.appId, appId), inArray(oauthRefreshTokens.identityId, identityIds))),
-    db.select().from(activityLogs).orderBy(desc(activityLogs.createdAt)),
-  ]);
-
-  const authorizationStats = new Map<string, { firstSeen: Date; lastSeen: Date; authorizations: number }>();
-  for (const authorization of authorizations) {
-    const createdAt = new Date(authorization.createdAt);
-    const existing = authorizationStats.get(authorization.identityId);
-    if (!existing) {
-      authorizationStats.set(authorization.identityId, {
-        firstSeen: createdAt,
-        lastSeen: createdAt,
-        authorizations: 1,
-      });
-      continue;
-    }
-
-    if (createdAt < existing.firstSeen) existing.firstSeen = createdAt;
-    if (createdAt > existing.lastSeen) existing.lastSeen = createdAt;
-    existing.authorizations += 1;
-  }
-
-  const refreshCountByIdentityId = new Map<string, { count: number; lastActive: Date | null }>();
-  for (const token of refreshTokens) {
-    const createdAt = new Date(token.createdAt);
-    const existing = refreshCountByIdentityId.get(token.identityId) || { count: 0, lastActive: null };
-    existing.count += 1;
-    if (!existing.lastActive || createdAt > existing.lastActive) {
-      existing.lastActive = createdAt;
-    }
-    refreshCountByIdentityId.set(token.identityId, existing);
-  }
-
-  const latestMethodByIdentityId = new Map<string, string>();
-  for (const log of authActivity) {
-    if (log.action !== "oauth_authorized") continue;
-    if ((log.details?.appId as string | undefined) !== appId) continue;
-    const identityId = log.details?.identityId;
-    const authMethod = log.details?.authMethod;
-    if (typeof identityId === "string" && typeof authMethod === "string" && !latestMethodByIdentityId.has(identityId)) {
-      latestMethodByIdentityId.set(identityId, authMethod);
-    }
-  }
-
-  return c.json({
-    identities: identityRows.map((identity) => {
-      const authorization = authorizationStats.get(identity.id);
-      const refresh = refreshCountByIdentityId.get(identity.id);
-      return {
-        id: identity.id,
-        displayName: identity.displayName,
-        handle: identity.handle,
-        email: identity.email,
-        avatarUrl: identity.avatarUrl,
-        isPrimary: identity.isPrimary,
-        firstSeen: authorization?.firstSeen || identity.createdAt,
-        lastActive: refresh?.lastActive || authorization?.lastSeen || identity.createdAt,
-        signInCount: (authorization?.authorizations || 0) + (refresh?.count || 0),
-        authorizationCount: authorization?.authorizations || 0,
-        refreshCount: refresh?.count || 0,
-        lastMethod: latestMethodByIdentityId.get(identity.id) || null,
-      };
-    }),
-  });
+  return c.json({ identities: await getAppIdentities(appId) });
 });
 
 app.get("/:appId/activity", async (c) => {
@@ -377,37 +407,25 @@ app.get("/:appId/activity", async (c) => {
   if (!accessible) {
     return c.json({ error: "App not found" }, 404);
   }
+  return c.json({ events: await getAppActivity(appId) });
+});
 
-  const [logs, delegationLogs] = await Promise.all([
-    db.select().from(activityLogs).orderBy(desc(activityLogs.createdAt)),
-    db.select().from(oauthDelegationAuditLogs).where(eq(oauthDelegationAuditLogs.sourceAppId, appId)).orderBy(desc(oauthDelegationAuditLogs.createdAt)),
+app.get("/:appId/overview", async (c) => {
+  const userId = c.get("devUserId") as string;
+  const appId = c.req.param("appId");
+
+  const accessible = await getAccessibleApp(userId, appId, "viewer");
+  if (!accessible) {
+    return c.json({ error: "App not found" }, 404);
+  }
+
+  const [insights, identities, events] = await Promise.all([
+    getAppInsights(appId, accessible.app.redirectUris as string[]),
+    getAppIdentities(appId),
+    getAppActivity(appId),
   ]);
 
-  const appLogs = logs
-    .filter((log) => (log.details?.appId as string | undefined) === appId)
-    .map((log) => ({
-      id: log.id,
-      action: log.action,
-      details: log.details,
-      severity: log.severity,
-      createdAt: log.createdAt,
-      source: "activity",
-    }));
-
-  const delegationEvents = delegationLogs.map((log) => ({
-    id: log.id,
-    action: log.eventType,
-    details: log.details,
-    severity: "info",
-    createdAt: log.createdAt,
-    source: "delegation",
-  }));
-
-  const events = [...appLogs, ...delegationEvents].sort(
-    (left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime(),
-  );
-
-  return c.json({ events });
+  return c.json({ insights, identities, events });
 });
 
 app.patch("/:appId", zValidator("json", baseAppSchema.partial()), async (c) => {

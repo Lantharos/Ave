@@ -205,6 +205,7 @@ export const activityLogs = sqliteTable("activity_logs", {
   
   // Additional context
   details: text("details", { mode: "json" }).$type<Record<string, unknown>>(),
+  appId: text("app_id").references(() => oauthApps.id, { onDelete: "set null" }),
   
   // Where it happened from
   deviceId: text("device_id").references(() => devices.id),
@@ -216,6 +217,23 @@ export const activityLogs = sqliteTable("activity_logs", {
 }, (table) => [
   index("activity_logs_user_id_idx").on(table.userId),
   index("activity_logs_created_at_idx").on(table.createdAt),
+  index("activity_logs_app_id_idx").on(table.appId),
+]);
+
+export const appAnalyticsEvents = sqliteTable("app_analytics_events", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull().$defaultFn(() => new Date()),
+  appId: text("app_id").references(() => oauthApps.id, { onDelete: "cascade" }).notNull(),
+  identityId: text("identity_id").references(() => identities.id, { onDelete: "set null" }),
+  eventType: text("event_type").notNull(),
+  authMethod: text("auth_method"),
+  severity: text("severity").default("info").notNull(),
+  metadata: text("metadata", { mode: "json" }).$type<Record<string, unknown>>(),
+}, (table) => [
+  index("app_analytics_events_app_id_idx").on(table.appId),
+  index("app_analytics_events_created_at_idx").on(table.createdAt),
+  index("app_analytics_events_identity_id_idx").on(table.identityId),
+  index("app_analytics_events_event_type_idx").on(table.eventType),
 ]);
 
 // OAuth applications (third-party apps using Ave for auth)
@@ -284,6 +302,9 @@ export const oauthAuthorizations = sqliteTable("oauth_authorizations", {
   appId: text("app_id").references(() => oauthApps.id, { onDelete: "cascade" }).notNull(),
   identityId: text("identity_id").references(() => identities.id, { onDelete: "cascade" }).notNull(),
   createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull().$defaultFn(() => new Date()),
+  lastAuthorizedAt: integer("last_authorized_at", { mode: "timestamp_ms" }).notNull().$defaultFn(() => new Date()),
+  authorizationCount: integer("authorization_count").notNull().default(1),
+  lastAuthMethod: text("last_auth_method"),
   
   // E2EE: encrypted keys for this app (encrypted with user's master key)
   // Each app gets its own encryption key that the user controls
@@ -291,6 +312,7 @@ export const oauthAuthorizations = sqliteTable("oauth_authorizations", {
 }, (table) => [
   index("oauth_authorizations_user_id_idx").on(table.userId),
   index("oauth_authorizations_app_id_idx").on(table.appId),
+  index("oauth_authorizations_identity_id_idx").on(table.identityId),
 ]);
 
 // OAuth resources - capabilities exposed by an app to other apps via connector flow
@@ -428,6 +450,7 @@ export type NewOAuthRefreshToken = typeof oauthRefreshTokens.$inferInsert;
 export type OAuthResource = typeof oauthResources.$inferSelect;
 export type OAuthDelegationGrant = typeof oauthDelegationGrants.$inferSelect;
 export type OAuthDelegationAuditLog = typeof oauthDelegationAuditLogs.$inferSelect;
+export type AppAnalyticsEvent = typeof appAnalyticsEvents.$inferSelect;
 export type SigningKey = typeof signingKeys.$inferSelect;
 export type NewSigningKey = typeof signingKeys.$inferInsert;
 export type SignatureRequest = typeof signatureRequests.$inferSelect;
