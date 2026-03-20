@@ -169,7 +169,7 @@ export const loginRequests = sqliteTable("login_requests", {
   encryptedMasterKey: text("encrypted_master_key"),
   
   // Which device approved it
-  approvedByDeviceId: text("approved_by_device_id").references(() => devices.id),
+  approvedByDeviceId: text("approved_by_device_id").references(() => devices.id, { onDelete: "set null" }),
   approverPublicKey: text("approver_public_key"),
 }, (table) => [
   index("login_requests_handle_idx").on(table.handle),
@@ -208,7 +208,7 @@ export const activityLogs = sqliteTable("activity_logs", {
   appId: text("app_id").references(() => oauthApps.id, { onDelete: "set null" }),
   
   // Where it happened from
-  deviceId: text("device_id").references(() => devices.id),
+  deviceId: text("device_id").references(() => devices.id, { onDelete: "set null" }),
   ipAddress: text("ip_address"),
   userAgent: text("user_agent"),
   
@@ -415,7 +415,7 @@ export const signatureRequests = sqliteTable("signature_requests", {
   resolvedAt: integer("resolved_at", { mode: "timestamp_ms" }),
   
   // Device that signed it
-  deviceId: text("device_id").references(() => devices.id),
+  deviceId: text("device_id").references(() => devices.id, { onDelete: "set null" }),
 }, (table) => [
   index("signature_requests_identity_id_idx").on(table.identityId),
   index("signature_requests_app_id_idx").on(table.appId),

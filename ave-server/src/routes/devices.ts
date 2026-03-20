@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
-import { db, devices, loginRequests, sessions, activityLogs } from "../db";
+import { db, devices, loginRequests, activityLogs } from "../db";
 import { requireAuth } from "../middleware/auth";
 import { eq, and, desc, lt } from "drizzle-orm";
 import { notifyLoginRequestStatus } from "../lib/websocket";
@@ -271,20 +271,19 @@ app.delete("/:deviceId", async (c) => {
     return c.json({ error: "Device not found" }, 404);
   }
   
-  // Delete all sessions for this device
-  await db.delete(sessions).where(eq(sessions.deviceId, deviceId));
-  
-  // Mark device as inactive (or delete it)
-  await db
-    .update(devices)
-    .set({ isActive: false })
-    .where(eq(devices.id, deviceId));
+  await db.delete(devices).where(eq(devices.id, deviceId));
   
   // Log activity
   await db.insert(activityLogs).values({
     userId: user.id,
     action: "device_removed",
-    details: { deviceId, deviceName: device.name, deviceType: device.type },
+    details: {
+      deviceId,
+      deviceName: device.name,
+      deviceType: device.type,
+      browser: device.browser,
+      os: device.os,
+    },
     deviceId: user.deviceId,
     ipAddress: c.req.header("x-forwarded-for") || c.req.header("x-real-ip"),
     userAgent: c.req.header("user-agent"),
@@ -303,7 +302,7 @@ export async function cleanupStaleDevices() {
   const staleDevices = await db
     .select()
     .from(devices)
-    .where(lt(devices.lastSeenAt, fourteenDaysAgo));
+    .where(and(eq(devices.isActive, true), lt(devices.lastSeenAt, fourteenDaysAgo)));
   
   if (staleDevices.length === 0) {
     console.log("[Cleanup] No stale devices found");
@@ -312,16 +311,9 @@ export async function cleanupStaleDevices() {
   
   console.log(`[Cleanup] Found ${staleDevices.length} stale devices to remove`);
   
-  // For each stale device, delete sessions and mark as inactive
+  // For each stale device, remove the trusted device record entirely
   for (const device of staleDevices) {
-    // Delete all sessions for this device
-    await db.delete(sessions).where(eq(sessions.deviceId, device.id));
-    
-    // Mark device as inactive (soft delete)
-    await db
-      .update(devices)
-      .set({ isActive: false })
-      .where(eq(devices.id, device.id));
+    await db.delete(devices).where(eq(devices.id, device.id));
     
     // Log activity
     await db.insert(activityLogs).values({
@@ -330,6 +322,9 @@ export async function cleanupStaleDevices() {
       details: { 
         deviceId: device.id, 
         deviceName: device.name,
+        deviceType: device.type,
+        browser: device.browser,
+        os: device.os,
         lastSeenAt: device.lastSeenAt,
         reason: "inactive_14_days" 
       },
