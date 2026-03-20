@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import { and, eq, inArray } from "drizzle-orm";
-import { db, identities, oauthApps, organizationMembers, organizations } from "../db";
+import { db, identities, oauthApps, oauthAuthorizations, organizationMembers, organizations } from "../db";
 import { requireAuth } from "../middleware/auth";
 import {
   createOrganization,
@@ -10,12 +10,51 @@ import {
   requireOrganizationAccess,
   type OrganizationRole,
 } from "../lib/dev-portal";
+import { listAppResources, serializeApp } from "./apps";
 
 const app = new Hono();
 
 app.use("*", requireAuth);
 
 const roleSchema = z.enum(["owner", "admin", "viewer"]);
+
+function mapOrganizationSummary(
+  membership: Awaited<ReturnType<typeof getOrganizationMemberships>>[number],
+  appCountByOrganizationId: Map<string, number>,
+  memberCountByOrganizationId: Map<string, number>,
+) {
+  return {
+    id: membership.organization.id,
+    name: membership.organization.name,
+    logoUrl: membership.organization.logoUrl,
+    slug: membership.organization.slug,
+    plan: membership.organization.plan,
+    verifiedDomains: (membership.organization.verifiedDomains as string[] | null) || [],
+    appLimit: membership.organization.appLimit,
+    role: membership.role,
+    appCount: appCountByOrganizationId.get(membership.organization.id) || 0,
+    memberCount: memberCountByOrganizationId.get(membership.organization.id) || 0,
+  };
+}
+
+function mapWorkspaceMembers(
+  members: Array<typeof organizationMembers.$inferSelect>,
+  identityByUserId: Map<string, { userId: string; displayName: string; email: string | null; avatarUrl: string | null }>,
+) {
+  return members.map((member) => {
+    const identity = member.userId ? identityByUserId.get(member.userId) : null;
+    return {
+      id: member.id,
+      userId: member.userId,
+      name: identity?.displayName || member.invitedEmail?.split("@")[0] || "Pending member",
+      email: identity?.email || member.invitedEmail,
+      avatarUrl: identity?.avatarUrl,
+      role: member.role,
+      status: member.status,
+      joinedAt: member.createdAt,
+    };
+  });
+}
 
 app.get("/", async (c) => {
   const user = c.get("user")!;
@@ -62,7 +101,142 @@ app.get("/", async (c) => {
 
   const currentOrganizationId = c.req.query("organizationId") || memberships[0]?.organization.id || null;
   return c.json({
-    organizations: memberships.map((membership) => ({
+    organizations: memberships.map((membership) =>
+      mapOrganizationSummary(membership, appCountByOrganizationId, memberCountByOrganizationId),
+    ),
+    currentOrganizationId,
+  });
+});
+
+app.get("/bootstrap", async (c) => {
+  const user = c.get("user")!;
+  const memberships = await getOrganizationMemberships(user.id);
+  const organizationIds = memberships.map((membership) => membership.organization.id);
+
+  const [appRows, memberRows] = await Promise.all([
+    organizationIds.length
+      ? db
+          .select({
+            organizationId: oauthApps.organizationId,
+            appId: oauthApps.id,
+          })
+          .from(oauthApps)
+          .where(inArray(oauthApps.organizationId, organizationIds))
+      : [],
+    organizationIds.length
+      ? db
+          .select({
+            organizationId: organizationMembers.organizationId,
+            memberId: organizationMembers.id,
+            userId: organizationMembers.userId,
+            invitedEmail: organizationMembers.invitedEmail,
+            role: organizationMembers.role,
+            status: organizationMembers.status,
+            createdAt: organizationMembers.createdAt,
+          })
+          .from(organizationMembers)
+          .where(inArray(organizationMembers.organizationId, organizationIds))
+      : [],
+  ]);
+
+  const appCountByOrganizationId = new Map<string, number>();
+  for (const row of appRows) {
+    const organizationId = row.organizationId;
+    if (!organizationId) continue;
+    appCountByOrganizationId.set(organizationId, (appCountByOrganizationId.get(organizationId) || 0) + 1);
+  }
+
+  const memberCountByOrganizationId = new Map<string, number>();
+  for (const row of memberRows) {
+    if (row.status !== "active") continue;
+    memberCountByOrganizationId.set(row.organizationId, (memberCountByOrganizationId.get(row.organizationId) || 0) + 1);
+  }
+
+  const currentOrganizationId = c.req.query("organizationId") || memberships[0]?.organization.id || null;
+  const organizationsSummary = memberships.map((membership) =>
+    mapOrganizationSummary(membership, appCountByOrganizationId, memberCountByOrganizationId),
+  );
+
+  if (!currentOrganizationId) {
+    return c.json({
+      organizations: organizationsSummary,
+      currentOrganizationId: null,
+      organization: null,
+      apps: [],
+    });
+  }
+
+  const membership = await requireOrganizationAccess(user.id, currentOrganizationId, "viewer");
+  if (!membership) {
+    return c.json({
+      organizations: organizationsSummary,
+      currentOrganizationId,
+      organization: null,
+      apps: [],
+    });
+  }
+
+  const [members, apps] = await Promise.all([
+    db
+      .select()
+      .from(organizationMembers)
+      .where(eq(organizationMembers.organizationId, currentOrganizationId)),
+    db
+      .select()
+      .from(oauthApps)
+      .where(eq(oauthApps.organizationId, currentOrganizationId)),
+  ]);
+
+  const userIds = members.map((member) => member.userId).filter((value): value is string => !!value);
+  const [identityRows, resources, authorizations] = await Promise.all([
+    userIds.length
+      ? db
+          .select({
+            userId: identities.userId,
+            displayName: identities.displayName,
+            email: identities.email,
+            avatarUrl: identities.avatarUrl,
+          })
+          .from(identities)
+          .where(inArray(identities.userId, userIds))
+      : [],
+    listAppResources(apps.map((app) => app.id)),
+    apps.length
+      ? db
+          .select({
+            appId: oauthAuthorizations.appId,
+            identityId: oauthAuthorizations.identityId,
+          })
+          .from(oauthAuthorizations)
+          .where(inArray(oauthAuthorizations.appId, apps.map((app) => app.id)))
+      : [],
+  ]);
+
+  const identityByUserId = new Map<string, (typeof identityRows)[number]>();
+  for (const identity of identityRows) {
+    if (!identityByUserId.has(identity.userId)) {
+      identityByUserId.set(identity.userId, identity);
+    }
+  }
+
+  const resourcesByAppId = new Map<string, typeof resources>();
+  for (const resource of resources) {
+    const list = resourcesByAppId.get(resource.ownerAppId) || [];
+    list.push(resource);
+    resourcesByAppId.set(resource.ownerAppId, list);
+  }
+
+  const identityIdsByAppId = new Map<string, Set<string>>();
+  for (const authorization of authorizations) {
+    const existing = identityIdsByAppId.get(authorization.appId) || new Set<string>();
+    existing.add(authorization.identityId);
+    identityIdsByAppId.set(authorization.appId, existing);
+  }
+
+  return c.json({
+    organizations: organizationsSummary,
+    currentOrganizationId,
+    organization: {
       id: membership.organization.id,
       name: membership.organization.name,
       logoUrl: membership.organization.logoUrl,
@@ -71,10 +245,16 @@ app.get("/", async (c) => {
       verifiedDomains: (membership.organization.verifiedDomains as string[] | null) || [],
       appLimit: membership.organization.appLimit,
       role: membership.role,
-      appCount: appCountByOrganizationId.get(membership.organization.id) || 0,
-      memberCount: memberCountByOrganizationId.get(membership.organization.id) || 0,
-    })),
-    currentOrganizationId,
+      members: mapWorkspaceMembers(members, identityByUserId),
+      appCount: apps.length,
+    },
+    apps: apps.map((appRow) =>
+      serializeApp(
+        appRow,
+        resourcesByAppId.get(appRow.id) || [],
+        identityIdsByAppId.get(appRow.id)?.size || 0,
+      ),
+    ),
   });
 });
 
@@ -153,19 +333,7 @@ app.get("/:organizationId", async (c) => {
       verifiedDomains: (membership.organization.verifiedDomains as string[] | null) || [],
       appLimit: membership.organization.appLimit,
       role: membership.role,
-      members: members.map((member) => {
-        const identity = member.userId ? identityByUserId.get(member.userId) : null;
-        return {
-          id: member.id,
-          userId: member.userId,
-          name: identity?.displayName || member.invitedEmail?.split("@")[0] || "Pending member",
-          email: identity?.email || member.invitedEmail,
-          avatarUrl: identity?.avatarUrl,
-          role: member.role,
-          status: member.status,
-          joinedAt: member.createdAt,
-        };
-      }),
+      members: mapWorkspaceMembers(members, identityByUserId),
       appCount: apps.length,
     },
   });

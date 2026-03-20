@@ -1,11 +1,12 @@
 import { Context, Next } from "hono";
 import { db, sessions, devices, users } from "../db";
-import { eq, and, gt } from "drizzle-orm";
+import { eq, and, gt, lt } from "drizzle-orm";
 import { hashSessionToken } from "../lib/crypto";
 import { SESSION_COOKIE_NAME, setSessionCookie } from "../lib/session-cookie";
 
 const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 const SESSION_REFRESH_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
+const DEVICE_LAST_SEEN_UPDATE_INTERVAL_MS = 5 * 60 * 1000;
 
 function getCookieValue(cookieHeader: string, name: string): string | null {
   const parts = cookieHeader.split(";");
@@ -84,10 +85,11 @@ export async function authMiddleware(c: Context, next: Next) {
     
     // Update device last seen if we have a device
     if (session.deviceId) {
+      const staleBefore = new Date(Date.now() - DEVICE_LAST_SEEN_UPDATE_INTERVAL_MS);
       await db
         .update(devices)
         .set({ lastSeenAt: new Date() })
-        .where(eq(devices.id, session.deviceId));
+        .where(and(eq(devices.id, session.deviceId), lt(devices.lastSeenAt, staleBefore)));
     }
     
     c.set("user", {

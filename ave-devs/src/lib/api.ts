@@ -88,6 +88,13 @@ export interface PaginatedResult<T> {
   hasMore: boolean;
 }
 
+export interface PortalBootstrap {
+  organizations: WorkspaceSummary[];
+  currentOrganizationId: string | null;
+  organization: WorkspaceState | null;
+  apps: DevApp[];
+}
+
 export interface CreateAppPayload {
   name: string;
   description?: string;
@@ -168,6 +175,15 @@ export async function fetchOrganizations(organizationId?: string): Promise<{
 }> {
   const query = organizationId ? `?organizationId=${encodeURIComponent(organizationId)}` : "";
   return request(`/api/organizations${query}`);
+}
+
+export async function fetchPortalBootstrap(organizationId?: string): Promise<PortalBootstrap> {
+  const query = organizationId ? `?organizationId=${encodeURIComponent(organizationId)}` : "";
+  const data = await request<PortalBootstrap>(`/api/organizations/bootstrap${query}`);
+  return {
+    ...data,
+    organization: data.organization ? mapWorkspaceState(data.organization) : null,
+  };
 }
 
 export async function createOrganization(name: string): Promise<{ organization: WorkspaceSummary }> {

@@ -550,6 +550,32 @@ export const api = {
         }[];
       }>(`/api/oauth/app/${encodeURIComponent(clientId)}`),
 
+    getAuthorizeBootstrap: (clientId: string) =>
+      request<{
+        app: {
+          id?: string;
+          name: string;
+          description?: string;
+          iconUrl?: string;
+          websiteUrl?: string;
+          supportsE2ee: boolean;
+        };
+        resources?: {
+          resourceKey: string;
+          displayName: string;
+          description?: string;
+          scopes: string[];
+          audience: string;
+          status: string;
+        }[];
+        authorization: {
+          id: string;
+          identityId: string;
+          encryptedAppKey?: string;
+          createdAt: string;
+        } | null;
+      }>(`/api/oauth/authorize/bootstrap/${encodeURIComponent(clientId)}`),
+
     getResource: (resourceKey: string) =>
       request<{
         resource: {

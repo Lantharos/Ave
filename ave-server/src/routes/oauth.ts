@@ -130,6 +130,7 @@ function buildQuickApp(clientId: string) {
 // Public: Get OAuth app info (for authorization screen)
 app.get("/app/:clientId", async (c) => {
   const clientId = c.req.param("clientId");
+  c.header("Cache-Control", "public, max-age=60, s-maxage=300");
 
   if (isQuickClient(clientId)) {
     const quickOrigin = getQuickOrigin(clientId);
@@ -184,6 +185,7 @@ app.get("/app/:clientId", async (c) => {
 // Public: Get connector resource info by resource key (for connector UX)
 app.get("/resource/:resourceKey", async (c) => {
   const resourceKey = c.req.param("resourceKey");
+  c.header("Cache-Control", "public, max-age=60, s-maxage=300");
 
   const [resource] = await db
     .select({
@@ -209,6 +211,85 @@ app.get("/resource/:resourceKey", async (c) => {
   }
 
   return c.json({ resource });
+});
+
+app.get("/authorize/bootstrap/:clientId", requireAuth, async (c) => {
+  const user = c.get("user")!;
+  const clientId = c.req.param("clientId") || "";
+
+  if (isQuickClient(clientId)) {
+    const quickOrigin = getQuickOrigin(clientId);
+    if (!quickOrigin) {
+      return c.json({ error: "App not found" }, 404);
+    }
+
+    return c.json({
+      app: {
+        id: clientId,
+        name: quickOrigin,
+        description: "Quick Ave â€” authenticate without app registration",
+        iconUrl: null,
+        websiteUrl: quickOrigin,
+        supportsE2ee: false,
+      },
+      resources: [],
+      authorization: null,
+    });
+  }
+
+  const [oauthApp] = await db
+    .select({
+      id: oauthApps.id,
+      name: oauthApps.name,
+      description: oauthApps.description,
+      iconUrl: oauthApps.iconUrl,
+      websiteUrl: oauthApps.websiteUrl,
+      supportsE2ee: oauthApps.supportsE2ee,
+    })
+    .from(oauthApps)
+    .where(eq(oauthApps.clientId, clientId))
+    .limit(1);
+
+  if (!oauthApp) {
+    return c.json({ error: "App not found" }, 404);
+  }
+
+  const [resources, authorization] = await Promise.all([
+    db
+      .select({
+        resourceKey: oauthResources.resourceKey,
+        displayName: oauthResources.displayName,
+        description: oauthResources.description,
+        scopes: oauthResources.scopes,
+        audience: oauthResources.audience,
+        status: oauthResources.status,
+      })
+      .from(oauthResources)
+      .where(and(eq(oauthResources.ownerAppId, oauthApp.id), eq(oauthResources.status, "active"))),
+    db
+      .select()
+      .from(oauthAuthorizations)
+      .where(and(
+        eq(oauthAuthorizations.userId, user.id),
+        eq(oauthAuthorizations.appId, oauthApp.id),
+      ))
+      .orderBy(desc(oauthAuthorizations.lastAuthorizedAt))
+      .limit(1)
+      .then((rows) => rows[0] ?? null),
+  ]);
+
+  return c.json({
+    app: oauthApp,
+    resources,
+    authorization: authorization
+      ? {
+          id: authorization.id,
+          identityId: authorization.identityId,
+          encryptedAppKey: authorization.encryptedAppKey,
+          createdAt: authorization.createdAt,
+        }
+      : null,
+  });
 });
 
 // Authorization endpoint - user grants access

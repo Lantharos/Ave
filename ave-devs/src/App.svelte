@@ -23,9 +23,8 @@
     fetchAppActivity,
     fetchAppIdentities,
     fetchAppOverview,
-    fetchApps,
     fetchOrganization,
-    fetchOrganizations,
+    fetchPortalBootstrap,
     inviteOrganizationMember,
     rotateSecret,
     updateApp,
@@ -125,25 +124,13 @@
     loading = true;
 
     try {
-      const organizationResponse = await fetchOrganizations(targetOrganizationId);
-      organizations = organizationResponse.organizations;
-      currentOrganizationId = organizationResponse.currentOrganizationId;
+      const bootstrap = await fetchPortalBootstrap(targetOrganizationId);
+      organizations = bootstrap.organizations;
+      currentOrganizationId = bootstrap.currentOrganizationId;
+      workspace = bootstrap.organization;
+      apps = bootstrap.apps;
 
-      if (!currentOrganizationId) {
-        workspace = null;
-        apps = [];
-        return;
-      }
-
-      const [nextWorkspace, nextApps] = await Promise.all([
-        fetchOrganization(currentOrganizationId),
-        fetchApps(currentOrganizationId),
-      ]);
-
-      workspace = nextWorkspace;
-      apps = nextApps;
-
-      if (selectedAppId && !nextApps.some((app) => app.id === selectedAppId)) {
+      if (selectedAppId && !bootstrap.apps.some((app) => app.id === selectedAppId)) {
         selectedAppId = null;
         appInsights = null;
         appIdentities = [];

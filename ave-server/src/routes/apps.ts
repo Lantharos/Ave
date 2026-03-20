@@ -74,7 +74,7 @@ function serializeResource(resource: typeof oauthResources.$inferSelect) {
   };
 }
 
-function serializeApp(
+export function serializeApp(
   appRow: typeof oauthApps.$inferSelect,
   resources: (typeof oauthResources.$inferSelect)[],
   identityCount = 0,
@@ -133,7 +133,7 @@ async function requireDevUser(c: any, next: any) {
   return c.json({ error: "Unauthorized" }, 401);
 }
 
-async function listAppResources(appIds: string[]) {
+export async function listAppResources(appIds: string[]) {
   if (!appIds.length) return [];
   return db
     .select()

@@ -171,18 +171,13 @@
         error = null;
 
         try {
-            // Load app info and check for existing authorization in parallel
-            const [appData, authData] = await Promise.all([
-                api.oauth.getApp(params.clientId),
-                api.oauth.getAuthorization(params.clientId),
-            ]);
+            const bootstrap = await api.oauth.getAuthorizeBootstrap(params.clientId);
 
-            appInfo = appData.app;
-            existingAuth = authData.authorization;
+            appInfo = bootstrap.app;
+            existingAuth = bootstrap.authorization;
             launchedExternalApp = false;
 
-            // Check if this is an E2EE app and we don't have the master key
-            if (appData.app.supportsE2ee && !hasMasterKey()) {
+            if (bootstrap.app.supportsE2ee && !hasMasterKey()) {
                 needsMasterKey = true;
             }
 
@@ -193,7 +188,7 @@
 
             selectedIdentity = existingIdentity || authState.currentIdentity || authState.identities[0] || null;
 
-            const shouldAutoAuthorize = !!existingAuth && !!existingIdentity && (!appData.app.supportsE2ee || hasMasterKey());
+            const shouldAutoAuthorize = !!existingAuth && !!existingIdentity && (!bootstrap.app.supportsE2ee || hasMasterKey());
 
             if (shouldAutoAuthorize) {
                 // Keep UI in loading state while we redirect.
