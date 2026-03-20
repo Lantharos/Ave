@@ -202,7 +202,7 @@
                 isPendingTarget
                   ? "bg-[#161d18] text-white shadow-[inset_0_0_0_1px_rgba(122,170,135,0.35)]"
                   : isSavedCurrent
-                    ? "bg-white/[0.045] text-white"
+                    ? "bg-white/[0.06] text-white"
                     : "bg-white/[0.03] text-white hover:bg-white/[0.055]"
               }`}
               onclick={() => {
@@ -226,7 +226,7 @@
                   <span class="rounded-full bg-[#6fa47f]/14 px-3 py-1 text-[12px] font-medium text-[#bdd3c3]">Will transfer</span>
                 {:else if isSavedCurrent}
                   <span class={`rounded-full px-3 py-1 text-[12px] font-medium ${
-                    transferPending ? "bg-white/[0.04] text-[#8b8b8b]" : "bg-white/[0.08] text-[#b8b8b8]"
+                    transferPending ? "bg-white/[0.05] text-[#909090]" : "bg-white/[0.1] text-[#c2c2c2]"
                   }`}>Current</span>
                 {/if}
               </div>
