@@ -30,6 +30,8 @@
     updateApp,
     updateOrganization,
     updateOrganizationMemberRole,
+    uploadWorkspaceLogo,
+    ApiError,
     type AppEvent,
     type AppIdentityRecord,
     type AppInsightSnapshot,
@@ -38,7 +40,7 @@
   } from "./lib/api";
   import type { WorkspaceRole, WorkspaceState, WorkspaceSummary } from "./lib/portal";
 
-  type WorkspaceSection = "applications" | "organization" | "settings" | "create";
+  type WorkspaceSection = "applications" | "organization" | "settings";
   type AppSection = "overview" | "identities" | "activity" | "configure";
 
   let workspaceSection: WorkspaceSection = $state("applications");
@@ -53,6 +55,7 @@
   let appEvents: AppEvent[] = $state([]);
   let appBundles: Record<string, AppOverviewBundle> = $state({});
   let deleteTarget: DevApp | null = $state(null);
+  let createModalOpen = $state(false);
   let loading = $state(true);
   let appLoading = $state(false);
   let error = $state("");
@@ -143,11 +146,13 @@
         appEvents = [];
       }
     } catch (err) {
-      authenticated = false;
-      apps = [];
-      workspace = null;
-      organizations = [];
-      currentOrganizationId = null;
+      if (err instanceof ApiError && err.status === 401) {
+        authenticated = false;
+        apps = [];
+        workspace = null;
+        organizations = [];
+        currentOrganizationId = null;
+      }
       error = err instanceof Error ? err.message : "Failed to load portal";
     } finally {
       loading = false;
@@ -219,6 +224,7 @@
     appIdentities = [];
     appEvents = [];
     deleteTarget = null;
+    createModalOpen = false;
     newSecret = null;
     workspaceSection = "applications";
     appSection = "overview";
@@ -229,6 +235,7 @@
     appInsights = null;
     appIdentities = [];
     appEvents = [];
+    createModalOpen = false;
     workspaceSection = section;
   }
 
@@ -239,6 +246,7 @@
     appEvents = [];
     appBundles = {};
     appLoading = false;
+    createModalOpen = false;
     workspaceSection = "applications";
     await loadPortal(organizationId);
   }
@@ -250,6 +258,7 @@
       appIdentities = [];
       appEvents = [];
       appLoading = false;
+      createModalOpen = false;
       workspaceSection = "applications";
       return;
     }
@@ -301,6 +310,7 @@
       apps = [result.app, ...apps];
       newSecret = result.clientSecret;
       appBundles = {};
+      createModalOpen = false;
       if (workspace) {
         workspace = {
           ...workspace,
@@ -484,10 +494,11 @@
       workspace = {
         ...workspace,
         name: updated.name,
+        logoUrl: updated.logoUrl,
       };
       organizations = organizations.map((organization) =>
         organization.id === workspace?.id
-          ? { ...organization, name: updated.name }
+          ? { ...organization, name: updated.name, logoUrl: updated.logoUrl }
           : organization,
       );
     } catch (err) {
@@ -503,15 +514,35 @@
       const updated = await updateOrganization(workspace.id, { verifiedDomains });
       workspace = {
         ...workspace,
+        logoUrl: updated.logoUrl,
         verifiedDomains: updated.verifiedDomains,
       };
       organizations = organizations.map((organization) =>
         organization.id === workspace?.id
-          ? { ...organization, verifiedDomains: updated.verifiedDomains }
+          ? { ...organization, verifiedDomains: updated.verifiedDomains, logoUrl: updated.logoUrl }
           : organization,
       );
     } catch (err) {
       error = err instanceof Error ? err.message : "Failed to add domain";
+    }
+  }
+
+  async function handleWorkspaceLogoUpload(file: File) {
+    if (!workspace) return;
+
+    try {
+      const result = await uploadWorkspaceLogo(workspace.id, file);
+      workspace = {
+        ...workspace,
+        logoUrl: result.logoUrl,
+      };
+      organizations = organizations.map((organization) =>
+        organization.id === workspace?.id
+          ? { ...organization, logoUrl: result.logoUrl }
+          : organization,
+      );
+    } catch (err) {
+      error = err instanceof Error ? err.message : "Failed to upload workspace logo";
     }
   }
 </script>
@@ -535,7 +566,7 @@
         onopenapps={() => openWorkspace("applications")}
         onopenteam={() => openWorkspace("organization")}
         onopensettings={() => openWorkspace("settings")}
-        oncreateapp={() => openWorkspace("create")}
+        oncreateapp={() => (createModalOpen = true)}
         onsignout={handleSignOut}
       />
 
@@ -572,7 +603,19 @@
         <SecretBanner secret={newSecret} ondismiss={() => (newSecret = null)} />
       {/if}
 
-      <main class="flex-1 rounded-[32px] bg-[#0d0d0d]/76 px-5 py-7 md:px-8 md:py-9 backdrop-blur-[24px]">
+      {#if createModalOpen}
+        <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 backdrop-blur-sm">
+          <div class="max-h-[calc(100vh-48px)] w-full max-w-[980px] overflow-y-auto rounded-[32px] bg-[#131313] p-6 md:p-8 shadow-[0_32px_120px_rgba(0,0,0,0.55)]">
+            <CreateAppPage
+              oncreate={handleCreate}
+              oncancel={() => (createModalOpen = false)}
+              {creating}
+            />
+          </div>
+        </div>
+      {/if}
+
+      <main class="flex-1 {selectedAppId || workspaceSection !== 'applications' ? 'rounded-[32px] bg-[#0d0d0d]/76 px-5 py-7 md:px-8 md:py-9 backdrop-blur-[24px]' : 'px-0 py-2 md:py-3'}">
         {#if selectedApp && appLoading && !appInsights && appSection !== "configure"}
           <div class="flex flex-col gap-5">
             <div class="flex items-center gap-4">
@@ -629,7 +672,7 @@
           <AppsPage
             {apps}
             {loading}
-            oncreate={() => openWorkspace("create")}
+            oncreate={() => (createModalOpen = true)}
             onselect={(app) => openApp(app.id)}
           />
         {:else if workspaceSection === "organization"}
@@ -644,12 +687,7 @@
             appCount={apps.length}
             onrename={handleWorkspaceRename}
             onadddomain={handleDomainAdd}
-          />
-        {:else if workspaceSection === "create"}
-          <CreateAppPage
-            oncreate={handleCreate}
-            oncancel={() => openWorkspace("applications")}
-            {creating}
+            onuploadlogo={handleWorkspaceLogoUpload}
           />
         {/if}
       </main>

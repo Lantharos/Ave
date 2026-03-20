@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { db, identities, activityLogs } from "../db";
+import { db, identities, activityLogs, organizations, organizationMembers } from "../db";
 import { requireAuth } from "../middleware/auth";
 import { eq, and } from "drizzle-orm";
 import { S3Client, PutObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
@@ -85,6 +85,7 @@ function getContentType(filename: string): string {
 // Max file sizes (in bytes)
 const MAX_AVATAR_SIZE = 5 * 1024 * 1024; // 5MB
 const MAX_BANNER_SIZE = 10 * 1024 * 1024; // 10MB
+const MAX_WORKSPACE_LOGO_SIZE = 5 * 1024 * 1024; // 5MB
 
 // All routes require authentication
 app.use("*", requireAuth);
@@ -207,6 +208,85 @@ app.post("/avatar", async (c) => {
   });
 
   return c.json({ avatarUrl });
+});
+
+app.post("/workspace-logo", async (c) => {
+  const user = c.get("user")!;
+
+  const body = await c.req.parseBody();
+  const file = body.file as File | undefined;
+  const organizationId = body.organizationId as string | undefined;
+
+  if (!file || !(file instanceof File)) {
+    return c.json({ error: "No file provided" }, 400);
+  }
+
+  if (!organizationId) {
+    return c.json({ error: "Organization ID required" }, 400);
+  }
+
+  const [membership] = await db
+    .select({
+      role: organizationMembers.role,
+      status: organizationMembers.status,
+    })
+    .from(organizationMembers)
+    .where(and(eq(organizationMembers.organizationId, organizationId), eq(organizationMembers.userId, user.id)))
+    .limit(1);
+
+  if (!membership || membership.status !== "active" || (membership.role !== "owner" && membership.role !== "admin")) {
+    return c.json({ error: "Organization not found" }, 404);
+  }
+
+  const [organization] = await db
+    .select()
+    .from(organizations)
+    .where(eq(organizations.id, organizationId))
+    .limit(1);
+
+  if (!organization) {
+    return c.json({ error: "Organization not found" }, 404);
+  }
+
+  if (!isValidImageType(file.type)) {
+    return c.json(
+      { error: "Invalid file type. Allowed: JPEG, PNG, GIF, WebP" },
+      400,
+    );
+  }
+
+  if (file.size > MAX_WORKSPACE_LOGO_SIZE) {
+    return c.json({ error: "File too large. Maximum size: 5MB" }, 400);
+  }
+
+  const filename = generateFilename(file.name);
+  const key = `workspace-logos/${filename}`;
+  const buffer = Buffer.from(await file.arrayBuffer());
+  const logoUrl = await uploadToR2(buffer, key, file.type);
+
+  if (organization.logoUrl) {
+    const oldKey = getKeyFromUrl(organization.logoUrl);
+    if (oldKey) {
+      await deleteFromR2(oldKey);
+    }
+  }
+
+  await db
+    .update(organizations)
+    .set({ logoUrl, updatedAt: new Date() })
+    .where(eq(organizations.id, organizationId));
+
+  await db.insert(activityLogs).values({
+    userId: user.id,
+    action: "workspace_logo_updated",
+    details: { organizationId },
+    deviceId: user.deviceId,
+    ipAddress: c.req.header("x-forwarded-for") || c.req.header("x-real-ip"),
+    userAgent: c.req.header("user-agent"),
+    severity: "info",
+  });
+
+  return c.json({ logoUrl });
 });
 
 // Upload banner

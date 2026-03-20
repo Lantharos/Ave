@@ -17,6 +17,7 @@ export const organizations = sqliteTable("organizations", {
   updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull().$defaultFn(() => new Date()),
 
   name: text("name").notNull(),
+  logoUrl: text("logo_url"),
   slug: text("slug").notNull().unique(),
   plan: text("plan").notNull().default("core"),
   verifiedDomains: text("verified_domains", { mode: "json" }).$type<string[]>().$defaultFn(() => []),

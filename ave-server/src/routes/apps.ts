@@ -72,6 +72,7 @@ function serializeResource(resource: typeof oauthResources.$inferSelect) {
 function serializeApp(
   appRow: typeof oauthApps.$inferSelect,
   resources: (typeof oauthResources.$inferSelect)[],
+  identityCount = 0,
 ) {
   return {
     id: appRow.id,
@@ -88,6 +89,7 @@ function serializeApp(
     allowUserIdScope: !!appRow.allowUserIdScope,
     createdAt: appRow.createdAt,
     organizationId: appRow.organizationId,
+    identityCount,
     resources: resources.map(serializeResource),
   };
 }
@@ -143,6 +145,15 @@ app.get("/", async (c) => {
   const requestedOrganizationId = c.req.query("organizationId");
   const apps = await getAccessibleApps(userId, requestedOrganizationId);
   const resources = await listAppResources(apps.map((appRow) => appRow.id));
+  const authorizations = apps.length
+    ? await db
+        .select({
+          appId: oauthAuthorizations.appId,
+          identityId: oauthAuthorizations.identityId,
+        })
+        .from(oauthAuthorizations)
+        .where(inArray(oauthAuthorizations.appId, apps.map((appRow) => appRow.id)))
+    : [];
 
   const resourcesByAppId = new Map<string, typeof resources>();
   for (const resource of resources) {
@@ -151,8 +162,21 @@ app.get("/", async (c) => {
     resourcesByAppId.set(resource.ownerAppId, list);
   }
 
+  const identityIdsByAppId = new Map<string, Set<string>>();
+  for (const authorization of authorizations) {
+    const existing = identityIdsByAppId.get(authorization.appId) || new Set<string>();
+    existing.add(authorization.identityId);
+    identityIdsByAppId.set(authorization.appId, existing);
+  }
+
   return c.json({
-    apps: apps.map((appRow) => serializeApp(appRow, resourcesByAppId.get(appRow.id) || [])),
+    apps: apps.map((appRow) =>
+      serializeApp(
+        appRow,
+        resourcesByAppId.get(appRow.id) || [],
+        identityIdsByAppId.get(appRow.id)?.size || 0,
+      ),
+    ),
   });
 });
 
@@ -192,7 +216,7 @@ app.post("/", zValidator("json", baseAppSchema), async (c) => {
     .returning();
 
   return c.json({
-    app: serializeApp(newApp, []),
+    app: serializeApp(newApp, [], 0),
     clientSecret,
   });
 });

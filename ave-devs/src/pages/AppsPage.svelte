@@ -2,8 +2,6 @@
   import Button from "../components/Button.svelte";
   import Card from "../components/Card.svelte";
   import type { DevApp } from "../lib/api";
-  import { formatDate } from "../lib/portal";
-
   interface Props {
     apps: DevApp[];
     loading: boolean;
@@ -28,7 +26,7 @@
   const overview = $derived({
     total: apps.length,
     secure: apps.filter((app) => app.supportsE2ee).length,
-    configured: apps.filter((app) => app.redirectUris.length > 0).length,
+    identities: apps.reduce((count, app) => count + (app.identityCount || 0), 0),
   });
 
   function getWebsiteHost(value?: string) {
@@ -60,14 +58,14 @@
     </Card>
     <Card>
       <div class="flex flex-col gap-2">
-        <span class="text-[14px] text-[#7d7d7d]">Encrypted</span>
+        <span class="text-[14px] text-[#7d7d7d]">E2EE</span>
         <span class="text-[32px] font-black text-white">{overview.secure}</span>
       </div>
     </Card>
     <Card>
       <div class="flex flex-col gap-2">
-        <span class="text-[14px] text-[#7d7d7d]">Configured</span>
-        <span class="text-[32px] font-black text-white">{overview.configured}</span>
+        <span class="text-[14px] text-[#7d7d7d]">Identities</span>
+        <span class="text-[32px] font-black text-white">{overview.identities}</span>
       </div>
     </Card>
   </div>
@@ -142,10 +140,15 @@
                     </div>
                     <div class="min-w-0">
                       <p class="m-0 truncate text-[20px] font-semibold text-white">{app.name}</p>
-                      <p class="m-0 mt-1 truncate text-[13px] text-[#7d7d7d]">{app.clientId}</p>
                     </div>
                   </div>
-                  <span class="text-[13px] text-[#8e8e8e]">{app.supportsE2ee ? "Encrypted" : "Standard"}</span>
+                  {#if app.supportsE2ee}
+                    <span class="flex h-10 w-10 items-center justify-center rounded-full bg-[#17311f] text-[#67d58a] shrink-0">
+                      <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 15v2m-4 0h8a2 2 0 002-2v-4a2 2 0 00-2-2h-1V7a3 3 0 10-6 0v2H8a2 2 0 00-2 2v4a2 2 0 002 2z" />
+                      </svg>
+                    </span>
+                  {/if}
                 </div>
 
                 <p class="m-0 min-h-[44px] text-[14px] leading-6 text-[#8b8b8b]">
@@ -158,13 +161,13 @@
                     <p class="m-0 mt-2 truncate text-[16px] font-semibold text-white">{getWebsiteHost(app.websiteUrl)}</p>
                   </div>
                   <div class="rounded-[20px] bg-white/[0.03] px-4 py-4">
-                    <p class="m-0 text-[12px] text-[#686868]">Created</p>
-                    <p class="m-0 mt-2 text-[16px] font-semibold text-white">{formatDate(app.createdAt)}</p>
+                    <p class="m-0 text-[12px] text-[#686868]">Identities</p>
+                    <p class="m-0 mt-2 text-[16px] font-semibold text-white">{app.identityCount || 0}</p>
                   </div>
                 </div>
 
                 <div class="mt-auto flex items-center justify-between gap-3">
-                  <span class="text-[13px] text-[#6d6d6d]">{app.clientId}</span>
+                  <span class="text-[13px] text-[#6d6d6d]">{app.redirectUris.length} redirects</span>
                   <span class="text-[14px] font-medium text-[#b9bbbe]">Open dashboard</span>
                 </div>
               </div>

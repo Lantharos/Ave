@@ -29,7 +29,7 @@
 
   const activeMembers = $derived(workspace.members.filter((member) => member.status === "active"));
   const invites = $derived(workspace.members.filter((member) => member.status === "invited"));
-  const workspaceAvatar = $derived(workspace.members.find((member) => member.avatarUrl)?.avatarUrl || null);
+  const workspaceAvatar = $derived(workspace.logoUrl || null);
 </script>
 
 <div class="flex flex-col gap-8 md:gap-10">

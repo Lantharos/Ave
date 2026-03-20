@@ -17,6 +17,7 @@ export interface DevApp {
   allowUserIdScope: boolean;
   createdAt: string;
   organizationId?: string | null;
+  identityCount?: number;
   resources?: AppResource[];
 }
 
@@ -129,6 +130,7 @@ async function request<T>(
 function mapWorkspaceState(payload: {
   id: string;
   name: string;
+  logoUrl?: string | null;
   slug: string;
   plan: string;
   verifiedDomains: string[];
@@ -140,6 +142,7 @@ function mapWorkspaceState(payload: {
   return {
     id: payload.id,
     name: payload.name,
+    logoUrl: payload.logoUrl || null,
     slug: payload.slug,
     plan: payload.plan,
     verifiedDomains: payload.verifiedDomains || [],
@@ -165,7 +168,7 @@ export async function fetchOrganization(organizationId: string): Promise<Workspa
 
 export async function updateOrganization(
   organizationId: string,
-  payload: { name?: string; verifiedDomains?: string[] },
+  payload: { name?: string; logoUrl?: string | null; verifiedDomains?: string[] },
 ): Promise<WorkspaceState> {
   const data = await request<{ organization: WorkspaceState }>(`/api/organizations/${organizationId}`, {
     method: "PATCH",
@@ -279,6 +282,26 @@ export async function checkSession(): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+export async function uploadWorkspaceLogo(organizationId: string, file: File): Promise<{ logoUrl: string }> {
+  const formData = new FormData();
+  formData.append("organizationId", organizationId);
+  formData.append("file", file);
+
+  const response = await fetch(`${API_BASE}/api/upload/workspace-logo`, {
+    method: "POST",
+    credentials: "include",
+    body: formData,
+  });
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new ApiError(response.status, data.error || "Upload failed");
+  }
+
+  return data as { logoUrl: string };
 }
 
 export async function logoutSession(): Promise<void> {

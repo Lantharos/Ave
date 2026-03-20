@@ -67,6 +67,7 @@ app.get("/", async (c) => {
     organizations: memberships.map((membership) => ({
       id: membership.organization.id,
       name: membership.organization.name,
+      logoUrl: membership.organization.logoUrl,
       slug: membership.organization.slug,
       plan: membership.organization.plan,
       verifiedDomains: (membership.organization.verifiedDomains as string[] | null) || [],
@@ -124,6 +125,7 @@ app.get("/:organizationId", async (c) => {
     organization: {
       id: membership.organization.id,
       name: membership.organization.name,
+      logoUrl: membership.organization.logoUrl,
       slug: membership.organization.slug,
       plan: membership.organization.plan,
       verifiedDomains: (membership.organization.verifiedDomains as string[] | null) || [],
@@ -149,6 +151,7 @@ app.get("/:organizationId", async (c) => {
 
 app.patch("/:organizationId", zValidator("json", z.object({
   name: z.string().min(2).max(80).optional(),
+  logoUrl: z.string().url().nullable().optional(),
   verifiedDomains: z.array(z.string().min(3).max(255)).optional(),
 })), async (c) => {
   const user = c.get("user")!;
@@ -164,6 +167,7 @@ app.patch("/:organizationId", zValidator("json", z.object({
     .update(organizations)
     .set({
       name: payload.name ?? membership.organization.name,
+      logoUrl: payload.logoUrl === undefined ? membership.organization.logoUrl : payload.logoUrl,
       verifiedDomains: payload.verifiedDomains ?? ((membership.organization.verifiedDomains as string[] | null) || []),
       updatedAt: new Date(),
     })
@@ -174,6 +178,7 @@ app.patch("/:organizationId", zValidator("json", z.object({
     organization: {
       id: updated.id,
       name: updated.name,
+      logoUrl: updated.logoUrl,
       slug: updated.slug,
       plan: updated.plan,
       verifiedDomains: (updated.verifiedDomains as string[] | null) || [],

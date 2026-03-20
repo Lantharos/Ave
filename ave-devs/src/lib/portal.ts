@@ -14,6 +14,7 @@ export interface WorkspaceMember {
 export interface WorkspaceSummary {
   id: string;
   name: string;
+  logoUrl?: string | null;
   slug: string;
   plan: string;
   verifiedDomains: string[];
@@ -26,6 +27,7 @@ export interface WorkspaceSummary {
 export interface WorkspaceState {
   id: string;
   name: string;
+  logoUrl?: string | null;
   slug: string;
   plan: string;
   appLimit: number;

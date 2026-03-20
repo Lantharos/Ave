@@ -9,12 +9,15 @@
     appCount: number;
     onrename: (name: string) => void;
     onadddomain: (domain: string) => void;
+    onuploadlogo: (file: File) => Promise<void>;
   }
 
-  let { workspace, appCount, onrename, onadddomain }: Props = $props();
+  let { workspace, appCount, onrename, onadddomain, onuploadlogo }: Props = $props();
 
   let draftName = $state("");
   let domainDraft = $state("");
+  let logoInput: HTMLInputElement | null = null;
+  let uploadingLogo = $state(false);
 
   $effect(() => {
     draftName = workspace.name;
@@ -39,6 +42,37 @@
           <span class="text-[14px] text-[#8a8a8a]">Name</span>
           <Input bind:value={draftName} placeholder="Workspace name" />
         </label>
+
+        <div class="flex items-center justify-between gap-4 rounded-[22px] bg-white/[0.03] px-5 py-5 flex-wrap">
+          <div class="flex items-center gap-4">
+            {#if workspace.logoUrl}
+              <img src={workspace.logoUrl} alt="" class="h-14 w-14 rounded-[18px] object-cover" />
+            {:else}
+              <div class="flex h-14 w-14 items-center justify-center rounded-[18px] bg-white/[0.05] text-[18px] font-black text-white">
+                {workspace.name.slice(0, 1).toUpperCase()}
+              </div>
+            {/if}
+            <div>
+              <p class="m-0 text-[15px] font-medium text-white">Workspace logo</p>
+              <p class="m-0 mt-1 text-[13px] text-[#7d7d7d]">Upload a custom mark for this workspace.</p>
+            </div>
+          </div>
+          <div>
+            <input bind:this={logoInput} type="file" accept="image/png,image/jpeg,image/webp,image/gif" class="hidden" onchange={async (event) => {
+              const input = event.currentTarget as HTMLInputElement;
+              const file = input.files?.[0];
+              if (!file) return;
+              uploadingLogo = true;
+              try {
+                await onuploadlogo(file);
+              } finally {
+                uploadingLogo = false;
+                input.value = "";
+              }
+            }} />
+            <Button variant="outline" size="sm" onclick={() => logoInput?.click()}>{uploadingLogo ? "Uploading..." : "Upload logo"}</Button>
+          </div>
+        </div>
 
         <div class="grid gap-4 md:grid-cols-2">
           <div class="rounded-[22px] bg-white/[0.03] px-5 py-5">
