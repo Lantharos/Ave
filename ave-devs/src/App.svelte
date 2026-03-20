@@ -386,6 +386,7 @@
   async function handleSaveApp(app: DevApp & { redirectUrisText?: string }) {
     error = "";
     saveState = "saving";
+    const previousOrganizationId = apps.find((entry) => entry.id === app.id)?.organizationId ?? null;
 
     try {
       const payload = {
@@ -402,14 +403,25 @@
         accessTokenTtlSeconds: app.accessTokenTtlSeconds,
         refreshTokenTtlSeconds: app.refreshTokenTtlSeconds,
         allowUserIdScope: app.allowUserIdScope,
+        organizationId: app.organizationId || undefined,
       };
 
       const result = await updateApp(app.id, payload);
-      apps = apps.map((entry) => (entry.id === result.app.id ? result.app : entry));
-      appBundles = Object.fromEntries(
-        Object.entries(appBundles).filter(([key]) => key !== app.id),
-      );
-      await loadSelectedApp(app.id);
+      const organizationChanged = result.app.organizationId !== previousOrganizationId;
+
+      if (organizationChanged) {
+        appBundles = {};
+        selectedAppId = result.app.id;
+        appSection = "configure";
+        await loadPortal(result.app.organizationId || undefined);
+        await loadSelectedApp(result.app.id);
+      } else {
+        apps = apps.map((entry) => (entry.id === result.app.id ? result.app : entry));
+        appBundles = Object.fromEntries(
+          Object.entries(appBundles).filter(([key]) => key !== app.id),
+        );
+        await loadSelectedApp(app.id);
+      }
       saveState = "saved";
 
       if (saveStateTimer) clearTimeout(saveStateTimer);
@@ -799,6 +811,7 @@
         {:else if selectedApp && appSection === "configure"}
           <AppDetailPage
             app={selectedApp}
+            {organizations}
             onsave={handleSaveApp}
             onrotate={handleRotateSecret}
             ondelete={(app) => (deleteTarget = app)}

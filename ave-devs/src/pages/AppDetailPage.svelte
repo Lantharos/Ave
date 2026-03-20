@@ -5,9 +5,11 @@
   import Textarea from "../components/Textarea.svelte";
   import Toggle from "../components/Toggle.svelte";
   import type { DevApp } from "../lib/api";
+  import type { WorkspaceSummary } from "../lib/portal";
 
   interface Props {
     app: DevApp & { redirectUrisText?: string };
+    organizations: WorkspaceSummary[];
     onsave: (app: DevApp & { redirectUrisText?: string }) => void;
     onrotate: (appId: string) => void;
     ondelete: (app: DevApp) => void;
@@ -29,6 +31,7 @@
 
   let {
     app = $bindable(),
+    organizations,
     onsave,
     onrotate,
     ondelete,
@@ -53,6 +56,10 @@
   let resourceError = $state<string | null>(null);
   let creatingResource = $state(false);
   let deletingResourceId = $state<string | null>(null);
+
+  const transferableOrganizations = $derived.by(() =>
+    organizations.filter((organization) => organization.role === "owner" || organization.role === "admin"),
+  );
 
   async function handleCopy(text: string, field: string) {
     oncopy(text);
@@ -159,6 +166,42 @@
         <span class="text-[14px] text-[#8a8a8a]">Redirect URIs</span>
         <Textarea bind:value={app.redirectUrisText} rows={4} placeholder="https://example.com/callback" />
       </label>
+
+      <div class="flex flex-col gap-3">
+        <div>
+          <span class="text-[14px] text-[#8a8a8a]">Organization</span>
+          <p class="m-0 mt-2 text-[14px] text-[#666]">Transfer this app to another workspace where you already have admin access.</p>
+        </div>
+
+        <div class="grid gap-3 md:grid-cols-2">
+          {#each transferableOrganizations as organization}
+            <button
+              class={`rounded-[22px] border-0 px-5 py-4 text-left cursor-pointer transition-colors duration-300 ${
+                app.organizationId === organization.id
+                  ? "bg-white text-[#090909]"
+                  : "bg-white/[0.03] text-white hover:bg-white/[0.06]"
+              }`}
+              onclick={() => {
+                app.organizationId = organization.id;
+              }}
+            >
+              <div class="flex items-center justify-between gap-3">
+                <div class="min-w-0">
+                  <p class={`m-0 truncate text-[15px] font-semibold ${app.organizationId === organization.id ? "text-[#090909]" : "text-white"}`}>
+                    {organization.name}
+                  </p>
+                  <p class={`m-0 mt-1 text-[13px] ${app.organizationId === organization.id ? "text-[#3b3b3b]" : "text-[#7d7d7d]"}`}>
+                    {organization.role} · {organization.appCount} apps
+                  </p>
+                </div>
+                {#if app.organizationId === organization.id}
+                  <span class="rounded-full bg-[#090909]/10 px-3 py-1 text-[12px] font-medium text-inherit">Current</span>
+                {/if}
+              </div>
+            </button>
+          {/each}
+        </div>
+      </div>
 
       <div class="grid gap-6 md:grid-cols-2">
         <label class="flex flex-col gap-3">

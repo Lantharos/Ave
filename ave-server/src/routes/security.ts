@@ -16,6 +16,7 @@ import {
 } from "@simplewebauthn/server";
 import { isAllowedWebauthnOrigin } from "../lib/webauthn-origin";
 import { deleteChallenge, getChallenge, setChallenge } from "../lib/challenge-store";
+import { resolvePasskeyName } from "../lib/passkey-names";
 
 const app = new Hono();
 const RECOVERY_CODE_COUNT = 5;
@@ -194,7 +195,12 @@ app.post("/passkeys/complete", zValidator("json", z.object({
         deviceType: registrationInfo.credentialDeviceType,
         backedUp: registrationInfo.credentialBackedUp,
         transports: credential.response?.transports,
-        name: name || "New Passkey",
+        name: resolvePasskeyName({
+          aaguid: registrationInfo.aaguid,
+          preferredName: name,
+          authenticatorAttachment: credential.authenticatorAttachment,
+          credentialDeviceType: registrationInfo.credentialDeviceType,
+        }),
         prfEncryptedMasterKey, // Store PRF-encrypted master key if provided
       })
       .returning();

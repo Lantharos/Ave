@@ -15,6 +15,7 @@ import { setSessionCookie } from "../lib/session-cookie";
 import { eq } from "drizzle-orm";
 import { requireAuth } from "../middleware/auth";
 import { deleteChallenge, getChallenge, setChallenge } from "../lib/challenge-store";
+import { resolvePasskeyName } from "../lib/passkey-names";
 
 const app = new Hono();
 
@@ -179,7 +180,13 @@ app.post("/complete", zValidator("json", completeRegistrationSchema), async (c) 
       deviceType: registrationInfo.credentialDeviceType,
       backedUp: registrationInfo.credentialBackedUp,
       transports: data.credential.response?.transports,
-      name: data.device.name + " Passkey",
+      name: resolvePasskeyName({
+        aaguid: registrationInfo.aaguid,
+        preferredName: data.device.name,
+        os: data.device.os,
+        authenticatorAttachment: data.credential.authenticatorAttachment,
+        credentialDeviceType: registrationInfo.credentialDeviceType,
+      }),
       // Store PRF-encrypted master key if provided (for passkeys that support PRF extension)
       prfEncryptedMasterKey: data.prfEncryptedMasterKey,
     });
