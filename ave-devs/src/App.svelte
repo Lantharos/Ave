@@ -33,6 +33,7 @@
     type AppEvent,
     type AppIdentityRecord,
     type AppInsightSnapshot,
+    type AppOverviewBundle,
     type DevApp,
   } from "./lib/api";
   import type { WorkspaceRole, WorkspaceState, WorkspaceSummary } from "./lib/portal";
@@ -50,8 +51,10 @@
   let appInsights: AppInsightSnapshot | null = $state(null);
   let appIdentities: AppIdentityRecord[] = $state([]);
   let appEvents: AppEvent[] = $state([]);
+  let appBundles: Record<string, AppOverviewBundle> = $state({});
   let deleteTarget: DevApp | null = $state(null);
   let loading = $state(true);
+  let appLoading = $state(false);
   let error = $state("");
   let authenticated = $state(false);
   let newSecret: string | null = $state(null);
@@ -152,17 +155,46 @@
   }
 
   async function loadSelectedApp(appId: string) {
-    selectedAppId = appId;
-    appSection = "overview";
+    const cachedBundle = appBundles[appId];
+
+    if (cachedBundle) {
+      applyAppBundle(cachedBundle);
+      appLoading = false;
+    } else {
+      appInsights = null;
+      appIdentities = [];
+      appEvents = [];
+      appLoading = true;
+    }
 
     try {
       const bundle = await fetchAppOverview(appId);
-      appInsights = bundle.insights;
-      appIdentities = bundle.identities;
-      appEvents = bundle.events;
+      appBundles = {
+        ...appBundles,
+        [appId]: bundle,
+      };
+
+      if (selectedAppId === appId) {
+        applyAppBundle(bundle);
+      }
     } catch (err) {
+      if (selectedAppId === appId && !cachedBundle) {
+        appInsights = null;
+        appIdentities = [];
+        appEvents = [];
+      }
       error = err instanceof Error ? err.message : "Failed to load app overview";
+    } finally {
+      if (selectedAppId === appId) {
+        appLoading = false;
+      }
     }
+  }
+
+  function applyAppBundle(bundle: AppOverviewBundle) {
+    appInsights = bundle.insights;
+    appIdentities = bundle.identities;
+    appEvents = bundle.events;
   }
 
   function handleSignIn() {
@@ -205,6 +237,8 @@
     appInsights = null;
     appIdentities = [];
     appEvents = [];
+    appBundles = {};
+    appLoading = false;
     workspaceSection = "applications";
     await loadPortal(organizationId);
   }
@@ -215,11 +249,15 @@
       appInsights = null;
       appIdentities = [];
       appEvents = [];
+      appLoading = false;
       workspaceSection = "applications";
       return;
     }
 
-    await loadSelectedApp(appId);
+    selectedAppId = appId;
+    workspaceSection = "applications";
+    appSection = "overview";
+    void loadSelectedApp(appId);
   }
 
   async function handleCreate(form: {
@@ -262,6 +300,7 @@
 
       apps = [result.app, ...apps];
       newSecret = result.clientSecret;
+      appBundles = {};
       if (workspace) {
         workspace = {
           ...workspace,
@@ -319,6 +358,9 @@
 
       const result = await updateApp(app.id, payload);
       apps = apps.map((entry) => (entry.id === result.app.id ? result.app : entry));
+      appBundles = Object.fromEntries(
+        Object.entries(appBundles).filter(([key]) => key !== app.id),
+      );
       await loadSelectedApp(app.id);
       saveState = "saved";
 
@@ -341,6 +383,9 @@
     try {
       await deleteApp(target.id);
       apps = apps.filter((app) => app.id !== target.id);
+      appBundles = Object.fromEntries(
+        Object.entries(appBundles).filter(([key]) => key !== target.id),
+      );
       if (workspace) {
         workspace = {
           ...workspace,
@@ -384,6 +429,9 @@
         ? { ...app, resources: [...(app.resources || []), result.resource] }
         : app,
     );
+    appBundles = Object.fromEntries(
+      Object.entries(appBundles).filter(([key]) => key !== appId),
+    );
     await loadSelectedApp(appId);
   }
 
@@ -393,6 +441,9 @@
       app.id === appId
         ? { ...app, resources: (app.resources || []).filter((resource) => resource.id !== resourceId) }
         : app,
+    );
+    appBundles = Object.fromEntries(
+      Object.entries(appBundles).filter(([key]) => key !== appId),
     );
     await loadSelectedApp(appId);
   }
@@ -472,14 +523,13 @@
     <AuroraBackdrop preset="dashboard-tr" cclass="pointer-events-none absolute right-0 top-0 w-[70%] select-none" />
     <AuroraBackdrop preset="dashboard-bl" cclass="pointer-events-none absolute bottom-0 left-0 w-[80%] select-none" />
 
-    <div class="relative z-10 mx-auto flex min-h-screen w-full max-w-[1520px] flex-col gap-6 px-3 py-3 md:px-6 md:py-5">
+    <div class="relative z-10 mx-auto flex min-h-screen w-full max-w-[1440px] flex-col gap-5 px-3 py-3 md:px-5 md:py-5">
       <TopBar
         {workspace}
         {organizations}
         {currentOrganizationId}
         {apps}
         {selectedAppId}
-        environmentLabel="Development"
         onselectorganization={switchOrganization}
         onselectapp={openApp}
         onopenapps={() => openWorkspace("applications")}
@@ -522,8 +572,39 @@
         <SecretBanner secret={newSecret} ondismiss={() => (newSecret = null)} />
       {/if}
 
-      <main class="flex-1 rounded-[32px] bg-[#0d0d0d]/76 px-4 py-6 md:px-6 md:py-8 backdrop-blur-[24px]">
-        {#if selectedApp && appInsights && appSection === "overview"}
+      <main class="flex-1 rounded-[32px] bg-[#0d0d0d]/76 px-5 py-7 md:px-8 md:py-9 backdrop-blur-[24px]">
+        {#if selectedApp && appLoading && !appInsights && appSection !== "configure"}
+          <div class="flex flex-col gap-5">
+            <div class="flex items-center gap-4">
+              <div class="h-12 w-12 rounded-[18px] bg-white/[0.05] animate-pulse"></div>
+              <div class="flex flex-col gap-2">
+                <div class="h-5 w-40 rounded-full bg-white/[0.05] animate-pulse"></div>
+                <div class="h-4 w-64 rounded-full bg-white/[0.04] animate-pulse"></div>
+              </div>
+            </div>
+            <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+              {#each Array.from({ length: 4 }) as _, index (index)}
+                <div class="rounded-[28px] bg-white/[0.03] p-6">
+                  <div class="h-4 w-24 rounded-full bg-white/[0.05] animate-pulse"></div>
+                  <div class="mt-5 h-10 w-20 rounded-full bg-white/[0.06] animate-pulse"></div>
+                  <div class="mt-4 h-4 w-32 rounded-full bg-white/[0.04] animate-pulse"></div>
+                </div>
+              {/each}
+            </div>
+            <div class="grid gap-4 xl:grid-cols-2">
+              {#each Array.from({ length: 2 }) as _, index (index)}
+                <div class="rounded-[28px] bg-white/[0.03] p-6">
+                  <div class="h-5 w-36 rounded-full bg-white/[0.05] animate-pulse"></div>
+                  <div class="mt-6 space-y-3">
+                    {#each Array.from({ length: 3 }) as __, itemIndex (itemIndex)}
+                      <div class="h-16 rounded-[20px] bg-white/[0.04] animate-pulse"></div>
+                    {/each}
+                  </div>
+                </div>
+              {/each}
+            </div>
+          </div>
+        {:else if selectedApp && appInsights && appSection === "overview"}
           <AppOverviewPage app={selectedApp} insights={appInsights} identities={appIdentities} events={appEvents} />
         {:else if selectedApp && appSection === "identities"}
           <AppIdentitiesPage identities={appIdentities} />
@@ -572,6 +653,37 @@
           />
         {/if}
       </main>
+    </div>
+  </div>
+{:else if authenticated}
+  <div class="relative min-h-screen bg-[#090909]">
+    <AuroraBackdrop preset="dashboard-tr" cclass="pointer-events-none absolute right-0 top-0 w-[70%] select-none" />
+    <AuroraBackdrop preset="dashboard-bl" cclass="pointer-events-none absolute bottom-0 left-0 w-[80%] select-none" />
+
+    <div class="relative z-10 mx-auto flex min-h-screen w-full max-w-[1440px] flex-col gap-5 px-3 py-3 md:px-5 md:py-5">
+      <div class="rounded-[30px] bg-[#0d0d0d]/88 px-5 py-5 backdrop-blur-[24px]">
+        <div class="flex items-center justify-between gap-4">
+          <div class="flex items-center gap-3">
+            <div class="h-14 w-14 rounded-full bg-white/[0.05] animate-pulse"></div>
+            <div class="space-y-2">
+              <div class="h-5 w-40 rounded-full bg-white/[0.05] animate-pulse"></div>
+              <div class="h-4 w-28 rounded-full bg-white/[0.04] animate-pulse"></div>
+            </div>
+          </div>
+          <div class="h-11 w-11 rounded-full bg-white/[0.05] animate-pulse"></div>
+        </div>
+      </div>
+
+      <div class="rounded-[32px] bg-[#0d0d0d]/76 px-5 py-8 md:px-8 md:py-10 backdrop-blur-[24px]">
+        <div class="space-y-5">
+          <div class="h-6 w-40 rounded-full bg-white/[0.05] animate-pulse"></div>
+          <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {#each Array.from({ length: 6 }) as _, index (index)}
+              <div class="h-[220px] rounded-[28px] bg-white/[0.03] animate-pulse"></div>
+            {/each}
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 {/if}

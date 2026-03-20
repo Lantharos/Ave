@@ -27,39 +27,47 @@
 
   const overview = $derived({
     total: apps.length,
-    resources: apps.reduce((count, app) => count + (app.resources?.length || 0), 0),
     secure: apps.filter((app) => app.supportsE2ee).length,
+    configured: apps.filter((app) => app.redirectUris.length > 0).length,
   });
+
+  function getWebsiteHost(value?: string) {
+    if (!value) return "Not set";
+
+    try {
+      return new URL(value).hostname;
+    } catch {
+      return value;
+    }
+  }
 </script>
 
-<div class="flex flex-col gap-8 md:gap-10">
+<div class="flex flex-col gap-9 md:gap-12">
   <div class="flex items-start justify-between gap-4 flex-wrap">
-    <div class="flex flex-col gap-3">
+    <div class="flex flex-col gap-2">
       <h1 class="m-0 text-[30px] md:text-[40px] font-black tracking-tight text-white">Applications</h1>
-      <p class="m-0 max-w-[700px] text-[15px] md:text-[18px] font-medium text-[#7e7e7e]">
-        Keep Ave feeling operational. Every app should read like a product surface with health, auth posture, and identity context close at hand.
-      </p>
+      <p class="m-0 max-w-[520px] text-[15px] text-[#7e7e7e]">Manage the apps connected to this workspace.</p>
     </div>
     <Button variant="primary" size="sm" onclick={oncreate}>Create application</Button>
   </div>
 
-  <div class="grid gap-3 md:grid-cols-3">
+  <div class="grid gap-4 md:grid-cols-3">
     <Card>
       <div class="flex flex-col gap-2">
         <span class="text-[14px] text-[#7d7d7d]">Applications</span>
-        <span class="text-[34px] font-black text-white">{overview.total}</span>
+        <span class="text-[32px] font-black text-white">{overview.total}</span>
       </div>
     </Card>
     <Card>
       <div class="flex flex-col gap-2">
-        <span class="text-[14px] text-[#7d7d7d]">Connector resources</span>
-        <span class="text-[34px] font-black text-white">{overview.resources}</span>
+        <span class="text-[14px] text-[#7d7d7d]">Encrypted</span>
+        <span class="text-[32px] font-black text-white">{overview.secure}</span>
       </div>
     </Card>
     <Card>
       <div class="flex flex-col gap-2">
-        <span class="text-[14px] text-[#7d7d7d]">E2EE ready apps</span>
-        <span class="text-[34px] font-black text-white">{overview.secure}</span>
+        <span class="text-[14px] text-[#7d7d7d]">Configured</span>
+        <span class="text-[32px] font-black text-white">{overview.configured}</span>
       </div>
     </Card>
   </div>
@@ -109,7 +117,7 @@
             </div>
             <div class="flex flex-col gap-2">
               <p class="m-0 text-[20px] font-semibold text-white">Create application</p>
-              <p class="m-0 text-[14px] text-[#7d7d7d]">Spin up a new Ave integration and start tuning auth behavior from a proper dashboard.</p>
+              <p class="m-0 text-[14px] text-[#7d7d7d]">Add a new app to this workspace.</p>
             </div>
           </div>
         </button>
@@ -137,28 +145,26 @@
                       <p class="m-0 mt-1 truncate text-[13px] text-[#7d7d7d]">{app.clientId}</p>
                     </div>
                   </div>
-                  <span class="rounded-full bg-white/[0.04] px-3 py-1.5 text-[12px] text-[#9a9a9a]">
-                    {app.supportsE2ee ? "E2EE ready" : "Standard"}
-                  </span>
+                  <span class="text-[13px] text-[#8e8e8e]">{app.supportsE2ee ? "Encrypted" : "Standard"}</span>
                 </div>
 
                 <p class="m-0 min-h-[44px] text-[14px] leading-6 text-[#8b8b8b]">
-                  {app.description || "No description yet. Open the control panel to add metadata, redirect coverage, and resource policy."}
+                  {app.description || "No description yet."}
                 </p>
 
                 <div class="grid grid-cols-2 gap-3">
                   <div class="rounded-[20px] bg-white/[0.03] px-4 py-4">
-                    <p class="m-0 text-[12px] text-[#686868]">Redirects</p>
-                    <p class="m-0 mt-2 text-[20px] font-semibold text-white">{app.redirectUris.length}</p>
+                    <p class="m-0 text-[12px] text-[#686868]">Website</p>
+                    <p class="m-0 mt-2 truncate text-[16px] font-semibold text-white">{getWebsiteHost(app.websiteUrl)}</p>
                   </div>
                   <div class="rounded-[20px] bg-white/[0.03] px-4 py-4">
-                    <p class="m-0 text-[12px] text-[#686868]">Resources</p>
-                    <p class="m-0 mt-2 text-[20px] font-semibold text-white">{app.resources?.length || 0}</p>
+                    <p class="m-0 text-[12px] text-[#686868]">Created</p>
+                    <p class="m-0 mt-2 text-[16px] font-semibold text-white">{formatDate(app.createdAt)}</p>
                   </div>
                 </div>
 
                 <div class="mt-auto flex items-center justify-between gap-3">
-                  <span class="text-[13px] text-[#6d6d6d]">Created {formatDate(app.createdAt)}</span>
+                  <span class="text-[13px] text-[#6d6d6d]">{app.clientId}</span>
                   <span class="text-[14px] font-medium text-[#b9bbbe]">Open dashboard</span>
                 </div>
               </div>

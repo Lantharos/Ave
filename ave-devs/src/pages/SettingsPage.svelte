@@ -24,9 +24,7 @@
 <div class="flex flex-col gap-8 md:gap-10">
   <div class="flex flex-col gap-3">
     <h1 class="m-0 text-[30px] md:text-[40px] font-black tracking-tight text-white">Settings</h1>
-    <p class="m-0 max-w-[720px] text-[15px] md:text-[18px] font-medium text-[#7e7e7e]">
-      Keep the workspace profile clean enough that invites, billing, and environment management can grow into it without a redesign later.
-    </p>
+    <p class="m-0 max-w-[560px] text-[15px] text-[#7e7e7e]">Update workspace details and verified domains.</p>
   </div>
 
   <div class="grid gap-4 xl:grid-cols-[1.05fr_0.95fr]">
@@ -34,7 +32,7 @@
       <div class="flex flex-col gap-6">
         <div class="flex flex-col gap-2">
           <h2 class="m-0 text-[22px] font-semibold text-white">Workspace profile</h2>
-          <p class="m-0 text-[14px] leading-6 text-[#7d7d7d]">Name, stable ID, and the pieces you would expect to survive once real organization persistence exists.</p>
+          <p class="m-0 text-[14px] leading-6 text-[#7d7d7d]">Name and workspace details used across your dashboard.</p>
         </div>
 
         <label class="flex flex-col gap-3">
@@ -64,7 +62,7 @@
         <div class="flex flex-col gap-6">
           <div class="flex flex-col gap-2">
             <h2 class="m-0 text-[22px] font-semibold text-white">Verified domains</h2>
-            <p class="m-0 text-[14px] leading-6 text-[#7d7d7d]">Domain-based membership routing should be visible now even before deeper org automation lands.</p>
+            <p class="m-0 text-[14px] leading-6 text-[#7d7d7d]">Add domains your team uses so they stay attached to this workspace.</p>
           </div>
 
           <div class="flex flex-col gap-3">
@@ -92,23 +90,6 @@
             >
               Add domain
             </Button>
-          </div>
-        </div>
-      </Card>
-
-      <Card>
-        <div class="flex flex-col gap-4">
-          <h2 class="m-0 text-[22px] font-semibold text-white">Billing readiness</h2>
-          <p class="m-0 text-[14px] leading-6 text-[#7d7d7d]">The portal now has the right structural hooks for future billing: org ownership, member roles, and app limits are already visible.</p>
-          <div class="grid gap-3 md:grid-cols-2">
-            <div class="rounded-[20px] bg-white/[0.03] px-4 py-4">
-              <p class="m-0 text-[13px] text-[#666]">Plan</p>
-              <p class="m-0 mt-2 text-[15px] font-medium text-white">{workspace.plan}</p>
-            </div>
-            <div class="rounded-[20px] bg-white/[0.03] px-4 py-4">
-              <p class="m-0 text-[13px] text-[#666]">Application cap</p>
-              <p class="m-0 mt-2 text-[15px] font-medium text-white">{workspace.appLimit}</p>
-            </div>
           </div>
         </div>
       </Card>

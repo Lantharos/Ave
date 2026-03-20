@@ -1,7 +1,7 @@
 <script lang="ts">
   import Card from "../components/Card.svelte";
   import type { AppIdentityRecord } from "../lib/api";
-  import { formatDate, formatRelativeTime, shortId } from "../lib/portal";
+  import { formatDate, formatRelativeTime, getInitials, shortId } from "../lib/portal";
 
   interface Props {
     identities: AppIdentityRecord[];
@@ -24,9 +24,7 @@
 <div class="flex flex-col gap-8 md:gap-10">
   <div class="flex flex-col gap-3">
     <h1 class="m-0 text-[30px] md:text-[40px] font-black tracking-tight text-white">Identities</h1>
-    <p class="m-0 max-w-[720px] text-[15px] md:text-[18px] font-medium text-[#7e7e7e]">
-      This is the app-specific identity table: first seen, last active, count of auth events, and the last known sign-in method where the backend can attribute it.
-    </p>
+    <p class="m-0 max-w-[560px] text-[15px] text-[#7e7e7e]">People who have used this app, with recent activity and sign-in history.</p>
   </div>
 
   <div class="relative">
@@ -55,9 +53,13 @@
           <div class="grid gap-4 rounded-[24px] bg-white/[0.03] px-4 py-4 lg:grid-cols-[1.2fr_0.8fr_0.8fr_0.7fr_0.7fr] lg:items-center">
             <div class="min-w-0">
               <div class="flex items-center gap-3">
-                <div class="flex h-11 w-11 items-center justify-center rounded-full bg-white/[0.05] text-[12px] font-black text-white shrink-0">
-                  {shortId(identity.id, 2).toUpperCase()}
-                </div>
+                {#if identity.avatarUrl}
+                  <img src={identity.avatarUrl} alt="" class="h-11 w-11 rounded-full object-cover shrink-0" />
+                {:else}
+                  <div class="flex h-11 w-11 items-center justify-center rounded-full bg-white/[0.05] text-[12px] font-black text-white shrink-0">
+                    {getInitials(identity.displayName)}
+                  </div>
+                {/if}
                 <div class="min-w-0">
                   <p class="m-0 truncate text-[15px] font-medium text-white">{identity.displayName}</p>
                   <p class="m-0 mt-1 truncate text-[13px] text-[#7d7d7d]">@{identity.handle} · {shortId(identity.id, 10)}</p>
