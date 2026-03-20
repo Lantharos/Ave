@@ -9,19 +9,19 @@
     import { auth, isLoading } from "./stores/auth";
 
     const routes = [
-        { path: "/", component: () => import("./pages/home/Home.svelte") },
-        { path: "/login", component: () => import("./pages/login/Login.svelte") },
-        { path: "/register", component: () => import("./pages/register/Register.svelte") },
-        { path: "/dashboard", component: () => import("./pages/dashboard/Dashboard.svelte") },
-        { path: "/dashboard/(.*)", component: () => import("./pages/dashboard/Dashboard.svelte") },
-        { path: "/privacy", component: () => import("./pages/home/legal/PrivacyPolicy.svelte") },
-        { path: "/terms", component: () => import("./pages/home/legal/TermsOfService.svelte") },
-        { path: "/authorize", component: () => import("./pages/authorize/Authorize.svelte") },
-        { path: "/signin", component: () => import("./pages/authorize/Authorize.svelte") },
-        { path: "/connect", component: () => import("./pages/connect/Connect.svelte") },
-        { path: "/connect/runtime", component: () => import("./pages/connect/Runtime.svelte") },
-        { path: "/docs(#.*)?", component: () => import("./pages/docs/DocsRedirect.svelte") },
-        { path: "/sign", component: () => import("./pages/sign/Sign.svelte") },
+        { path: "/", component: async () => (await import("./pages/home/Home.svelte")).default },
+        { path: "/login", component: async () => (await import("./pages/login/Login.svelte")).default },
+        { path: "/register", component: async () => (await import("./pages/register/Register.svelte")).default },
+        { path: "/dashboard", component: async () => (await import("./pages/dashboard/Dashboard.svelte")).default },
+        { path: "/dashboard/(.*)", component: async () => (await import("./pages/dashboard/Dashboard.svelte")).default },
+        { path: "/privacy", component: async () => (await import("./pages/home/legal/PrivacyPolicy.svelte")).default },
+        { path: "/terms", component: async () => (await import("./pages/home/legal/TermsOfService.svelte")).default },
+        { path: "/authorize", component: async () => (await import("./pages/authorize/Authorize.svelte")).default },
+        { path: "/signin", component: async () => (await import("./pages/authorize/Authorize.svelte")).default },
+        { path: "/connect", component: async () => (await import("./pages/connect/Connect.svelte")).default },
+        { path: "/connect/runtime", component: async () => (await import("./pages/connect/Runtime.svelte")).default },
+        { path: "/docs(#.*)?", component: async () => (await import("./pages/docs/DocsRedirect.svelte")).default },
+        { path: "/sign", component: async () => (await import("./pages/sign/Sign.svelte")).default },
     ];
 
     const statuses: Statuses = {
