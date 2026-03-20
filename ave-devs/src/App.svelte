@@ -38,6 +38,7 @@
     type AppOverviewBundle,
     type DevApp,
     type PaginatedResult,
+    type UpdateAppPayload,
   } from "./lib/api";
   import type { WorkspaceRole, WorkspaceState, WorkspaceSummary } from "./lib/portal";
 
@@ -387,13 +388,17 @@
     error = "";
     saveState = "saving";
     const previousOrganizationId = apps.find((entry) => entry.id === app.id)?.organizationId ?? null;
+    const normalizeOptionalText = (value?: string) => {
+      const nextValue = value?.trim();
+      return nextValue ? nextValue : null;
+    };
 
     try {
-      const payload = {
+      const payload: UpdateAppPayload = {
         name: app.name,
-        description: app.description || undefined,
-        websiteUrl: app.websiteUrl || undefined,
-        iconUrl: app.iconUrl || undefined,
+        description: normalizeOptionalText(app.description),
+        websiteUrl: normalizeOptionalText(app.websiteUrl),
+        iconUrl: normalizeOptionalText(app.iconUrl),
         redirectUris: (app.redirectUrisText || "")
           .split("\n")
           .map((uri) => uri.trim())

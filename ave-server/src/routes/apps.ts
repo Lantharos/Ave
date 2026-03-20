@@ -36,9 +36,9 @@ const allowedScopes = ["openid", "profile", "email", "offline_access", "user_id"
 
 const baseAppSchema = z.object({
   name: z.string().min(2).max(64),
-  description: z.string().max(200).optional(),
-  websiteUrl: z.string().url().optional(),
-  iconUrl: z.string().url().optional(),
+  description: z.string().max(200).nullable().optional(),
+  websiteUrl: z.string().url().nullable().optional(),
+  iconUrl: z.string().url().nullable().optional(),
   redirectUris: z.array(z.string().url()).min(1),
   supportsE2ee: z.boolean().default(false),
   allowedScopes: z.array(z.enum(allowedScopes)).default(["openid", "profile", "email", "offline_access"]),
@@ -509,9 +509,9 @@ app.patch("/:appId", zValidator("json", baseAppSchema.partial()), async (c) => {
     .update(oauthApps)
     .set({
       name: data.name ?? accessible.app.name,
-      description: data.description ?? accessible.app.description,
-      websiteUrl: data.websiteUrl ?? accessible.app.websiteUrl,
-      iconUrl: data.iconUrl ?? accessible.app.iconUrl,
+      description: data.description === undefined ? accessible.app.description : data.description,
+      websiteUrl: data.websiteUrl === undefined ? accessible.app.websiteUrl : data.websiteUrl,
+      iconUrl: data.iconUrl === undefined ? accessible.app.iconUrl : data.iconUrl,
       redirectUris: data.redirectUris ?? (accessible.app.redirectUris as string[]),
       supportsE2ee: data.supportsE2ee ?? accessible.app.supportsE2ee,
       allowedScopes: data.allowedScopes ?? (accessible.app.allowedScopes as string[]),

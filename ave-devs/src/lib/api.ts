@@ -109,6 +109,12 @@ export interface CreateAppPayload {
   organizationId?: string;
 }
 
+export interface UpdateAppPayload extends Omit<Partial<CreateAppPayload>, "description" | "websiteUrl" | "iconUrl"> {
+  description?: string | null;
+  websiteUrl?: string | null;
+  iconUrl?: string | null;
+}
+
 class ApiError extends Error {
   constructor(
     public status: number,
@@ -288,7 +294,7 @@ export async function createApp(
 
 export async function updateApp(
   appId: string,
-  payload: Partial<CreateAppPayload>,
+  payload: UpdateAppPayload,
 ): Promise<{ app: DevApp }> {
   return request(`/api/apps/${appId}`, {
     method: "PATCH",
