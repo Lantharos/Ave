@@ -59,7 +59,7 @@
             class="rounded-[28px] border-0 bg-transparent p-0 text-left cursor-pointer"
             onclick={() => onselect(app)}
           >
-            <Card>
+            <Card class="transition-colors duration-300 hover:bg-[#171717]/88">
               <div class="flex h-full flex-col gap-6">
                 <div class="flex items-start justify-between gap-4">
                   <div class="flex items-center gap-3 min-w-0">
