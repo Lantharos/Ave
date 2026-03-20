@@ -7,6 +7,10 @@
   import type { DevApp } from "../lib/api";
   import type { WorkspaceSummary } from "../lib/portal";
 
+  interface AppDraft extends DevApp {
+    redirectUrisText?: string;
+  }
+
   interface Props {
     app: DevApp & { redirectUrisText?: string };
     organizations: WorkspaceSummary[];
@@ -45,6 +49,10 @@
   }: Props = $props();
 
   let copiedField = $state<string | null>(null);
+  let draft = $state<AppDraft>({
+    ...app,
+    redirectUrisText: app.redirectUrisText,
+  });
   let resourceForm = $state({
     resourceKey: "",
     displayName: "",
@@ -56,13 +64,12 @@
   let resourceError = $state<string | null>(null);
   let creatingResource = $state(false);
   let deletingResourceId = $state<string | null>(null);
-  let selectedOrganizationId = $state<string | null>(app.organizationId || null);
   let transferSyncKey = $state("");
 
   const transferableOrganizations = $derived.by(() =>
     organizations.filter((organization) => organization.role === "owner" || organization.role === "admin"),
   );
-  const transferPending = $derived(selectedOrganizationId !== (app.organizationId || null));
+  const transferPending = $derived((draft.organizationId || null) !== (app.organizationId || null));
   const currentOrganizationName = $derived.by(
     () => organizations.find((organization) => organization.id === app.organizationId)?.name || "Current workspace",
   );
@@ -71,7 +78,10 @@
     const nextSyncKey = `${app.id}:${app.organizationId ?? ""}`;
     if (transferSyncKey === nextSyncKey) return;
     transferSyncKey = nextSyncKey;
-    selectedOrganizationId = app.organizationId || null;
+    draft = {
+      ...app,
+      redirectUrisText: app.redirectUrisText,
+    };
   });
 
   async function handleCopy(text: string, field: string) {
@@ -130,7 +140,7 @@
 
 <div class="flex flex-col gap-8 md:gap-10">
   <div>
-    <h1 class="m-0 text-[30px] md:text-[40px] font-black tracking-tight text-white">Configure {app.name}</h1>
+    <h1 class="m-0 text-[30px] md:text-[40px] font-black tracking-tight text-white">Configure {draft.name}</h1>
     <p class="m-0 mt-2 text-[14px] md:text-[16px] text-[#7d7d7d]">Credentials, redirect URLs, token settings, and connected resources.</p>
   </div>
 
@@ -156,28 +166,28 @@
       <div class="grid gap-6 md:grid-cols-2">
         <label class="flex flex-col gap-3">
           <span class="text-[14px] text-[#8a8a8a]">Application name</span>
-          <Input bind:value={app.name} placeholder="App name" />
+          <Input bind:value={draft.name} placeholder="App name" />
         </label>
         <label class="flex flex-col gap-3">
           <span class="text-[14px] text-[#8a8a8a]">Description</span>
-          <Input bind:value={app.description} placeholder="Short description" />
+          <Input bind:value={draft.description} placeholder="Short description" />
         </label>
       </div>
 
       <div class="grid gap-6 md:grid-cols-2">
         <label class="flex flex-col gap-3">
           <span class="text-[14px] text-[#8a8a8a]">Website URL</span>
-          <Input bind:value={app.websiteUrl} placeholder="https://" />
+          <Input bind:value={draft.websiteUrl} placeholder="https://" />
         </label>
         <label class="flex flex-col gap-3">
           <span class="text-[14px] text-[#8a8a8a]">Icon URL</span>
-          <Input bind:value={app.iconUrl} placeholder="https://" />
+          <Input bind:value={draft.iconUrl} placeholder="https://" />
         </label>
       </div>
 
       <label class="flex flex-col gap-3">
         <span class="text-[14px] text-[#8a8a8a]">Redirect URIs</span>
-        <Textarea bind:value={app.redirectUrisText} rows={4} placeholder="https://example.com/callback" />
+        <Textarea bind:value={draft.redirectUrisText} rows={4} placeholder="https://example.com/callback" />
       </label>
 
       <div class="flex flex-col gap-4">
@@ -195,7 +205,7 @@
         <div class="grid gap-3 md:grid-cols-2">
           {#each transferableOrganizations as organization}
             {@const isSavedCurrent = organization.id === app.organizationId}
-            {@const isSelected = organization.id === selectedOrganizationId}
+            {@const isSelected = organization.id === draft.organizationId}
             {@const isPendingTarget = transferPending && isSelected}
             <button
               class={`rounded-[22px] border-0 px-5 py-4 text-left cursor-pointer transition-all duration-300 ${
@@ -206,7 +216,7 @@
                     : "bg-white/[0.03] text-white hover:bg-white/[0.055]"
               }`}
               onclick={() => {
-                selectedOrganizationId = organization.id;
+                draft.organizationId = organization.id;
               }}
             >
               <div class="flex items-center justify-between gap-3">
@@ -238,17 +248,17 @@
       <div class="grid gap-6 md:grid-cols-2">
         <label class="flex flex-col gap-3">
           <span class="text-[14px] text-[#8a8a8a]">Access token TTL</span>
-          <Input type="number" bind:value={app.accessTokenTtlSeconds} />
+          <Input type="number" bind:value={draft.accessTokenTtlSeconds} />
         </label>
         <label class="flex flex-col gap-3">
           <span class="text-[14px] text-[#8a8a8a]">Refresh token TTL</span>
-          <Input type="number" bind:value={app.refreshTokenTtlSeconds} />
+          <Input type="number" bind:value={draft.refreshTokenTtlSeconds} />
         </label>
       </div>
 
       <div class="flex flex-col gap-4">
-        <Toggle bind:checked={app.supportsE2ee} label="Enable end-to-end encryption" />
-        <Toggle bind:checked={app.allowUserIdScope} label="Allow user_id scope" />
+        <Toggle bind:checked={draft.supportsE2ee} label="Enable end-to-end encryption" />
+        <Toggle bind:checked={draft.allowUserIdScope} label="Allow user_id scope" />
       </div>
 
       <div class="flex items-center justify-between gap-3 flex-wrap border-t border-white/[0.06] pt-6">
@@ -261,11 +271,7 @@
         <Button
           variant="primary"
           size="sm"
-          onclick={() =>
-            onsave({
-              ...app,
-              organizationId: selectedOrganizationId || undefined,
-            })}
+          onclick={() => onsave(draft)}
           disabled={saving}
         >
           {saving ? "Saving..." : saved ? "Saved" : "Save changes"}
