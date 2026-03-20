@@ -49,7 +49,7 @@ app.get("/keys", requireAuth, async (c) => {
 // Get signing key for a specific identity
 app.get("/keys/:identityId", requireAuth, async (c) => {
   const user = c.get("user")!;
-  const identityId = c.req.param("identityId");
+  const identityId = c.req.param("identityId") || "";
   
   // Verify identity belongs to user
   const [identity] = await db
@@ -91,7 +91,7 @@ app.post("/keys/:identityId", requireAuth, zValidator("json", z.object({
   encryptedPrivateKey: z.string().min(1),
 })), async (c) => {
   const user = c.get("user")!;
-  const identityId = c.req.param("identityId");
+  const identityId = c.req.param("identityId") || "";
   const { publicKey, encryptedPrivateKey } = c.req.valid("json");
   
   // Validate public key format
@@ -155,7 +155,7 @@ app.put("/keys/:identityId", requireAuth, zValidator("json", z.object({
   encryptedPrivateKey: z.string().min(1),
 })), async (c) => {
   const user = c.get("user")!;
-  const identityId = c.req.param("identityId");
+  const identityId = c.req.param("identityId") || "";
   const { publicKey, encryptedPrivateKey } = c.req.valid("json");
   
   // Validate public key format
@@ -268,7 +268,7 @@ app.get("/requests", requireAuth, async (c) => {
 // Get a specific signature request
 app.get("/requests/:requestId", requireAuth, async (c) => {
   const user = c.get("user")!;
-  const requestId = c.req.param("requestId");
+  const requestId = c.req.param("requestId") || "";
   
   const [result] = await db
     .select({
@@ -328,7 +328,7 @@ app.post("/requests/:requestId/sign", requireAuth, zValidator("json", z.object({
   signature: z.string().min(1),
 })), async (c) => {
   const user = c.get("user")!;
-  const requestId = c.req.param("requestId");
+  const requestId = c.req.param("requestId") || "";
   const { signature } = c.req.valid("json");
   
   // Validate signature format
@@ -413,7 +413,7 @@ app.post("/requests/:requestId/sign", requireAuth, zValidator("json", z.object({
 // Deny a signature request
 app.post("/requests/:requestId/deny", requireAuth, async (c) => {
   const user = c.get("user")!;
-  const requestId = c.req.param("requestId");
+  const requestId = c.req.param("requestId") || "";
   
   // Get the request
   const [result] = await db

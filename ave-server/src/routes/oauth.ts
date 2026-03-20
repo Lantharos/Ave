@@ -1250,7 +1250,7 @@ app.get("/authorizations", requireAuth, async (c) => {
 // Get authorization for a specific app (includes encrypted app key for E2EE)
 app.get("/authorization/:clientId", requireAuth, async (c) => {
   const user = c.get("user")!;
-  const clientId = c.req.param("clientId");
+  const clientId = c.req.param("clientId") || "";
 
   // Quick Auth clients (origin: prefix) never have stored authorizations
   if (isQuickClient(clientId)) {
@@ -1296,7 +1296,7 @@ app.get("/authorization/:clientId", requireAuth, async (c) => {
 // Revoke app authorization
 app.delete("/authorizations/:authId", requireAuth, async (c) => {
   const user = c.get("user")!;
-  const authId = c.req.param("authId");
+  const authId = c.req.param("authId") || "";
   
   const [auth] = await db
     .select()
@@ -1375,7 +1375,7 @@ app.get("/delegations", requireAuth, async (c) => {
 // Revoke connector delegation
 app.delete("/delegations/:delegationId", requireAuth, async (c) => {
   const user = c.get("user")!;
-  const delegationId = c.req.param("delegationId");
+  const delegationId = c.req.param("delegationId") || "";
 
   const [grant] = await db
     .select()
