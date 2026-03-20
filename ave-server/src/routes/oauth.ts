@@ -450,7 +450,13 @@ app.post("/authorize", requireAuth, zValidator("json", z.object({
   await db.insert(activityLogs).values({
     userId: user.id,
     action: "oauth_authorized",
-    details: { appName: oauthApp.name, appId: oauthApp.id },
+    details: {
+      appName: oauthApp.name,
+      appId: oauthApp.id,
+      identityId,
+      authMethod: user.authMethod || "unknown",
+      scope,
+    },
     deviceId: user.deviceId,
     ipAddress: c.req.header("x-forwarded-for") || c.req.header("x-real-ip"),
     userAgent: c.req.header("user-agent"),
@@ -1193,7 +1199,11 @@ app.delete("/authorizations/:authId", requireAuth, async (c) => {
   await db.insert(activityLogs).values({
     userId: user.id,
     action: "oauth_revoked",
-    details: { appName: oauthApp?.name, appId: auth.appId },
+    details: {
+      appName: oauthApp?.name,
+      appId: auth.appId,
+      identityId: auth.identityId,
+    },
     deviceId: user.deviceId,
     ipAddress: c.req.header("x-forwarded-for") || c.req.header("x-real-ip"),
     userAgent: c.req.header("user-agent"),

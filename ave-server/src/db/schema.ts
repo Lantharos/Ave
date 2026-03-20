@@ -11,6 +11,39 @@ export const users = sqliteTable("users", {
   encryptedMasterKeyBackup: text("encrypted_master_key_backup"),
 });
 
+export const organizations = sqliteTable("organizations", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull().$defaultFn(() => new Date()),
+  updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull().$defaultFn(() => new Date()),
+
+  name: text("name").notNull(),
+  slug: text("slug").notNull().unique(),
+  plan: text("plan").notNull().default("core"),
+  verifiedDomains: text("verified_domains", { mode: "json" }).$type<string[]>().$defaultFn(() => []),
+  appLimit: integer("app_limit").notNull().default(12),
+  ownerUserId: text("owner_user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
+}, (table) => [
+  index("organizations_owner_user_id_idx").on(table.ownerUserId),
+  index("organizations_slug_idx").on(table.slug),
+]);
+
+export const organizationMembers = sqliteTable("organization_members", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull().$defaultFn(() => new Date()),
+  updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull().$defaultFn(() => new Date()),
+
+  organizationId: text("organization_id").references(() => organizations.id, { onDelete: "cascade" }).notNull(),
+  userId: text("user_id").references(() => users.id, { onDelete: "cascade" }),
+  invitedEmail: text("invited_email"),
+  role: text("role").notNull().default("admin"),
+  status: text("status").notNull().default("active"),
+  invitedByUserId: text("invited_by_user_id").references(() => users.id, { onDelete: "set null" }),
+}, (table) => [
+  index("organization_members_organization_id_idx").on(table.organizationId),
+  index("organization_members_user_id_idx").on(table.userId),
+  index("organization_members_status_idx").on(table.status),
+]);
+
 // Identities - users can have multiple identities (up to 5)
 export const identities = sqliteTable("identities", {
   id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
@@ -101,6 +134,7 @@ export const sessions = sqliteTable("sessions", {
   // IP and location info for activity log
   ipAddress: text("ip_address"),
   userAgent: text("user_agent"),
+  authMethod: text("auth_method"),
 }, (table) => [
   index("sessions_user_id_idx").on(table.userId),
   index("sessions_token_hash_idx").on(table.tokenHash),
@@ -212,7 +246,11 @@ export const oauthApps = sqliteTable("oauth_apps", {
   
   // Developer who owns this app
   ownerId: text("owner_id").references(() => users.id),
-});
+  organizationId: text("organization_id").references(() => organizations.id, { onDelete: "cascade" }),
+}, (table) => [
+  index("oauth_apps_owner_id_idx").on(table.ownerId),
+  index("oauth_apps_organization_id_idx").on(table.organizationId),
+]);
 
 // OAuth refresh tokens
 export const oauthRefreshTokens = sqliteTable("oauth_refresh_tokens", {
@@ -364,6 +402,10 @@ export const signatureRequests = sqliteTable("signature_requests", {
 // Types for TypeScript
 export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
+export type Organization = typeof organizations.$inferSelect;
+export type NewOrganization = typeof organizations.$inferInsert;
+export type OrganizationMember = typeof organizationMembers.$inferSelect;
+export type NewOrganizationMember = typeof organizationMembers.$inferInsert;
 export type Identity = typeof identities.$inferSelect;
 export type NewIdentity = typeof identities.$inferInsert;
 export type Passkey = typeof passkeys.$inferSelect;

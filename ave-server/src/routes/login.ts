@@ -348,14 +348,15 @@ app.post("/passkey", zValidator("json", z.object({
     // Create session
     const sessionToken = generateSessionToken();
     const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
-    await db.insert(sessions).values({
-      userId: storedChallenge.userId,
-      deviceId: deviceRecord.id,
-      tokenHash: hashSessionToken(sessionToken),
-      expiresAt,
-      ipAddress: c.req.header("x-forwarded-for") || c.req.header("x-real-ip"),
-      userAgent: c.req.header("user-agent"),
-    });
+      await db.insert(sessions).values({
+        userId: storedChallenge.userId,
+        deviceId: deviceRecord.id,
+        tokenHash: hashSessionToken(sessionToken),
+        expiresAt,
+        ipAddress: c.req.header("x-forwarded-for") || c.req.header("x-real-ip"),
+        userAgent: c.req.header("user-agent"),
+        authMethod: "passkey",
+      });
 
     setSessionCookie(c, sessionToken, expiresAt);
     
@@ -554,14 +555,15 @@ app.get("/request-status/:requestId", async (c) => {
     
     const sessionToken = generateSessionToken();
     const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
-    await db.insert(sessions).values({
-      userId: identity.userId,
-      deviceId: deviceRecord.id,
-      tokenHash: hashSessionToken(sessionToken),
-      expiresAt,
-      ipAddress: request.ipAddress,
-      userAgent: c.req.header("user-agent"),
-    });
+      await db.insert(sessions).values({
+        userId: identity.userId,
+        deviceId: deviceRecord.id,
+        tokenHash: hashSessionToken(sessionToken),
+        expiresAt,
+        ipAddress: request.ipAddress,
+        userAgent: c.req.header("user-agent"),
+        authMethod: "device_approval",
+      });
 
     setSessionCookie(c, sessionToken, expiresAt);
     
@@ -750,6 +752,7 @@ app.post("/trust-code", zValidator("json", z.object({
     expiresAt,
     ipAddress: c.req.header("x-forwarded-for") || c.req.header("x-real-ip"),
     userAgent: c.req.header("user-agent"),
+    authMethod: "trust_code",
   });
 
   setSessionCookie(c, sessionToken, expiresAt);

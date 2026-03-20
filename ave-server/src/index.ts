@@ -17,6 +17,7 @@ import activityRoutes from "./routes/activity";
 import mydataRoutes from "./routes/mydata";
 import oauthRoutes, { oidcRoutes } from "./routes/oauth";
 import appsRoutes from "./routes/apps";
+import organizationsRoutes from "./routes/organizations";
 import pushRoutes from "./routes/push";
 import signingRoutes from "./routes/signing";
 
@@ -146,6 +147,7 @@ function buildApp() {
   app.route("/api/mydata", mydataRoutes);
   app.route("/api/oauth", oauthRoutes);
   app.route("/api/apps", appsRoutes);
+  app.route("/api/organizations", organizationsRoutes);
   app.route("/api/push", pushRoutes);
   app.route("/api/signing", signingRoutes);
   app.route("/.well-known", oidcRoutes);

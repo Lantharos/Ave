@@ -22,6 +22,13 @@
       "when": 1771338000000,
       "tag": "0002_connector_brokering",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1774087200000,
+      "tag": "0003_dev_portal_organizations",
+      "breakpoints": true
     }
   ]
 }

@@ -5,8 +5,8 @@ Frontend for https://devs.aveid.net.
 ## Local development
 
 ```bash
-npm install
-npm run dev
+bun install
+bun run dev
 ```
 
 ## Environment

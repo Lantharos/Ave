@@ -202,15 +202,16 @@ app.post("/complete", zValidator("json", completeRegistrationSchema), async (c) 
     const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
     await db
       .insert(sessions)
-      .values({
-        userId: user.id,
-        deviceId: device.id,
-        tokenHash: hashSessionToken(sessionToken),
-        expiresAt,
-        ipAddress: c.req.header("x-forwarded-for") || c.req.header("x-real-ip"),
-        userAgent: c.req.header("user-agent"),
-      })
-      .returning();
+        .values({
+          userId: user.id,
+          deviceId: device.id,
+          tokenHash: hashSessionToken(sessionToken),
+          expiresAt,
+          ipAddress: c.req.header("x-forwarded-for") || c.req.header("x-real-ip"),
+          userAgent: c.req.header("user-agent"),
+          authMethod: "passkey",
+        })
+        .returning();
 
     // Log activity
     await db.insert(activityLogs).values({

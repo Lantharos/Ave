@@ -20,6 +20,7 @@ function getCookieValue(cookieHeader: string, name: string): string | null {
 export type AuthUser = {
   id: string;
   deviceId: string | null;
+  authMethod?: string | null;
 };
 
 // Extend Hono context with user
@@ -78,6 +79,7 @@ export async function authMiddleware(c: Context, next: Next) {
     c.set("user", {
       id: session.userId,
       deviceId: session.deviceId,
+      authMethod: session.authMethod,
     });
   } catch (error) {
     console.error("Auth middleware error:", error);

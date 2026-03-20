@@ -1,3 +1,5 @@
+import type { WorkspaceMember, WorkspaceRole, WorkspaceState, WorkspaceSummary } from "./portal";
+
 const API_BASE = import.meta.env.VITE_API_URL || "https://api.aveid.net";
 
 export interface DevApp {
@@ -14,6 +16,7 @@ export interface DevApp {
   refreshTokenTtlSeconds: number;
   allowUserIdScope: boolean;
   createdAt: string;
+  organizationId?: string | null;
   resources?: AppResource[];
 }
 
@@ -27,6 +30,54 @@ export interface AppResource {
   status: "active" | "disabled";
 }
 
+export interface AppInsightSnapshot {
+  totalIdentities: number;
+  totalAuthorizations: number;
+  weeklyAuthorizations: number;
+  activeRefreshTokens: number;
+  instantSignInRate: number;
+  methodCounts: {
+    passkey: number;
+    deviceApproval: number;
+    trustCode: number;
+    unknown: number;
+  };
+  redirectSecurityRate: number;
+  resources: number;
+  activeDelegations: number;
+  revocations: number;
+}
+
+export interface AppIdentityRecord {
+  id: string;
+  displayName: string;
+  handle: string;
+  email?: string | null;
+  avatarUrl?: string | null;
+  isPrimary: boolean;
+  firstSeen: string;
+  lastActive: string;
+  signInCount: number;
+  authorizationCount: number;
+  refreshCount: number;
+  lastMethod?: string | null;
+}
+
+export interface AppEvent {
+  id: string;
+  action: string;
+  details?: Record<string, unknown> | null;
+  severity: "info" | "warning" | "danger";
+  createdAt: string;
+  source: "activity" | "delegation";
+}
+
+export interface AppOverviewBundle {
+  insights: AppInsightSnapshot;
+  identities: AppIdentityRecord[];
+  events: AppEvent[];
+}
+
 export interface CreateAppPayload {
   name: string;
   description?: string;
@@ -38,6 +89,7 @@ export interface CreateAppPayload {
   accessTokenTtlSeconds?: number;
   refreshTokenTtlSeconds?: number;
   allowUserIdScope?: boolean;
+  organizationId?: string;
 }
 
 class ApiError extends Error {
@@ -74,9 +126,98 @@ async function request<T>(
   return data as T;
 }
 
-export async function fetchApps(): Promise<DevApp[]> {
-  const data = await request<{ apps: DevApp[] }>("/api/apps");
+function mapWorkspaceState(payload: {
+  id: string;
+  name: string;
+  slug: string;
+  plan: string;
+  verifiedDomains: string[];
+  appLimit: number;
+  role: WorkspaceRole;
+  members: WorkspaceMember[];
+  appCount: number;
+}): WorkspaceState {
+  return {
+    id: payload.id,
+    name: payload.name,
+    slug: payload.slug,
+    plan: payload.plan,
+    verifiedDomains: payload.verifiedDomains || [],
+    appLimit: payload.appLimit,
+    role: payload.role,
+    members: payload.members,
+    appCount: payload.appCount,
+  };
+}
+
+export async function fetchOrganizations(organizationId?: string): Promise<{
+  organizations: WorkspaceSummary[];
+  currentOrganizationId: string | null;
+}> {
+  const query = organizationId ? `?organizationId=${encodeURIComponent(organizationId)}` : "";
+  return request(`/api/organizations${query}`);
+}
+
+export async function fetchOrganization(organizationId: string): Promise<WorkspaceState> {
+  const data = await request<{ organization: WorkspaceState }>(`/api/organizations/${organizationId}`);
+  return mapWorkspaceState(data.organization);
+}
+
+export async function updateOrganization(
+  organizationId: string,
+  payload: { name?: string; verifiedDomains?: string[] },
+): Promise<WorkspaceState> {
+  const data = await request<{ organization: WorkspaceState }>(`/api/organizations/${organizationId}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+
+  return mapWorkspaceState({
+    ...data.organization,
+    members: [],
+    appCount: 0,
+  });
+}
+
+export async function inviteOrganizationMember(
+  organizationId: string,
+  payload: { email: string; role: WorkspaceRole },
+): Promise<{ member: WorkspaceMember }> {
+  return request(`/api/organizations/${organizationId}/invites`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateOrganizationMemberRole(
+  organizationId: string,
+  memberId: string,
+  role: WorkspaceRole,
+): Promise<{ member: { id: string; role: WorkspaceRole; status: string } }> {
+  return request(`/api/organizations/${organizationId}/members/${memberId}`, {
+    method: "PATCH",
+    body: JSON.stringify({ role }),
+  });
+}
+
+export async function fetchApps(organizationId?: string): Promise<DevApp[]> {
+  const query = organizationId ? `?organizationId=${encodeURIComponent(organizationId)}` : "";
+  const data = await request<{ apps: DevApp[] }>(`/api/apps${query}`);
   return data.apps;
+}
+
+export async function fetchAppOverview(appId: string): Promise<AppOverviewBundle> {
+  const [insights, identities, activity] = await Promise.all([
+    request<{ insights: AppInsightSnapshot }>(`/api/apps/${appId}/insights`),
+    request<{ identities: AppIdentityRecord[] }>(`/api/apps/${appId}/identities`),
+    request<{ events: AppEvent[] }>(`/api/apps/${appId}/activity`),
+  ]);
+
+  return {
+    insights: insights.insights,
+    identities: identities.identities,
+    events: activity.events,
+  };
 }
 
 export async function createApp(
@@ -112,28 +253,12 @@ export async function rotateSecret(
   });
 }
 
-export async function listResources(appId: string): Promise<AppResource[]> {
-  const data = await request<{ resources: AppResource[] }>(`/api/apps/${appId}/resources`);
-  return data.resources;
-}
-
 export async function createResource(
   appId: string,
   payload: Omit<AppResource, "id">,
 ): Promise<{ resource: AppResource }> {
   return request(`/api/apps/${appId}/resources`, {
     method: "POST",
-    body: JSON.stringify(payload),
-  });
-}
-
-export async function updateResource(
-  appId: string,
-  resourceId: string,
-  payload: Partial<Omit<AppResource, "id">>,
-): Promise<{ resource: AppResource }> {
-  return request(`/api/apps/${appId}/resources/${resourceId}`, {
-    method: "PATCH",
     body: JSON.stringify(payload),
   });
 }
@@ -149,7 +274,7 @@ export async function deleteResource(
 
 export async function checkSession(): Promise<boolean> {
   try {
-    await request<{ apps: DevApp[] }>("/api/apps");
+    await request<{ organizations: WorkspaceSummary[] }>("/api/organizations");
     return true;
   } catch {
     return false;
