@@ -5,10 +5,26 @@
   }
 
   let { checked = $bindable(false), label = "" }: Props = $props();
+
+  function toggle() {
+    checked = !checked;
+  }
+
+  function handleKeydown(event: KeyboardEvent) {
+    if (event.key !== "Enter" && event.key !== " ") return;
+    event.preventDefault();
+    toggle();
+  }
 </script>
 
-<label class="inline-flex items-center gap-3 cursor-pointer text-[#878787] text-[16px] md:text-[18px] select-none group">
-  <input type="checkbox" class="hidden" bind:checked />
+<button
+  type="button"
+  role="switch"
+  aria-checked={checked}
+  class="inline-flex items-center gap-3 border-0 bg-transparent p-0 cursor-pointer text-left text-[#878787] text-[16px] md:text-[18px] select-none group"
+  onclick={toggle}
+  onkeydown={handleKeydown}
+>
   <span
     class="relative w-[48px] h-[28px] md:w-[52px] md:h-[30px] rounded-full transition-colors duration-300 {checked
       ? 'bg-[#B9BBBE]/40'
@@ -21,6 +37,6 @@
     ></span>
   </span>
   {#if label}
-    <span class="group-hover:text-white transition-colors duration-300">{label}</span>
+    <span class="group-hover:text-white transition-colors duration-300 {checked ? 'text-white' : ''}">{label}</span>
   {/if}
-</label>
+</button>
