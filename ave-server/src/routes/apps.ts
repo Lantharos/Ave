@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
-import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, gt, gte, inArray, isNull, sql } from "drizzle-orm";
 import {
   appAnalyticsEvents,
   db,
@@ -143,7 +143,7 @@ async function listAppResources(appIds: string[]) {
 
 async function getAppInsights(appId: string, redirectUris: string[]) {
   const now = Date.now();
-  const weekAgo = new Date(now - 7 * 24 * 60 * 60 * 1000);
+  const weekAgo = now - 7 * 24 * 60 * 60 * 1000;
   const [authorizationRows, weeklyAuthorizations, refreshTokens, analyticsCount, revocations, delegations, resources] = await Promise.all([
     db
       .select({
@@ -155,11 +155,11 @@ async function getAppInsights(appId: string, redirectUris: string[]) {
     db
       .select({ count: sql<number>`count(*)` })
       .from(oauthAuthorizations)
-      .where(and(eq(oauthAuthorizations.appId, appId), sql`${oauthAuthorizations.lastAuthorizedAt} >= ${weekAgo}`)),
+      .where(and(eq(oauthAuthorizations.appId, appId), gte(oauthAuthorizations.lastAuthorizedAt, weekAgo))),
     db
       .select({ count: sql<number>`count(*)` })
       .from(oauthRefreshTokens)
-      .where(and(eq(oauthRefreshTokens.appId, appId), isNull(oauthRefreshTokens.revokedAt), sql`${oauthRefreshTokens.expiresAt} > ${new Date(now)}`)),
+      .where(and(eq(oauthRefreshTokens.appId, appId), isNull(oauthRefreshTokens.revokedAt), gt(oauthRefreshTokens.expiresAt, now))),
     db
       .select({ count: sql<number>`count(*)` })
       .from(appAnalyticsEvents)
