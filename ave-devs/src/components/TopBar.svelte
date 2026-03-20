@@ -17,7 +17,7 @@
     onopenteam: () => void;
     oncreateorganization: () => void;
     oncreateapp: () => void;
-    onsignout: () => void;
+    onopenaccount: () => void;
   }
 
   let {
@@ -32,7 +32,7 @@
     onopenteam,
     oncreateorganization,
     oncreateapp,
-    onsignout,
+    onopenaccount,
   }: Props = $props();
 
   let workspaceOpen = $state(false);
@@ -111,7 +111,7 @@
         >
           <span class="flex h-11 w-11 items-center justify-center rounded-[14px] bg-[#171717] shrink-0">
             {#if selectedApp?.iconUrl}
-              <img src={selectedApp.iconUrl} alt="" class="h-6 w-6 rounded-[10px] object-cover" />
+              <img src={selectedApp.iconUrl} alt="" class="h-7 w-auto max-w-full object-contain" />
             {:else}
               <svg class="h-5 w-5 text-[#8a8a8a]" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
@@ -131,9 +131,10 @@
       <div class="flex items-center gap-2 flex-wrap">
         <Button variant="ghost" size="sm" onclick={onopenteam}>Invite</Button>
         <button
-          aria-label="Sign out"
+          aria-label="Open Ave dashboard"
+          title="Open Ave dashboard"
           class="flex h-11 w-11 items-center justify-center overflow-hidden rounded-full border-0 bg-white/[0.04] text-white cursor-pointer transition-colors duration-300 hover:bg-white/[0.08]"
-          onclick={onsignout}
+          onclick={onopenaccount}
         >
           {#if accountAvatar}
             <img src={accountAvatar} alt="" class="h-full w-full object-cover" />
@@ -166,7 +167,7 @@
             >
               <span class="min-w-0">
                 <span class="block truncate text-[15px] font-semibold text-white">{organization.name}</span>
-                <span class="block pt-1 text-[13px] text-[#7d7d7d]">{organization.memberCount} members · {organization.appCount} apps</span>
+                <span class="block pt-1 text-[13px] text-[#7d7d7d]">{organization.memberCount} members and {organization.appCount} apps</span>
               </span>
               <span class="rounded-full bg-white/[0.05] px-3 py-1.5 text-[12px] text-[#b0b0b0]">{organization.role}</span>
             </button>
@@ -231,7 +232,7 @@
           >
             <span class="flex h-12 w-12 items-center justify-center rounded-[16px] bg-[#171717] shrink-0">
               {#if app.iconUrl}
-                <img src={app.iconUrl} alt="" class="h-7 w-7 rounded-[10px] object-cover" />
+                <img src={app.iconUrl} alt="" class="h-8 w-auto max-w-full object-contain" />
               {:else}
                 <svg class="h-5 w-5 text-[#8a8a8a]" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">
                   <path stroke-linecap="round" stroke-linejoin="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />

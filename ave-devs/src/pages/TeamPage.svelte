@@ -17,7 +17,7 @@
 
   let search = $state("");
   let inviteEmail = $state("");
-  let inviteRole = $state<WorkspaceRole>("admin");
+  let inviteRole = $state<Exclude<WorkspaceRole, "owner">>("admin");
   let draftName = $state("");
   let logoInput: HTMLInputElement | null = null;
   let uploadingLogo = $state(false);
@@ -87,7 +87,9 @@
         <div class="grid gap-4 sm:grid-cols-2">
           <div class="rounded-[22px] bg-white/[0.03] px-5 py-5">
             <p class="m-0 text-[13px] text-[#666]">Workspace ID</p>
-            <p class="m-0 mt-2 break-all text-[14px] font-medium text-white">{workspace.id}</p>
+            <p class="m-0 mt-2 overflow-x-auto whitespace-nowrap text-[14px] font-medium text-white [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+              {workspace.id}
+            </p>
           </div>
           <div class="rounded-[22px] bg-white/[0.03] px-5 py-5">
             <p class="m-0 text-[13px] text-[#666]">Pending invites</p>
@@ -116,10 +118,10 @@
             <Input bind:value={inviteEmail} placeholder="name@company.com" />
           </div>
           <div class="flex gap-2 flex-wrap">
-            {#each ["owner", "admin", "viewer"] as role}
+            {#each ["admin", "viewer"] as role}
               <button
                 class="rounded-full border-0 px-4 py-2 text-[13px] cursor-pointer transition-colors duration-300 {inviteRole === role ? 'bg-white text-[#090909]' : 'bg-white/[0.05] text-[#8d8d8d] hover:text-white'}"
-                onclick={() => (inviteRole = role as WorkspaceRole)}
+                onclick={() => (inviteRole = role as Exclude<WorkspaceRole, "owner">)}
               >
                 {role}
               </button>
@@ -174,15 +176,19 @@
                 </div>
                 <div class="text-[14px] text-[#8a8a8a]">{formatDate(member.joinedAt)}</div>
                 <div class="flex flex-wrap gap-2">
-                  {#each ["owner", "admin", "viewer"] as role}
-                    <button
-                      class="rounded-full border-0 px-3 py-1.5 text-[12px] cursor-pointer transition-colors duration-300 {member.role === role ? 'bg-white text-[#090909]' : 'bg-white/[0.05] text-[#8d8d8d] hover:text-white'}"
-                      onclick={() => onchangerole(member.id, role as WorkspaceRole)}
-                      disabled={member.status === "invited"}
-                    >
-                      {role}
-                    </button>
-                  {/each}
+                  {#if member.role === "owner"}
+                    <span class="rounded-full bg-white px-3 py-1.5 text-[12px] text-[#090909]">owner</span>
+                  {:else}
+                    {#each ["admin", "viewer"] as role}
+                      <button
+                        class="rounded-full border-0 px-3 py-1.5 text-[12px] cursor-pointer transition-colors duration-300 {member.role === role ? 'bg-white text-[#090909]' : 'bg-white/[0.05] text-[#8d8d8d] hover:text-white'}"
+                        onclick={() => onchangerole(member.id, role as WorkspaceRole)}
+                        disabled={member.status === "invited"}
+                      >
+                        {role}
+                      </button>
+                    {/each}
+                  {/if}
                 </div>
               </div>
             {/each}

@@ -26,7 +26,6 @@
     fetchOrganization,
     fetchOrganizations,
     inviteOrganizationMember,
-    logoutSession,
     rotateSecret,
     updateApp,
     updateOrganization,
@@ -209,29 +208,8 @@
     window.location.href = "https://aveid.net/login";
   }
 
-  async function handleSignOut() {
-    try {
-      await logoutSession();
-    } catch {
-      error = "Failed to sign out";
-      return;
-    }
-
-    authenticated = false;
-    organizations = [];
-    currentOrganizationId = null;
-    workspace = null;
-    apps = [];
-    selectedAppId = null;
-    appInsights = null;
-    appIdentities = [];
-    appEvents = [];
-    deleteTarget = null;
-    createModalOpen = false;
-    createOrganizationModalOpen = false;
-    newSecret = null;
-    workspaceSection = "applications";
-    appSection = "overview";
+  function openAveDashboard() {
+    window.location.href = "https://aveid.net/dashboard";
   }
 
   function openWorkspace(section: WorkspaceSection) {
@@ -593,7 +571,7 @@
         onopenteam={() => openWorkspace("organization")}
         oncreateorganization={() => (createOrganizationModalOpen = true)}
         oncreateapp={() => (createModalOpen = true)}
-        onsignout={handleSignOut}
+        onopenaccount={openAveDashboard}
       />
 
       <div class="rounded-[28px] bg-[#0d0d0d]/76 px-4 md:px-6 backdrop-blur-[24px]">

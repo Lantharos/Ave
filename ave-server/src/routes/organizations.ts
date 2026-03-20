@@ -225,6 +225,10 @@ app.post("/:organizationId/invites", zValidator("json", z.object({
     return c.json({ error: "Organization not found" }, 404);
   }
 
+  if (payload.role === "owner") {
+    return c.json({ error: "Workspace owner cannot be reassigned" }, 400);
+  }
+
   const [existingInvite] = await db
     .select({ id: organizationMembers.id })
     .from(organizationMembers)
@@ -286,6 +290,10 @@ app.patch("/:organizationId/members/:memberId", zValidator("json", z.object({
 
   if (target.userId === membership.organization.ownerUserId && payload.role !== "owner") {
     return c.json({ error: "Cannot demote the workspace owner" }, 400);
+  }
+
+  if (payload.role === "owner" && target.userId !== membership.organization.ownerUserId) {
+    return c.json({ error: "Workspace owner cannot be reassigned" }, 400);
   }
 
   const [updated] = await db
