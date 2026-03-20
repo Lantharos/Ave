@@ -133,6 +133,8 @@
     let launchedExternalApp = $state(false);
     let loadingAppInfo = $state(false);
     let resolvedAppInfo = $state(false);
+    let authorizeBootstrapClientId = $state<string | null>(null);
+    let loadedAuthorizeBootstrapClientId = $state<string | null>(null);
 
     const embedPopup = $derived.by(() => params.embed && !!window.opener);
     const embedSheet = $derived.by(() => params.embed && !embedPopup);
@@ -161,21 +163,29 @@
     // Load app info
     async function loadAppInfo() {
         if (completed) return;
-        if (!params.clientId) {
+        const clientId = params.clientId;
+
+        if (!clientId) {
             error = "Missing client_id parameter";
             loading = false;
             return;
         }
 
+        if (authorizeBootstrapClientId === clientId || loadedAuthorizeBootstrapClientId === clientId) {
+            return;
+        }
+
+        authorizeBootstrapClientId = clientId;
         loading = true;
         error = null;
 
         try {
-            const bootstrap = await api.oauth.getAuthorizeBootstrap(params.clientId);
+            const bootstrap = await api.oauth.getAuthorizeBootstrap(clientId);
 
             appInfo = bootstrap.app;
             existingAuth = bootstrap.authorization;
             launchedExternalApp = false;
+            loadedAuthorizeBootstrapClientId = clientId;
 
             if (bootstrap.app.supportsE2ee && !hasMasterKey()) {
                 needsMasterKey = true;
@@ -202,6 +212,9 @@
         } catch (err) {
             error = err instanceof Error ? err.message : "Failed to load app info";
         } finally {
+            if (authorizeBootstrapClientId === clientId) {
+                authorizeBootstrapClientId = null;
+            }
             if (!completed) {
                 loading = false;
             }
@@ -430,6 +443,12 @@
 
     // Check auth and load app info
 	$effect(() => {
+        if (loadedAuthorizeBootstrapClientId && loadedAuthorizeBootstrapClientId !== params.clientId) {
+            loadedAuthorizeBootstrapClientId = null;
+            authorizeBootstrapClientId = null;
+            existingAuth = null;
+            appInfo = null;
+        }
 		if (params.resource) {
 			window.location.replace(`/connect${window.location.search}`);
 			return;
