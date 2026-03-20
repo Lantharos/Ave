@@ -36,6 +36,7 @@ const initialState: AuthState = {
 
 function createAuthStore() {
   const { subscribe, set, update } = writable<AuthState>(initialState);
+  let initPromise: Promise<void> | null = null;
   
   return {
     subscribe,
@@ -44,15 +45,34 @@ function createAuthStore() {
      * Initialize auth state from storage
      */
     async init() {
+      if (initPromise) {
+        return initPromise;
+      }
+
+      initPromise = (async () => {
       let token: string | null = null;
       try {
         token = localStorage.getItem("ave_session_token");
       } catch {
         token = null;
       }
+
+      if (!token) {
+        update((s) => ({
+          ...s,
+          isAuthenticated: false,
+          isLoading: false,
+          userId: null,
+          identities: [],
+          currentIdentity: null,
+          device: null,
+          masterKey: null,
+          hasMasterKey: false,
+        }));
+        return;
+      }
       
       try {
-        // Fetch identities to verify session is valid
         const { identities } = await api.identities.list();
         const masterKey = await loadMasterKey();
         
@@ -66,18 +86,31 @@ function createAuthStore() {
           hasMasterKey: masterKey !== null,
         }));
         
-        // Connect WebSocket for real-time notifications
-        if (token) {
-          websocket.connectAsUser(token);
-        }
+        websocket.connectAsUser(token);
       } catch {
-        // Session invalid, clear it
         try {
           localStorage.removeItem("ave_session_token");
         } catch {
-          // ignore
         }
-        update((s) => ({ ...s, isLoading: false }));
+        websocket.disconnect();
+        update((s) => ({
+          ...s,
+          isAuthenticated: false,
+          isLoading: false,
+          userId: null,
+          identities: [],
+          currentIdentity: null,
+          device: null,
+          masterKey: null,
+          hasMasterKey: false,
+        }));
+      }
+      })();
+
+      try {
+        await initPromise;
+      } finally {
+        initPromise = null;
       }
     },
     

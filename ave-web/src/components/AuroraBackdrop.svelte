@@ -1,6 +1,5 @@
 <script lang="ts">
     import { onMount, onDestroy } from "svelte";
-    import { Renderer, Program, Mesh, Color, Triangle } from "ogl";
 
     type PresetName =
         | "home"
@@ -157,15 +156,18 @@ void main() {
 }
 `;
 
-    let renderer: Renderer | null = null;
-    let program: Program | null = null;
-    let mesh: Mesh | null = null;
+    let renderer: any = null;
+    let program: any = null;
+    let mesh: any = null;
     let raf = 0;
     let resizeObserver: ResizeObserver | null = null;
 
-    function setup() {
+    async function setup() {
         if (!container) return;
         const presetConfig = activePreset;
+        const { Renderer, Program, Mesh, Color, Triangle } = await import("ogl");
+
+        if (!container) return;
 
         renderer = new Renderer({
             alpha: true,
@@ -243,7 +245,7 @@ void main() {
     }
 
     onMount(() => {
-        setup();
+        void setup();
         return () => teardown();
     });
 

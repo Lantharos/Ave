@@ -5,56 +5,31 @@
         type Statuses,
     } from "@mateothegreat/svelte5-router";
     import { onMount } from "svelte";
-    import Home from "./pages/home/Home.svelte";
     import NotFound from "./pages/status/NotFound.svelte";
-    import Login from "./pages/login/Login.svelte";
-    import Register from "./pages/register/Register.svelte";
-    import Dashboard from "./pages/dashboard/Dashboard.svelte";
-    import PrivacyPolicy from "./pages/home/legal/PrivacyPolicy.svelte";
-    import TermsOfService from "./pages/home/legal/TermsOfService.svelte";
-    import Authorize from "./pages/authorize/Authorize.svelte";
-    import DocsRedirect from "./pages/docs/DocsRedirect.svelte";
-    import Sign from "./pages/sign/Sign.svelte";
-    import Connect from "./pages/connect/Connect.svelte";
-    import ConnectRuntime from "./pages/connect/Runtime.svelte";
-    import { auth, isAuthenticated, isLoading } from "./stores/auth";
-    import { websocket } from "./stores/websocket";
+    import { auth, isLoading } from "./stores/auth";
 
     const routes = [
-        { path: "/", component: Home },
-        { path: "/login", component: Login },
-        { path: "/register", component: Register },
-        { path: "/dashboard", component: Dashboard },
-        { path: "/dashboard/(.*)", component: Dashboard },
-        { path: "/privacy", component: PrivacyPolicy },
-        { path: "/terms", component: TermsOfService },
-        { path: "/authorize", component: Authorize },
-        { path: "/signin", component: Authorize },
-        { path: "/connect", component: Connect },
-        { path: "/connect/runtime", component: ConnectRuntime },
-        { path: "/docs(#.*)?", component: DocsRedirect },
-        { path: "/sign", component: Sign },
+        { path: "/", component: () => import("./pages/home/Home.svelte") },
+        { path: "/login", component: () => import("./pages/login/Login.svelte") },
+        { path: "/register", component: () => import("./pages/register/Register.svelte") },
+        { path: "/dashboard", component: () => import("./pages/dashboard/Dashboard.svelte") },
+        { path: "/dashboard/(.*)", component: () => import("./pages/dashboard/Dashboard.svelte") },
+        { path: "/privacy", component: () => import("./pages/home/legal/PrivacyPolicy.svelte") },
+        { path: "/terms", component: () => import("./pages/home/legal/TermsOfService.svelte") },
+        { path: "/authorize", component: () => import("./pages/authorize/Authorize.svelte") },
+        { path: "/signin", component: () => import("./pages/authorize/Authorize.svelte") },
+        { path: "/connect", component: () => import("./pages/connect/Connect.svelte") },
+        { path: "/connect/runtime", component: () => import("./pages/connect/Runtime.svelte") },
+        { path: "/docs(#.*)?", component: () => import("./pages/docs/DocsRedirect.svelte") },
+        { path: "/sign", component: () => import("./pages/sign/Sign.svelte") },
     ];
 
     const statuses: Statuses = {
         [StatusCode.NotFound]: () => ({ component: NotFound }),
     };
 
-    // Protected routes that require authentication
-    const protectedRoutes = ["/dashboard", "/authorize", "/signin", "/connect", "/sign"];
-
-    // Routes that should redirect to dashboard if already authenticated
-    const authRoutes = ["/login", "/register"];
-
     onMount(async () => {
-        // Initialize auth state
         await auth.init();
-
-        // Connect to WebSocket for real-time updates if authenticated
-        const token = localStorage.getItem("ave_session_token");
-        if (token) {
-            websocket.connectAsUser(token);
-        }
     });
 </script>
 

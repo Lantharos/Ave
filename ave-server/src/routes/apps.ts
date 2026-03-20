@@ -143,7 +143,8 @@ async function listAppResources(appIds: string[]) {
 
 async function getAppInsights(appId: string, redirectUris: string[]) {
   const now = Date.now();
-  const weekAgo = now - 7 * 24 * 60 * 60 * 1000;
+  const nowDate = new Date(now);
+  const weekAgo = new Date(now - 7 * 24 * 60 * 60 * 1000);
   const [authorizationRows, weeklyAuthorizations, refreshTokens, analyticsCount, revocations, delegations, resources] = await Promise.all([
     db
       .select({
@@ -159,7 +160,7 @@ async function getAppInsights(appId: string, redirectUris: string[]) {
     db
       .select({ count: sql<number>`count(*)` })
       .from(oauthRefreshTokens)
-      .where(and(eq(oauthRefreshTokens.appId, appId), isNull(oauthRefreshTokens.revokedAt), gt(oauthRefreshTokens.expiresAt, now))),
+      .where(and(eq(oauthRefreshTokens.appId, appId), isNull(oauthRefreshTokens.revokedAt), gt(oauthRefreshTokens.expiresAt, nowDate))),
     db
       .select({ count: sql<number>`count(*)` })
       .from(appAnalyticsEvents)

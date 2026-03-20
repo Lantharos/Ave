@@ -1,6 +1,5 @@
 <script lang="ts">
   import { onDestroy, onMount } from "svelte";
-  import { Color, Mesh, Program, Renderer, Triangle } from "ogl";
 
   type PresetName = "login" | "dashboard-tr" | "dashboard-bl";
 
@@ -150,15 +149,18 @@ void main() {
 }
 `;
 
-  let renderer: Renderer | null = null;
-  let program: Program | null = null;
-  let mesh: Mesh | null = null;
+  let renderer: any = null;
+  let program: any = null;
+  let mesh: any = null;
   let raf = 0;
   let resizeObserver: ResizeObserver | null = null;
 
-  function setup() {
+  async function setup() {
     if (!container) return;
     const presetConfig = presets[preset];
+    const { Color, Mesh, Program, Renderer, Triangle } = await import("ogl");
+
+    if (!container) return;
 
     renderer = new Renderer({
       alpha: true,
@@ -174,7 +176,7 @@ void main() {
     gl.canvas.style.width = "100%";
     gl.canvas.style.height = "100%";
 
-    const geometry = new Triangle(gl) as Triangle & { attributes?: { uv?: unknown } };
+    const geometry = new Triangle(gl) as any;
     if (geometry.attributes?.uv) {
       delete geometry.attributes.uv;
     }
@@ -238,7 +240,7 @@ void main() {
   }
 
   onMount(() => {
-    setup();
+    void setup();
     return teardown;
   });
 
