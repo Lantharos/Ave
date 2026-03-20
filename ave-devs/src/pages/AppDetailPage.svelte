@@ -56,10 +56,23 @@
   let resourceError = $state<string | null>(null);
   let creatingResource = $state(false);
   let deletingResourceId = $state<string | null>(null);
+  let selectedOrganizationId = $state<string | null>(app.organizationId || null);
+  let transferSyncKey = $state("");
 
   const transferableOrganizations = $derived.by(() =>
     organizations.filter((organization) => organization.role === "owner" || organization.role === "admin"),
   );
+  const transferPending = $derived(selectedOrganizationId !== (app.organizationId || null));
+  const currentOrganizationName = $derived.by(
+    () => organizations.find((organization) => organization.id === app.organizationId)?.name || "Current workspace",
+  );
+
+  $effect(() => {
+    const nextSyncKey = `${app.id}:${app.organizationId ?? ""}`;
+    if (transferSyncKey === nextSyncKey) return;
+    transferSyncKey = nextSyncKey;
+    selectedOrganizationId = app.organizationId || null;
+  });
 
   async function handleCopy(text: string, field: string) {
     oncopy(text);
@@ -167,35 +180,54 @@
         <Textarea bind:value={app.redirectUrisText} rows={4} placeholder="https://example.com/callback" />
       </label>
 
-      <div class="flex flex-col gap-3">
+      <div class="flex flex-col gap-4">
         <div>
           <span class="text-[14px] text-[#8a8a8a]">Organization</span>
-          <p class="m-0 mt-2 text-[14px] text-[#666]">Transfer this app to another workspace where you already have admin access.</p>
+          <p class="m-0 mt-2 text-[14px] text-[#666]">
+            {#if transferPending}
+              This app will move from {currentOrganizationName} when you save.
+            {:else}
+              Transfer this app to another workspace where you already have admin access.
+            {/if}
+          </p>
         </div>
 
         <div class="grid gap-3 md:grid-cols-2">
           {#each transferableOrganizations as organization}
+            {@const isSavedCurrent = organization.id === app.organizationId}
+            {@const isSelected = organization.id === selectedOrganizationId}
+            {@const isPendingTarget = transferPending && isSelected}
             <button
-              class={`rounded-[22px] border-0 px-5 py-4 text-left cursor-pointer transition-colors duration-300 ${
-                app.organizationId === organization.id
-                  ? "bg-white text-[#090909]"
-                  : "bg-white/[0.03] text-white hover:bg-white/[0.06]"
+              class={`rounded-[22px] border-0 px-5 py-4 text-left cursor-pointer transition-all duration-300 ${
+                isPendingTarget
+                  ? "bg-[#161d18] text-white shadow-[inset_0_0_0_1px_rgba(122,170,135,0.35)]"
+                  : isSavedCurrent
+                    ? "bg-white/[0.045] text-white"
+                    : "bg-white/[0.03] text-white hover:bg-white/[0.055]"
               }`}
               onclick={() => {
-                app.organizationId = organization.id;
+                selectedOrganizationId = organization.id;
               }}
             >
               <div class="flex items-center justify-between gap-3">
                 <div class="min-w-0">
-                  <p class={`m-0 truncate text-[15px] font-semibold ${app.organizationId === organization.id ? "text-[#090909]" : "text-white"}`}>
+                  <p class={`m-0 truncate text-[15px] font-semibold ${
+                    isPendingTarget ? "text-[#eef5ef]" : isSavedCurrent && transferPending ? "text-[#9c9c9c]" : "text-white"
+                  }`}>
                     {organization.name}
                   </p>
-                  <p class={`m-0 mt-1 text-[13px] ${app.organizationId === organization.id ? "text-[#3b3b3b]" : "text-[#7d7d7d]"}`}>
+                  <p class={`m-0 mt-1 text-[13px] ${
+                    isPendingTarget ? "text-[#98b39f]" : isSavedCurrent && transferPending ? "text-[#666]" : "text-[#7d7d7d]"
+                  }`}>
                     {organization.role} · {organization.appCount} apps
                   </p>
                 </div>
-                {#if app.organizationId === organization.id}
-                  <span class="rounded-full bg-[#090909]/10 px-3 py-1 text-[12px] font-medium text-inherit">Current</span>
+                {#if isPendingTarget}
+                  <span class="rounded-full bg-[#6fa47f]/14 px-3 py-1 text-[12px] font-medium text-[#bdd3c3]">Will transfer</span>
+                {:else if isSavedCurrent}
+                  <span class={`rounded-full px-3 py-1 text-[12px] font-medium ${
+                    transferPending ? "bg-white/[0.04] text-[#8b8b8b]" : "bg-white/[0.08] text-[#b8b8b8]"
+                  }`}>Current</span>
                 {/if}
               </div>
             </button>
@@ -226,7 +258,16 @@
           </Button>
           <Button variant="danger" size="sm" onclick={() => ondelete(app)}>Delete app</Button>
         </div>
-        <Button variant="primary" size="sm" onclick={() => onsave(app)} disabled={saving}>
+        <Button
+          variant="primary"
+          size="sm"
+          onclick={() =>
+            onsave({
+              ...app,
+              organizationId: selectedOrganizationId || undefined,
+            })}
+          disabled={saving}
+        >
           {saving ? "Saving..." : saved ? "Saved" : "Save changes"}
         </Button>
       </div>
