@@ -1,13 +1,17 @@
 <script lang="ts">
   import Card from "../components/Card.svelte";
   import type { AppIdentityRecord } from "../lib/api";
-  import { formatDate, formatRelativeTime, getInitials, shortId } from "../lib/portal";
+  import { formatDate, formatRelativeTime, getAuthMethodLabel, getInitials, shortId } from "../lib/portal";
 
   interface Props {
     identities: AppIdentityRecord[];
+    total: number;
+    loadingmore: boolean;
+    hasmore: boolean;
+    onloadmore: () => void;
   }
 
-  let { identities }: Props = $props();
+  let { identities, total, loadingmore, hasmore, onloadmore }: Props = $props();
   let search = $state("");
 
   const filtered = $derived(
@@ -25,6 +29,7 @@
   <div class="flex flex-col gap-3">
     <h1 class="m-0 text-[30px] md:text-[40px] font-black tracking-tight text-white">Identities</h1>
     <p class="m-0 max-w-[560px] text-[15px] text-[#7e7e7e]">People who have used this app, with recent activity and sign-in history.</p>
+    <p class="m-0 text-[13px] text-[#666]">{total} identities</p>
   </div>
 
   <div class="relative">
@@ -71,12 +76,22 @@
             <div class="text-[14px] text-white">{identity.signInCount}</div>
             <div>
               <span class="rounded-full px-3 py-1.5 text-[12px] {identity.lastMethod ? 'bg-white/[0.05] text-[#bdbdbd]' : 'bg-white/[0.03] text-[#6c6c6c]'}">
-                {identity.lastMethod || "unknown"}
+                {getAuthMethodLabel(identity.lastMethod)}
               </span>
             </div>
           </div>
         {/each}
       </div>
+
+      {#if hasmore}
+        <button
+          class="mt-2 rounded-full border-0 bg-white/[0.04] px-5 py-3 text-[14px] text-[#c2c2c2] cursor-pointer transition-colors duration-300 hover:bg-white/[0.07] disabled:opacity-50 disabled:pointer-events-none"
+          onclick={onloadmore}
+          disabled={loadingmore}
+        >
+          {loadingmore ? "Loading more..." : "Load more"}
+        </button>
+      {/if}
     </div>
   </Card>
 </div>

@@ -20,6 +20,8 @@
     createResource,
     deleteApp,
     deleteResource,
+    fetchAppActivity,
+    fetchAppIdentities,
     fetchAppOverview,
     fetchApps,
     fetchOrganization,
@@ -36,6 +38,7 @@
     type AppInsightSnapshot,
     type AppOverviewBundle,
     type DevApp,
+    type PaginatedResult,
   } from "./lib/api";
   import type { WorkspaceRole, WorkspaceState, WorkspaceSummary } from "./lib/portal";
 
@@ -52,6 +55,10 @@
   let appInsights: AppInsightSnapshot | null = $state(null);
   let appIdentities: AppIdentityRecord[] = $state([]);
   let appEvents: AppEvent[] = $state([]);
+  let appIdentitiesTotal = $state(0);
+  let appEventsTotal = $state(0);
+  let appIdentitiesLoadingMore = $state(false);
+  let appEventsLoadingMore = $state(false);
   let appBundles: Record<string, AppOverviewBundle> = $state({});
   let deleteTarget: DevApp | null = $state(null);
   let createModalOpen = $state(false);
@@ -92,8 +99,8 @@
 
   const appNav = $derived([
     { id: "overview", label: "Overview" },
-    { id: "identities", label: "Identities", badge: appIdentities.length },
-    { id: "activity", label: "Activity" },
+    { id: "identities", label: "Identities", badge: appIdentitiesTotal || appIdentities.length },
+    { id: "activity", label: "Activity", badge: appEventsTotal || appEvents.length },
     { id: "configure", label: "Configure" },
   ]);
 
@@ -141,6 +148,8 @@
         appInsights = null;
         appIdentities = [];
         appEvents = [];
+        appIdentitiesTotal = 0;
+        appEventsTotal = 0;
       }
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) {
@@ -168,6 +177,8 @@
       appInsights = null;
       appIdentities = [];
       appEvents = [];
+      appIdentitiesTotal = 0;
+      appEventsTotal = 0;
       appLoading = true;
     }
 
@@ -186,6 +197,8 @@
         appInsights = null;
         appIdentities = [];
         appEvents = [];
+        appIdentitiesTotal = 0;
+        appEventsTotal = 0;
       }
       error = err instanceof Error ? err.message : "Failed to load app overview";
     } finally {
@@ -195,10 +208,46 @@
     }
   }
 
+  async function loadAppIdentitiesPage(appId: string, reset = false) {
+    const nextOffset = reset ? 0 : appIdentities.length;
+    if (!reset) {
+      appIdentitiesLoadingMore = true;
+    }
+
+    try {
+      const page = await fetchAppIdentities(appId, { limit: 25, offset: nextOffset });
+      appIdentities = reset ? page.items : [...appIdentities, ...page.items];
+      appIdentitiesTotal = page.total;
+    } catch (err) {
+      error = err instanceof Error ? err.message : "Failed to load app identities";
+    } finally {
+      appIdentitiesLoadingMore = false;
+    }
+  }
+
+  async function loadAppActivityPage(appId: string, reset = false) {
+    const nextOffset = reset ? 0 : appEvents.length;
+    if (!reset) {
+      appEventsLoadingMore = true;
+    }
+
+    try {
+      const page = await fetchAppActivity(appId, { limit: 25, offset: nextOffset });
+      appEvents = reset ? page.items : [...appEvents, ...page.items];
+      appEventsTotal = page.total;
+    } catch (err) {
+      error = err instanceof Error ? err.message : "Failed to load app activity";
+    } finally {
+      appEventsLoadingMore = false;
+    }
+  }
+
   function applyAppBundle(bundle: AppOverviewBundle) {
     appInsights = bundle.insights;
     appIdentities = bundle.identities;
     appEvents = bundle.events;
+    appIdentitiesTotal = bundle.insights.totalIdentities;
+    appEventsTotal = bundle.insights.totalActivityEvents;
   }
 
   function handleSignIn() {
@@ -214,6 +263,8 @@
     appInsights = null;
     appIdentities = [];
     appEvents = [];
+    appIdentitiesTotal = 0;
+    appEventsTotal = 0;
     createModalOpen = false;
     createOrganizationModalOpen = false;
     workspaceSection = section;
@@ -224,6 +275,8 @@
     appInsights = null;
     appIdentities = [];
     appEvents = [];
+    appIdentitiesTotal = 0;
+    appEventsTotal = 0;
     appBundles = {};
     appLoading = false;
     createModalOpen = false;
@@ -238,6 +291,8 @@
       appInsights = null;
       appIdentities = [];
       appEvents = [];
+      appIdentitiesTotal = 0;
+      appEventsTotal = 0;
       appLoading = false;
       createModalOpen = false;
       createOrganizationModalOpen = false;
@@ -249,6 +304,20 @@
     workspaceSection = "applications";
     appSection = "overview";
     void loadSelectedApp(appId);
+  }
+
+  function handleAppSectionSelect(id: string) {
+    appSection = id as AppSection;
+
+    if (!selectedAppId) return;
+
+    if (appSection === "identities" && appIdentities.length < appIdentitiesTotal) {
+      void loadAppIdentitiesPage(selectedAppId, true);
+    }
+
+    if (appSection === "activity" && (appEventsTotal === 0 || appEvents.length < appEventsTotal)) {
+      void loadAppActivityPage(selectedAppId, true);
+    }
   }
 
   async function handleCreate(form: {
@@ -573,7 +642,7 @@
 
       <div class="rounded-[28px] bg-[#0d0d0d]/76 px-4 md:px-6 backdrop-blur-[24px]">
         {#if selectedAppId}
-          <Subnav items={appNav} active={appSection} onselect={(id) => (appSection = id as AppSection)} />
+          <Subnav items={appNav} active={appSection} onselect={handleAppSectionSelect} />
         {:else}
           <Subnav items={workspaceNav} active={workspaceSection} onselect={(id) => (workspaceSection = id as WorkspaceSection)} />
         {/if}
@@ -689,9 +758,23 @@
         {:else if selectedApp && appInsights && appSection === "overview"}
           <AppOverviewPage app={selectedApp} insights={appInsights} identities={appIdentities} events={appEvents} />
         {:else if selectedApp && appSection === "identities"}
-          <AppIdentitiesPage identities={appIdentities} />
+          <AppIdentitiesPage
+            identities={appIdentities}
+            total={appIdentitiesTotal}
+            loadingmore={appIdentitiesLoadingMore}
+            hasmore={appIdentities.length < appIdentitiesTotal}
+            onloadmore={() => loadAppIdentitiesPage(selectedApp.id)}
+          />
         {:else if selectedApp && appInsights && appSection === "activity"}
-          <AppActivityPage app={selectedApp} insights={appInsights} events={appEvents} />
+          <AppActivityPage
+            app={selectedApp}
+            insights={appInsights}
+            events={appEvents}
+            total={appEventsTotal}
+            loadingmore={appEventsLoadingMore}
+            hasmore={appEvents.length < appEventsTotal}
+            onloadmore={() => loadAppActivityPage(selectedApp.id)}
+          />
         {:else if selectedApp && appSection === "configure"}
           <AppDetailPage
             app={selectedApp}

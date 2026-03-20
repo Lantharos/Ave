@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
-import { and, desc, eq, inArray, isNull } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import {
   appAnalyticsEvents,
   db,
@@ -55,6 +55,11 @@ const resourceSchema = z.object({
   scopes: z.array(z.string().min(2).max(80)).min(1),
   audience: z.string().min(3).max(200),
   status: z.enum(["active", "disabled"]).optional(),
+});
+
+const paginationQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(100).default(25).optional(),
+  offset: z.coerce.number().int().min(0).default(0).optional(),
 });
 
 function serializeResource(resource: typeof oauthResources.$inferSelect) {
@@ -137,15 +142,40 @@ async function listAppResources(appIds: string[]) {
 }
 
 async function getAppInsights(appId: string, redirectUris: string[]) {
-  const [authorizations, refreshTokens, analyticsEvents, delegations, resources] = await Promise.all([
-    db.select().from(oauthAuthorizations).where(eq(oauthAuthorizations.appId, appId)),
-    db.select().from(oauthRefreshTokens).where(eq(oauthRefreshTokens.appId, appId)),
+  const now = Date.now();
+  const weekAgo = new Date(now - 7 * 24 * 60 * 60 * 1000);
+  const [authorizationRows, weeklyAuthorizations, refreshTokens, analyticsCount, revocations, delegations, resources] = await Promise.all([
     db
-      .select()
+      .select({
+        lastAuthMethod: oauthAuthorizations.lastAuthMethod,
+        authorizationCount: oauthAuthorizations.authorizationCount,
+      })
+      .from(oauthAuthorizations)
+      .where(eq(oauthAuthorizations.appId, appId)),
+    db
+      .select({ count: sql<number>`count(*)` })
+      .from(oauthAuthorizations)
+      .where(and(eq(oauthAuthorizations.appId, appId), sql`${oauthAuthorizations.lastAuthorizedAt} >= ${weekAgo}`)),
+    db
+      .select({ count: sql<number>`count(*)` })
+      .from(oauthRefreshTokens)
+      .where(and(eq(oauthRefreshTokens.appId, appId), isNull(oauthRefreshTokens.revokedAt), sql`${oauthRefreshTokens.expiresAt} > ${new Date(now)}`)),
+    db
+      .select({ count: sql<number>`count(*)` })
       .from(appAnalyticsEvents)
       .where(eq(appAnalyticsEvents.appId, appId)),
-    db.select().from(oauthDelegationGrants).where(and(eq(oauthDelegationGrants.sourceAppId, appId), isNull(oauthDelegationGrants.revokedAt))),
-    db.select().from(oauthResources).where(eq(oauthResources.ownerAppId, appId)),
+    db
+      .select({ count: sql<number>`count(*)` })
+      .from(appAnalyticsEvents)
+      .where(and(eq(appAnalyticsEvents.appId, appId), eq(appAnalyticsEvents.eventType, "authorization_revoked"))),
+    db
+      .select({ count: sql<number>`count(*)` })
+      .from(oauthDelegationGrants)
+      .where(and(eq(oauthDelegationGrants.sourceAppId, appId), isNull(oauthDelegationGrants.revokedAt))),
+    db
+      .select({ count: sql<number>`count(*)` })
+      .from(oauthResources)
+      .where(eq(oauthResources.ownerAppId, appId)),
   ]);
 
   const methodCounts = {
@@ -155,11 +185,11 @@ async function getAppInsights(appId: string, redirectUris: string[]) {
     unknown: 0,
   };
 
-  for (const authorization of authorizations) {
+  for (const authorization of authorizationRows) {
     const method = authorization.lastAuthMethod;
     if (method === "passkey") methodCounts.passkey += 1;
-    else if (method === "device_approval") methodCounts.deviceApproval += 1;
-    else if (method === "trust_code") methodCounts.trustCode += 1;
+    else if (method === "instant") methodCounts.deviceApproval += 1;
+    else if (method === "fallback" || method === "trust_code" || method === "device_approval") methodCounts.trustCode += 1;
     else methodCounts.unknown += 1;
   }
 
@@ -168,62 +198,54 @@ async function getAppInsights(appId: string, redirectUris: string[]) {
     ? Math.round(((methodCounts.passkey + methodCounts.deviceApproval) / totalMethodEvents) * 100)
     : 0;
 
-  const now = Date.now();
-  const weekAgo = now - 7 * 24 * 60 * 60 * 1000;
   const httpsRedirects = redirectUris.filter((uri) => uri.startsWith("https://")).length;
 
   return {
-    totalIdentities: new Set(authorizations.map((entry) => entry.identityId)).size,
-    totalAuthorizations: authorizations.reduce((total, entry) => total + (entry.authorizationCount || 0), 0),
-    weeklyAuthorizations: authorizations.filter((entry) => new Date(entry.lastAuthorizedAt).getTime() >= weekAgo).length,
-    activeRefreshTokens: refreshTokens.filter((entry) => !entry.revokedAt && new Date(entry.expiresAt).getTime() > now).length,
+    totalIdentities: authorizationRows.length,
+    totalAuthorizations: authorizationRows.reduce((total, entry) => total + (entry.authorizationCount || 0), 0),
+    weeklyAuthorizations: weeklyAuthorizations[0]?.count || 0,
+    activeRefreshTokens: refreshTokens[0]?.count || 0,
     instantSignInRate: instantRate,
     methodCounts,
     redirectSecurityRate: redirectUris.length ? Math.round((httpsRedirects / redirectUris.length) * 100) : 0,
-    resources: resources.length,
-    activeDelegations: delegations.length,
-    revocations: analyticsEvents.filter((entry) => entry.eventType === "authorization_revoked").length,
+    resources: resources[0]?.count || 0,
+    activeDelegations: delegations[0]?.count || 0,
+    revocations: revocations[0]?.count || 0,
+    totalActivityEvents: (analyticsCount[0]?.count || 0) + (delegations[0]?.count || 0),
   };
 }
 
-async function getAppIdentities(appId: string) {
-  const authorizations = await db
-    .select()
-    .from(oauthAuthorizations)
-    .where(eq(oauthAuthorizations.appId, appId));
+async function getAppIdentities(appId: string, limit = 25, offset = 0) {
+  const [totalRow, authorizations] = await Promise.all([
+    db
+      .select({ count: sql<number>`count(*)` })
+      .from(oauthAuthorizations)
+      .where(eq(oauthAuthorizations.appId, appId)),
+    db
+      .select()
+      .from(oauthAuthorizations)
+      .where(eq(oauthAuthorizations.appId, appId))
+      .orderBy(desc(oauthAuthorizations.lastAuthorizedAt))
+      .limit(limit)
+      .offset(offset),
+  ]);
 
-  const identityIds = [...new Set(authorizations.map((entry) => entry.identityId))];
+  const total = totalRow[0]?.count || 0;
+  const identityIds = authorizations.map((entry) => entry.identityId);
   if (!identityIds.length) {
-    return [];
+    return {
+      items: [],
+      total,
+      limit,
+      offset,
+      hasMore: false,
+    };
   }
 
   const [identityRows, refreshTokens] = await Promise.all([
     db.select().from(identities).where(inArray(identities.id, identityIds)),
     db.select().from(oauthRefreshTokens).where(and(eq(oauthRefreshTokens.appId, appId), inArray(oauthRefreshTokens.identityId, identityIds))),
   ]);
-
-  const authorizationStats = new Map<string, { firstSeen: Date; lastSeen: Date; authorizations: number; lastMethod: string | null }>();
-  for (const authorization of authorizations) {
-    const createdAt = new Date(authorization.createdAt);
-    const lastAuthorizedAt = new Date(authorization.lastAuthorizedAt);
-    const existing = authorizationStats.get(authorization.identityId);
-    if (!existing) {
-      authorizationStats.set(authorization.identityId, {
-        firstSeen: createdAt,
-        lastSeen: lastAuthorizedAt,
-        authorizations: authorization.authorizationCount || 0,
-        lastMethod: authorization.lastAuthMethod || null,
-      });
-      continue;
-    }
-
-    if (createdAt < existing.firstSeen) existing.firstSeen = createdAt;
-    if (lastAuthorizedAt > existing.lastSeen) existing.lastSeen = lastAuthorizedAt;
-    existing.authorizations += authorization.authorizationCount || 0;
-    if (lastAuthorizedAt >= existing.lastSeen) {
-      existing.lastMethod = authorization.lastAuthMethod || existing.lastMethod;
-    }
-  }
 
   const refreshCountByIdentityId = new Map<string, { count: number; lastActive: Date | null }>();
   for (const token of refreshTokens) {
@@ -236,8 +258,8 @@ async function getAppIdentities(appId: string) {
     refreshCountByIdentityId.set(token.identityId, existing);
   }
 
-  return identityRows.map((identity) => {
-    const authorization = authorizationStats.get(identity.id);
+  const items = identityRows.map((identity) => {
+    const authorization = authorizations.find((entry) => entry.identityId === identity.id);
     const refresh = refreshCountByIdentityId.get(identity.id);
     return {
       id: identity.id,
@@ -246,25 +268,48 @@ async function getAppIdentities(appId: string) {
       email: identity.email,
       avatarUrl: identity.avatarUrl,
       isPrimary: identity.isPrimary,
-      firstSeen: authorization?.firstSeen || identity.createdAt,
-        lastActive: refresh?.lastActive || authorization?.lastSeen || identity.createdAt,
-        signInCount: (authorization?.authorizations || 0) + (refresh?.count || 0),
-        authorizationCount: authorization?.authorizations || 0,
-        refreshCount: refresh?.count || 0,
-        lastMethod: authorization?.lastMethod || null,
+      firstSeen: authorization?.createdAt || identity.createdAt,
+      lastActive: refresh?.lastActive || authorization?.lastAuthorizedAt || identity.createdAt,
+      signInCount: (authorization?.authorizationCount || 0) + (refresh?.count || 0),
+      authorizationCount: authorization?.authorizationCount || 0,
+      refreshCount: refresh?.count || 0,
+      lastMethod: authorization?.lastAuthMethod || null,
       };
-    });
+    })
+    .sort((left, right) => new Date(right.lastActive).getTime() - new Date(left.lastActive).getTime());
+
+  return {
+    items,
+    total,
+    limit,
+    offset,
+    hasMore: offset + items.length < total,
+  };
 }
 
-async function getAppActivity(appId: string) {
-  const [analyticsEvents, delegationLogs] = await Promise.all([
+async function getAppActivity(appId: string, limit = 25, offset = 0) {
+  const windowSize = limit + offset;
+  const [analyticsEvents, delegationLogs, analyticsCount, delegationCount] = await Promise.all([
     db
       .select()
       .from(appAnalyticsEvents)
       .where(eq(appAnalyticsEvents.appId, appId))
       .orderBy(desc(appAnalyticsEvents.createdAt))
-      .limit(100),
-    db.select().from(oauthDelegationAuditLogs).where(eq(oauthDelegationAuditLogs.sourceAppId, appId)).orderBy(desc(oauthDelegationAuditLogs.createdAt)),
+      .limit(windowSize),
+    db
+      .select()
+      .from(oauthDelegationAuditLogs)
+      .where(eq(oauthDelegationAuditLogs.sourceAppId, appId))
+      .orderBy(desc(oauthDelegationAuditLogs.createdAt))
+      .limit(windowSize),
+    db
+      .select({ count: sql<number>`count(*)` })
+      .from(appAnalyticsEvents)
+      .where(eq(appAnalyticsEvents.appId, appId)),
+    db
+      .select({ count: sql<number>`count(*)` })
+      .from(oauthDelegationAuditLogs)
+      .where(eq(oauthDelegationAuditLogs.sourceAppId, appId)),
   ]);
 
   const appLogs = analyticsEvents.map((event) => ({
@@ -285,9 +330,19 @@ async function getAppActivity(appId: string) {
     source: "delegation" as const,
   }));
 
-  return [...appLogs, ...delegationEvents].sort(
+  const items = [...appLogs, ...delegationEvents].sort(
     (left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime(),
-  );
+  ).slice(offset, offset + limit);
+
+  const total = (analyticsCount[0]?.count || 0) + (delegationCount[0]?.count || 0);
+
+  return {
+    items,
+    total,
+    limit,
+    offset,
+    hasMore: offset + items.length < total,
+  };
 }
 
 app.use("*", requireDevUser);
@@ -388,26 +443,28 @@ app.get("/:appId/insights", async (c) => {
   });
 });
 
-app.get("/:appId/identities", async (c) => {
+app.get("/:appId/identities", zValidator("query", paginationQuerySchema), async (c) => {
   const userId = c.get("devUserId") as string;
   const appId = c.req.param("appId");
+  const { limit = 25, offset = 0 } = c.req.valid("query");
 
   const accessible = await getAccessibleApp(userId, appId, "viewer");
   if (!accessible) {
     return c.json({ error: "App not found" }, 404);
   }
-  return c.json({ identities: await getAppIdentities(appId) });
+  return c.json(await getAppIdentities(appId, limit, offset));
 });
 
-app.get("/:appId/activity", async (c) => {
+app.get("/:appId/activity", zValidator("query", paginationQuerySchema), async (c) => {
   const userId = c.get("devUserId") as string;
   const appId = c.req.param("appId");
+  const { limit = 25, offset = 0 } = c.req.valid("query");
 
   const accessible = await getAccessibleApp(userId, appId, "viewer");
   if (!accessible) {
     return c.json({ error: "App not found" }, 404);
   }
-  return c.json({ events: await getAppActivity(appId) });
+  return c.json(await getAppActivity(appId, limit, offset));
 });
 
 app.get("/:appId/overview", async (c) => {
@@ -419,13 +476,13 @@ app.get("/:appId/overview", async (c) => {
     return c.json({ error: "App not found" }, 404);
   }
 
-  const [insights, identities, events] = await Promise.all([
+  const [insights, identitiesPage, eventsPage] = await Promise.all([
     getAppInsights(appId, accessible.app.redirectUris as string[]),
-    getAppIdentities(appId),
-    getAppActivity(appId),
+    getAppIdentities(appId, 5, 0),
+    getAppActivity(appId, 8, 0),
   ]);
 
-  return c.json({ insights, identities, events });
+  return c.json({ insights, identities: identitiesPage.items, events: eventsPage.items });
 });
 
 app.patch("/:appId", zValidator("json", baseAppSchema.partial()), async (c) => {

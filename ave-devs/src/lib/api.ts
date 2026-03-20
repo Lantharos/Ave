@@ -47,6 +47,7 @@ export interface AppInsightSnapshot {
   resources: number;
   activeDelegations: number;
   revocations: number;
+  totalActivityEvents: number;
 }
 
 export interface AppIdentityRecord {
@@ -77,6 +78,14 @@ export interface AppOverviewBundle {
   insights: AppInsightSnapshot;
   identities: AppIdentityRecord[];
   events: AppEvent[];
+}
+
+export interface PaginatedResult<T> {
+  items: T[];
+  total: number;
+  limit: number;
+  offset: number;
+  hasMore: boolean;
 }
 
 export interface CreateAppPayload {
@@ -218,6 +227,28 @@ export async function fetchApps(organizationId?: string): Promise<DevApp[]> {
 
 export async function fetchAppOverview(appId: string): Promise<AppOverviewBundle> {
   return request<AppOverviewBundle>(`/api/apps/${appId}/overview`);
+}
+
+export async function fetchAppIdentities(
+  appId: string,
+  options: { limit?: number; offset?: number } = {},
+): Promise<PaginatedResult<AppIdentityRecord>> {
+  const query = new URLSearchParams();
+  if (options.limit !== undefined) query.set("limit", String(options.limit));
+  if (options.offset !== undefined) query.set("offset", String(options.offset));
+  const suffix = query.toString() ? `?${query.toString()}` : "";
+  return request<PaginatedResult<AppIdentityRecord>>(`/api/apps/${appId}/identities${suffix}`);
+}
+
+export async function fetchAppActivity(
+  appId: string,
+  options: { limit?: number; offset?: number } = {},
+): Promise<PaginatedResult<AppEvent>> {
+  const query = new URLSearchParams();
+  if (options.limit !== undefined) query.set("limit", String(options.limit));
+  if (options.offset !== undefined) query.set("offset", String(options.offset));
+  const suffix = query.toString() ? `?${query.toString()}` : "";
+  return request<PaginatedResult<AppEvent>>(`/api/apps/${appId}/activity${suffix}`);
 }
 
 export async function createApp(

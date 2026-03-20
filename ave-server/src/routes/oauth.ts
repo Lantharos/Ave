@@ -226,6 +226,7 @@ app.post("/authorize", requireAuth, zValidator("json", z.object({
   requestedResource: z.string().optional(),
   requestedScope: z.string().optional(),
   communicationMode: z.enum(["user_present", "background"]).optional().default("user_present"),
+  interactionMode: z.enum(["instant", "prompt"]).optional().default("prompt"),
 })), async (c) => {
   const user = c.get("user")!;
   const {
@@ -242,6 +243,7 @@ app.post("/authorize", requireAuth, zValidator("json", z.object({
     requestedResource,
     requestedScope,
     communicationMode,
+    interactionMode,
   } = c.req.valid("json");
 
   
@@ -308,6 +310,14 @@ app.post("/authorize", requireAuth, zValidator("json", z.object({
     return c.json({ error: "Invalid identity" }, 400);
   }
 
+  const authorizationMethod = interactionMode === "instant"
+    ? "instant"
+    : user.authMethod === "passkey"
+      ? "passkey"
+      : user.authMethod === "trust_code" || user.authMethod === "device_approval"
+      ? "fallback"
+      : user.authMethod || "unknown";
+
   // Track authorization (skipped for Quick Auth — no persistent app record)
   let existingAuth: typeof oauthAuthorizations.$inferSelect | undefined;
   let createdAuthorization = false;
@@ -336,7 +346,7 @@ app.post("/authorize", requireAuth, zValidator("json", z.object({
         identityId,
         lastAuthorizedAt: new Date(),
         authorizationCount: 1,
-        lastAuthMethod: user.authMethod || "unknown",
+        lastAuthMethod: authorizationMethod,
         encryptedAppKey: encryptedAppKey || null,
       });
       createdAuthorization = true;
@@ -347,7 +357,7 @@ app.post("/authorize", requireAuth, zValidator("json", z.object({
           encryptedAppKey,
           lastAuthorizedAt: new Date(),
           authorizationCount: existingAuth.authorizationCount + 1,
-          lastAuthMethod: user.authMethod || "unknown",
+          lastAuthMethod: authorizationMethod,
         })
         .where(eq(oauthAuthorizations.id, existingAuth.id));
     } else {
@@ -355,7 +365,7 @@ app.post("/authorize", requireAuth, zValidator("json", z.object({
         .set({
           lastAuthorizedAt: new Date(),
           authorizationCount: existingAuth.authorizationCount + 1,
-          lastAuthMethod: user.authMethod || "unknown",
+          lastAuthMethod: authorizationMethod,
         })
         .where(eq(oauthAuthorizations.id, existingAuth.id));
     }
@@ -473,7 +483,7 @@ app.post("/authorize", requireAuth, zValidator("json", z.object({
       appName: oauthApp.name,
       appId: oauthApp.id,
       identityId,
-      authMethod: user.authMethod || "unknown",
+      authMethod: authorizationMethod,
       scope,
     },
     deviceId: user.deviceId,

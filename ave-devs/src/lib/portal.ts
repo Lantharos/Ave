@@ -118,3 +118,11 @@ export function getActivityTone(severity: "info" | "warning" | "danger") {
   if (severity === "warning") return "text-[#f0c674] bg-[#f0c674]/10";
   return "text-[#B9BBBE] bg-[#B9BBBE]/10";
 }
+
+export function getAuthMethodLabel(value?: string | null): string {
+  if (value === "instant") return "instant";
+  if (value === "passkey") return "passkey";
+  if (value === "fallback" || value === "trust_code") return "fallback";
+  if (value === "device_approval") return "device approval";
+  return "unknown";
+}

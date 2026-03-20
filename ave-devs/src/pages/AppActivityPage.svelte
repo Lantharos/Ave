@@ -7,9 +7,13 @@
     app: DevApp;
     insights: AppInsightSnapshot;
     events: AppEvent[];
+    total: number;
+    loadingmore: boolean;
+    hasmore: boolean;
+    onloadmore: () => void;
   }
 
-  let { app, insights, events }: Props = $props();
+  let { app, insights, events, total, loadingmore, hasmore, onloadmore }: Props = $props();
 
   const actionCounts = $derived(
     Object.entries(
@@ -23,7 +27,7 @@
   );
 
   const notableEvents = $derived(
-    events.filter((event) => event.action !== "oauth_authorized").slice(0, 8),
+    events.filter((event) => event.action !== "authorization_added").slice(0, 8),
   );
 </script>
 
@@ -31,13 +35,14 @@
   <div class="flex flex-col gap-3">
     <h1 class="m-0 text-[30px] md:text-[40px] font-black tracking-tight text-white">Activity</h1>
     <p class="m-0 max-w-[560px] text-[15px] text-[#7e7e7e]">Recent sign-in patterns and changes for {app.name}.</p>
+    <p class="m-0 text-[13px] text-[#666]">{total} events</p>
   </div>
 
   <div class="grid gap-4 md:grid-cols-4">
     <Card>
       <div class="flex flex-col gap-2">
         <span class="text-[14px] text-[#7d7d7d]">Total events</span>
-        <span class="text-[32px] font-black text-white">{events.length}</span>
+        <span class="text-[32px] font-black text-white">{total}</span>
       </div>
     </Card>
     <Card>
@@ -111,6 +116,16 @@
             </div>
           {/if}
         </div>
+
+        {#if hasmore}
+          <button
+            class="mt-2 rounded-full border-0 bg-white/[0.04] px-5 py-3 text-[14px] text-[#c2c2c2] cursor-pointer transition-colors duration-300 hover:bg-white/[0.07] disabled:opacity-50 disabled:pointer-events-none"
+            onclick={onloadmore}
+            disabled={loadingmore}
+          >
+            {loadingmore ? "Loading more..." : "Load more"}
+          </button>
+        {/if}
       </div>
     </Card>
   </div>

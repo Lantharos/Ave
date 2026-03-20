@@ -20,7 +20,7 @@
 
   const recentChanges = $derived(
     events
-      .filter((event) => event.action !== "oauth_authorized")
+      .filter((event) => event.action !== "authorization_added")
       .slice(0, 4),
   );
 

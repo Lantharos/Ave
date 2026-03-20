@@ -213,7 +213,7 @@
         }
     }
 
-	async function handleAuthorize() {
+    async function handleAuthorize(interactionMode: "instant" | "prompt" = "prompt") {
 		if (!selectedIdentity || !appInfo) return;
 
         try {
@@ -227,6 +227,7 @@
                 state: params.state,
                 identityId: selectedIdentity.id,
                 nonce: params.nonce || undefined,
+                interactionMode,
             };
             
             // Only include PKCE params if they exist
@@ -584,7 +585,7 @@
 				return;
 			}
 			needsMasterKey = false;
-			await handleAuthorize();
+                await handleAuthorize("instant");
 		} finally {
 			unlockingMasterKey = false;
 		}
