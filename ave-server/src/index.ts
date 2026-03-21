@@ -68,13 +68,17 @@ function resolveCorsOrigin(origin: string | undefined): string {
 function buildApp() {
   const app = new Hono<{ Bindings: Bindings }>();
 
-  app.use("/api/oauth/*", cors({
+  app.use("/api/oauth/token", cors({
+    origin: "*",
+    credentials: false,
+    allowMethods: ["POST", "OPTIONS"],
+    allowHeaders: ["Content-Type", "Authorization"],
+  }));
+
+  const oauthCorsMiddleware = cors({
     origin: (origin, c) => {
-      // The token and session-check endpoints are public OAuth endpoints that must be
-      // reachable from any origin (Quick Ave sites can be on any domain). PKCE provides
-      // the security; CORS restriction would only break legitimate callers.
       const path = c.req.path;
-      if (path === "/api/oauth/token" || path === "/api/oauth/session/check") {
+      if (path === "/api/oauth/session/check") {
         return origin || "https://aveid.net";
       }
       return resolveCorsOrigin(origin);
@@ -82,11 +86,18 @@ function buildApp() {
     credentials: true,
     allowMethods: ["GET", "POST", "OPTIONS"],
     allowHeaders: ["Content-Type", "Authorization"],
-  }));
+  });
+
+  app.use("/api/oauth/*", async (c, next) => {
+    if (c.req.path === "/api/oauth/token") {
+      return next();
+    }
+    return oauthCorsMiddleware(c, next);
+  });
 
   app.use("/.well-known/*", cors({
-    origin: (origin) => resolveCorsOrigin(origin),
-    credentials: true,
+    origin: "*",
+    credentials: false,
     allowMethods: ["GET", "OPTIONS"],
     allowHeaders: ["Content-Type", "Authorization"],
   }));
