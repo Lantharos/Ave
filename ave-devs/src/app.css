@@ -102,6 +102,11 @@
     overflow-x: clip;
   }
 
+  #app,
+  #app > * {
+    background-color: #090909;
+  }
+
   a {
     color: inherit;
     text-decoration: none;

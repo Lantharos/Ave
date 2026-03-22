@@ -16,6 +16,13 @@ html, body, #app {
     min-height: calc(var(--vh, 1vh) * 100);
 }
 
+html,
+body,
+#app,
+#app > * {
+    background-color: #090909;
+}
+
 html {
     background: #090909;
 }
