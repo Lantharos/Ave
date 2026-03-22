@@ -38,15 +38,6 @@
             };
         }
 
-        if ($isAuthenticated) {
-            if (returnUrl) {
-                clearReturnUrl();
-                safeGoto(goto, returnUrl);
-                return;
-            }
-            safeGoto(goto, pendingOauth ? "/signin" : "/dashboard");
-        }
-
         void loadPendingAuthContext().then((context) => {
             pendingAuthContext = context;
             authContextReady = true;
@@ -54,6 +45,18 @@
     });
 
     let error = $state("");
+
+    $effect(() => {
+        if (!$isAuthenticated) return;
+
+        if (returnUrl) {
+            clearReturnUrl();
+            safeGoto(goto, returnUrl);
+            return;
+        }
+
+        safeGoto(goto, pendingOauth ? "/signin" : "/dashboard");
+    });
     
     // State passed between steps
     let handle = $state("");

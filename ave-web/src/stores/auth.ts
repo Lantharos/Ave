@@ -23,9 +23,17 @@ interface AuthState {
   hasMasterKey: boolean;
 }
 
+function hasStoredSessionToken(): boolean {
+  try {
+    return Boolean(localStorage.getItem("ave_session_token"));
+  } catch {
+    return false;
+  }
+}
+
 const initialState: AuthState = {
   isAuthenticated: false,
-  isLoading: true,
+  isLoading: hasStoredSessionToken(),
   userId: null,
   identities: [],
   currentIdentity: null,
