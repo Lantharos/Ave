@@ -6,7 +6,7 @@
     import AuroraBackdrop from "../../components/AuroraBackdrop.svelte";
     import { goto } from "@mateothegreat/svelte5-router";
     import { safeGoto } from "../../util/safe-goto";
-    import { auth, isAuthenticated } from "../../stores/auth";
+    import { auth, isAuthenticated, isLoading } from "../../stores/auth";
     import { getReturnUrl, clearReturnUrl } from "../../util/return-url";
     import type { Identity, Device } from "../../lib/api";
     import { onMount } from "svelte";
@@ -153,7 +153,11 @@
         </div>
     {/if}
 
-    {#if currentPage === "login"}
+    {#if $isLoading || $isAuthenticated}
+        <div class="w-full h-full flex items-center justify-center">
+            <div class="w-12 h-12 border-4 border-transparent border-t-white rounded-full animate-spin"></div>
+        </div>
+    {:else if currentPage === "login"}
         {#if authContextReady}
             <LoginStart
                 onNext={handleLoginStart}

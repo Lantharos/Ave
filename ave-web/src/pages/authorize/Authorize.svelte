@@ -510,6 +510,18 @@
                         }
                     }
                 }
+                const granted = (await withTimeout(requestStorageAccess(), 8000)) === true;
+                if (granted) {
+                    const retryInitOk = (await withTimeout(auth.init(), 5000)) !== null;
+                    if (retryInitOk) {
+                        const retryState = get(auth);
+                        if (retryState.isAuthenticated) {
+                            needsStorageAccess = false;
+                            return;
+                        }
+                    }
+                }
+
                 needsStorageAccess = true;
                 return;
             }
