@@ -2,15 +2,20 @@
     import Text from "../../../components/Text.svelte";
     import ActionCard from "../../../components/ActionCard.svelte";
     import Passkey from "./components/Passkey.svelte";
-    import { api, type Passkey as PasskeyType } from "../../../lib/api";
+    import { api } from "../../../lib/api";
+    import { createDeletePasskeyMutation, createSecurityQuery, queryKeys } from "../../../lib/queries";
+    import { queryClient } from "../../../lib/query-client";
     import { registerPasskey, authenticateWithPasskey } from "../../../lib/webauthn";
     import { loadMasterKey, encryptMasterKeyWithPrf, createMasterKeyBackup } from "../../../lib/crypto";
     import { getPushStatus, subscribeToPushNotifications, unsubscribeFromPushNotifications, getPushSupportDetails } from "../../../lib/push";
 
-    let passkeys = $state<PasskeyType[]>([]);
-    let recoveryCodesRemaining = $state(0);
-    let hasRecoveryCodes = $state(false);
-    let loading = $state(true);
+    const securityQuery = createSecurityQuery();
+    const deletePasskeyMutation = createDeletePasskeyMutation();
+
+    let loading = $derived(securityQuery.isPending);
+    let passkeys = $derived(securityQuery.data?.passkeys ?? []);
+    let recoveryCodesRemaining = $derived(securityQuery.data?.recoveryCodesRemaining ?? 0);
+    let hasRecoveryCodes = $derived(securityQuery.data?.hasRecoveryCodes ?? false);
     let error = $state<string | null>(null);
     let deletingPasskeyId = $state<string | null>(null);
     let addingPasskey = $state(false);
@@ -26,20 +31,11 @@
     let showPushPrompt = $state(false);
     let pushError = $state<string | null>(null);
 
-    async function loadSecurityData() {
-        try {
-            loading = true;
-            error = null;
-            const data = await api.security.get();
-            passkeys = data.passkeys;
-            recoveryCodesRemaining = data.recoveryCodesRemaining;
-            hasRecoveryCodes = data.hasRecoveryCodes;
-        } catch (err) {
-            error = err instanceof Error ? err.message : "Failed to load security data";
-        } finally {
-            loading = false;
+    $effect(() => {
+        if (!error && securityQuery.error) {
+            error = securityQuery.error instanceof Error ? securityQuery.error.message : "Failed to load security data";
         }
-    }
+    });
 
     async function handleDeletePasskey(passkeyId: string) {
         if (passkeys.length <= 1) {
@@ -50,8 +46,7 @@
         try {
             deletingPasskeyId = passkeyId;
             error = null;
-            await api.security.deletePasskey(passkeyId);
-            passkeys = passkeys.filter(p => p.id !== passkeyId);
+            await deletePasskeyMutation.mutateAsync(passkeyId);
         } catch (err) {
             error = err instanceof Error ? err.message : "Failed to delete passkey";
         } finally {
@@ -78,7 +73,13 @@
             );
             
             // Add to list immediately so user sees the new passkey
-            passkeys = [...passkeys, result.passkey];
+            queryClient.setQueryData<any>(queryKeys.security, (previous: any) => {
+                if (!previous) return previous;
+                return {
+                    ...previous,
+                    passkeys: [...previous.passkeys, result.passkey],
+                };
+            });
             
             // If PRF is supported, we need to authenticate with the passkey to get the PRF output
             // Then we can encrypt the master key and update the passkey record
@@ -159,9 +160,8 @@
             const result = await api.security.issueRecoveryCodes();
             await finalizeRecoveryCodes(result.codes);
             newCodes = result.codes;
-            recoveryCodesRemaining = result.recoveryCodesRemaining;
-            hasRecoveryCodes = true;
             showNewCodes = true;
+            await queryClient.invalidateQueries({ queryKey: queryKeys.security });
         } catch (err) {
             error = err instanceof Error ? err.message : "Failed to set up recovery codes";
         } finally {
@@ -180,9 +180,8 @@
             const result = await api.security.regenerateTrustCodes();
             await finalizeRecoveryCodes(result.codes);
             newCodes = result.codes;
-            recoveryCodesRemaining = result.recoveryCodesRemaining;
-            hasRecoveryCodes = true;
             showNewCodes = true;
+            await queryClient.invalidateQueries({ queryKey: queryKeys.security });
         } catch (err) {
             error = err instanceof Error ? err.message : "Failed to regenerate codes";
         } finally {
@@ -286,9 +285,7 @@
         }
     }
 
-    // Load data on mount
     $effect(() => {
-        loadSecurityData();
         loadPush();
     });
 </script>

@@ -3,11 +3,15 @@
     import ActionCard from "../../../components/ActionCard.svelte";
     import QRCode from "qrcode";
     import Device from "./components/Device.svelte";
-    import { api, type Device as DeviceType } from "../../../lib/api";
+    import { api } from "../../../lib/api";
     import { currentIdentity } from "../../../stores/auth";
+    import { createDevicesQuery, createRevokeDeviceMutation, queryKeys } from "../../../lib/queries";
+    import { queryClient } from "../../../lib/query-client";
 
-    let devices = $state<DeviceType[]>([]);
-    let loading = $state(true);
+    const devicesQuery = createDevicesQuery();
+
+    let loading = $derived(devicesQuery.isPending);
+    let devices = $derived(devicesQuery.data ?? []);
     let error = $state<string | null>(null);
     let revokingDeviceId = $state<string | null>(null);
     let revokingAll = $state(false);
@@ -15,19 +19,13 @@
     let addDeviceLoading = $state(false);
     let addDeviceQrDataUrl = $state<string | null>(null);
 
-    async function loadDevices() {
-        try {
-            loading = true;
-            error = null;
-            const data = await api.devices.list();
-            // Only show active devices
-            devices = data.devices.filter(d => d.isActive);
-        } catch (err) {
-            error = err instanceof Error ? err.message : "Failed to load devices";
-        } finally {
-            loading = false;
+    const revokeDeviceMutation = createRevokeDeviceMutation();
+
+    $effect(() => {
+        if (!error && devicesQuery.error) {
+            error = devicesQuery.error instanceof Error ? devicesQuery.error.message : "Failed to load devices";
         }
-    }
+    });
 
     async function handleAddDevice() {
         addDeviceLoading = true;
@@ -73,8 +71,7 @@
         try {
             revokingDeviceId = deviceId;
             error = null;
-            await api.devices.revoke(deviceId);
-            devices = devices.filter(d => d.id !== deviceId);
+            await revokeDeviceMutation.mutateAsync(deviceId);
         } catch (err) {
             error = err instanceof Error ? err.message : "Failed to revoke device";
         } finally {
@@ -94,24 +91,15 @@
             // Revoke all devices except current
             const otherDevices = devices.filter(d => !d.isCurrent);
             for (const device of otherDevices) {
-                await api.devices.revoke(device.id);
+                await revokeDeviceMutation.mutateAsync(device.id);
             }
-            
-            // Keep only current device
-            devices = devices.filter(d => d.isCurrent);
         } catch (err) {
             error = err instanceof Error ? err.message : "Failed to revoke devices";
-            // Reload to get accurate state
-            await loadDevices();
+            await queryClient.invalidateQueries({ queryKey: queryKeys.devices });
         } finally {
             revokingAll = false;
         }
     }
-
-    // Load data on mount
-    $effect(() => {
-        loadDevices();
-    });
 </script>
 
 <div class="flex flex-col gap-4 md:gap-[40px] w-full z-10 px-3 md:px-[60px] py-4 md:py-[40px] bg-[#111111]/60 rounded-[24px] md:rounded-[64px] backdrop-blur-[20px]">

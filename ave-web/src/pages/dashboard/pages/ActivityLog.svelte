@@ -1,58 +1,39 @@
 <script lang="ts">
     import Text from "../../../components/Text.svelte";
     import Activity from "./components/Activity.svelte";
-    import { api, type ActivityLogEntry } from "../../../lib/api";
+    import type { ActivityLogEntry } from "../../../lib/api";
+    import { createActivityInfiniteQuery } from "../../../lib/queries";
 
-    let activities = $state<ActivityLogEntry[]>([]);
-    let loading = $state(true);
+    let loadingMore = $state(false);
     let error = $state<string | null>(null);
     let searchQuery = $state("");
     let selectedSeverity = $state<"all" | "info" | "warning" | "danger">("all");
-    let loadingMore = $state(false);
-    let hasMore = $state(true);
+    const activityQuery = createActivityInfiniteQuery(() => selectedSeverity, 20);
+    let loading = $derived(activityQuery.isPending);
+    let hasMore = $derived(Boolean(activityQuery.hasNextPage));
+    let activities = $derived((activityQuery.data?.pages.flat() ?? []) as ActivityLogEntry[]);
 
-    const LIMIT = 20;
+    function handleSeverityFilter(severity: "all" | "info" | "warning" | "danger") {
+        selectedSeverity = severity;
+    }
 
-    async function loadActivities(reset = true) {
+    async function loadMore() {
+        if (!activityQuery.hasNextPage || activityQuery.isFetchingNextPage) return;
+        loadingMore = true;
         try {
-            if (reset) {
-                loading = true;
-                activities = [];
-            } else {
-                loadingMore = true;
-            }
-            error = null;
-            
-            const params: { limit: number; offset: number; severity?: "info" | "warning" | "danger" } = {
-                limit: LIMIT,
-                offset: reset ? 0 : activities.length,
-            };
-            
-            if (selectedSeverity !== "all") {
-                params.severity = selectedSeverity;
-            }
-            
-            const data = await api.activity.list(params);
-            
-            if (reset) {
-                activities = data.logs;
-            } else {
-                activities = [...activities, ...data.logs];
-            }
-            
-            hasMore = data.logs.length === LIMIT;
+            await activityQuery.fetchNextPage();
         } catch (err) {
-            error = err instanceof Error ? err.message : "Failed to load activity";
+            error = err instanceof Error ? err.message : "Failed to load more activity";
         } finally {
-            loading = false;
             loadingMore = false;
         }
     }
 
-    function handleSeverityFilter(severity: "all" | "info" | "warning" | "danger") {
-        selectedSeverity = severity;
-        loadActivities(true);
-    }
+    $effect(() => {
+        if (!error && activityQuery.error) {
+            error = activityQuery.error instanceof Error ? activityQuery.error.message : "Failed to load activity";
+        }
+    });
 
     // Filter activities by search query
     let filteredActivities = $derived(
@@ -64,10 +45,6 @@
             : activities
     );
 
-    // Load data on mount
-    $effect(() => {
-        loadActivities();
-    });
 </script>
 
 <div class="flex flex-col gap-4 md:gap-[40px] w-full z-10 px-3 md:px-[60px] py-4 md:py-[40px] bg-[#111111]/60 rounded-[24px] md:rounded-[64px] backdrop-blur-[20px]">
@@ -137,7 +114,7 @@
             {#if hasMore && !searchQuery}
                 <button 
                     class="w-full py-3 md:py-[15px] bg-[#171717] hover:bg-[#1E1E1E] rounded-full text-[#D3D3D3] text-sm md:text-[16px] transition-colors duration-300 cursor-pointer disabled:opacity-50"
-                    onclick={() => loadActivities(false)}
+                    onclick={loadMore}
                     disabled={loadingMore}
                 >
                     {#if loadingMore}

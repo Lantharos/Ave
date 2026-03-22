@@ -1,8 +1,7 @@
 <script lang="ts">
-  import { onMount } from "svelte";
   import Text from "../../../components/Text.svelte";
   import ActionCard from "../../../components/ActionCard.svelte";
-  import { api } from "../../../lib/api";
+  import { createRevokeDelegationMutation, createDelegationsQuery } from "../../../lib/queries";
 
   type Delegation = {
     id: string;
@@ -17,8 +16,11 @@
     targetResourceKey: string;
   };
 
-  let loading = $state(true);
-  let delegations = $state<Delegation[]>([]);
+  const delegationsQuery = createDelegationsQuery();
+  const revokeDelegationMutation = createRevokeDelegationMutation();
+
+  let loading = $derived(delegationsQuery.isPending);
+  let delegations = $derived((delegationsQuery.data ?? []) as Delegation[]);
   let error = $state<string | null>(null);
   let revokingId = $state<string | null>(null);
 
@@ -48,33 +50,23 @@
     }
   }
 
-  async function load() {
-    loading = true;
-    error = null;
-    try {
-      const result = await api.oauth.getDelegations();
-      delegations = result.delegations as Delegation[];
-    } catch (e: any) {
-      error = e?.message || "Failed to load connectors";
-    } finally {
-      loading = false;
+  $effect(() => {
+    if (!error && delegationsQuery.error) {
+      error = delegationsQuery.error instanceof Error ? delegationsQuery.error.message : "Failed to load connectors";
     }
-  }
+  });
 
   async function revoke(id: string) {
     revokingId = id;
     error = null;
     try {
-      await api.oauth.revokeDelegation(id);
-      delegations = delegations.filter((item) => item.id !== id);
+      await revokeDelegationMutation.mutateAsync(id);
     } catch (e: any) {
       error = e?.message || "Failed to revoke connector";
     } finally {
       revokingId = null;
     }
   }
-
-  onMount(load);
 </script>
 
 <div class="flex flex-col gap-4 md:gap-[40px] w-full z-10 px-3 md:px-[60px] py-4 md:py-[40px] bg-[#111111]/60 rounded-[24px] md:rounded-[64px] backdrop-blur-[20px]">

@@ -4,8 +4,10 @@
         StatusCode,
         type Statuses,
     } from "@mateothegreat/svelte5-router";
+    import { setQueryClientContext } from "@tanstack/svelte-query";
     import { onMount } from "svelte";
     import NotFound from "./pages/status/NotFound.svelte";
+    import { queryClient } from "./lib/query-client";
     import { auth, isLoading } from "./stores/auth";
 
     const routes = [
@@ -27,6 +29,8 @@
     const statuses: Statuses = {
         [StatusCode.NotFound]: () => ({ component: NotFound }),
     };
+
+    setQueryClientContext(queryClient);
 
     onMount(async () => {
         await auth.init();

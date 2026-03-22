@@ -1,6 +1,45 @@
 import type { WorkspaceMember, WorkspaceRole, WorkspaceState, WorkspaceSummary } from "./portal";
 
 const API_BASE = import.meta.env.VITE_API_URL || "https://api.aveid.net";
+const D1_BOOKMARK_HEADER = "x-d1-bookmark";
+
+let d1Bookmark: string | null = null;
+
+function readStoredBookmark(): string | null {
+  if (d1Bookmark) return d1Bookmark;
+
+  try {
+    d1Bookmark = sessionStorage.getItem("ave_d1_bookmark");
+  } catch {
+    d1Bookmark = null;
+  }
+
+  return d1Bookmark;
+}
+
+function persistBookmark(bookmark: string | null): void {
+  d1Bookmark = bookmark;
+
+  try {
+    if (bookmark) {
+      sessionStorage.setItem("ave_d1_bookmark", bookmark);
+    } else {
+      sessionStorage.removeItem("ave_d1_bookmark");
+    }
+  } catch {
+  }
+}
+
+export function clearD1Bookmark(): void {
+  persistBookmark(null);
+}
+
+function captureBookmark(response: Response): void {
+  const bookmark = response.headers.get(D1_BOOKMARK_HEADER);
+  if (bookmark) {
+    persistBookmark(bookmark);
+  }
+}
 
 export interface DevApp {
   id: string;
@@ -139,10 +178,15 @@ async function request<T>(
   endpoint: string,
   options: RequestInit = {},
 ): Promise<T> {
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-    ...((options.headers as Record<string, string>) || {}),
-  };
+  const headers = new Headers(options.headers);
+  if (!headers.has("Content-Type")) {
+    headers.set("Content-Type", "application/json");
+  }
+
+  const bookmark = readStoredBookmark();
+  if (bookmark) {
+    headers.set(D1_BOOKMARK_HEADER, bookmark);
+  }
 
   const response = await fetch(`${API_BASE}${endpoint}`, {
     ...options,
@@ -150,9 +194,14 @@ async function request<T>(
     headers,
   });
 
+  captureBookmark(response);
+
   const data = await response.json();
 
   if (!response.ok) {
+    if (response.status === 401) {
+      clearD1Bookmark();
+    }
     throw new ApiError(response.status, getApiErrorMessage(data));
   }
 
@@ -342,9 +391,19 @@ export async function uploadWorkspaceLogo(organizationId: string, file: File): P
 
   const response = await fetch(`${API_BASE}/api/upload/workspace-logo`, {
     method: "POST",
+    headers: (() => {
+      const headers: Record<string, string> = {};
+      const bookmark = readStoredBookmark();
+      if (bookmark) {
+        headers[D1_BOOKMARK_HEADER] = bookmark;
+      }
+      return headers;
+    })(),
     credentials: "include",
     body: formData,
   });
+
+  captureBookmark(response);
 
   const data = await response.json();
 

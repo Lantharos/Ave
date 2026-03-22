@@ -65,6 +65,8 @@ function resolveCorsOrigin(origin: string | undefined): string {
   return "https://aveid.net";
 }
 
+const D1_BOOKMARK_HEADER = "x-d1-bookmark";
+
 function buildApp() {
   const app = new Hono<{ Bindings: Bindings }>();
 
@@ -72,7 +74,8 @@ function buildApp() {
     origin: "*",
     credentials: false,
     allowMethods: ["POST", "OPTIONS"],
-    allowHeaders: ["Content-Type", "Authorization"],
+    allowHeaders: ["Content-Type", "Authorization", D1_BOOKMARK_HEADER],
+    exposeHeaders: [D1_BOOKMARK_HEADER],
   }));
 
   const oauthCorsMiddleware = cors({
@@ -85,7 +88,8 @@ function buildApp() {
     },
     credentials: true,
     allowMethods: ["GET", "POST", "OPTIONS"],
-    allowHeaders: ["Content-Type", "Authorization"],
+    allowHeaders: ["Content-Type", "Authorization", D1_BOOKMARK_HEADER],
+    exposeHeaders: [D1_BOOKMARK_HEADER],
   });
 
   app.use("/api/oauth/*", async (c, next) => {
@@ -99,7 +103,8 @@ function buildApp() {
     origin: "*",
     credentials: false,
     allowMethods: ["GET", "OPTIONS"],
-    allowHeaders: ["Content-Type", "Authorization"],
+    allowHeaders: ["Content-Type", "Authorization", D1_BOOKMARK_HEADER],
+    exposeHeaders: [D1_BOOKMARK_HEADER],
   }));
 
   app.use("*", async (c, next) => {
@@ -111,7 +116,8 @@ function buildApp() {
       origin: (origin) => resolveCorsOrigin(origin),
       credentials: true,
       allowMethods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-      allowHeaders: ["Content-Type", "Authorization"],
+      allowHeaders: ["Content-Type", "Authorization", D1_BOOKMARK_HEADER],
+      exposeHeaders: [D1_BOOKMARK_HEADER],
     });
 
     return corsMiddleware(c, next);
@@ -194,8 +200,37 @@ function isWebSocketUpgrade(request: Request): boolean {
   return request.headers.get("Upgrade")?.toLowerCase() === "websocket";
 }
 
-function createRequestDatabase(db: D1Database): D1Database | D1DatabaseSession {
+function createRequestDatabase(request: Request, db: D1Database): D1DatabaseSession {
+  const incomingBookmark = request.headers.get(D1_BOOKMARK_HEADER) || undefined;
+  if (incomingBookmark) {
+    return db.withSession(incomingBookmark);
+  }
+
+  if (isWebSocketUpgrade(request)) {
+    return db.withSession("first-primary");
+  }
+
+  if (request.method === "GET" || request.method === "HEAD") {
+    return db.withSession("first-unconstrained");
+  }
+
   return db.withSession("first-primary");
+}
+
+function appendBookmarkHeader(response: Response, requestDatabase: D1DatabaseSession): Response {
+  const bookmark = requestDatabase.getBookmark();
+  if (!bookmark) {
+    return response;
+  }
+
+  const headers = new Headers(response.headers);
+  headers.set(D1_BOOKMARK_HEADER, bookmark);
+
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
 }
 
 function createWebSocketResponse(request: Request, requestDatabase: D1Database | D1DatabaseSession): Response {
@@ -254,7 +289,7 @@ export class ApiAppDurableObject {
 
   async fetch(request: Request): Promise<Response> {
     initDb(this.env.DB);
-    const requestDatabase = createRequestDatabase(this.env.DB);
+    const requestDatabase = createRequestDatabase(request, this.env.DB);
 
     return runWithOAuthStorage(this.state.storage, () =>
       runWithDb(requestDatabase, async () => {
@@ -278,7 +313,8 @@ export class ApiAppDurableObject {
           return Response.json({ success: true, ...deviceCleanup, activityRetentionDays: activityCleanup.retentionDays });
         }
 
-        return app.fetch(request, this.env);
+        const response = await app.fetch(request, this.env);
+        return appendBookmarkHeader(response, requestDatabase);
       })
     );
   }

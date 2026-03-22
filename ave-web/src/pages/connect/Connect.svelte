@@ -1,7 +1,7 @@
 <script lang="ts">
   import { goto } from "@mateothegreat/svelte5-router";
+  import { createAuthorizeConnectorMutation, createConnectAuthorizeBootstrapQuery } from "../../lib/queries";
   import { get } from "svelte/store";
-  import { api } from "../../lib/api";
   import { auth, isAuthenticated } from "../../stores/auth";
   import { setReturnUrl } from "../../util/return-url";
   import { safeGoto } from "../../util/safe-goto";
@@ -58,6 +58,12 @@
     };
   });
 
+  const connectBootstrapQuery = createConnectAuthorizeBootstrapQuery(
+    () => params.clientId,
+    () => params.resource,
+  );
+  const authorizeConnectorMutation = createAuthorizeConnectorMutation();
+
   function pickScope(requestedScope: string, allowedScopes: string[]): string {
     if (!allowedScopes.length) return "";
     if (!requestedScope) return allowedScopes[0];
@@ -84,13 +90,13 @@
         return;
       }
 
-      const [appData, resourceData] = await Promise.all([
-        api.oauth.getApp(params.clientId),
-        api.oauth.getResource(params.resource),
-      ]);
+      const bootstrap = await connectBootstrapQuery.refetch();
+      if (!bootstrap.data) {
+        throw new Error("Failed to load connector details.");
+      }
 
-      appInfo = appData.app;
-      targetResource = resourceData.resource;
+      appInfo = bootstrap.data.app;
+      targetResource = bootstrap.data.resource;
       selectedResourceKey = targetResource.resourceKey;
       requestedCommunicationMode = params.mode;
 
@@ -116,7 +122,7 @@
     error = null;
 
     try {
-      const response = await api.oauth.authorize({
+      const response = await authorizeConnectorMutation.mutateAsync({
         clientId: params.clientId,
         redirectUri: params.redirectUri,
         scope: "openid profile email",

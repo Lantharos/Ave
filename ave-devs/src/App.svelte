@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { setQueryClientContext } from "@tanstack/svelte-query";
   import { onMount } from "svelte";
   import AuroraBackdrop from "./components/AuroraBackdrop.svelte";
   import DeleteModal from "./components/DeleteModal.svelte";
@@ -15,22 +16,11 @@
   import TopBar from "./components/TopBar.svelte";
   import Subnav from "./components/Subnav.svelte";
   import {
-    createOrganization,
-    createApp,
-    createResource,
-    deleteApp,
-    deleteResource,
     fetchAppActivity,
     fetchAppIdentities,
     fetchAppOverview,
     fetchOrganization,
     fetchPortalBootstrap,
-    inviteOrganizationMember,
-    rotateSecret,
-    updateApp,
-    updateOrganization,
-    updateOrganizationMemberRole,
-    uploadWorkspaceLogo,
     ApiError,
     type AppEvent,
     type AppIdentityRecord,
@@ -40,10 +30,39 @@
     type PaginatedResult,
     type UpdateAppPayload,
   } from "./lib/api";
+  import { queryClient } from "./lib/query-client";
+  import {
+    createCreateAppMutation,
+    createCreateOrganizationMutation,
+    createCreateResourceMutation,
+    createDeleteAppMutation,
+    createDeleteResourceMutation,
+    createInviteMemberMutation,
+    createRotateSecretMutation,
+    createUpdateAppMutation,
+    createUpdateMemberRoleMutation,
+    createUpdateOrganizationMutation,
+    createUploadWorkspaceLogoMutation,
+    queryKeys,
+  } from "./lib/queries";
   import type { WorkspaceRole, WorkspaceState, WorkspaceSummary } from "./lib/portal";
 
   type WorkspaceSection = "applications" | "organization";
   type AppSection = "overview" | "identities" | "activity" | "configure";
+
+  setQueryClientContext(queryClient);
+
+  const createAppMutation = createCreateAppMutation(() => currentOrganizationId);
+  const updateAppMutation = createUpdateAppMutation();
+  const deleteAppMutation = createDeleteAppMutation();
+  const rotateSecretMutation = createRotateSecretMutation();
+  const createOrganizationMutation = createCreateOrganizationMutation();
+  const inviteMemberMutation = createInviteMemberMutation();
+  const updateMemberRoleMutation = createUpdateMemberRoleMutation();
+  const updateOrganizationMutation = createUpdateOrganizationMutation();
+  const uploadWorkspaceLogoMutation = createUploadWorkspaceLogoMutation();
+  const createResourceMutation = createCreateResourceMutation();
+  const deleteResourceMutation = createDeleteResourceMutation();
 
   let workspaceSection: WorkspaceSection = $state("applications");
   let appSection: AppSection = $state("overview");
@@ -125,7 +144,10 @@
     loading = true;
 
     try {
-      const bootstrap = await fetchPortalBootstrap(targetOrganizationId);
+      const bootstrap = await queryClient.fetchQuery({
+        queryKey: queryKeys.portal(targetOrganizationId),
+        queryFn: () => fetchPortalBootstrap(targetOrganizationId),
+      });
       organizations = bootstrap.organizations;
       currentOrganizationId = bootstrap.currentOrganizationId;
       workspace = bootstrap.organization;
@@ -156,7 +178,7 @@
   }
 
   async function loadSelectedApp(appId: string) {
-    const cachedBundle = appBundles[appId];
+    const cachedBundle = queryClient.getQueryData<AppOverviewBundle>(queryKeys.appOverview(appId)) || appBundles[appId];
 
     if (cachedBundle) {
       applyAppBundle(cachedBundle);
@@ -171,7 +193,10 @@
     }
 
     try {
-      const bundle = await fetchAppOverview(appId);
+      const bundle = await queryClient.fetchQuery({
+        queryKey: queryKeys.appOverview(appId),
+        queryFn: () => fetchAppOverview(appId),
+      });
       appBundles = {
         ...appBundles,
         [appId]: bundle,
@@ -203,7 +228,10 @@
     }
 
     try {
-      const page = await fetchAppIdentities(appId, { limit: 25, offset: nextOffset });
+      const page = await queryClient.fetchQuery({
+        queryKey: [...queryKeys.appIdentities(appId), nextOffset, 25],
+        queryFn: () => fetchAppIdentities(appId, { limit: 25, offset: nextOffset }),
+      });
       appIdentities = reset ? page.items : [...appIdentities, ...page.items];
       appIdentitiesTotal = page.total;
     } catch (err) {
@@ -220,7 +248,10 @@
     }
 
     try {
-      const page = await fetchAppActivity(appId, { limit: 25, offset: nextOffset });
+      const page = await queryClient.fetchQuery({
+        queryKey: [...queryKeys.appActivity(appId), nextOffset, 25],
+        queryFn: () => fetchAppActivity(appId, { limit: 25, offset: nextOffset }),
+      });
       appEvents = reset ? page.items : [...appEvents, ...page.items];
       appEventsTotal = page.total;
     } catch (err) {
@@ -332,7 +363,7 @@
         .map((uri) => uri.trim())
         .filter(Boolean);
 
-      const result = await createApp({
+      const result = await createAppMutation.mutateAsync({
         name: form.name,
         description: form.description || undefined,
         websiteUrl: form.websiteUrl || undefined,
@@ -343,12 +374,12 @@
         accessTokenTtlSeconds: form.accessTokenTtlSeconds,
         refreshTokenTtlSeconds: form.refreshTokenTtlSeconds,
         allowedScopes: form.allowedScopes,
-        organizationId: currentOrganizationId,
       });
 
       apps = [result.app, ...apps];
       newSecret = result.clientSecret;
       appBundles = {};
+      await queryClient.invalidateQueries({ queryKey: ["portal"] });
       createModalOpen = false;
       if (workspace) {
         workspace = {
@@ -370,7 +401,7 @@
     rotatedAppId = null;
 
     try {
-      const result = await rotateSecret(appId);
+      const result = await rotateSecretMutation.mutateAsync(appId);
       newSecret = result.clientSecret;
       rotatedAppId = appId;
       if (rotateStateTimer) clearTimeout(rotateStateTimer);
@@ -411,8 +442,13 @@
         organizationId: app.organizationId || undefined,
       };
 
-      const result = await updateApp(app.id, payload);
+      const result = await updateAppMutation.mutateAsync({
+        appId: app.id,
+        data: payload,
+      });
       const organizationChanged = result.app.organizationId !== previousOrganizationId;
+      await queryClient.invalidateQueries({ queryKey: queryKeys.appOverview(app.id) });
+      await queryClient.invalidateQueries({ queryKey: ["portal"] });
 
       if (organizationChanged) {
         appBundles = {};
@@ -446,7 +482,11 @@
     const target = deleteTarget;
 
     try {
-      await deleteApp(target.id);
+      await deleteAppMutation.mutateAsync(target.id);
+      await queryClient.invalidateQueries({ queryKey: ["portal"] });
+      queryClient.removeQueries({ queryKey: queryKeys.appOverview(target.id) });
+      queryClient.removeQueries({ queryKey: queryKeys.appIdentities(target.id) });
+      queryClient.removeQueries({ queryKey: queryKeys.appActivity(target.id) });
       apps = apps.filter((app) => app.id !== target.id);
       appBundles = Object.fromEntries(
         Object.entries(appBundles).filter(([key]) => key !== target.id),
@@ -488,7 +528,8 @@
     audience: string;
     status: "active" | "disabled";
   }) {
-    const result = await createResource(appId, resource);
+    const result = await createResourceMutation.mutateAsync({ appId, resource });
+    await queryClient.invalidateQueries({ queryKey: queryKeys.appOverview(appId) });
     apps = apps.map((app) =>
       app.id === appId
         ? { ...app, resources: [...(app.resources || []), result.resource] }
@@ -501,7 +542,8 @@
   }
 
   async function handleDeleteResource(appId: string, resourceId: string) {
-    await deleteResource(appId, resourceId);
+    await deleteResourceMutation.mutateAsync({ appId, resourceId });
+    await queryClient.invalidateQueries({ queryKey: queryKeys.appOverview(appId) });
     apps = apps.map((app) =>
       app.id === appId
         ? { ...app, resources: (app.resources || []).filter((resource) => resource.id !== resourceId) }
@@ -515,10 +557,14 @@
 
   async function handleInvite(email: string, role: WorkspaceRole) {
     if (!workspace) return;
+    const organizationId = workspace.id;
 
     try {
-      await inviteOrganizationMember(workspace.id, { email, role });
-      const refreshedWorkspace = await fetchOrganization(workspace.id);
+      await inviteMemberMutation.mutateAsync({ organizationId, email, role });
+      const refreshedWorkspace = await queryClient.fetchQuery({
+        queryKey: queryKeys.workspace(organizationId),
+        queryFn: () => fetchOrganization(organizationId),
+      });
       workspace = refreshedWorkspace;
       organizations = organizations.map((organization) =>
         organization.id === refreshedWorkspace.id
@@ -532,10 +578,14 @@
 
   async function handleRoleChange(memberId: string, role: WorkspaceRole) {
     if (!workspace) return;
+    const organizationId = workspace.id;
 
     try {
-      await updateOrganizationMemberRole(workspace.id, memberId, role);
-      workspace = await fetchOrganization(workspace.id);
+      await updateMemberRoleMutation.mutateAsync({ organizationId, memberId, role });
+      workspace = await queryClient.fetchQuery({
+        queryKey: queryKeys.workspace(organizationId),
+        queryFn: () => fetchOrganization(organizationId),
+      });
     } catch (err) {
       error = err instanceof Error ? err.message : "Failed to update role";
     }
@@ -545,7 +595,10 @@
     if (!workspace) return;
 
     try {
-      const updated = await updateOrganization(workspace.id, { name });
+      const updated = await updateOrganizationMutation.mutateAsync({
+        organizationId: workspace.id,
+        data: { name },
+      });
       workspace = {
         ...workspace,
         name: updated.name,
@@ -566,7 +619,10 @@
 
     try {
       const verifiedDomains = [...workspace.verifiedDomains, domain];
-      const updated = await updateOrganization(workspace.id, { verifiedDomains });
+      const updated = await updateOrganizationMutation.mutateAsync({
+        organizationId: workspace.id,
+        data: { verifiedDomains },
+      });
       workspace = {
         ...workspace,
         logoUrl: updated.logoUrl,
@@ -586,7 +642,7 @@
     if (!workspace) return;
 
     try {
-      const result = await uploadWorkspaceLogo(workspace.id, file);
+      const result = await uploadWorkspaceLogoMutation.mutateAsync({ organizationId: workspace.id, file });
       workspace = {
         ...workspace,
         logoUrl: result.logoUrl,
@@ -608,7 +664,7 @@
     creatingOrganization = true;
 
     try {
-      const result = await createOrganization(name);
+      const result = await createOrganizationMutation.mutateAsync(name);
       newOrganizationName = "";
       createOrganizationModalOpen = false;
       await loadPortal(result.organization.id);

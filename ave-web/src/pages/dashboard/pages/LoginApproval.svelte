@@ -1,37 +1,53 @@
 <script lang="ts">
-    import { onMount } from "svelte";
+    import { createMutation } from "@tanstack/svelte-query";
     import Text from "../../../components/Text.svelte";
-    import ActionCard from "../../../components/ActionCard.svelte";
     import { api, type LoginRequest } from "../../../lib/api";
+    import { queryClient } from "../../../lib/query-client";
+    import { createPendingRequestsQuery, queryKeys } from "../../../lib/queries";
     import { loadMasterKey, encryptMasterKeyForDevice, generateEphemeralKeyPair } from "../../../lib/crypto";
 
     let { pendingCount = $bindable(0) } = $props<{ pendingCount?: number }>();
 
-    let requests = $state<LoginRequest[]>([]);
-    let isLoading = $state(true);
-    let processingId = $state<string | null>(null);
-    let error = $state("");
+    const pendingRequestsQuery = createPendingRequestsQuery();
 
-    onMount(async () => {
-        await loadRequests();
+    let requests = $derived((pendingRequestsQuery.data ?? []) as LoginRequest[]);
+    let isLoading = $derived(pendingRequestsQuery.isPending);
+    let processingId = $state<string | null>(null);
+    let error = $state<string | null>(null);
+
+    const approveMutation = createMutation(() => ({
+        mutationFn: async (payload: { requestId: string; encryptedMasterKey: string; approverPublicKey?: string }) => {
+            await api.devices.approveRequest(payload.requestId, payload.encryptedMasterKey, payload.approverPublicKey);
+            return payload.requestId;
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: queryKeys.pendingRequests });
+        },
+    }));
+
+    const denyMutation = createMutation(() => ({
+        mutationFn: async (requestId: string) => {
+            await api.devices.denyRequest(requestId);
+            return requestId;
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: queryKeys.pendingRequests });
+        },
+    }));
+
+    $effect(() => {
+        pendingCount = requests.length;
     });
 
-    async function loadRequests() {
-        isLoading = true;
-        try {
-            const result = await api.devices.getPendingRequests();
-            requests = result.requests;
-            pendingCount = requests.length;
-        } catch (e: any) {
-            error = e.message || "Failed to load requests";
-        } finally {
-            isLoading = false;
+    $effect(() => {
+        if (!error && pendingRequestsQuery.error) {
+            error = pendingRequestsQuery.error instanceof Error ? pendingRequestsQuery.error.message : "Failed to load requests";
         }
-    }
+    });
 
     async function approveRequest(request: LoginRequest) {
         processingId = request.id;
-        error = "";
+        error = null;
         
         try {
             // Load our master key
@@ -52,17 +68,13 @@
             );
 
             // Send approval with encrypted master key + our public key
-            await api.devices.approveRequest(
-                request.id,
+            await approveMutation.mutateAsync({
+                requestId: request.id,
                 encryptedMasterKey,
-                ourKeyPair.publicKey
-            );
-            
-            // Remove from list
-            requests = requests.filter(r => r.id !== request.id);
-            pendingCount = requests.length;
+                approverPublicKey: ourKeyPair.publicKey,
+            });
         } catch (e: any) {
-            error = e.message || "Failed to approve request";
+            error = e?.message || "Failed to approve request";
         } finally {
             processingId = null;
         }
@@ -70,14 +82,12 @@
 
     async function denyRequest(request: LoginRequest) {
         processingId = request.id;
-        error = "";
+        error = null;
         
         try {
-            await api.devices.denyRequest(request.id);
-            requests = requests.filter(r => r.id !== request.id);
-            pendingCount = requests.length;
+            await denyMutation.mutateAsync(request.id);
         } catch (e: any) {
-            error = e.message || "Failed to deny request";
+            error = e?.message || "Failed to deny request";
         } finally {
             processingId = null;
         }

@@ -10,6 +10,7 @@
         "@noble/hashes": "^2.0.1",
         "@simplewebauthn/browser": "^13.2.2",
         "@tailwindcss/vite": "^4.1.18",
+        "@tanstack/svelte-query": "^6.1.7",
         "ogl": "^1.0.11",
         "qrcode": "^1.5.4",
         "tailwindcss": "^4.1.18",
@@ -176,6 +177,10 @@
     "@tailwindcss/oxide-win32-x64-msvc": ["@tailwindcss/oxide-win32-x64-msvc@4.1.18", "", { "os": "win32", "cpu": "x64" }, "sha512-bJWbyYpUlqamC8dpR7pfjA0I7vdF6t5VpUGMWRkXVE3AXgIZjYUYAK7II1GNaxR8J1SSrSrppRar8G++JekE3Q=="],
 
     "@tailwindcss/vite": ["@tailwindcss/vite@4.1.18", "", { "dependencies": { "@tailwindcss/node": "4.1.18", "@tailwindcss/oxide": "4.1.18", "tailwindcss": "4.1.18" }, "peerDependencies": { "vite": "^5.2.0 || ^6 || ^7" } }, "sha512-jVA+/UpKL1vRLg6Hkao5jldawNmRo7mQYrZtNHMIVpLfLhDml5nMRUo/8MwoX2vNXvnaXNNMedrMfMugAVX1nA=="],
+
+    "@tanstack/query-core": ["@tanstack/query-core@5.94.5", "", {}, "sha512-Vx1JJiBURW/wdNGP45afjrqn0LfxYwL7K/bSrQvNRtyLGF1bxQPgUXCpzscG29e+UeFOh9hz1KOVala0N+bZiA=="],
+
+    "@tanstack/svelte-query": ["@tanstack/svelte-query@6.1.7", "", { "dependencies": { "@tanstack/query-core": "5.94.5" }, "peerDependencies": { "svelte": "^5.25.0" } }, "sha512-ade0y34eSXIl1Pt2linCENXABTu+Xf3h8I5R8OyXSbKaStRafikEfrTAIb8aMkfnUIn1+3D9Y+EQxp9wVRtsAg=="],
 
     "@tsconfig/svelte": ["@tsconfig/svelte@5.0.7", "", {}, "sha512-NOtJF9LQnV7k6bpzcXwL/rXdlFHvAT9e0imrftiMc6/+FUNBHRZ8UngDrM+jciA6ENzFYNoFs8rfwumuGF+Dhw=="],
 

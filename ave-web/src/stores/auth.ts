@@ -3,7 +3,7 @@
  */
 
 import { writable, derived, get } from "svelte/store";
-import { api, type Identity, type Device } from "../lib/api";
+import { api, clearD1Bookmark, type Identity, type Device } from "../lib/api";
 import { 
   loadMasterKey, 
   storeMasterKey, 
@@ -166,6 +166,7 @@ function createAuthStore() {
         // Ignore errors during logout
       }
       
+      clearD1Bookmark();
       localStorage.removeItem("ave_session_token");
       clearMasterKey();
       websocket.disconnect();

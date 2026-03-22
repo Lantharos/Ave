@@ -13,7 +13,9 @@
     import Connectors from "./pages/Connectors.svelte";
     import { auth, identities as identitiesStore, isAuthenticated } from "../../stores/auth";
     import { websocket } from "../../stores/websocket";
-    import { api, type Identity as IdentityType } from "../../lib/api";
+    import { type Identity as IdentityType } from "../../lib/api";
+    import { createPendingRequestsQuery, queryKeys } from "../../lib/queries";
+    import { queryClient } from "../../lib/query-client";
 
     let selectedPage = $state<string>("");
     let pendingApprovals = $state(0);
@@ -21,6 +23,11 @@
     let isLoggingOut = $state(false);
 
     let identities = $derived($identitiesStore);
+    const pendingRequestsQuery = createPendingRequestsQuery();
+
+    $effect(() => {
+        pendingApprovals = pendingRequestsQuery.data?.length ?? 0;
+    });
 
     onMount(async () => {
         if (!$isAuthenticated) {
@@ -32,15 +39,8 @@
             selectedPage = identities[0].displayName;
         }
 
-        try {
-            const { requests } = await api.devices.getPendingRequests();
-            pendingApprovals = requests.length;
-        } catch (e) {
-            console.error("Failed to fetch pending requests:", e);
-        }
-
-        websocket.onLoginRequest((request) => {
-            pendingApprovals++;
+        websocket.onLoginRequest(() => {
+            queryClient.invalidateQueries({ queryKey: queryKeys.pendingRequests });
         });
     });
 

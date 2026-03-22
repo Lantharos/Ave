@@ -3,6 +3,64 @@
  */
 
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:3000";
+const D1_BOOKMARK_HEADER = "x-d1-bookmark";
+
+let d1Bookmark: string | null = null;
+
+function readStoredBookmark(): string | null {
+  if (d1Bookmark) return d1Bookmark;
+
+  try {
+    d1Bookmark = sessionStorage.getItem("ave_d1_bookmark");
+  } catch {
+    d1Bookmark = null;
+  }
+
+  return d1Bookmark;
+}
+
+function persistBookmark(bookmark: string | null): void {
+  d1Bookmark = bookmark;
+
+  try {
+    if (bookmark) {
+      sessionStorage.setItem("ave_d1_bookmark", bookmark);
+    } else {
+      sessionStorage.removeItem("ave_d1_bookmark");
+    }
+  } catch {
+  }
+}
+
+export function clearD1Bookmark(): void {
+  persistBookmark(null);
+}
+
+function mergeHeaders(base: HeadersInit | undefined, token: string | null): Headers {
+  const headers = new Headers(base);
+
+  if (!headers.has("Content-Type")) {
+    headers.set("Content-Type", "application/json");
+  }
+
+  if (token) {
+    headers.set("Authorization", `Bearer ${token}`);
+  }
+
+  const bookmark = readStoredBookmark();
+  if (bookmark) {
+    headers.set(D1_BOOKMARK_HEADER, bookmark);
+  }
+
+  return headers;
+}
+
+function captureBookmark(response: Response): void {
+  const bookmark = response.headers.get(D1_BOOKMARK_HEADER);
+  if (bookmark) {
+    persistBookmark(bookmark);
+  }
+}
 
 class ApiError extends Error {
   constructor(public status: number, message: string) {
@@ -22,14 +80,7 @@ async function request<T>(
     token = null;
   }
   
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-    ...((options.headers as Record<string, string>) || {}),
-  };
-  
-  if (token) {
-    headers["Authorization"] = `Bearer ${token}`;
-  }
+  const headers = mergeHeaders(options.headers, token);
   
   const { timeoutMs, ...fetchOptions } = options;
   let controller: AbortController | null = null;
@@ -63,6 +114,12 @@ async function request<T>(
     if (timeoutId !== null) {
       window.clearTimeout(timeoutId);
     }
+  }
+
+  captureBookmark(response);
+
+  if (response.status === 401) {
+    clearD1Bookmark();
   }
   
   const data = await response.json();
@@ -507,11 +564,17 @@ export const api = {
       if (token) {
         headers["Authorization"] = `Bearer ${token}`;
       }
+      const bookmark = readStoredBookmark();
+      if (bookmark) {
+        headers[D1_BOOKMARK_HEADER] = bookmark;
+      }
       
       const response = await fetch(`${API_BASE}/api/mydata/export`, {
         headers,
         credentials: "include",
       });
+
+      captureBookmark(response);
       
       
       if (!response.ok) {
@@ -792,10 +855,19 @@ export const api = {
       
       const response = await fetch(`${API_BASE}/api/upload/avatar`, {
         method: "POST",
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        headers: (() => {
+          const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
+          const bookmark = readStoredBookmark();
+          if (bookmark) {
+            headers[D1_BOOKMARK_HEADER] = bookmark;
+          }
+          return headers;
+        })(),
         body: formData,
         credentials: "include",
       });
+
+      captureBookmark(response);
       
       if (!response.ok) {
         const data = await response.json();
@@ -818,10 +890,19 @@ export const api = {
       
       const response = await fetch(`${API_BASE}/api/upload/banner`, {
         method: "POST",
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        headers: (() => {
+          const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
+          const bookmark = readStoredBookmark();
+          if (bookmark) {
+            headers[D1_BOOKMARK_HEADER] = bookmark;
+          }
+          return headers;
+        })(),
         body: formData,
         credentials: "include",
       });
+
+      captureBookmark(response);
       
       if (!response.ok) {
         const data = await response.json();
