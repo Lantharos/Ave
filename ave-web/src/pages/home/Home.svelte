@@ -36,6 +36,9 @@
             <a href="https://docs.aveid.net" class="px-6 py-3 text-[#B9BBBE] text-lg" onclick={() => mobileMenuOpen = false}>
                 docs
             </a>
+            <a href="https://status.aveid.net" class="px-6 py-3 text-[#B9BBBE] text-lg" onclick={() => mobileMenuOpen = false} target="_blank" rel="noreferrer">
+                status
+            </a>
             <div class="h-px w-32 bg-[#333] my-4"></div>
             <a href="/privacy" use:route class="text-[#A5A7AA] text-base" onclick={() => mobileMenuOpen = false}>
                 privacy policy
@@ -62,6 +65,9 @@
             </a>
             <a href="https://docs.aveid.net" class="px-[40px] py-[20px] cursor-pointer hover:bg-[#121212] transition-colors duration-300 rounded-full flex items-center justify-center text-[#B9BBBE] text-[24px]">
                 docs
+            </a>
+            <a href="https://status.aveid.net" class="px-[40px] py-[20px] cursor-pointer hover:bg-[#121212] transition-colors duration-300 rounded-full flex items-center justify-center text-[#B9BBBE] text-[24px]" target="_blank" rel="noreferrer">
+                status
             </a>
         </div>
 
