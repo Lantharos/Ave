@@ -14,7 +14,7 @@
         createMasterKeyBackup,
         encryptMasterKeyWithPrf,
     } from "../../lib/crypto";
-    import { registerPasskey, getDeviceInfo } from "../../lib/webauthn";
+    import { registerPasskey, getDeviceInfo, isPlatformAuthenticatorAvailable } from "../../lib/webauthn";
     import { auth, isAuthenticated } from "../../stores/auth";
     import { getReturnUrl, clearReturnUrl } from "../../util/return-url";
     import { goto } from "@mateothegreat/svelte5-router";
@@ -115,6 +115,12 @@
         }
         
         try {
+            const platformAuthenticatorAvailable = await isPlatformAuthenticatorAvailable();
+            if (!platformAuthenticatorAvailable) {
+                error = "This device can't create a passkey right now. Sign in on another device with Windows Hello or another passkey-capable device, then set up recovery codes from Security.";
+                return;
+            }
+
             const result = await registerPasskey(webauthnOptions);
             webauthnCredential = result.credential;
             prfSupported = result.prfSupported;
@@ -127,7 +133,11 @@
             setPage("legal");
         } catch (e: any) {
             console.error("Passkey registration failed:", e);
-            error = "Failed to set up passkey. Please try again.";
+            if (e instanceof Error && e.name === "NotAllowedError") {
+                error = "Passkey setup was cancelled. You can try again, or finish this step on another device that supports passkeys.";
+                return;
+            }
+            error = e.message || "Failed to set up passkey. Please try again.";
         }
     }
 

@@ -5,7 +5,7 @@
     import { api } from "../../../lib/api";
     import { createDeletePasskeyMutation, createSecurityQuery, queryKeys } from "../../../lib/queries";
     import { queryClient } from "../../../lib/query-client";
-    import { registerPasskey, authenticateWithPasskey } from "../../../lib/webauthn";
+    import { registerPasskey, authenticateWithPasskey, isPlatformAuthenticatorAvailable } from "../../../lib/webauthn";
     import { loadMasterKey, encryptMasterKeyWithPrf, createMasterKeyBackup } from "../../../lib/crypto";
     import { getPushStatus, subscribeToPushNotifications, unsubscribeFromPushNotifications, getPushSupportDetails } from "../../../lib/push";
 
@@ -58,21 +58,22 @@
         try {
             addingPasskey = true;
             error = null;
+
+            const platformAuthenticatorAvailable = await isPlatformAuthenticatorAvailable();
+            if (!platformAuthenticatorAvailable) {
+                error = "This device can't create a passkey right now. Set up recovery codes here, then sign in on another device with Windows Hello or another passkey-capable device to add one there.";
+                return;
+            }
             
-            // Get registration options from server
             const { options } = await api.security.registerPasskey();
             
-            // Start WebAuthn registration with PRF support
-            // Note: During registration, we only learn if PRF is supported, not the actual PRF output
             const { credential, prfSupported } = await registerPasskey(options);
             
-            // Complete registration on server first
             const result = await api.security.completePasskeyRegistration(
                 credential, 
                 "New Passkey"
             );
             
-            // Add to list immediately so user sees the new passkey
             queryClient.setQueryData<any>(queryKeys.security, (previous: any) => {
                 if (!previous) return previous;
                 return {
@@ -81,28 +82,22 @@
                 };
             });
             
-            // If PRF is supported, we need to authenticate with the passkey to get the PRF output
-            // Then we can encrypt the master key and update the passkey record
             if (prfSupported) {
                 console.log("[Security] PRF supported, authenticating to get PRF output...");
                 const masterKey = await loadMasterKey();
                 
                 if (masterKey) {
                     try {
-                        // Helper to convert bytes to base64url
                         const bytesToBase64url = (bytes: Uint8Array): string => {
                             const base64 = btoa(String.fromCharCode(...bytes));
                             return base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
                         };
                         
-                        // Generate a random challenge as base64url
                         const challengeBytes = crypto.getRandomValues(new Uint8Array(32));
                         const challenge = bytesToBase64url(challengeBytes);
                         
-                        // The passkey ID is already base64url encoded from the server
                         const credentialId = result.passkey.id;
                         
-                        // Create auth options in the format expected by @simplewebauthn/browser
                         const authOptions = {
                             challenge,
                             rpId: window.location.hostname,
@@ -114,27 +109,23 @@
                             timeout: 60000,
                         };
                         
-                        // Authenticate with PRF to get the output
                         const { prfOutput } = await authenticateWithPasskey(authOptions as any, true);
                         
                         if (prfOutput) {
-                            // Encrypt the master key with PRF output
                             const prfEncryptedMasterKey = await encryptMasterKeyWithPrf(masterKey, prfOutput);
                             console.log("[Security] Updating passkey with PRF-encrypted master key");
                             
-                            // Update the passkey record with the encrypted master key
                             await api.security.updatePasskeyPrf(result.passkey.id, prfEncryptedMasterKey);
                             console.log("[Security] PRF-encrypted master key saved successfully");
                         }
                     } catch (prfError) {
-                        // PRF encryption failed, but the passkey was still registered successfully
                         console.warn("[Security] Failed to set up PRF encryption:", prfError);
                     }
                 }
             }
         } catch (err) {
             if (err instanceof Error && err.name === "NotAllowedError") {
-                error = "Passkey registration was cancelled";
+                error = "Passkey setup was cancelled. You can try again, set up recovery codes here, or sign in on another device to add a passkey there.";
             } else {
                 error = err instanceof Error ? err.message : "Failed to add passkey";
             }

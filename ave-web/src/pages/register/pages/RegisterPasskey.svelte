@@ -2,7 +2,7 @@
     import Text from "../../../components/Text.svelte";
     import Button from "../../../components/Button.svelte";
 
-    let { onNext, appName = null } = $props<{ onNext?: () => void; appName?: string | null }>();
+    let { onNext, appName = null } = $props<{ onNext?: () => void | Promise<void>; appName?: string | null }>();
     
     let isLoading = $state(false);
     let error = $state("");
@@ -12,9 +12,10 @@
         error = "";
         
         try {
-            onNext?.();
+            await onNext?.();
         } catch (e: any) {
             error = e.message || "Failed to set up passkey";
+        } finally {
             isLoading = false;
         }
     }
