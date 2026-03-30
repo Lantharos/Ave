@@ -203,6 +203,45 @@ export interface SignatureRequest {
   };
 }
 
+export interface IdentityEncryptionKey {
+  publicKey: string;
+  encryptedPrivateKey: string;
+}
+
+export type SharedSecretKind = "app_scoped" | "global";
+
+export interface SharedSecretDescriptor {
+  id: string;
+  kind: SharedSecretKind;
+  appId?: string | null;
+  resourceKey?: string | null;
+  label?: string | null;
+  appName?: string | null;
+}
+
+export interface TransferContract {
+  id: string;
+  targetHandle: string;
+  status: "pending" | "claimed" | "expired";
+  expiresAt: string;
+  descriptor: SharedSecretDescriptor;
+  returnUrl?: string | null;
+}
+
+export interface RecipientSharedSecretEnvelope {
+  id: string;
+  sharedSecretId: string;
+  identityId: string;
+  encryptedSecret: string;
+  claimedAt?: string | null;
+  descriptor: SharedSecretDescriptor;
+  owner: {
+    identityId: string;
+    handle: string;
+    displayName: string;
+  };
+}
+
 // Registration
 export const api = {
   register: {
@@ -239,6 +278,7 @@ export const api = {
         fingerprint?: string;
       };
       prfEncryptedMasterKey?: string; // Master key encrypted with PRF output (if passkey supports PRF)
+      encryptionKey?: IdentityEncryptionKey;
     }) =>
       request<{
         success: boolean;
@@ -425,6 +465,7 @@ export const api = {
       birthday?: string;
       avatarUrl?: string;
       bannerUrl?: string;
+      encryptionKey?: IdentityEncryptionKey;
     }) =>
       request<{ identity: Identity }>("/api/identities", {
         method: "POST",
@@ -590,6 +631,146 @@ export const api = {
       request<{ success: boolean; message: string }>("/api/mydata", {
         method: "DELETE",
       }),
+  },
+
+  encryption: {
+    getPublicKey: (handle: string) =>
+      request<{
+        identityId: string;
+        handle: string;
+        publicKey: string;
+        createdAt: string;
+      }>(`/api/encryption/public-key/${encodeURIComponent(handle)}`),
+
+    getKey: (identityId: string) =>
+      request<{
+        hasKey: boolean;
+        publicKey?: string | null;
+        encryptedPrivateKey?: string | null;
+        createdAt?: string | null;
+      }>(`/api/encryption/keys/${identityId}`),
+
+    createKey: (identityId: string, payload: IdentityEncryptionKey) =>
+      request<{ success: boolean; publicKey: string; createdAt: string }>(`/api/encryption/keys/${identityId}`, {
+        method: "POST",
+        body: JSON.stringify(payload),
+      }),
+
+    rotateKey: (identityId: string, payload: IdentityEncryptionKey) =>
+      request<{ success: boolean }>(`/api/encryption/keys/${identityId}`, {
+        method: "PUT",
+        body: JSON.stringify(payload),
+      }),
+  },
+
+  sharedSecrets: {
+    list: () =>
+      request<{
+        created: Array<{
+          id: string;
+          kind: SharedSecretKind;
+          appId?: string | null;
+          resourceKey?: string | null;
+          label?: string | null;
+          status: string;
+          createdAt: string;
+          ownerIdentityId: string;
+          ownerHandle: string;
+          appName?: string | null;
+          encryptedSecret?: string | null;
+          transfers: Array<{
+            id: string;
+            targetHandle: string;
+            status: "pending" | "claimed" | "expired";
+            expiresAt: string;
+            createdAt: string;
+            claimedAt?: string | null;
+          }>;
+        }>;
+        received: RecipientSharedSecretEnvelope[];
+      }>("/api/shared-secrets"),
+
+    create: (payload: {
+      identityId: string;
+      kind: SharedSecretKind;
+      appId?: string;
+      resourceKey?: string;
+      label?: string;
+      encryptedSecret: string;
+    }) =>
+      request<{ secret: SharedSecretDescriptor & { status: string; createdAt: string } }>("/api/shared-secrets", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      }),
+
+    createTransfer: (sharedSecretId: string, payload: {
+      identityId: string;
+      targetHandle: string;
+      encryptedSecretForTarget: string;
+      senderPublicKey: string;
+      expiresInHours?: number;
+      returnUrl?: string;
+    }) =>
+      request<{
+        transfer: TransferContract;
+        claimToken: string;
+        claimUrl: string;
+      }>(`/api/shared-secrets/${sharedSecretId}/transfers`, {
+        method: "POST",
+        body: JSON.stringify(payload),
+      }),
+
+    getTransfer: (claimToken: string) =>
+      request<{
+        transfer: TransferContract & {
+          owner: {
+            identityId: string;
+            handle: string;
+            displayName: string;
+          };
+        };
+      }>(`/api/shared-secrets/transfers/${encodeURIComponent(claimToken)}`),
+
+    claimTransfer: (claimToken: string, identityId: string) =>
+      request<{
+        transfer: {
+          id: string;
+          sharedSecretId: string;
+          encryptedSecretForTarget: string;
+          senderPublicKey: string;
+          targetHandle: string;
+          expiresAt: string;
+          descriptor: SharedSecretDescriptor;
+          returnUrl?: string | null;
+          owner: {
+            identityId: string;
+            handle: string;
+            displayName: string;
+          };
+        };
+      }>(`/api/shared-secrets/transfers/${encodeURIComponent(claimToken)}/claim`, {
+        method: "POST",
+        body: JSON.stringify({ identityId }),
+      }),
+
+    finalizeRecipientStorage: (sharedSecretId: string, payload: {
+      identityId: string;
+      transferId: string;
+      encryptedSecretForRecipient: string;
+    }) =>
+      request<{ success: boolean }>(`/api/shared-secrets/${sharedSecretId}/finalize-recipient-storage`, {
+        method: "POST",
+        body: JSON.stringify(payload),
+      }),
+
+    getAccess: (params?: { kind?: SharedSecretKind; appId?: string; resourceKey?: string }) => {
+      const searchParams = new URLSearchParams();
+      if (params?.kind) searchParams.set("kind", params.kind);
+      if (params?.appId) searchParams.set("appId", params.appId);
+      if (params?.resourceKey) searchParams.set("resourceKey", params.resourceKey);
+      const query = searchParams.toString();
+      return request<{ access: RecipientSharedSecretEnvelope[] }>(`/api/shared-secrets/access${query ? `?${query}` : ""}`);
+    },
   },
   
   oauth: {

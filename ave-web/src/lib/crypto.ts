@@ -415,3 +415,90 @@ export async function decryptAppKey(
   const appKeyB64 = await decryptToString(encryptedAppKey, masterKey);
   return await importAppKey(appKeyB64);
 }
+
+/**
+ * Generate a dedicated identity encryption keypair for shared secret transfer.
+ */
+export async function generateIdentityEncryptionKeyPair(): Promise<{
+  publicKey: string;
+  privateKey: CryptoKey;
+}> {
+  const keyPair = await crypto.subtle.generateKey(
+    {
+      name: "ECDH",
+      namedCurve: "P-256",
+    },
+    true,
+    ["deriveKey"]
+  );
+
+  const publicKeyData = await crypto.subtle.exportKey("spki", keyPair.publicKey);
+  return {
+    publicKey: btoa(String.fromCharCode(...new Uint8Array(publicKeyData))),
+    privateKey: keyPair.privateKey,
+  };
+}
+
+export async function exportIdentityEncryptionPrivateKey(privateKey: CryptoKey): Promise<ArrayBuffer> {
+  return await crypto.subtle.exportKey("pkcs8", privateKey);
+}
+
+export async function importIdentityEncryptionPrivateKey(privateKeyData: ArrayBuffer): Promise<CryptoKey> {
+  return await crypto.subtle.importKey(
+    "pkcs8",
+    privateKeyData,
+    {
+      name: "ECDH",
+      namedCurve: "P-256",
+    },
+    false,
+    ["deriveKey"]
+  );
+}
+
+export async function createStoredIdentityEncryptionKeyPair(masterKey: CryptoKey): Promise<{
+  publicKey: string;
+  encryptedPrivateKey: string;
+}> {
+  const keyPair = await generateIdentityEncryptionKeyPair();
+  const privateKeyData = await exportIdentityEncryptionPrivateKey(keyPair.privateKey);
+  return {
+    publicKey: keyPair.publicKey,
+    encryptedPrivateKey: await encrypt(privateKeyData, masterKey),
+  };
+}
+
+export async function loadIdentityEncryptionPrivateKey(
+  encryptedPrivateKey: string,
+  masterKey: CryptoKey
+): Promise<CryptoKey> {
+  const privateKeyData = await decrypt(encryptedPrivateKey, masterKey);
+  return await importIdentityEncryptionPrivateKey(privateKeyData);
+}
+
+/**
+ * Encrypt a plaintext secret for an identity's public encryption key.
+ * Uses a fresh ephemeral sender keypair and returns its public key with the ciphertext.
+ */
+export async function encryptSecretForIdentity(
+  secret: string | ArrayBuffer,
+  recipientPublicKeyB64: string
+): Promise<{ encryptedSecret: string; senderPublicKey: string }> {
+  const senderKeyPair = await generateIdentityEncryptionKeyPair();
+  const recipientPublicKey = await importPublicKey(recipientPublicKeyB64);
+  const sharedKey = await deriveSharedKey(senderKeyPair.privateKey, recipientPublicKey);
+  return {
+    encryptedSecret: await encrypt(secret, sharedKey),
+    senderPublicKey: senderKeyPair.publicKey,
+  };
+}
+
+export async function decryptSecretFromIdentity(
+  encryptedSecret: string,
+  senderPublicKeyB64: string,
+  recipientPrivateKey: CryptoKey
+): Promise<ArrayBuffer> {
+  const senderPublicKey = await importPublicKey(senderPublicKeyB64);
+  const sharedKey = await deriveSharedKey(recipientPrivateKey, senderPublicKey);
+  return await decrypt(encryptedSecret, sharedKey);
+}

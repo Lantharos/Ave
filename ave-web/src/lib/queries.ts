@@ -1,5 +1,5 @@
 import { createInfiniteQuery, createMutation, createQuery } from "@tanstack/svelte-query";
-import { api, type Device, type ActivityLogEntry, type LoginRequest, type Passkey } from "./api";
+import { api, type Device, type ActivityLogEntry, type LoginRequest, type Passkey, type RecipientSharedSecretEnvelope } from "./api";
 import { queryClient } from "./query-client";
 
 const QUERY_KEYS = {
@@ -7,6 +7,8 @@ const QUERY_KEYS = {
   pendingRequests: ["pendingRequests"] as const,
   security: ["security"] as const,
   delegations: ["delegations"] as const,
+  sharedSecrets: ["sharedSecrets"] as const,
+  sharedSecretAccess: ["sharedSecretAccess"] as const,
   activity: (severity: "all" | "info" | "warning" | "danger") => ["activity", severity] as const,
 };
 
@@ -54,6 +56,23 @@ export function createDelegationsQuery() {
     queryFn: async () => {
       const result = await api.oauth.getDelegations();
       return result.delegations;
+    },
+  }));
+}
+
+export function createSharedSecretsQuery() {
+  return createQuery(() => ({
+    queryKey: QUERY_KEYS.sharedSecrets,
+    queryFn: async () => api.sharedSecrets.list(),
+  }));
+}
+
+export function createSharedSecretAccessQuery() {
+  return createQuery(() => ({
+    queryKey: QUERY_KEYS.sharedSecretAccess,
+    queryFn: async (): Promise<RecipientSharedSecretEnvelope[]> => {
+      const result = await api.sharedSecrets.getAccess();
+      return result.access;
     },
   }));
 }

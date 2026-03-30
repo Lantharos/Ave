@@ -8,7 +8,8 @@ import {
   loadMasterKey, 
   storeMasterKey, 
   clearMasterKey, 
-  hasMasterKey
+  hasMasterKey,
+  createStoredIdentityEncryptionKeyPair,
 } from "../lib/crypto";
 import { websocket } from "./websocket";
 
@@ -51,6 +52,22 @@ function createAuthStore() {
   const { subscribe, set, update } = writable<AuthState>(initialState);
   let initPromise: Promise<void> | null = null;
 
+  async function ensureIdentityEncryptionKeys(identities: Identity[], masterKey: CryptoKey | null) {
+    if (!masterKey) return;
+
+    for (const identity of identities) {
+      try {
+        const keyState = await api.encryption.getKey(identity.id);
+        if (keyState.hasKey) continue;
+
+        const generated = await createStoredIdentityEncryptionKeyPair(masterKey);
+        await api.encryption.createKey(identity.id, generated);
+      } catch (error) {
+        console.warn("[Auth] Failed to backfill encryption key for identity", identity.id, error);
+      }
+    }
+  }
+
   async function hydrateAuthenticatedSession(identities: Identity[]) {
     const masterKey = await loadMasterKey();
 
@@ -63,6 +80,8 @@ function createAuthStore() {
       masterKey,
       hasMasterKey: masterKey !== null,
     }));
+
+    void ensureIdentityEncryptionKeys(identities, masterKey);
   }
   
   return {
@@ -163,6 +182,8 @@ function createAuthStore() {
         masterKey: masterKey || null,
         hasMasterKey: masterKey !== null || hasMasterKey(),
       }));
+
+      void ensureIdentityEncryptionKeys(identities, masterKey || null);
       
       // Connect WebSocket for real-time notifications
       websocket.connectAsUser(sessionToken);

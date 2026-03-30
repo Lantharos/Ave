@@ -71,6 +71,13 @@
       "when": 1774041951245,
       "tag": "0009_rainy_sharon_ventura",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1774861200000,
+      "tag": "0010_shared_secret_transfers",
+      "breakpoints": true
     }
   ]
 }

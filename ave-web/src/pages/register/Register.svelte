@@ -13,6 +13,7 @@
         generateMasterKey, 
         createMasterKeyBackup,
         encryptMasterKeyWithPrf,
+        createStoredIdentityEncryptionKeyPair,
     } from "../../lib/crypto";
     import { registerPasskey, getDeviceInfo, isPlatformAuthenticatorAvailable } from "../../lib/webauthn";
     import { auth, isAuthenticated } from "../../stores/auth";
@@ -180,6 +181,7 @@
 
                 device: deviceInfo,
                 prfEncryptedMasterKey, // Send PRF-encrypted master key if available
+                encryptionKey: await createStoredIdentityEncryptionKeyPair(masterKey),
             });
             
             // Store master key and login

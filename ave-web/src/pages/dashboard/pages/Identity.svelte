@@ -3,6 +3,7 @@
     import IdentityCard from "../../../components/IdentityCard.svelte";
     import Button from "../../../components/Button.svelte";
     import { api, type Identity as IdentityType } from "../../../lib/api";
+    import { createStoredIdentityEncryptionKeyPair, loadMasterKey } from "../../../lib/crypto";
     import { auth } from "../../../stores/auth";
 
     let { newIdentity = false, identity = null } = $props<{
@@ -90,6 +91,7 @@
         error = "";
 
         try {
+            const masterKey = await loadMasterKey();
             const { identity: created } = await api.identities.create({
                 displayName: displayName.trim(),
                 handle: handle.trim().toLowerCase(),
@@ -97,6 +99,7 @@
                 birthday: birthday || undefined,
                 avatarUrl: avatarUrl || undefined,
                 bannerUrl: bannerUrl || undefined,
+                encryptionKey: masterKey ? await createStoredIdentityEncryptionKeyPair(masterKey) : undefined,
             });
 
             auth.addIdentity(created);

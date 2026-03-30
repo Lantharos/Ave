@@ -6,7 +6,7 @@ import {
   verifyRegistrationResponse,
   type VerifiedRegistrationResponse,
 } from "@simplewebauthn/server";
-import { db, users, identities, passkeys, devices, sessions, activityLogs } from "../db";
+import { db, users, identities, passkeys, devices, sessions, activityLogs, identityEncryptionKeys } from "../db";
 import { 
   generateSessionToken, 
   hashSessionToken,
@@ -94,6 +94,10 @@ const completeRegistrationSchema = z.object({
   }),
   // PRF-encrypted master key (if passkey supports PRF extension)
   prfEncryptedMasterKey: z.string().optional(),
+  encryptionKey: z.object({
+    publicKey: z.string().min(1),
+    encryptedPrivateKey: z.string().min(1),
+  }).optional(),
 });
 
 // Complete registration
@@ -169,6 +173,14 @@ app.post("/complete", zValidator("json", completeRegistrationSchema), async (c) 
         isPrimary: true,
       })
       .returning();
+
+    if (data.encryptionKey) {
+      await db.insert(identityEncryptionKeys).values({
+        identityId: identity.id,
+        publicKey: data.encryptionKey.publicKey,
+        encryptedPrivateKey: data.encryptionKey.encryptedPrivateKey,
+      });
+    }
 
     // Create passkey
     // Note: registrationInfo.credential.id is already a base64url string from @simplewebauthn

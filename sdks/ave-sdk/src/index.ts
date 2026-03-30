@@ -3,7 +3,24 @@ export type Scope = "openid" | "profile" | "email" | "offline_access" | "user_id
 export { configureCryptoRuntime, createExpoCryptoRuntime, isJwtVerificationSupported } from "./crypto-runtime.js";
 export type { AveCryptoRuntime } from "./crypto-runtime.js";
 export { fetchJwks, verifyJwt } from "./jwt.js";
-export type { AveIdTokenClaims, AveJwtClaims, FedCmTokenResponse, JwkKey, JwksResponse, JwtHeader, JwtPayload, OidcConfiguration, VerifyJwtOptions } from "./types.js";
+export type {
+  AveIdTokenClaims,
+  AveJwtClaims,
+  FedCmTokenResponse,
+  IdentityEncryptionPublicKey,
+  JwkKey,
+  JwksResponse,
+  JwtHeader,
+  JwtPayload,
+  OidcConfiguration,
+  RecipientSharedSecretEnvelope,
+  SharedSecretRecord,
+  SharedSecretTransferResolution,
+  SharedSecretDescriptor,
+  SharedSecretKind,
+  TransferContract,
+  VerifyJwtOptions,
+} from "./types.js";
 import { digestSha256, fillRandomValues } from "./crypto-runtime.js";
 
 export interface AveConfig {
@@ -256,6 +273,232 @@ function base64UrlEncode(bytes: Uint8Array): string {
     .replace(/\+/g, "-")
     .replace(/\//g, "_")
     .replace(/=+$/, "");
+}
+
+export async function getIdentityEncryptionPublicKey(
+  config: { issuer?: string },
+  handle: string
+): Promise<import("./types.js").IdentityEncryptionPublicKey> {
+  const apiBase = getApiBase(config.issuer);
+  const response = await fetch(`${apiBase}/api/encryption/public-key/${encodeURIComponent(handle)}`);
+
+  if (!response.ok) {
+    const data = await response.json();
+    throw new Error(data.error || "Failed to get identity encryption public key");
+  }
+
+  return response.json();
+}
+
+export async function listSharedSecrets(
+  config: { issuer?: string },
+  sessionToken: string
+): Promise<{
+  created: Array<{
+    id: string;
+    kind: import("./types.js").SharedSecretKind;
+    appId?: string | null;
+    resourceKey?: string | null;
+    label?: string | null;
+    status: string;
+    createdAt: string;
+    ownerIdentityId: string;
+    ownerHandle: string;
+    appName?: string | null;
+    encryptedSecret?: string | null;
+    transfers: Array<{
+      id: string;
+      targetHandle: string;
+      status: "pending" | "claimed" | "expired";
+      expiresAt: string;
+      createdAt: string;
+      claimedAt?: string | null;
+    }>;
+  }>;
+  received: import("./types.js").RecipientSharedSecretEnvelope[];
+}> {
+  const apiBase = getApiBase(config.issuer);
+  const response = await fetch(`${apiBase}/api/shared-secrets`, {
+    headers: {
+      Authorization: `Bearer ${sessionToken}`,
+    },
+  });
+
+  if (!response.ok) {
+    const data = await response.json();
+    throw new Error(data.error || "Failed to list shared secrets");
+  }
+
+  return response.json();
+}
+
+export async function getSharedSecretAccess(
+  config: { issuer?: string },
+  sessionToken: string,
+  params: {
+    kind?: import("./types.js").SharedSecretKind;
+    appId?: string;
+    resourceKey?: string;
+  } = {}
+): Promise<import("./types.js").RecipientSharedSecretEnvelope[]> {
+  const apiBase = getApiBase(config.issuer);
+  const search = new URLSearchParams();
+  if (params.kind) search.set("kind", params.kind);
+  if (params.appId) search.set("appId", params.appId);
+  if (params.resourceKey) search.set("resourceKey", params.resourceKey);
+
+  const response = await fetch(`${apiBase}/api/shared-secrets/access${search.toString() ? `?${search.toString()}` : ""}`, {
+    headers: {
+      Authorization: `Bearer ${sessionToken}`,
+    },
+  });
+
+  if (!response.ok) {
+    const data = await response.json();
+    throw new Error(data.error || "Failed to load shared secret access");
+  }
+
+  const payload = await response.json();
+  return payload.access || [];
+}
+
+export async function createSharedSecret(
+  config: { issuer?: string },
+  sessionToken: string,
+  payload: {
+    identityId: string;
+    kind: import("./types.js").SharedSecretKind;
+    encryptedSecret: string;
+    appId?: string;
+    resourceKey?: string;
+    label?: string;
+  }
+): Promise<import("./types.js").SharedSecretRecord> {
+  const apiBase = getApiBase(config.issuer);
+  const response = await fetch(`${apiBase}/api/shared-secrets`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${sessionToken}`,
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    const data = await response.json();
+    throw new Error(data.error || "Failed to create shared secret");
+  }
+
+  const data = await response.json();
+  return data.secret;
+}
+
+export async function createSharedSecretTransfer(
+  config: { issuer?: string },
+  sessionToken: string,
+  sharedSecretId: string,
+  payload: {
+    identityId: string;
+    targetHandle: string;
+    encryptedSecretForTarget: string;
+    senderPublicKey: string;
+    expiresInHours?: number;
+    returnUrl?: string;
+  }
+): Promise<{
+  transfer: import("./types.js").TransferContract;
+  claimToken: string;
+  claimUrl: string;
+}> {
+  const apiBase = getApiBase(config.issuer);
+  const response = await fetch(`${apiBase}/api/shared-secrets/${encodeURIComponent(sharedSecretId)}/transfers`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${sessionToken}`,
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    const data = await response.json();
+    throw new Error(data.error || "Failed to create shared secret transfer");
+  }
+
+  return response.json();
+}
+
+export async function resolveSharedSecretTransfer(
+  config: { issuer?: string },
+  claimToken: string
+): Promise<import("./types.js").TransferContract & {
+  owner: {
+    identityId: string;
+    handle: string;
+    displayName: string;
+  };
+}> {
+  const apiBase = getApiBase(config.issuer);
+  const response = await fetch(`${apiBase}/api/shared-secrets/transfers/${encodeURIComponent(claimToken)}`);
+
+  if (!response.ok) {
+    const data = await response.json();
+    throw new Error(data.error || "Failed to resolve shared secret transfer");
+  }
+
+  const data = await response.json();
+  return data.transfer;
+}
+
+export async function claimSharedSecretTransfer(
+  config: { issuer?: string },
+  sessionToken: string,
+  claimToken: string,
+  identityId: string
+): Promise<import("./types.js").SharedSecretTransferResolution> {
+  const apiBase = getApiBase(config.issuer);
+  const response = await fetch(`${apiBase}/api/shared-secrets/transfers/${encodeURIComponent(claimToken)}/claim`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${sessionToken}`,
+    },
+    body: JSON.stringify({ identityId }),
+  });
+
+  if (!response.ok) {
+    const data = await response.json();
+    throw new Error(data.error || "Failed to claim shared secret transfer");
+  }
+
+  const data = await response.json();
+  return data.transfer;
+}
+
+export async function finalizeSharedSecretRecipientStorage(
+  config: { issuer?: string },
+  sessionToken: string,
+  sharedSecretId: string,
+  payload: {
+    identityId: string;
+    transferId: string;
+    encryptedSecretForRecipient: string;
+  }
+): Promise<void> {
+  const apiBase = getApiBase(config.issuer);
+  const response = await fetch(`${apiBase}/api/shared-secrets/${encodeURIComponent(sharedSecretId)}/finalize-recipient-storage`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${sessionToken}`,
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    const data = await response.json();
+    throw new Error(data.error || "Failed to finalize shared secret recipient storage");
+  }
 }
 
 // ============================================

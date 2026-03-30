@@ -386,6 +386,79 @@ export const signingKeys = sqliteTable("signing_keys", {
   index("signing_keys_identity_id_idx").on(table.identityId),
 ]);
 
+// Identity encryption keys - ECDH keypairs per identity for shared secret transfers
+export const identityEncryptionKeys = sqliteTable("identity_encryption_keys", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  identityId: text("identity_id").references(() => identities.id, { onDelete: "cascade" }).notNull().unique(),
+  createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull().$defaultFn(() => new Date()),
+
+  // ECDH public key (base64 SPKI)
+  publicKey: text("public_key").notNull(),
+
+  // Private key encrypted with the user's master key (base64 PKCS8 wrapped in AES-GCM)
+  encryptedPrivateKey: text("encrypted_private_key").notNull(),
+}, (table) => [
+  index("identity_encryption_keys_identity_id_idx").on(table.identityId),
+]);
+
+// Shared secret logical records
+export const sharedSecrets = sqliteTable("shared_secrets", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull().$defaultFn(() => new Date()),
+  updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull().$defaultFn(() => new Date()),
+
+  ownerIdentityId: text("owner_identity_id").references(() => identities.id, { onDelete: "cascade" }).notNull(),
+  kind: text("kind").notNull(), // app_scoped | global
+  appId: text("app_id").references(() => oauthApps.id, { onDelete: "set null" }),
+  resourceKey: text("resource_key"),
+  label: text("label"),
+  status: text("status").notNull().default("active"), // active | archived
+}, (table) => [
+  index("shared_secrets_owner_identity_id_idx").on(table.ownerIdentityId),
+  index("shared_secrets_app_id_idx").on(table.appId),
+  index("shared_secrets_kind_idx").on(table.kind),
+]);
+
+// Recipient-specific wrapped copies of shared secrets
+export const sharedSecretAccess = sqliteTable("shared_secret_access", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull().$defaultFn(() => new Date()),
+  updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull().$defaultFn(() => new Date()),
+
+  sharedSecretId: text("shared_secret_id").references(() => sharedSecrets.id, { onDelete: "cascade" }).notNull(),
+  recipientIdentityId: text("recipient_identity_id").references(() => identities.id, { onDelete: "cascade" }).notNull(),
+  encryptedSecretForRecipient: text("encrypted_secret_for_recipient").notNull(),
+  claimedAt: integer("claimed_at", { mode: "timestamp_ms" }),
+  revokedAt: integer("revoked_at", { mode: "timestamp_ms" }),
+}, (table) => [
+  index("shared_secret_access_shared_secret_id_idx").on(table.sharedSecretId),
+  index("shared_secret_access_recipient_identity_id_idx").on(table.recipientIdentityId),
+]);
+
+// Pending founder -> recipient transfer contracts
+export const sharedSecretTransferContracts = sqliteTable("shared_secret_transfer_contracts", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull().$defaultFn(() => new Date()),
+  updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull().$defaultFn(() => new Date()),
+  expiresAt: integer("expires_at", { mode: "timestamp_ms" }).notNull(),
+
+  sharedSecretId: text("shared_secret_id").references(() => sharedSecrets.id, { onDelete: "cascade" }).notNull(),
+  ownerIdentityId: text("owner_identity_id").references(() => identities.id, { onDelete: "cascade" }).notNull(),
+  targetHandle: text("target_handle").notNull(),
+  targetIdentityId: text("target_identity_id").references(() => identities.id, { onDelete: "set null" }),
+  claimTokenHash: text("claim_token_hash").notNull().unique(),
+  encryptedSecretForTarget: text("encrypted_secret_for_target").notNull(),
+  senderPublicKey: text("sender_public_key").notNull(),
+  returnUrl: text("return_url"),
+  status: text("status").notNull().default("pending"), // pending | claimed | expired
+  claimedAt: integer("claimed_at", { mode: "timestamp_ms" }),
+}, (table) => [
+  index("shared_secret_transfer_contracts_shared_secret_id_idx").on(table.sharedSecretId),
+  index("shared_secret_transfer_contracts_owner_identity_id_idx").on(table.ownerIdentityId),
+  index("shared_secret_transfer_contracts_target_handle_idx").on(table.targetHandle),
+  index("shared_secret_transfer_contracts_status_idx").on(table.status),
+]);
+
 // Signature requests - pending requests from apps for user signatures
 export const signatureRequests = sqliteTable("signature_requests", {
   id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
