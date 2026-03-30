@@ -8,6 +8,25 @@ Typed helpers for Ave OAuth + OIDC flows.
 npm install @ave-id/sdk
 ```
 
+For Expo apps, also install:
+
+```bash
+npx expo install expo-crypto
+```
+
+Then configure the SDK once during app startup:
+
+```ts
+import * as ExpoCrypto from "expo-crypto";
+import { configureCryptoRuntime, createExpoCryptoRuntime } from "@ave-id/sdk";
+
+configureCryptoRuntime(createExpoCryptoRuntime(ExpoCrypto));
+```
+
+This enables the SDK's PKCE helpers in Expo (`generateCodeVerifier`, `generateCodeChallenge`, and `generateNonce`). `verifyJwt()` still requires a runtime with `SubtleCrypto` RSA verification support.
+
+On Expo native, `verifyJwt()` is not supported. The SDK's callback helpers skip client-side JWT verification in that runtime so successful logins do not fail after token exchange. If you need JWT signature verification, do it on your server or use a service like Convex that validates the `id_token` itself.
+
 ## Quick Ave (no app registration)
 
 If you want the sign-in UI to stay inside your app, pair the SDK with `@ave-id/embed` and use `startAveAuth()` as the default entry point.
@@ -69,7 +88,7 @@ const fedcmResult = await signIn({
 });
 
 if (fedcmResult) {
-  console.log(fedcmResult.access_token, fedcmResult.encryptedAppKey);
+  console.log(fedcmResult.access_token, fedcmResult.app_key);
 }
 
 await startPkceLogin({

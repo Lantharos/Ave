@@ -1,0 +1,269 @@
+---
+title: "Expo with AuthSession"
+description: "Use Ave in an Expo app with expo-auth-session and expo-web-browser. Covers deep links, PKCE, code exchange, token refresh, and the Convex handoff."
+---
+
+Expo is a great fit for Ave's public-client OAuth flow. The clean setup is:
+
+- `expo-auth-session` to start the authorization code flow with PKCE
+- `expo-web-browser` to handle the system browser session cleanly
+- `@ave-id/sdk` to exchange the code and refresh tokens against Ave's API
+
+If you're using Convex too, see [Convex custom auth](/guides/convex-custom-auth). The short version: pass Convex the Ave `id_token`, not `access_token_jwt`.
+
+<Warning>
+  Expo apps are public clients. Do not ship a `clientSecret` in the app. Use the authorization code flow with PKCE.
+</Warning>
+
+## Install dependencies
+
+```bash
+npx expo install expo-auth-session expo-web-browser expo-crypto
+npm install @ave-id/sdk
+```
+
+Expo's current AuthSession docs note that `expo-crypto` is a peer dependency of `expo-auth-session`.
+
+## Configure the Ave SDK for Expo
+
+The Ave SDK uses Web Crypto by default. In Expo, configure it once with `expo-crypto` during app startup:
+
+```ts
+import * as ExpoCrypto from "expo-crypto";
+import { configureCryptoRuntime, createExpoCryptoRuntime } from "@ave-id/sdk";
+
+configureCryptoRuntime(createExpoCryptoRuntime(ExpoCrypto));
+```
+
+Put that near your app bootstrap, before any Ave PKCE helpers run.
+
+<Warning>
+  `verifyJwt()` is not supported on Expo native today. The Ave SDK skips client-side JWT verification in Expo callback helpers so your login flow does not crash, but if you need signature verification you should do it on your server or let a verifier like Convex validate the `id_token`.
+</Warning>
+
+## Register your redirect URI
+
+First, give your app a custom scheme:
+
+```json
+{
+  "expo": {
+    "scheme": "aveexpo"
+  }
+}
+```
+
+Then build the redirect URI you will use in the app:
+
+```ts
+import * as AuthSession from "expo-auth-session";
+
+const redirectUri = AuthSession.makeRedirectUri({
+  scheme: "aveexpo",
+  path: "oauth/callback",
+});
+```
+
+Register that exact redirect URI in the Ave developer portal for your app.
+
+<Note>
+  In Expo development builds and standalone apps, `makeRedirectUri()` uses your app scheme. On web it uses the current website origin. Keep the redirect URI you register in Ave aligned with the platform you are testing.
+</Note>
+
+## Minimal implementation
+
+This example uses Expo for the browser redirect and PKCE request, then uses `@ave-id/sdk` for Ave's token exchange and refresh helpers.
+
+```tsx
+import { useEffect, useMemo, useState } from "react";
+import { Button, Text, View } from "react-native";
+import * as AuthSession from "expo-auth-session";
+import * as WebBrowser from "expo-web-browser";
+import { exchangeCode, fetchUserInfo, refreshToken } from "@ave-id/sdk";
+
+WebBrowser.maybeCompleteAuthSession();
+
+const CLIENT_ID = "YOUR_CLIENT_ID";
+const ISSUER = "https://aveid.net";
+
+export default function AveLoginScreen() {
+  const [tokens, setTokens] = useState<any | null>(null);
+  const [profile, setProfile] = useState<any | null>(null);
+
+  const discovery = AuthSession.useAutoDiscovery(ISSUER);
+
+  const redirectUri = useMemo(
+    () =>
+      AuthSession.makeRedirectUri({
+        scheme: "aveexpo",
+        path: "oauth/callback",
+      }),
+    [],
+  );
+
+  const [request, response, promptAsync] = AuthSession.useAuthRequest(
+    {
+      clientId: CLIENT_ID,
+      redirectUri,
+      responseType: AuthSession.ResponseType.Code,
+      scopes: ["openid", "profile", "email", "offline_access"],
+      usePKCE: true,
+    },
+    discovery,
+  );
+
+  useEffect(() => {
+    WebBrowser.warmUpAsync();
+    return () => {
+      WebBrowser.coolDownAsync();
+    };
+  }, []);
+
+  useEffect(() => {
+    async function finishLogin() {
+      if (!response || response.type !== "success" || !request) return;
+
+      const code = response.params.code;
+      if (!code) {
+        throw new Error("Missing authorization code");
+      }
+
+      if (response.params.state !== request.state) {
+        throw new Error("State mismatch");
+      }
+
+      const nextTokens = await exchangeCode(
+        {
+          clientId: CLIENT_ID,
+          redirectUri,
+          issuer: ISSUER,
+        },
+        {
+          code,
+          codeVerifier: request.codeVerifier,
+        },
+      );
+
+      setTokens(nextTokens);
+
+      const user = await fetchUserInfo(
+        { clientId: CLIENT_ID, redirectUri, issuer: ISSUER },
+        nextTokens.access_token,
+      );
+
+      setProfile(user);
+    }
+
+    finishLogin().catch((error) => {
+      console.error("Ave login failed", error);
+    });
+  }, [redirectUri, request, response]);
+
+  async function handleRefresh() {
+    if (!tokens?.refresh_token) return;
+
+    const nextTokens = await refreshToken(
+      {
+        clientId: CLIENT_ID,
+        redirectUri,
+        issuer: ISSUER,
+      },
+      {
+        refreshToken: tokens.refresh_token,
+      },
+    );
+
+    setTokens(nextTokens);
+  }
+
+  return (
+    <View style={{ gap: 12, padding: 24 }}>
+      <Button
+        title="Continue with Ave"
+        disabled={!request}
+        onPress={() => promptAsync()}
+      />
+
+      {profile ? (
+        <Text>Signed in as {profile.email ?? profile.preferred_username ?? profile.sub}</Text>
+      ) : null}
+
+      {tokens?.refresh_token ? (
+        <Button title="Refresh session" onPress={handleRefresh} />
+      ) : null}
+    </View>
+  );
+}
+```
+
+## What this flow does
+
+1. `useAuthRequest()` creates the authorization request and PKCE verifier/challenge
+2. `promptAsync()` opens the system browser via Expo's browser session support
+3. Ave redirects back to your Expo deep link with an authorization `code`
+4. You exchange that code with `exchangeCode(...)`, passing `request.codeVerifier`
+5. Ave returns the normal token set: `access_token`, `access_token_jwt`, `id_token`, and optionally `refresh_token`
+
+<Tip>
+  Request `openid` whenever you need `id_token`. Without `openid`, Ave will not return an ID token.
+</Tip>
+
+## Token handling
+
+Ave's token response has a few fields Expo developers usually care about:
+
+| Field | Use |
+|---|---|
+| `access_token` | Bearer token for Ave API endpoints like `userinfo` |
+| `access_token_jwt` | Signed JWT for Ave resource authorization |
+| `id_token` | OIDC identity token for your app and for Convex |
+| `refresh_token` | Used to rotate into a fresh token set when `offline_access` was granted |
+
+<Warning>
+  Refresh tokens rotate on every use. After a successful refresh, store the new `refresh_token` immediately and discard the old one.
+</Warning>
+
+On Expo native, do not call `verifyJwt()` in the client. Use the tokens directly for app state, and move JWT signature verification to your backend if you need it.
+
+## Convex handoff
+
+If your Expo app talks to Convex, give Convex the Ave `id_token`:
+
+```ts
+convex.setAuth(async () => tokens.id_token);
+```
+
+Do not pass `access_token_jwt` to Convex. Its audience is `https://aveid.net`, while Convex expects the `id_token` audience to match your Ave `clientId`.
+
+The full setup is documented in [Convex custom auth](/guides/convex-custom-auth).
+
+## Common pitfalls
+
+<AccordionGroup>
+  <Accordion title="The browser completes but the app never resumes">
+    Your app scheme or redirect URI is misconfigured. Make sure the scheme in Expo config matches the scheme used in `makeRedirectUri()`, and register that exact redirect URI in the Ave developer portal.
+  </Accordion>
+  <Accordion title="The code exchange fails with PKCE or invalid_grant errors">
+    The authorization code must be exchanged with the exact `request.codeVerifier` created by `useAuthRequest()`. Do not generate a second verifier yourself during the callback.
+  </Accordion>
+  <Accordion title="The flow works on native but fails on web">
+    Expo documents that `WebBrowser.maybeCompleteAuthSession()` should run on web so the popup can finish cleanly. Also make sure the auth flow starts and finishes on the same web origin.
+  </Accordion>
+  <Accordion title="Convex rejects the token">
+    Pass `id_token`, not `access_token_jwt`. See [Convex custom auth](/guides/convex-custom-auth).
+  </Accordion>
+</AccordionGroup>
+
+## Notes on Expo APIs
+
+- Expo's AuthSession docs say `usePKCE` defaults to `true`, but it is still worth setting explicitly in auth code so the flow is obvious in your app.
+- Expo's WebBrowser docs recommend `openAuthSessionAsync` for auth-style browser flows and document `warmUpAsync()` / `coolDownAsync()` as Android performance helpers.
+- On web, Expo documents that `maybeCompleteAuthSession()` is what closes the popup after the redirect page loads.
+
+## References
+
+- [Expo AuthSession docs](https://docs.expo.dev/versions/latest/sdk/auth-session/)
+- [Expo WebBrowser docs](https://docs.expo.dev/versions/latest/sdk/webbrowser/)
+- [Ave SDK OAuth reference](/sdk/sdk-oauth)
+- [PKCE for public clients](/guides/pkce-for-public-clients)
+- [Convex custom auth](/guides/convex-custom-auth)

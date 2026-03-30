@@ -1,7 +1,10 @@
 export type Scope = "openid" | "profile" | "email" | "offline_access" | "user_id";
 
+export { configureCryptoRuntime, createExpoCryptoRuntime, isJwtVerificationSupported } from "./crypto-runtime.js";
+export type { AveCryptoRuntime } from "./crypto-runtime.js";
 export { fetchJwks, verifyJwt } from "./jwt.js";
 export type { AveIdTokenClaims, AveJwtClaims, FedCmTokenResponse, JwkKey, JwksResponse, JwtHeader, JwtPayload, OidcConfiguration, VerifyJwtOptions } from "./types.js";
+import { digestSha256, fillRandomValues } from "./crypto-runtime.js";
 
 export interface AveConfig {
   clientId: string;
@@ -11,20 +14,19 @@ export interface AveConfig {
 
 export function generateCodeVerifier(): string {
   const bytes = new Uint8Array(32);
-  crypto.getRandomValues(bytes);
+  fillRandomValues(bytes);
   return base64UrlEncode(bytes);
 }
 
 export async function generateCodeChallenge(verifier: string): Promise<string> {
   const encoder = new TextEncoder();
   const data = encoder.encode(verifier);
-  const hash = await crypto.subtle.digest("SHA-256", data);
-  return base64UrlEncode(new Uint8Array(hash));
+  return base64UrlEncode(await digestSha256(data));
 }
 
 export function generateNonce(): string {
   const bytes = new Uint8Array(32);
-  crypto.getRandomValues(bytes);
+  fillRandomValues(bytes);
   return base64UrlEncode(bytes).slice(0, 32);
 }
 
@@ -234,7 +236,23 @@ export function getApiBase(issuer?: string): string {
 }
 
 function base64UrlEncode(bytes: Uint8Array): string {
-  return btoa(String.fromCharCode(...bytes))
+  const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+  let output = "";
+
+  for (let i = 0; i < bytes.length; i += 3) {
+    const byte1 = bytes[i] ?? 0;
+    const byte2 = bytes[i + 1] ?? 0;
+    const byte3 = bytes[i + 2] ?? 0;
+
+    const chunk = (byte1 << 16) | (byte2 << 8) | byte3;
+
+    output += alphabet[(chunk >> 18) & 63];
+    output += alphabet[(chunk >> 12) & 63];
+    output += i + 1 < bytes.length ? alphabet[(chunk >> 6) & 63] : "=";
+    output += i + 2 < bytes.length ? alphabet[chunk & 63] : "=";
+  }
+
+  return output
     .replace(/\+/g, "-")
     .replace(/\//g, "_")
     .replace(/=+$/, "");

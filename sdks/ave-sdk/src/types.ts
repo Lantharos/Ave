@@ -83,6 +83,7 @@ export interface TokenResponse {
 }
 
 export interface FedCmTokenResponse extends TokenResponse {
+  app_key?: string;
   encryptedAppKey?: string;
 }
 

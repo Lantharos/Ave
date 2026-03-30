@@ -1,4 +1,5 @@
 import { buildAuthorizeUrl, buildConnectorUrl, exchangeCode, exchangeFedCmAssertion, generateCodeChallenge, generateCodeVerifier, generateNonce, getApiBase } from "./index.js";
+import { isJwtVerificationSupported } from "./crypto-runtime.js";
 import { verifyJwt } from "./jwt.js";
 import type { AveIdTokenClaims, AveJwtClaims, FedCmTokenResponse, TokenResponse } from "./types.js";
 
@@ -18,6 +19,18 @@ interface FedCmOptions {
   state?: string;
   nonce?: string;
   mediation?: CredentialMediationRequirement;
+}
+
+function decodeJwtPayload(token: string): Record<string, unknown> | null {
+  try {
+    const [, payloadSegment] = token.split(".");
+    if (!payloadSegment) return null;
+    const normalized = payloadSegment.replace(/-/g, "+").replace(/_/g, "/");
+    const padded = normalized + "=".repeat((4 - (normalized.length % 4)) % 4);
+    return JSON.parse(atob(padded));
+  } catch {
+    return null;
+  }
 }
 
 // PKCE_STORAGE_KEY is the new canonical SDK storage entry.
@@ -92,6 +105,10 @@ async function verifyReturnedTokens(params: {
   idToken?: string;
   accessTokenJwt?: string;
 }): Promise<void> {
+  if (!(await isJwtVerificationSupported())) {
+    return;
+  }
+
   if (params.idToken) {
     const idPayload = await verifyJwt<AveIdTokenClaims>(params.idToken, {
       issuer: params.issuer,
@@ -205,13 +222,21 @@ export async function signInWithFedCm(params: FedCmOptions): Promise<FedCmTokenR
     throw new Error("[Ave] FedCM did not return an assertion.");
   }
 
-  return exchangeFedCmAssertion(
+  const assertionPayload = decodeJwtPayload(assertion);
+
+  const response = await exchangeFedCmAssertion(
     {
       clientId: params.clientId,
       issuer: params.issuer,
     },
     { assertion },
   );
+
+  if (typeof assertionPayload?.app_key === "string") {
+    response.app_key = assertionPayload.app_key;
+  }
+
+  return response;
 }
 
 export async function signIn(params: FedCmOptions & { preferFedCm?: boolean }): Promise<FedCmTokenResponse | null> {

@@ -546,7 +546,7 @@ app.post("/fedcm/assertion", async (c) => {
     ))
     .limit(1);
 
-  if (!existingAuth || (oauthApp.supportsE2ee && !existingAuth.encryptedAppKey)) {
+  if (oauthApp.supportsE2ee || !existingAuth) {
     const continueUrl = new URL(`${getWebBase()}/authorize`);
     continueUrl.searchParams.set("client_id", clientId);
     continueUrl.searchParams.set("redirect_uri", redirectUri);
@@ -1517,9 +1517,10 @@ app.post("/fedcm/finalize", requireAuth, zValidator("json", z.object({
   code: z.string(),
   clientId: z.string(),
   state: z.string().optional(),
+  appKey: z.string().optional(),
 })), async (c) => {
   const user = c.get("user")!;
-  const { code, clientId, state } = c.req.valid("json");
+  const { code, clientId, state, appKey } = c.req.valid("json");
 
   const authCodeResult = await getAuthorizationCode(code);
   if (!authCodeResult.value) {
@@ -1543,6 +1544,7 @@ app.post("/fedcm/finalize", requireAuth, zValidator("json", z.object({
     sid: authCode.userId,
     typ: "ave_fedcm",
     code,
+    app_key: appKey || undefined,
     client_id: clientId,
     redirect_uri: authCode.redirectUri,
     state: state || undefined,

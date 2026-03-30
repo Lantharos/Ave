@@ -21,12 +21,15 @@ Use FedCM when you want the smoothest possible sign-in UX for browser apps:
 
 ## E2EE behavior
 
-FedCM works with Ave's end-to-end encryption model too, but there are two modes:
+FedCM works with Ave's end-to-end encryption model too, but with an important detail:
 
-- **Existing authorization**: if Ave already has an `encryptedAppKey` stored for the chosen identity and app, FedCM can complete directly.
-- **First-time authorization / missing key**: Ave uses a continuation dialog to finish consent and create/store the encrypted app key, then resumes the FedCM flow.
+- Ave's authorization UI on `aveid.net` is still the place that unlocks the user's master key and prepares the plaintext app key handoff.
+- Because of that, E2EE apps use a **FedCM continuation dialog** rather than a fully in-page direct FedCM completion.
 
-That means you keep compatibility with the existing E2EE model while gaining a faster repeat-login path.
+In practice:
+
+- **Non-E2EE apps** can complete directly in the initial FedCM exchange.
+- **E2EE apps** start with FedCM, then continue in an Ave dialog, and finally return the plaintext `app_key` through the completed FedCM assertion.
 
 ## SDK usage
 
@@ -62,7 +65,7 @@ const tokens = await signInWithFedCm({
 
 ## Returned data
 
-FedCM exchange returns the normal token payload plus `encryptedAppKey` when Ave has one for the selected app/identity:
+FedCM exchange returns the normal token payload. For E2EE apps, the completed FedCM result may also include `app_key` when the continuation dialog finished the Ave-side unlock flow:
 
 ```json
 {
@@ -72,11 +75,11 @@ FedCM exchange returns the normal token payload plus `encryptedAppKey` when Ave 
   "refresh_token": "...",
   "expires_in": 3600,
   "scope": "openid profile email",
-  "encryptedAppKey": "base64..."
+  "app_key": "base64..."
 }
 ```
 
-`encryptedAppKey` is still encrypted under the user's master key. Your app must unlock locally the same way it does today.
+This keeps compatibility with the current Ave E2EE model, where Ave's authorization UI performs the key-unlock work and hands the plaintext app key to the RP.
 
 ## Fallback model
 

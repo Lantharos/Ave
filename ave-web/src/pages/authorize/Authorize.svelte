@@ -309,6 +309,7 @@
                     code,
                     clientId: params.clientId,
                     state: params.state || undefined,
+                    appKey: rawAppKey || undefined,
                 });
 
                 (window as any).IdentityProvider.resolve(finalized.assertion);

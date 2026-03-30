@@ -60,6 +60,7 @@
           {
             "group": "Frameworks",
             "pages": [
+              "guides/expo-auth-session",
               "guides/convex-custom-auth"
             ]
           }

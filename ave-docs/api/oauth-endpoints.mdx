@@ -159,7 +159,7 @@ Used by Ave's continuation UI to turn a completed consent step into a short-live
 
 ### `POST /api/oauth/fedcm/exchange`
 
-Exchanges a FedCM assertion for the normal token payload. For E2EE apps, this may also return `encryptedAppKey` when Ave already has one stored for the selected app/identity.
+Exchanges a FedCM assertion for the normal token payload. For E2EE apps, the signed FedCM assertion can also carry `app_key` after Ave's continuation dialog completes the existing key-unlock flow.
 
 ## `GET /api/oauth/userinfo`
 

@@ -241,7 +241,7 @@ async function signInWithFedCm(params: {
 }): Promise<FedCmTokenResponse>
 ```
 
-Ave returns the normal token payload plus `encryptedAppKey` when the selected app/identity already has one stored. If the app needs a first-time consent or E2EE setup step, Ave continues in a FedCM dialog and then resumes automatically.
+Ave returns the normal token payload. For E2EE apps, Ave continues in a FedCM dialog so the existing Ave authorization UI can unlock the user's master key and prepare the plaintext `app_key` handoff before resuming automatically.
 
 ---
 

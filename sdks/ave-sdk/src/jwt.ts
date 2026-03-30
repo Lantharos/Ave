@@ -1,3 +1,4 @@
+import { resolveSubtleCrypto } from "./crypto-runtime.js";
 import type { AveJwtClaims, JwkKey, JwksResponse, JwtHeader, JwtPayload, OidcConfiguration, VerifyJwtOptions } from "./types.js";
 
 const DEFAULT_ISSUER = "https://aveid.net";
@@ -108,10 +109,6 @@ function base64UrlDecode(input: string): Uint8Array {
   }
 
   throw new Error("No base64 decoder available in this environment");
-}
-
-function getSubtleCrypto(): SubtleCrypto | null {
-  return globalThis.crypto?.subtle ?? null;
 }
 
 function parseJwtPart<T>(value: string): T | null {
@@ -241,7 +238,7 @@ export async function verifyJwt<T extends JwtPayload = AveJwtClaims>(
     return null;
   }
 
-  const subtle = getSubtleCrypto();
+  const subtle = await resolveSubtleCrypto();
   if (!subtle) {
     return null;
   }
