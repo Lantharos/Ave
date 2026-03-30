@@ -60,7 +60,17 @@ window.location.href = url;
 ## Client helpers
 
 ```ts
-import { finishPkceLogin, startPkceLogin } from "@ave-id/sdk/client";
+import { finishPkceLogin, signIn, startPkceLogin } from "@ave-id/sdk/client";
+
+// Smart path: tries FedCM first, falls back to PKCE redirect when needed.
+const fedcmResult = await signIn({
+  clientId: "YOUR_CLIENT_ID",
+  redirectUri: "https://yourapp.com/callback",
+});
+
+if (fedcmResult) {
+  console.log(fedcmResult.access_token, fedcmResult.encryptedAppKey);
+}
 
 await startPkceLogin({
   clientId: "YOUR_CLIENT_ID",

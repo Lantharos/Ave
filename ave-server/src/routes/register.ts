@@ -252,6 +252,7 @@ app.post("/complete", zValidator("json", completeRegistrationSchema), async (c) 
   await deleteChallenge("registration", data.tempUserId);
   
   setSessionCookie(c, result.sessionToken, new Date(Date.now() + 30 * 24 * 60 * 60 * 1000));
+  c.header("Set-Login", "logged-in");
 
   return c.json({
     success: true,

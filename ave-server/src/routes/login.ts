@@ -359,6 +359,7 @@ app.post("/passkey", zValidator("json", z.object({
       });
 
     setSessionCookie(c, sessionToken, expiresAt);
+    c.header("Set-Login", "logged-in");
     
     // Log activity
     await db.insert(activityLogs).values({
@@ -566,6 +567,7 @@ app.get("/request-status/:requestId", async (c) => {
       });
 
     setSessionCookie(c, sessionToken, expiresAt);
+    c.header("Set-Login", "logged-in");
     
     // Log activity
     await db.insert(activityLogs).values({
@@ -756,6 +758,7 @@ app.post("/trust-code", zValidator("json", z.object({
   });
 
   setSessionCookie(c, sessionToken, expiresAt);
+  c.header("Set-Login", "logged-in");
   
   // Log activity
   await db.insert(activityLogs).values({
@@ -922,6 +925,7 @@ app.post("/logout", async (c) => {
   }
 
   clearSessionCookie(c);
+  c.header("Set-Login", "logged-out");
   return c.json({ success: true });
 });
 

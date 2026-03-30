@@ -84,8 +84,10 @@
 				scope: searchParams.get("scope") || "openid profile email",
 				state: searchParams.get("state") || "",
 				nonce: searchParams.get("nonce") || "",
+                identityId: searchParams.get("identity_id") || "",
 				resource: searchParams.get("resource") || "",
 				embed: searchParams.get("embed") === "1",
+                fedcmContinue: searchParams.get("fedcm_continue") === "1",
 				codeChallenge: codeChallenge || undefined,
 				codeChallengeMethod: (codeChallengeMethod === "S256" || codeChallengeMethod === "plain") ? codeChallengeMethod : undefined,
 			};
@@ -192,11 +194,14 @@
             }
 
             const authState = get(auth);
+            const preferredIdentity = params.identityId
+                ? authState.identities.find((i) => i.id === params.identityId) || null
+                : null;
             const existingIdentity = existingAuth
                 ? authState.identities.find((i) => i.id === existingAuth!.identityId)
                 : null;
 
-            selectedIdentity = existingIdentity || authState.currentIdentity || authState.identities[0] || null;
+            selectedIdentity = preferredIdentity || existingIdentity || authState.currentIdentity || authState.identities[0] || null;
 
             const shouldAutoAuthorize = !!existingAuth && !!existingIdentity && (!bootstrap.app.supportsE2ee || hasMasterKey());
 
@@ -293,6 +298,24 @@
             }
             
             const result = await api.oauth.authorize(authData);
+
+            if (params.fedcmContinue && typeof window !== "undefined" && "IdentityProvider" in window) {
+                const code = new URL(result.redirectUrl).searchParams.get("code");
+                if (!code) {
+                    throw new Error("FedCM authorization did not return a code");
+                }
+
+                const finalized = await api.oauth.fedcmFinalize({
+                    code,
+                    clientId: params.clientId,
+                    state: params.state || undefined,
+                });
+
+                (window as any).IdentityProvider.resolve(finalized.assertion);
+                completed = true;
+                authorizing = false;
+                return;
+            }
             
             // For E2EE apps, append the app key as a URL fragment (not sent to server)
             let redirectUrl = result.redirectUrl;
@@ -422,6 +445,12 @@
 
 
     function handleDeny() {
+        if (params.fedcmContinue && typeof window !== "undefined" && "IdentityProvider" in window) {
+            (window as any).IdentityProvider.close();
+            completed = true;
+            return;
+        }
+
         // Redirect back with error
         const redirectUrl = new URL(params.redirectUri);
         redirectUrl.searchParams.set("error", "access_denied");

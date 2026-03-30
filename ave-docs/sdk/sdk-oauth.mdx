@@ -14,7 +14,7 @@ npm install @ave-id/sdk
 | Import | Contents | Runtime |
 |---|---|---|
 | `@ave-id/sdk` | Core OAuth, PKCE helpers, `verifyJwt`, `fetchJwks` | Browser or Node |
-| `@ave-id/sdk/client` | `startPkceLogin`, `finishPkceLogin` — browser redirect helpers | Browser only |
+| `@ave-id/sdk/client` | `startPkceLogin`, `finishPkceLogin`, `signIn`, `signInWithFedCm` — browser redirect + FedCM helpers | Browser only |
 | `@ave-id/sdk/server` | `exchangeCodeServer`, `refreshTokenServer`, `verifyJwt` — uses `clientSecret` | Server only |
 
 <Warning>
@@ -214,6 +214,82 @@ Returns `UserInfo` with `sub`, `name?`, `preferred_username?`, `email?`, `pictur
 ## Client helpers
 
 Import from `@ave-id/sdk/client`. Browser-only.
+
+### `supportsFedCm()`
+
+Checks whether the current browser environment is eligible to attempt FedCM.
+
+```ts
+function supportsFedCm(): boolean
+```
+
+---
+
+### `signInWithFedCm(params)`
+
+Attempts a browser-native FedCM sign-in and returns tokens immediately without a redirect callback.
+
+```ts
+async function signInWithFedCm(params: {
+  clientId: string;
+  redirectUri: string;
+  scope?: string;
+  issuer?: string;
+  state?: string;
+  nonce?: string;
+  mediation?: CredentialMediationRequirement;
+}): Promise<FedCmTokenResponse>
+```
+
+Ave returns the normal token payload plus `encryptedAppKey` when the selected app/identity already has one stored. If the app needs a first-time consent or E2EE setup step, Ave continues in a FedCM dialog and then resumes automatically.
+
+---
+
+### `signIn(params)`
+
+Smart sign-in helper for browser apps.
+
+It tries FedCM first when available, and falls back to the standard PKCE redirect flow when it isn't.
+
+```ts
+async function signIn(params: {
+  clientId: string;
+  redirectUri: string;
+  scope?: string;
+  issuer?: string;
+  state?: string;
+  nonce?: string;
+  mediation?: CredentialMediationRequirement;
+  preferFedCm?: boolean;
+}): Promise<FedCmTokenResponse | null>
+```
+
+Returns:
+
+- `FedCmTokenResponse` when FedCM completes in-page
+- `null` when the helper falls back to `startPkceLogin()` and redirects the browser
+
+```ts
+import { finishPkceLogin, signIn } from "@ave-id/sdk/client";
+
+const result = await signIn({
+  clientId: "YOUR_CLIENT_ID",
+  redirectUri: "https://yourapp.com/callback",
+  scope: "openid profile email offline_access",
+});
+
+if (result) {
+  // FedCM completed immediately
+} else {
+  // Browser redirected for PKCE fallback
+}
+
+// On your callback page:
+const tokens = await finishPkceLogin({
+  clientId: "YOUR_CLIENT_ID",
+  redirectUri: "https://yourapp.com/callback",
+});
+```
 
 ### `startPkceLogin(params)`
 

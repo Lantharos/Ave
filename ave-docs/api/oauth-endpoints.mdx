@@ -134,6 +134,33 @@ Validates token hash record, revoked/reuse/expiry state, then rotates refresh to
 
 Exchanges source app token for delegated target token after grant and scope checks.
 
+## FedCM endpoints
+
+Ave also exposes an additive FedCM flow for supported browsers.
+
+### `GET /api/oauth/fedcm/config`
+
+Returns the Ave FedCM provider configuration.
+
+### `GET /api/oauth/fedcm/accounts`
+
+Returns the currently signed-in Ave identities for the browser session.
+
+### `POST /api/oauth/fedcm/assertion`
+
+Returns either:
+
+- a short-lived Ave FedCM assertion token, or
+- a `continue_on` URL when consent or E2EE setup must finish in a dialog
+
+### `POST /api/oauth/fedcm/finalize`
+
+Used by Ave's continuation UI to turn a completed consent step into a short-lived FedCM assertion.
+
+### `POST /api/oauth/fedcm/exchange`
+
+Exchanges a FedCM assertion for the normal token payload. For E2EE apps, this may also return `encryptedAppKey` when Ave already has one stored for the selected app/identity.
+
 ## `GET /api/oauth/userinfo`
 
 Authorization: `Bearer <access_token_or_access_token_jwt>`

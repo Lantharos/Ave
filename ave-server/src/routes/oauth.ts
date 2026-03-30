@@ -7,7 +7,7 @@ import { eq, and, isNull, desc } from "drizzle-orm";
 import { randomUUID, timingSafeEqual } from "crypto";
 import { hashSessionToken } from "../lib/crypto";
 import { getIssuer, getResourceAudience, getJwtPublicJwk, signJwt, verifyJwt, hashToken } from "../lib/oidc";
-import { consumeAuthorizationCode, getAccessToken, setAccessToken, setAuthorizationCode } from "../lib/oauth-store";
+import { consumeAuthorizationCode, getAccessToken, getAuthorizationCode, setAccessToken, setAuthorizationCode } from "../lib/oauth-store";
 
 const app = new Hono();
 export const oidcRoutes = new Hono();
@@ -76,6 +76,14 @@ function parseScopes(scope: string): string[] {
   return scope.split(" ").map((s) => s.trim()).filter(Boolean);
 }
 
+function getWebBase(): string {
+  return process.env.RP_ORIGIN || "https://aveid.net";
+}
+
+function getApiBase(): string {
+  return process.env.OIDC_DISCOVERY_BASE || "https://api.aveid.net";
+}
+
 function hasScope(scope: string, requested: string): boolean {
   return parseScopes(scope).includes(requested);
 }
@@ -83,6 +91,187 @@ function hasScope(scope: string, requested: string): boolean {
 function hasAllScopes(grantedScope: string, requestedScope: string): boolean {
   const granted = new Set(parseScopes(grantedScope));
   return parseScopes(requestedScope).every((scope) => granted.has(scope));
+}
+
+function ensureFedCmRequest(c: any): Response | null {
+  const destination = c.req.header("Sec-Fetch-Dest");
+  if (destination !== "webidentity") {
+    return c.json({ error: "invalid_request", error_description: "FedCM requests must include Sec-Fetch-Dest: webidentity" }, 400);
+  }
+  return null;
+}
+
+function setLoginStatusHeader(c: any, status: "logged-in" | "logged-out") {
+  c.header("Set-Login", status);
+}
+
+async function resolveOauthAppForClient(clientId: string) {
+  if (isQuickClient(clientId)) {
+    return null;
+  }
+
+  const [app] = await db
+    .select()
+    .from(oauthApps)
+    .where(eq(oauthApps.clientId, clientId))
+    .limit(1);
+
+  return app ?? null;
+}
+
+function isAllowedClientOriginForApp(oauthApp: typeof oauthApps.$inferSelect, origin: string): boolean {
+  const allowedOrigins = new Set<string>();
+
+  for (const redirectUri of (oauthApp.redirectUris || []) as string[]) {
+    try {
+      allowedOrigins.add(new URL(redirectUri).origin);
+    } catch {
+    }
+  }
+
+  if (oauthApp.websiteUrl) {
+    try {
+      allowedOrigins.add(new URL(oauthApp.websiteUrl).origin);
+    } catch {
+    }
+  }
+
+  return allowedOrigins.has(origin);
+}
+
+async function issueAuthorizationCodeForApp(params: {
+  userId: string;
+  appId: string;
+  identityId: string;
+  redirectUri: string;
+  scope: string;
+  nonce?: string;
+  encryptedAppKey?: string;
+}) {
+  const code = generateAuthCode();
+
+  await setAuthorizationCode(code, {
+    userId: params.userId,
+    appId: params.appId,
+    identityId: params.identityId,
+    redirectUri: params.redirectUri,
+    scope: params.scope,
+    expiresAt: Date.now() + 10 * 60 * 1000,
+    encryptedAppKey: params.encryptedAppKey,
+    nonce: params.nonce,
+  });
+
+  return code;
+}
+
+async function buildTokenResponseFromAuthorizationCode(params: {
+  authCode: {
+    userId: string;
+    identityId: string;
+    scope: string;
+    nonce?: string;
+    encryptedAppKey?: string;
+  };
+  oauthApp: ReturnType<typeof buildQuickApp> | typeof oauthApps.$inferSelect;
+  clientId: string;
+  redirectUri: string;
+  includeEncryptedAppKey?: boolean;
+}) {
+  const { authCode, oauthApp, clientId, redirectUri, includeEncryptedAppKey } = params;
+
+  const accessToken = generateAccessToken();
+  const accessTokenTtl = oauthApp.accessTokenTtlSeconds || 3600;
+  const refreshTokenTtl = oauthApp.refreshTokenTtlSeconds || 30 * 24 * 60 * 60;
+
+  await setAccessToken(accessToken, {
+    userId: authCode.userId,
+    identityId: authCode.identityId,
+    appId: oauthApp.id,
+    scope: authCode.scope,
+    expiresAt: Date.now() + accessTokenTtl * 1000,
+    redirectUri,
+  });
+
+  const [identity] = await db
+    .select()
+    .from(identities)
+    .where(eq(identities.id, authCode.identityId))
+    .limit(1);
+
+  const subject = authCode.identityId;
+  const issuedAt = nowSeconds();
+  const expiresAt = issuedAt + accessTokenTtl;
+
+  const response: Record<string, unknown> = {
+    access_token: accessToken,
+    token_type: "Bearer",
+    expires_in: accessTokenTtl,
+    scope: authCode.scope,
+    user: identity ? {
+      id: identity.id,
+      handle: identity.handle,
+      displayName: identity.displayName,
+      email: identity.email,
+      avatarUrl: identity.avatarUrl,
+    } : null,
+  };
+
+  const jwtAccessToken = await signJwt({
+    iss: getIssuer(),
+    sub: subject,
+    aud: getResourceAudience(),
+    exp: expiresAt,
+    iat: issuedAt,
+    scope: authCode.scope,
+    cid: oauthApp.clientId,
+    sid: authCode.userId,
+    uid: hasScope(authCode.scope, "user_id") && oauthApp.allowUserIdScope ? authCode.userId : undefined,
+    ...(isQuickClient(clientId) ? { quick: true } : {}),
+  });
+
+  response.access_token_jwt = jwtAccessToken;
+
+  if (hasScope(authCode.scope, "user_id") && oauthApp.allowUserIdScope) {
+    response.user_id = authCode.userId;
+  }
+
+  if (hasScope(authCode.scope, "openid")) {
+    const idToken = await signJwt({
+      iss: getIssuer(),
+      sub: subject,
+      aud: oauthApp.clientId,
+      exp: expiresAt,
+      iat: issuedAt,
+      auth_time: issuedAt,
+      azp: oauthApp.clientId,
+      sid: authCode.userId,
+      nonce: authCode.nonce,
+      name: hasScope(authCode.scope, "profile") ? identity?.displayName : undefined,
+      preferred_username: hasScope(authCode.scope, "profile") ? identity?.handle : undefined,
+      email: hasScope(authCode.scope, "email") ? identity?.email : undefined,
+      picture: hasScope(authCode.scope, "profile") ? identity?.avatarUrl : undefined,
+    });
+    response.id_token = idToken;
+  }
+
+  if (hasScope(authCode.scope, "offline_access") && !isQuickClient(clientId)) {
+    const refreshToken = generateRefreshToken();
+    await db.insert(oauthRefreshTokens).values({
+      userId: authCode.userId,
+      identityId: authCode.identityId,
+      appId: oauthApp.id,
+      tokenHash: hashToken(refreshToken),
+      scope: authCode.scope,
+      expiresAt: new Date(Date.now() + refreshTokenTtl * 1000),
+    });
+    response.refresh_token = refreshToken;
+  }
+
+  if (includeEncryptedAppKey && authCode.encryptedAppKey) {
+    response.encryptedAppKey = authCode.encryptedAppKey;
+  }
+
+  return response;
 }
 
 // ============================================
@@ -211,6 +400,191 @@ app.get("/resource/:resourceKey", async (c) => {
   }
 
   return c.json({ resource });
+});
+
+app.get("/fedcm/config", async (c) => {
+  c.header("Cache-Control", "public, max-age=300");
+
+  return c.json({
+    accounts_endpoint: `${getApiBase()}/api/oauth/fedcm/accounts`,
+    id_assertion_endpoint: `${getApiBase()}/api/oauth/fedcm/assertion`,
+    client_metadata_endpoint: `${getApiBase()}/api/oauth/fedcm/client-metadata`,
+    login_url: `${getWebBase()}/login`,
+  });
+});
+
+app.get("/fedcm/client-metadata", async (c) => {
+  const clientId = c.req.query("client_id") || "";
+  const oauthApp = await resolveOauthAppForClient(clientId);
+
+  if (!oauthApp) {
+    return c.json({ privacy_policy_url: `${getWebBase()}/privacy`, terms_of_service_url: `${getWebBase()}/terms` });
+  }
+
+  let appOrigin: string | null = null;
+  try {
+    appOrigin = oauthApp.websiteUrl ? new URL(oauthApp.websiteUrl).origin : null;
+  } catch {
+    appOrigin = null;
+  }
+
+  return c.json({
+    privacy_policy_url: appOrigin ? `${appOrigin}/privacy` : `${getWebBase()}/privacy`,
+    terms_of_service_url: appOrigin ? `${appOrigin}/terms` : `${getWebBase()}/terms`,
+  });
+});
+
+app.get("/fedcm/accounts", async (c) => {
+  const fedcmError = ensureFedCmRequest(c);
+  if (fedcmError) return fedcmError;
+
+  const user = c.get("user");
+  if (!user) {
+    setLoginStatusHeader(c, "logged-out");
+    return c.json({ accounts: [] }, 401);
+  }
+
+  setLoginStatusHeader(c, "logged-in");
+
+  const [userIdentities, authorizations] = await Promise.all([
+    db
+      .select()
+      .from(identities)
+      .where(eq(identities.userId, user.id)),
+    db
+      .select({
+        identityId: oauthAuthorizations.identityId,
+        clientId: oauthApps.clientId,
+      })
+      .from(oauthAuthorizations)
+      .innerJoin(oauthApps, eq(oauthAuthorizations.appId, oauthApps.id))
+      .where(eq(oauthAuthorizations.userId, user.id)),
+  ]);
+
+  const approvedClientsByIdentity = new Map<string, string[]>();
+  for (const authorization of authorizations) {
+    const existing = approvedClientsByIdentity.get(authorization.identityId) || [];
+    existing.push(authorization.clientId);
+    approvedClientsByIdentity.set(authorization.identityId, existing);
+  }
+
+  return c.json({
+    accounts: userIdentities.map((identity) => ({
+      id: identity.id,
+      given_name: identity.displayName.split(" ")[0] || identity.displayName,
+      name: identity.displayName,
+      email: identity.email || `${identity.handle}@aveid.net`,
+      picture: identity.avatarUrl || undefined,
+      approved_clients: approvedClientsByIdentity.get(identity.id) || [],
+      login_hints: [identity.handle, identity.id],
+    })),
+  });
+});
+
+app.post("/fedcm/assertion", async (c) => {
+  const fedcmError = ensureFedCmRequest(c);
+  if (fedcmError) return fedcmError;
+
+  const user = c.get("user");
+  if (!user) {
+    setLoginStatusHeader(c, "logged-out");
+    return c.json({ error: { code: "access_denied", url: `${getWebBase()}/login` } }, 401);
+  }
+
+  setLoginStatusHeader(c, "logged-in");
+
+  const form = await c.req.parseBody();
+  const clientId = String(form.client_id || "");
+  const accountId = String(form.account_id || "");
+  const origin = c.req.header("Origin") || "";
+  const rawParams = String(form.params || "");
+
+  let extraParams: Record<string, unknown> = {};
+  if (rawParams) {
+    try {
+      extraParams = JSON.parse(rawParams);
+    } catch {
+      return c.json({ error: { code: "invalid_request", url: `${getWebBase()}/docs` } }, 400);
+    }
+  }
+
+  const redirectUri = typeof extraParams.redirectUri === "string" ? extraParams.redirectUri : "";
+  const scope = typeof extraParams.scope === "string" ? extraParams.scope : "openid profile email";
+  const state = typeof extraParams.state === "string" ? extraParams.state : "";
+  const nonce = typeof extraParams.nonce === "string" ? extraParams.nonce : undefined;
+
+  const oauthApp = await resolveOauthAppForClient(clientId);
+  if (!oauthApp) {
+    return c.json({ error: { code: "unauthorized_client", url: `${getWebBase()}/docs` } }, 400);
+  }
+
+  if (!origin || !isAllowedClientOriginForApp(oauthApp, origin)) {
+    return c.json({ error: { code: "access_denied", url: `${getWebBase()}/docs` } }, 403);
+  }
+
+  if (!redirectUri || !(oauthApp.redirectUris as string[]).includes(redirectUri)) {
+    return c.json({ error: { code: "invalid_request", url: `${getWebBase()}/docs` } }, 400);
+  }
+
+  const [identity] = await db
+    .select()
+    .from(identities)
+    .where(and(eq(identities.id, accountId), eq(identities.userId, user.id)))
+    .limit(1);
+
+  if (!identity) {
+    return c.json({ error: { code: "access_denied", url: `${getWebBase()}/login` } }, 403);
+  }
+
+  const [existingAuth] = await db
+    .select()
+    .from(oauthAuthorizations)
+    .where(and(
+      eq(oauthAuthorizations.userId, user.id),
+      eq(oauthAuthorizations.appId, oauthApp.id),
+      eq(oauthAuthorizations.identityId, identity.id),
+    ))
+    .limit(1);
+
+  if (!existingAuth || (oauthApp.supportsE2ee && !existingAuth.encryptedAppKey)) {
+    const continueUrl = new URL(`${getWebBase()}/authorize`);
+    continueUrl.searchParams.set("client_id", clientId);
+    continueUrl.searchParams.set("redirect_uri", redirectUri);
+    continueUrl.searchParams.set("scope", scope);
+    if (state) continueUrl.searchParams.set("state", state);
+    if (nonce) continueUrl.searchParams.set("nonce", nonce);
+    continueUrl.searchParams.set("identity_id", identity.id);
+    continueUrl.searchParams.set("fedcm_continue", "1");
+
+    return c.json({ continue_on: continueUrl.toString() });
+  }
+
+  const code = await issueAuthorizationCodeForApp({
+    userId: user.id,
+    appId: oauthApp.id,
+    identityId: identity.id,
+    redirectUri,
+    scope,
+    nonce,
+    encryptedAppKey: existingAuth.encryptedAppKey || undefined,
+  });
+
+  const assertion = await signJwt({
+    iss: getIssuer(),
+    aud: clientId,
+    sub: identity.id,
+    sid: user.id,
+    typ: "ave_fedcm",
+    code,
+    client_id: clientId,
+    redirect_uri: redirectUri,
+    state: state || undefined,
+    nonce,
+    exp: nowSeconds() + 5 * 60,
+    iat: nowSeconds(),
+  });
+
+  return c.json({ token: assertion });
 });
 
 app.get("/authorize/bootstrap/:clientId", requireAuth, async (c) => {
@@ -1005,98 +1379,12 @@ app.post("/token", zValidator("json", z.discriminatedUnion("grantType", [
     return c.json({ error: "invalid_scope", error_description: `Invalid scopes: ${invalidScopes.join(", ")}` }, 400);
   }
 
-  // Generate access token
-  const accessToken = generateAccessToken();
-  const accessTokenTtl = oauthApp.accessTokenTtlSeconds || 3600;
-  const refreshTokenTtl = oauthApp.refreshTokenTtlSeconds || 30 * 24 * 60 * 60;
-
-  await setAccessToken(accessToken, {
-    userId: authCode.userId,
-    identityId: authCode.identityId,
-    appId: authCode.appId,
-    scope: authCode.scope,
-    expiresAt: Date.now() + accessTokenTtl * 1000,
+  const response = await buildTokenResponseFromAuthorizationCode({
+    authCode,
+    oauthApp,
+    clientId,
     redirectUri,
   });
-  
-  // Get identity info
-  const [identity] = await db
-    .select()
-    .from(identities)
-    .where(eq(identities.id, authCode.identityId))
-    .limit(1);
-
-  const subject = authCode.identityId;
-  const issuedAt = nowSeconds();
-  const expiresAt = issuedAt + accessTokenTtl;
-  
-  // Build response
-  const response: Record<string, unknown> = {
-    access_token: accessToken,
-    token_type: "Bearer",
-    expires_in: accessTokenTtl,
-    scope: authCode.scope,
-    user: identity ? {
-      id: identity.id,
-      handle: identity.handle,
-      displayName: identity.displayName,
-      email: identity.email,
-      avatarUrl: identity.avatarUrl,
-    } : null,
-  };
-
-  const jwtAccessToken = await signJwt({
-    iss: getIssuer(),
-    sub: subject,
-    aud: getResourceAudience(),
-    exp: expiresAt,
-    iat: issuedAt,
-    scope: authCode.scope,
-    cid: oauthApp.clientId,
-    sid: authCode.userId,
-    uid: hasScope(authCode.scope, "user_id") && oauthApp.allowUserIdScope ? authCode.userId : undefined,
-    // Mark Quick Ave tokens so Standard-only API middleware can reject them
-    ...(isQuickClient(clientId) ? { quick: true } : {}),
-  });
-
-    response.access_token_jwt = jwtAccessToken;
-
-
-  if (hasScope(authCode.scope, "user_id") && oauthApp.allowUserIdScope) {
-    response.user_id = authCode.userId;
-  }
-
-  if (hasScope(authCode.scope, "openid")) {
-    const idToken = await signJwt({
-      iss: getIssuer(),
-      sub: subject,
-      aud: oauthApp.clientId,
-      exp: expiresAt,
-      iat: issuedAt,
-      auth_time: issuedAt,
-      azp: oauthApp.clientId,
-      sid: authCode.userId,
-      nonce: authCode.nonce,
-      name: hasScope(authCode.scope, "profile") ? identity?.displayName : undefined,
-      preferred_username: hasScope(authCode.scope, "profile") ? identity?.handle : undefined,
-      email: hasScope(authCode.scope, "email") ? identity?.email : undefined,
-      picture: hasScope(authCode.scope, "profile") ? identity?.avatarUrl : undefined,
-    });
-    response.id_token = idToken;
-  }
-
-  if (hasScope(authCode.scope, "offline_access") && !isQuickClient(clientId)) {
-    const refreshToken = generateRefreshToken();
-    await db.insert(oauthRefreshTokens).values({
-      userId: authCode.userId,
-      identityId: authCode.identityId,
-      appId: authCode.appId,
-      tokenHash: hashToken(refreshToken),
-      scope: authCode.scope,
-      expiresAt: new Date(Date.now() + refreshTokenTtl * 1000),
-    });
-    response.refresh_token = refreshToken;
-  }
   
   // Note: the app key is NOT included in the JSON token response.
   // The Ave authorization UI decrypts the server-stored encrypted key using the user's master key
@@ -1223,6 +1511,97 @@ app.post("/session/check", async (c) => {
   }
 
   return c.json({ status: "active" });
+});
+
+app.post("/fedcm/finalize", requireAuth, zValidator("json", z.object({
+  code: z.string(),
+  clientId: z.string(),
+  state: z.string().optional(),
+})), async (c) => {
+  const user = c.get("user")!;
+  const { code, clientId, state } = c.req.valid("json");
+
+  const authCodeResult = await getAuthorizationCode(code);
+  if (!authCodeResult.value) {
+    return c.json({ error: "invalid_grant" }, 400);
+  }
+
+  const authCode = authCodeResult.value;
+  if (authCode.userId !== user.id) {
+    return c.json({ error: "access_denied" }, 403);
+  }
+
+  const oauthApp = await resolveOauthAppForClient(clientId);
+  if (!oauthApp || oauthApp.id !== authCode.appId) {
+    return c.json({ error: "invalid_client" }, 400);
+  }
+
+  const assertion = await signJwt({
+    iss: getIssuer(),
+    aud: clientId,
+    sub: authCode.identityId,
+    sid: authCode.userId,
+    typ: "ave_fedcm",
+    code,
+    client_id: clientId,
+    redirect_uri: authCode.redirectUri,
+    state: state || undefined,
+    nonce: authCode.nonce,
+    exp: nowSeconds() + 5 * 60,
+    iat: nowSeconds(),
+  });
+
+  return c.json({ assertion });
+});
+
+app.post("/fedcm/exchange", zValidator("json", z.object({
+  assertion: z.string(),
+  clientId: z.string(),
+})), async (c) => {
+  const { assertion, clientId } = c.req.valid("json");
+  const assertionPayload = await verifyJwt(assertion, clientId);
+
+  if (!assertionPayload || assertionPayload.typ !== "ave_fedcm") {
+    return c.json({ error: "invalid_grant", error_description: "Invalid FedCM assertion" }, 400);
+  }
+
+  if (String(assertionPayload.client_id || "") !== clientId) {
+    return c.json({ error: "invalid_client", error_description: "Client mismatch" }, 400);
+  }
+
+  const code = String(assertionPayload.code || "");
+  const redirectUri = String(assertionPayload.redirect_uri || "");
+  if (!code || !redirectUri) {
+    return c.json({ error: "invalid_request", error_description: "Malformed FedCM assertion" }, 400);
+  }
+
+  const oauthApp = await resolveOauthAppForClient(clientId);
+  if (!oauthApp) {
+    return c.json({ error: "invalid_client", error_description: "Client not found" }, 400);
+  }
+
+  const authCodeResult = await consumeAuthorizationCode(code);
+  if (!authCodeResult.value) {
+    return c.json({
+      error: "invalid_grant",
+      error_description: authCodeResult.expired ? "Authorization code expired" : "Authorization code not found",
+    }, 400);
+  }
+
+  const authCode = authCodeResult.value;
+  if (authCode.redirectUri !== redirectUri || authCode.appId !== oauthApp.id) {
+    return c.json({ error: "invalid_grant", error_description: "FedCM assertion does not match authorization" }, 400);
+  }
+
+  const response = await buildTokenResponseFromAuthorizationCode({
+    authCode,
+    oauthApp,
+    clientId,
+    redirectUri,
+    includeEncryptedAppKey: true,
+  });
+
+  return c.json(response);
 });
 
 app.get("/session/bootstrap", requireAuth, async (c) => {

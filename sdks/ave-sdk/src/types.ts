@@ -82,6 +82,10 @@ export interface TokenResponse {
   user_id?: string;
 }
 
+export interface FedCmTokenResponse extends TokenResponse {
+  encryptedAppKey?: string;
+}
+
 export interface UserInfo {
   sub: string;
   name?: string;

@@ -600,6 +600,12 @@ export const api = {
         timeoutMs,
       }),
 
+    fedcmFinalize: (data: { code: string; clientId: string; state?: string }) =>
+      request<{ assertion: string }>("/api/oauth/fedcm/finalize", {
+        method: "POST",
+        body: JSON.stringify(data),
+      }),
+
     getApp: (clientId: string) =>
       request<{
         app: {

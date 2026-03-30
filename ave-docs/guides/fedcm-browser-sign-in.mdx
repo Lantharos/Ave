@@ -1,0 +1,89 @@
+---
+title: "FedCM browser sign-in"
+description: "Use Ave with the browser's FedCM account chooser for a faster sign-in path, with fallback to the standard redirect flow."
+---
+
+FedCM gives registered Ave apps a faster browser-native sign-in path on supported browsers, without depending on third-party cookies as the primary transport.
+
+Ave's FedCM flow is **additive**:
+
+- Existing redirect + PKCE integrations keep working unchanged
+- FedCM is a new browser-only happy path for supported environments
+- If FedCM is unavailable, your app falls back to the normal PKCE redirect flow
+
+## When to use it
+
+Use FedCM when you want the smoothest possible sign-in UX for browser apps:
+
+- Chromium-based browsers with FedCM support
+- Registered Ave apps with a stable `clientId`
+- Apps that already use PKCE today and want a faster first step
+
+## E2EE behavior
+
+FedCM works with Ave's end-to-end encryption model too, but there are two modes:
+
+- **Existing authorization**: if Ave already has an `encryptedAppKey` stored for the chosen identity and app, FedCM can complete directly.
+- **First-time authorization / missing key**: Ave uses a continuation dialog to finish consent and create/store the encrypted app key, then resumes the FedCM flow.
+
+That means you keep compatibility with the existing E2EE model while gaining a faster repeat-login path.
+
+## SDK usage
+
+```ts
+import { signIn } from "@ave-id/sdk/client";
+
+const result = await signIn({
+  clientId: "YOUR_CLIENT_ID",
+  redirectUri: "https://yourapp.com/callback",
+  scope: "openid profile email offline_access",
+});
+
+if (result) {
+  // FedCM path resolved immediately in-page.
+  // result.access_token, result.id_token, result.encryptedAppKey, ...
+} else {
+  // Browser fell back to the standard PKCE redirect flow.
+  // The page will navigate away, then you finish with finishPkceLogin().
+}
+```
+
+If you want FedCM only:
+
+```ts
+import { signInWithFedCm } from "@ave-id/sdk/client";
+
+const tokens = await signInWithFedCm({
+  clientId: "YOUR_CLIENT_ID",
+  redirectUri: "https://yourapp.com/callback",
+  scope: "openid profile email",
+});
+```
+
+## Returned data
+
+FedCM exchange returns the normal token payload plus `encryptedAppKey` when Ave has one for the selected app/identity:
+
+```json
+{
+  "access_token": "...",
+  "access_token_jwt": "...",
+  "id_token": "...",
+  "refresh_token": "...",
+  "expires_in": 3600,
+  "scope": "openid profile email",
+  "encryptedAppKey": "base64..."
+}
+```
+
+`encryptedAppKey` is still encrypted under the user's master key. Your app must unlock locally the same way it does today.
+
+## Fallback model
+
+`signIn()` follows this ladder:
+
+1. Try FedCM if the browser supports it
+2. If unavailable, fall back to `startPkceLogin()`
+3. Finish the fallback on your callback page with `finishPkceLogin()`
+
+This keeps the migration low-risk: you are adding a faster path, not replacing the old one.

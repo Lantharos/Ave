@@ -43,6 +43,7 @@
             "group": "Standard OAuth",
             "pages": [
               "guides/oauth-authorization-code-flow",
+              "guides/fedcm-browser-sign-in",
               "guides/pkce-for-public-clients",
               "guides/server-side-confidential-clients",
               "guides/scopes-and-claims"

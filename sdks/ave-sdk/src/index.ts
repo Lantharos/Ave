@@ -1,7 +1,7 @@
 export type Scope = "openid" | "profile" | "email" | "offline_access" | "user_id";
 
 export { fetchJwks, verifyJwt } from "./jwt.js";
-export type { AveIdTokenClaims, AveJwtClaims, JwkKey, JwksResponse, JwtHeader, JwtPayload, OidcConfiguration, VerifyJwtOptions } from "./types.js";
+export type { AveIdTokenClaims, AveJwtClaims, FedCmTokenResponse, JwkKey, JwksResponse, JwtHeader, JwtPayload, OidcConfiguration, VerifyJwtOptions } from "./types.js";
 
 export interface AveConfig {
   clientId: string;
@@ -115,6 +115,28 @@ export async function refreshToken(config: AveConfig, payload: { refreshToken: s
   if (!response.ok) {
     const data = await response.json();
     throw new Error(data.error || "Failed to refresh token");
+  }
+
+  return response.json();
+}
+
+export async function exchangeFedCmAssertion(
+  config: Pick<AveConfig, "clientId" | "issuer">,
+  payload: { assertion: string }
+): Promise<import("./types.js").FedCmTokenResponse> {
+  const apiBase = getApiBase(config.issuer);
+  const response = await fetch(`${apiBase}/api/oauth/fedcm/exchange`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      assertion: payload.assertion,
+      clientId: config.clientId,
+    }),
+  });
+
+  if (!response.ok) {
+    const data = await response.json();
+    throw new Error(data.error_description || data.error || "Failed to exchange FedCM assertion");
   }
 
   return response.json();

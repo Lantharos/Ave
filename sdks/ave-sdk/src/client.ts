@@ -1,9 +1,24 @@
-import { buildAuthorizeUrl, buildConnectorUrl, exchangeCode, generateCodeChallenge, generateCodeVerifier, generateNonce, getApiBase } from "./index.js";
+import { buildAuthorizeUrl, buildConnectorUrl, exchangeCode, exchangeFedCmAssertion, generateCodeChallenge, generateCodeVerifier, generateNonce, getApiBase } from "./index.js";
 import { verifyJwt } from "./jwt.js";
-import type { AveIdTokenClaims, AveJwtClaims, TokenResponse } from "./types.js";
+import type { AveIdTokenClaims, AveJwtClaims, FedCmTokenResponse, TokenResponse } from "./types.js";
 
 export { fetchJwks, verifyJwt } from "./jwt.js";
-export type { VerifyJwtOptions } from "./types.js";
+export type { FedCmTokenResponse, VerifyJwtOptions } from "./types.js";
+
+interface FedCmIdentityCredential extends Credential {
+  token?: string;
+  configURL?: string;
+}
+
+interface FedCmOptions {
+  clientId: string;
+  redirectUri: string;
+  scope?: string;
+  issuer?: string;
+  state?: string;
+  nonce?: string;
+  mediation?: CredentialMediationRequirement;
+}
 
 // PKCE_STORAGE_KEY is the new canonical SDK storage entry.
 // The individual keys are kept only for backwards compatibility with older
@@ -144,6 +159,68 @@ export async function startPkceLogin(params: {
   );
 
   window.location.href = url;
+}
+
+export function supportsFedCm(): boolean {
+  return typeof window !== "undefined"
+    && typeof navigator !== "undefined"
+    && !!navigator.credentials
+    && typeof navigator.credentials.get === "function"
+    && typeof window.isSecureContext === "boolean"
+    && window.isSecureContext;
+}
+
+export async function signInWithFedCm(params: FedCmOptions): Promise<FedCmTokenResponse> {
+  if (!supportsFedCm()) {
+    throw new Error("[Ave] FedCM is not available in this browser.");
+  }
+
+  const state = params.state ?? generateNonce();
+  const nonce = params.nonce ?? generateNonce();
+  const configUrl = `${getApiBase(params.issuer)}/api/oauth/fedcm/config`;
+
+  const credential = await navigator.credentials.get({
+    identity: {
+      context: "signin",
+      providers: [
+        {
+          configURL: configUrl,
+          clientId: params.clientId,
+          nonce,
+          fields: ["name", "email", "picture"],
+          params: {
+            scope: params.scope ?? "openid profile email",
+            redirectUri: params.redirectUri,
+            state,
+            nonce,
+          },
+        },
+      ],
+    } as any,
+    mediation: params.mediation ?? "optional",
+  } as CredentialRequestOptions) as FedCmIdentityCredential | null;
+
+  const assertion = credential?.token;
+  if (!assertion) {
+    throw new Error("[Ave] FedCM did not return an assertion.");
+  }
+
+  return exchangeFedCmAssertion(
+    {
+      clientId: params.clientId,
+      issuer: params.issuer,
+    },
+    { assertion },
+  );
+}
+
+export async function signIn(params: FedCmOptions & { preferFedCm?: boolean }): Promise<FedCmTokenResponse | null> {
+  if (params.preferFedCm !== false && supportsFedCm()) {
+    return signInWithFedCm(params);
+  }
+
+  await startPkceLogin(params);
+  return null;
 }
 
 /**

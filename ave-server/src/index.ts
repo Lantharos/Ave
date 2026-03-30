@@ -81,6 +81,9 @@ function buildApp() {
   const oauthCorsMiddleware = cors({
     origin: (origin, c) => {
       const path = c.req.path;
+      if (path.startsWith("/api/oauth/fedcm/")) {
+        return origin || "https://aveid.net";
+      }
       if (path === "/api/oauth/session/check") {
         return origin || "https://aveid.net";
       }
@@ -125,6 +128,10 @@ function buildApp() {
 
   app.use("*", async (c, next) => {
     if (c.req.method === "OPTIONS") return next();
+
+    if (c.req.path.startsWith("/api/oauth/fedcm/")) {
+      return next();
+    }
 
     const cookieHeader = c.req.header("Cookie") || "";
     const hasSessionCookie = cookieHeader.includes(`${SESSION_COOKIE_NAME}=`);

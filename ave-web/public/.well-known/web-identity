@@ -1,0 +1,7 @@
+{
+  "provider_urls": [
+    "https://api.aveid.net/api/oauth/fedcm/config"
+  ],
+  "accounts_endpoint": "https://api.aveid.net/api/oauth/fedcm/accounts",
+  "login_url": "https://aveid.net/login"
+}
