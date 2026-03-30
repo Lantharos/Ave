@@ -262,22 +262,19 @@
         needsStorageAccess = false;
         storageAccessError = null;
         try {
-            const initOk = (await withTimeout(auth.init(), 5000)) !== null;
-            if (initOk && $isAuthenticated) {
-                needsStorageAccess = false;
+            const storageSupported = supportsStorageAccessApi();
+            const alreadyHasAccess = storageSupported
+                ? (await withTimeout(hasStorageAccess(), 250)) === true
+                : true;
+
+            if (!alreadyHasAccess) {
+                needsStorageAccess = true;
                 return;
             }
 
-            if (supportsStorageAccessApi()) {
-                const alreadyHasAccess = (await withTimeout(hasStorageAccess(), 1200)) === true;
-                if (alreadyHasAccess) {
-                    const retryInitOk = (await withTimeout(auth.init(), 5000)) !== null;
-                    if (retryInitOk && $isAuthenticated) {
-                        needsStorageAccess = false;
-                        return;
-                    }
-                }
-                needsStorageAccess = true;
+            const initOk = (await withTimeout(auth.init({ allowCookieSession: true, timeoutMs: 1200 }), 1500)) !== null;
+            if (initOk && $isAuthenticated) {
+                needsStorageAccess = false;
                 return;
             }
 
@@ -306,8 +303,8 @@
                 return;
             }
 
-            const alreadyHasAccess = (await withTimeout(hasStorageAccess(), 1200)) === true;
-            const granted = alreadyHasAccess || (await withTimeout(requestStorageAccess(), 8000)) === true;
+            const alreadyHasAccess = (await withTimeout(hasStorageAccess(), 250)) === true;
+            const granted = alreadyHasAccess || (await withTimeout(requestStorageAccess(), 1500)) === true;
             if (!granted) {
                 const opened = openSigningPopupHere();
                 if (!opened) {
@@ -320,7 +317,7 @@
                 return;
             }
 
-            const initOk = (await withTimeout(auth.init(), 5000)) !== null;
+            const initOk = (await withTimeout(auth.init({ allowCookieSession: true, timeoutMs: 1200 }), 1500)) !== null;
             if (!initOk) {
                 const opened = openSigningPopupHere();
                 if (!opened) {

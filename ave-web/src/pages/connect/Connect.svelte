@@ -30,6 +30,7 @@
   let loading = $state(true);
   let connecting = $state(false);
   let error = $state<string | null>(null);
+  let authProbeStarted = $state(false);
 
   let appInfo = $state<AppInfo | null>(null);
   let targetResource = $state<TargetResourceInfo | null>(null);
@@ -95,12 +96,14 @@
         throw new Error("Failed to load connector details.");
       }
 
+      const resource = bootstrap.data.resource;
+
       appInfo = bootstrap.data.app;
-      targetResource = bootstrap.data.resource;
-      selectedResourceKey = targetResource.resourceKey;
+      targetResource = resource;
+      selectedResourceKey = resource.resourceKey;
       requestedCommunicationMode = params.mode;
 
-      const resolvedScope = pickScope(params.scope, targetResource.scopes || []);
+      const resolvedScope = pickScope(params.scope, resource.scopes || []);
       if (!resolvedScope) {
         error = params.scope
           ? "Requested access is not allowed for this connector resource."
@@ -150,6 +153,26 @@
       connecting = false;
       sliderPosition = 0;
     }
+  }
+
+  async function tryEmbeddedSessionBootstrap() {
+    if (authProbeStarted) return;
+    authProbeStarted = true;
+
+    const initOk = (await auth.init({ allowCookieSession: true, timeoutMs: 1200 }).then(() => true).catch(() => false));
+    if (initOk && get(auth).isAuthenticated) {
+      init();
+      return;
+    }
+
+    if (params.embed) {
+      const target = (window.opener && (window.opener as any).parent)
+        ? (window.opener as any).parent
+        : (window.opener ?? window.parent);
+      target?.postMessage({ type: "ave:auth_required" }, "*");
+    }
+    setReturnUrl(window.location.pathname + window.location.search);
+    safeGoto(goto, "/login");
   }
 
   function handleCancel() {
@@ -241,16 +264,10 @@
 
   $effect(() => {
     if (!$isAuthenticated) {
-      if (params.embed) {
-        const target = (window.opener && (window.opener as any).parent)
-          ? (window.opener as any).parent
-          : (window.opener ?? window.parent);
-        target?.postMessage({ type: "ave:auth_required" }, "*");
-      }
-      setReturnUrl(window.location.pathname + window.location.search);
-      safeGoto(goto, "/login");
+      void tryEmbeddedSessionBootstrap();
       return;
     }
+    authProbeStarted = false;
     init();
   });
 </script>

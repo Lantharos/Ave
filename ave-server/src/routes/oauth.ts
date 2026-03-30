@@ -1225,6 +1225,31 @@ app.post("/session/check", async (c) => {
   return c.json({ status: "active" });
 });
 
+app.get("/session/bootstrap", requireAuth, async (c) => {
+  const user = c.get("user")!;
+
+  const userIdentities = await db
+    .select()
+    .from(identities)
+    .where(eq(identities.userId, user.id));
+
+  c.header("Cache-Control", "no-store");
+
+  return c.json({
+    identities: userIdentities.map((identity) => ({
+      id: identity.id,
+      displayName: identity.displayName,
+      handle: identity.handle,
+      email: identity.email,
+      birthday: identity.birthday,
+      avatarUrl: identity.avatarUrl,
+      bannerUrl: identity.bannerUrl,
+      isPrimary: identity.isPrimary,
+      createdAt: identity.createdAt,
+    })),
+  });
+});
+
 
 // List user's authorized apps (for dashboard)
 app.get("/authorizations", requireAuth, async (c) => {

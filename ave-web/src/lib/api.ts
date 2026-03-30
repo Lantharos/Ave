@@ -593,6 +593,13 @@ export const api = {
   },
   
   oauth: {
+    getSessionBootstrap: (timeoutMs = 1500) =>
+      request<{
+        identities: Identity[];
+      }>("/api/oauth/session/bootstrap", {
+        timeoutMs,
+      }),
+
     getApp: (clientId: string) =>
       request<{
         app: {

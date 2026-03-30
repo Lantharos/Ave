@@ -23,6 +23,11 @@ interface AuthState {
   hasMasterKey: boolean;
 }
 
+interface InitOptions {
+  allowCookieSession?: boolean;
+  timeoutMs?: number;
+}
+
 function hasStoredSessionToken(): boolean {
   try {
     return Boolean(localStorage.getItem("ave_session_token"));
@@ -45,6 +50,20 @@ const initialState: AuthState = {
 function createAuthStore() {
   const { subscribe, set, update } = writable<AuthState>(initialState);
   let initPromise: Promise<void> | null = null;
+
+  async function hydrateAuthenticatedSession(identities: Identity[]) {
+    const masterKey = await loadMasterKey();
+
+    update((s) => ({
+      ...s,
+      isAuthenticated: true,
+      isLoading: false,
+      identities,
+      currentIdentity: identities.find((i) => i.isPrimary) || identities[0] || null,
+      masterKey,
+      hasMasterKey: masterKey !== null,
+    }));
+  }
   
   return {
     subscribe,
@@ -52,7 +71,7 @@ function createAuthStore() {
     /**
      * Initialize auth state from storage
      */
-    async init() {
+    async init(options: InitOptions = {}) {
       if (initPromise) {
         return initPromise;
       }
@@ -65,7 +84,7 @@ function createAuthStore() {
         token = null;
       }
 
-      if (!token) {
+      if (!token && !options.allowCookieSession) {
         update((s) => ({
           ...s,
           isAuthenticated: false,
@@ -79,26 +98,23 @@ function createAuthStore() {
         }));
         return;
       }
-      
+
       try {
-        const { identities } = await api.identities.list();
-        const masterKey = await loadMasterKey();
-        
-        update((s) => ({
-          ...s,
-          isAuthenticated: true,
-          isLoading: false,
-          identities,
-          currentIdentity: identities.find((i) => i.isPrimary) || identities[0] || null,
-          masterKey,
-          hasMasterKey: masterKey !== null,
-        }));
-        
-        websocket.connectAsUser(token);
+        const identities = token
+          ? (await api.identities.list()).identities
+          : (await api.oauth.getSessionBootstrap(options.timeoutMs)).identities;
+
+        await hydrateAuthenticatedSession(identities);
+
+        if (token) {
+          websocket.connectAsUser(token);
+        }
       } catch {
-        try {
-          localStorage.removeItem("ave_session_token");
-        } catch {
+        if (token) {
+          try {
+            localStorage.removeItem("ave_session_token");
+          } catch {
+          }
         }
         websocket.disconnect();
         update((s) => ({
