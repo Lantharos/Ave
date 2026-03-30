@@ -4,7 +4,7 @@ description: "Detailed endpoint contract for app metadata, authorize, token gran
 ---
 
 <Tip>
-	All token endpoint body fields use camelCase (`grantType`, `clientId`, `redirectUri`, `codeVerifier`).
+	The token endpoint accepts both OAuth-standard `snake_case` fields and legacy `camelCase` fields. Prefer `grant_type`, `client_id`, `redirect_uri`, and `code_verifier` in new integrations.
 </Tip>
 
 ## `GET /api/oauth/app/:clientId`
@@ -62,7 +62,7 @@ Notable behavior:
 
 ## `POST /api/oauth/token`
 
-Supported `grantType` values:
+Supported `grant_type` values:
 
 1. `authorization_code`
 2. `refresh_token`
@@ -72,33 +72,33 @@ Supported `grantType` values:
 	<Tab title="authorization_code">
 		```json
 		{
-			"grantType": "authorization_code",
+			"grant_type": "authorization_code",
 			"code": "AUTHORIZATION_CODE",
-			"redirectUri": "https://yourapp.com/callback",
-			"clientId": "YOUR_CLIENT_ID",
-			"codeVerifier": "PKCE_VERIFIER"
+			"redirect_uri": "https://yourapp.com/callback",
+			"client_id": "YOUR_CLIENT_ID",
+			"code_verifier": "PKCE_VERIFIER"
 		}
 		```
 	</Tab>
 	<Tab title="refresh_token">
 		```json
 		{
-			"grantType": "refresh_token",
-			"refreshToken": "rt_...",
-			"clientId": "YOUR_CLIENT_ID",
-			"clientSecret": "YOUR_CLIENT_SECRET"
+			"grant_type": "refresh_token",
+			"refresh_token": "rt_...",
+			"client_id": "YOUR_CLIENT_ID",
+			"client_secret": "YOUR_CLIENT_SECRET"
 		}
 		```
 	</Tab>
 	<Tab title="token_exchange">
 		```json
 		{
-			"grantType": "urn:ietf:params:oauth:grant-type:token-exchange",
-			"subjectToken": "SOURCE_APP_ACCESS_TOKEN",
-			"requestedResource": "target:resource",
-			"requestedScope": "resource.access",
-			"clientId": "YOUR_CLIENT_ID",
-			"clientSecret": "YOUR_CLIENT_SECRET"
+			"grant_type": "urn:ietf:params:oauth:grant-type:token-exchange",
+			"subject_token": "SOURCE_APP_ACCESS_TOKEN",
+			"resource": "target:resource",
+			"scope": "resource.access",
+			"client_id": "YOUR_CLIENT_ID",
+			"client_secret": "YOUR_CLIENT_SECRET"
 		}
 		```
 	</Tab>

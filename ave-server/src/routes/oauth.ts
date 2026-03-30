@@ -76,6 +76,27 @@ function parseScopes(scope: string): string[] {
   return scope.split(" ").map((s) => s.trim()).filter(Boolean);
 }
 
+function normalizeOauthTokenPayload(input: unknown): unknown {
+  if (!input || typeof input !== "object" || Array.isArray(input)) {
+    return input;
+  }
+
+  const raw = input as Record<string, unknown>;
+
+  return {
+    ...raw,
+    grantType: raw.grantType ?? raw.grant_type,
+    redirectUri: raw.redirectUri ?? raw.redirect_uri,
+    clientId: raw.clientId ?? raw.client_id,
+    clientSecret: raw.clientSecret ?? raw.client_secret,
+    codeVerifier: raw.codeVerifier ?? raw.code_verifier,
+    refreshToken: raw.refreshToken ?? raw.refresh_token,
+    subjectToken: raw.subjectToken ?? raw.subject_token,
+    requestedResource: raw.requestedResource ?? raw.resource,
+    requestedScope: raw.requestedScope ?? raw.scope,
+  };
+}
+
 function getWebBase(): string {
   return process.env.RP_ORIGIN || "https://aveid.net";
 }
@@ -968,8 +989,7 @@ app.post("/authorize", requireAuth, zValidator("json", z.object({
   return c.json({ redirectUrl: redirectUrl.toString() });
 });
 
-// Token endpoint - exchange code for access token
-app.post("/token", zValidator("json", z.discriminatedUnion("grantType", [
+const oauthTokenRequestSchema = z.preprocess(normalizeOauthTokenPayload, z.discriminatedUnion("grantType", [
   z.object({
     grantType: z.literal("authorization_code"),
     code: z.string(),
@@ -993,7 +1013,10 @@ app.post("/token", zValidator("json", z.discriminatedUnion("grantType", [
     clientSecret: z.string().optional(),
     actor: z.record(z.string(), z.unknown()).optional(),
   }),
-])), async (c) => {
+]));
+
+// Token endpoint - exchange code for access token
+app.post("/token", zValidator("json", oauthTokenRequestSchema), async (c) => {
   const payload = c.req.valid("json");
 
   if (payload.grantType === "urn:ietf:params:oauth:grant-type:token-exchange") {

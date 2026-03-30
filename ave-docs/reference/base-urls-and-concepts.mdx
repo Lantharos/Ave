@@ -90,17 +90,17 @@ Scopes are space-separated strings requested during authorization. They control 
   Scopes are allowlisted per app. Requesting a scope your app hasn't been granted will return an `invalid_scope` error.
 </Note>
 
-## camelCase fields on the token endpoint
+## Token endpoint field casing
 
-The Ave token endpoint (`POST /api/oauth/token`) uses **camelCase** body fields — not the snake_case used by many other OAuth providers.
+The Ave token endpoint (`POST /api/oauth/token`) accepts both OAuth-standard `snake_case` body fields and legacy `camelCase` variants.
 
 ```ts
 {
-  "grantType": "authorization_code",   // not grant_type
-  "clientId": "YOUR_CLIENT_ID",        // not client_id
-  "redirectUri": "...",                // not redirect_uri
-  "codeVerifier": "..."                // not code_verifier
+  "grant_type": "authorization_code",
+  "client_id": "YOUR_CLIENT_ID",
+  "redirect_uri": "...",
+  "code_verifier": "..."
 }
 ```
 
-Sending snake_case fields will return a `400` error.
+Prefer the standard `snake_case` names in new integrations. Legacy `grantType`, `clientId`, `redirectUri`, and `codeVerifier` still work for backward compatibility.

@@ -16,20 +16,22 @@ description: "Frequent integration bugs, protocol mismatches, and how to fix the
     ```
   </Accordion>
 
-  <Accordion title="Wrong field casing on the token request" icon="triangle-exclamation">
+  <Accordion title="Mixed field casing on the token request" icon="circle-info">
     **Symptom:** Token endpoint returns `400 invalid_request` even though you're sending the right values.
 
-    **Cause:** Ave uses camelCase body fields, not the snake_case used by most OAuth providers.
+    **Cause:** Ave accepts both OAuth-standard `snake_case` fields and legacy `camelCase` fields. Problems usually come from mixing names incorrectly or misspelling them.
 
-    **Fix:**
+    **Fix:** Prefer the standard OAuth field names in new integrations:
     ```ts
     {
-      "grantType": "authorization_code",  // not grant_type
-      "clientId": "YOUR_CLIENT_ID",       // not client_id
-      "redirectUri": "...",               // not redirect_uri
-      "codeVerifier": "..."               // not code_verifier
+      "grant_type": "authorization_code",
+      "client_id": "YOUR_CLIENT_ID",
+      "redirect_uri": "...",
+      "code_verifier": "..."
     }
     ```
+
+    Legacy `grantType`, `clientId`, `redirectUri`, and `codeVerifier` still work for backward compatibility.
   </Accordion>
 
   <Accordion title="PKCE verifier mismatch" icon="triangle-exclamation">

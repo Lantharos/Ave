@@ -139,17 +139,17 @@ startAveAuth({
         Content-Type: application/json
 
         {
-          "grantType": "authorization_code",
+          "grant_type": "authorization_code",
           "code": "AUTH_CODE",
-          "redirectUri": "https://yourapp.com/callback",
-          "clientId": "YOUR_CLIENT_ID",
-          "codeVerifier": "PKCE_VERIFIER"
+          "redirect_uri": "https://yourapp.com/callback",
+          "client_id": "YOUR_CLIENT_ID",
+          "code_verifier": "PKCE_VERIFIER"
         }
         ```
 
-        <Warning>
-          Ave uses **camelCase** fields (`grantType`, `clientId`, `redirectUri`, `codeVerifier`) — not the snake_case used by most OAuth providers. Sending `grant_type` or `client_id` returns a `400` error.
-        </Warning>
+        <Note>
+          Ave accepts both OAuth-standard `snake_case` fields and the legacy `camelCase` variants for backward compatibility. Prefer `grant_type`, `client_id`, `redirect_uri`, and `code_verifier` in new integrations.
+        </Note>
       </Tab>
     </Tabs>
   </Step>

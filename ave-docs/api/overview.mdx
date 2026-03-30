@@ -30,18 +30,18 @@ https://api.aveid.net
 
 ## Request conventions
 
-All request bodies are JSON. The token endpoint uses **camelCase** field names.
+All request bodies are JSON. The token endpoint accepts both OAuth-standard `snake_case` fields and legacy `camelCase` fields.
 
 <CodeGroup>
 ```bash Token request
 curl -X POST https://api.aveid.net/api/oauth/token \
   -H "Content-Type: application/json" \
   -d '{
-    "grantType": "authorization_code",
+    "grant_type": "authorization_code",
     "code": "AUTHORIZATION_CODE",
-    "redirectUri": "https://yourapp.com/callback",
-    "clientId": "YOUR_CLIENT_ID",
-    "codeVerifier": "PKCE_VERIFIER"
+    "redirect_uri": "https://yourapp.com/callback",
+    "client_id": "YOUR_CLIENT_ID",
+    "code_verifier": "PKCE_VERIFIER"
   }'
 ```
 
