@@ -10,7 +10,7 @@ description: "Endpoint families, authentication requirements, and request conven
   <Card title="Signing" icon="pen-nib" href="/api/signing-endpoints">
     Signature request lifecycle, verification, and key management.
   </Card>
-  <Card title="Shared Secrets" icon="key-skeleton" href="/api/shared-secret-endpoints">
+  <Card title="App keys (shared secrets)" icon="key-skeleton" href="/api/shared-secret-endpoints">
     Identity encryption keys, transfer contracts, claim flows, and recipient access retrieval.
   </Card>
   <Card title="Security" icon="shield" href="/security/best-practices">
@@ -94,7 +94,7 @@ curl https://api.aveid.net/api/oauth/userinfo \
     - `POST /api/signing/requests/:requestId/deny` — deny a request
   </Accordion>
 
-  <Accordion title="Shared secret endpoints — session auth plus public lookup">
+  <Accordion title="App keys (shared secrets) — session auth plus public lookup">
     Public endpoints:
 
     - `GET /api/encryption/public-key/:handle` — look up an identity encryption key

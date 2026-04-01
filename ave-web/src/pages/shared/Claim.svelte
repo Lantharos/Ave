@@ -20,8 +20,17 @@
     let error = $state("");
     let success = $state("");
     let transfer = $state<Awaited<ReturnType<typeof api.sharedSecrets.getTransfer>>["transfer"] | null>(null);
+    let embed = $state(false);
 
     const token = new URLSearchParams(window.location.search).get("token") || "";
+
+    function postToEmbedHost(payload: unknown) {
+        const target =
+            window.opener && (window.opener as Window & { parent?: Window }).parent
+                ? (window.opener as Window & { parent: Window }).parent
+                : window.opener ?? window.parent;
+        target?.postMessage(payload, "*");
+    }
     const availableIdentities = $derived($identities);
     const matchingIdentity = $derived.by(() => {
         const activeTransfer = transfer;
@@ -30,6 +39,8 @@
     });
 
     onMount(async () => {
+        embed = new URLSearchParams(window.location.search).get("embed") === "1";
+
         if (!token) {
             error = "Missing claim token.";
             loading = false;
@@ -46,7 +57,10 @@
         }
 
         if (!$isAuthenticated) {
-            setReturnUrl(`/shared/claim?token=${encodeURIComponent(token)}`);
+            const qs = new URLSearchParams();
+            qs.set("token", token);
+            if (embed) qs.set("embed", "1");
+            setReturnUrl(`/shared/claim?${qs.toString()}`);
             goto("/login");
             return;
         }
@@ -71,7 +85,7 @@
 
             const keyState = await api.encryption.getKey(matchingIdentity.id);
             if (!keyState.hasKey || !keyState.encryptedPrivateKey) {
-                throw new Error("This identity does not have an encryption key yet. Open Shared Keys on a trusted device first.");
+                throw new Error("This identity does not have an encryption key yet. Open App keys on a trusted device first.");
             }
 
             const claim = await api.sharedSecrets.claimTransfer(token, matchingIdentity.id);
@@ -89,13 +103,29 @@
                 encryptedSecretForRecipient,
             });
 
-            success = `Shared key accepted for @${matchingIdentity.handle}.`;
+            success = `Key added for @${matchingIdentity.handle}.`;
             const nextUrl = buildReturnUrl(
                 claim.transfer.returnUrl,
                 claim.transfer.sharedSecretId,
                 claim.transfer.id,
                 matchingIdentity.id
             );
+
+            if (embed) {
+                postToEmbedHost({
+                    type: "ave:success",
+                    payload: {
+                        kind: "app_key_claim",
+                        redirectUrl: nextUrl,
+                        sharedSecretId: claim.transfer.sharedSecretId,
+                        transferId: claim.transfer.id,
+                        identityId: matchingIdentity.id,
+                        handle: matchingIdentity.handle,
+                    },
+                });
+                return;
+            }
+
             setTimeout(() => {
                 if (nextUrl) {
                     navigateTo(nextUrl);
@@ -139,13 +169,15 @@
     }
 </script>
 
-<div class="relative w-full min-h-screen-fixed overflow-hidden bg-[#090909]">
-    <AuroraBackdrop preset="reg-finishing" mobileHeight={420} cclass="absolute inset-x-0 bottom-0 h-[720px] pointer-events-none select-none" />
-    <div class="relative z-10 min-h-screen-fixed flex items-center justify-center px-4 py-10">
+<div class="relative w-full min-h-screen-fixed overflow-hidden bg-[#090909]" class:min-h-[min(100dvh,720px)]={embed}>
+    {#if !embed}
+        <AuroraBackdrop preset="reg-finishing" mobileHeight={420} cclass="absolute inset-x-0 bottom-0 h-[720px] pointer-events-none select-none" />
+    {/if}
+    <div class="relative z-10 min-h-screen-fixed flex items-center justify-center px-4 py-10" class:py-6={embed}>
         <div class="w-full max-w-[720px] bg-[#111111]/70 backdrop-blur-[20px] rounded-[32px] p-6 md:p-10 flex flex-col gap-5">
             <div class="flex flex-col gap-2">
-                <div class="self-start px-3 py-1 rounded-full border border-[#2A2A2A] bg-[#171717] text-[#B9BBBE] text-xs tracking-[0.18em]">SHARED KEY CLAIM</div>
-                <Text type="h" size={30} mobileSize={22} weight="medium">Claim Shared Key</Text>
+                <Text type="h" size={30} mobileSize={22} weight="bold">Accept app key</Text>
+                <p class="text-[#878787] text-sm md:text-[16px]">Confirm this key for your Ave account so your apps can decrypt.</p>
             </div>
 
             {#if loading}
@@ -154,7 +186,9 @@
                 </div>
             {:else}
                 {#if error}
-                    <div class="bg-red-600/20 border border-red-600 text-red-400 px-4 py-3 rounded-2xl">{error}</div>
+                    <div class="bg-[#E14747]/20 border border-[#E14747] rounded-[16px] px-4 py-3">
+                        <p class="text-[#E14747] text-sm md:text-[16px]">{error}</p>
+                    </div>
                 {/if}
 
                 {#if success}
@@ -162,33 +196,27 @@
                 {/if}
 
                 {#if transfer}
-                    <div class="bg-[#171717] rounded-[24px] p-5 flex flex-col gap-3 border border-[#232323]">
-                        <p class="text-white font-semibold">{transfer.descriptor.label || transfer.descriptor.resourceKey || transfer.descriptor.id}</p>
-                        <div class="flex flex-wrap gap-2 text-xs">
-                            <span class="px-3 py-1 rounded-full bg-[#111111] text-[#878787]">From @{transfer.owner.handle}</span>
-                            <span class="px-3 py-1 rounded-full bg-[#111111] text-[#B9BBBE]">For @{transfer.targetHandle}</span>
-                            <span class="px-3 py-1 rounded-full bg-[#111111] text-[#B9BBBE]">{transfer.descriptor.kind}</span>
-                            {#if transfer.descriptor.resourceKey}
-                                <span class="px-3 py-1 rounded-full bg-[#111111] text-[#B9BBBE]">{transfer.descriptor.resourceKey}</span>
-                            {/if}
-                        </div>
+                    <div class="bg-[#171717] rounded-[20px] md:rounded-[28px] p-5 flex flex-col gap-2 border border-[#2A2A2A]">
+                        <p class="text-white font-medium">{transfer.descriptor.label || transfer.descriptor.resourceKey || transfer.descriptor.id}</p>
+                        <p class="text-[#878787] text-sm">From @{transfer.owner.handle} · for @{transfer.targetHandle}</p>
+                        {#if transfer.descriptor.resourceKey}
+                            <p class="text-[#B9BBBE] text-sm">{transfer.descriptor.resourceKey}</p>
+                        {/if}
                     </div>
                 {/if}
 
                 {#if $isAuthenticated && transfer}
                     {#if matchingIdentity}
                         <button
-                            class="bg-[#B9BBBE] text-[#090909] rounded-full px-5 py-4 font-black transition-colors duration-300 hover:bg-[#A1A1A1] disabled:opacity-50 disabled:cursor-not-allowed"
+                            class="w-full py-3 md:py-[15px] bg-[#FFFFFF] text-[#000000] font-semibold rounded-[16px] hover:bg-[#E0E0E0] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-3"
                             onclick={handleClaim}
                             disabled={claiming}
-                            aria-label={claiming ? "Claiming shared key" : `Claim as @${matchingIdentity.handle}`}
+                            aria-label={claiming ? "Adding key" : `Add key as @${matchingIdentity.handle}`}
                         >
                             {#if claiming}
-                                <div class="flex items-center justify-center">
-                                    <Spinner size={24} />
-                                </div>
+                                <Spinner size={24} />
                             {:else}
-                                Claim As @{matchingIdentity.handle}
+                                Add to @{matchingIdentity.handle}
                             {/if}
                         </button>
                     {:else}

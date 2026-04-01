@@ -307,10 +307,32 @@ app.post("/:id/transfers", zValidator("json", createTransferSchema), async (c) =
   const [secret] = await db
     .select()
     .from(sharedSecrets)
-    .where(and(eq(sharedSecrets.id, sharedSecretId), eq(sharedSecrets.ownerIdentityId, payload.identityId)))
+    .where(eq(sharedSecrets.id, sharedSecretId))
     .limit(1);
 
   if (!secret) {
+    return c.json({ error: "Shared secret not found" }, 404);
+  }
+
+  const isSecretOwner = secret.ownerIdentityId === payload.identityId;
+  let canCreateTransfer = isSecretOwner;
+
+  if (!canCreateTransfer) {
+    const [recipientAccess] = await db
+      .select()
+      .from(sharedSecretAccess)
+      .where(
+        and(
+          eq(sharedSecretAccess.sharedSecretId, sharedSecretId),
+          eq(sharedSecretAccess.recipientIdentityId, payload.identityId),
+          isNull(sharedSecretAccess.revokedAt)
+        )
+      )
+      .limit(1);
+    canCreateTransfer = !!recipientAccess;
+  }
+
+  if (!canCreateTransfer) {
     return c.json({ error: "Shared secret not found" }, 404);
   }
 
@@ -367,7 +389,8 @@ app.post("/:id/transfers", zValidator("json", createTransferSchema), async (c) =
       sharedSecretId,
       transferId: contract.id,
       targetHandle: normalizedHandle,
-      ownerIdentityId: payload.identityId,
+      senderIdentityId: payload.identityId,
+      delegatedByRecipient: !isSecretOwner,
     },
     deviceId: user.deviceId,
     ipAddress: c.req.header("x-forwarded-for") || c.req.header("x-real-ip"),

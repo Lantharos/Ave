@@ -1,4 +1,4 @@
-﻿---
+---
 title: "@ave-id/embed"
 description: "UI integration helpers for Ave auth, Connector, and Signing flows. Covers iframe embed, sheet (modal), and popup patterns with full event handling."
 ---
@@ -333,6 +333,48 @@ function openAveSigningPopup(options: OpenAveSigningPopupOptions): {
 ```
 
 Returns `null` if the popup was blocked. Fall back to sheet.
+
+---
+
+## App key claim embeds
+
+Use these when your app (e.g. Citadel) sends an **app key / shared secret** invite and you want the recipient to **accept inside your UI** instead of opening a new tab on Ave.
+
+### `openAppKeyClaimSheet(options)`
+
+Loads `https://aveid.net/shared/claim?token=...&embed=1` in a bottom sheet. When the user finishes, Ave posts:
+
+```json
+{
+  "type": "ave:success",
+  "payload": {
+    "kind": "app_key_claim",
+    "redirectUrl": "https://yourapp.com/... or null",
+    "sharedSecretId": "...",
+    "transferId": "...",
+    "identityId": "...",
+    "handle": "recipient"
+  }
+}
+```
+
+```ts
+import { openAppKeyClaimSheet } from "@ave-id/embed";
+
+const { close } = openAppKeyClaimSheet({
+  claimUrl: result.claimUrl,
+  onSuccess: (payload) => {
+    if (payload.redirectUrl) window.location.assign(payload.redirectUrl);
+  },
+  onClose: () => {},
+});
+```
+
+Pass either **`claimUrl`** from the transfer API or **`claimToken`** alone (the helper builds the URL).
+
+### `openAppKeyClaimPopup(options)`
+
+Same behavior in a centered popup (`width` / `height` optional). Returns `null` if the popup was blocked.
 
 ---
 

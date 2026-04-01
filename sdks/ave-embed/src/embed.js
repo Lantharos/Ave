@@ -967,6 +967,226 @@ export function openAveConnectorRuntime({
   };
 }
 
+// ============================================
+// App key claim (shared secret transfer) embeds
+// ============================================
+
+function _buildAppKeyClaimUrl({ issuer, claimToken, claimUrl }) {
+  if (claimUrl) {
+    try {
+      const u = new URL(claimUrl);
+      u.searchParams.set("embed", "1");
+      return u.toString();
+    } catch {
+      throw new Error("[Ave] Invalid claimUrl");
+    }
+  }
+  if (!claimToken) {
+    throw new Error("[Ave] claimToken or claimUrl is required");
+  }
+  const u = new URL(`${issuer}/shared/claim`);
+  u.searchParams.set("token", claimToken);
+  u.searchParams.set("embed", "1");
+  return u.toString();
+}
+
+/**
+ * Open the Ave app-key claim page in a bottom sheet (e.g. in-app invite for Citadel-style vaults).
+ * Listens for `ave:success` with `payload.kind === "app_key_claim"`.
+ */
+export function openAppKeyClaimSheet({
+  claimToken,
+  claimUrl,
+  issuer = "https://aveid.net",
+  onSuccess,
+  onError,
+  onClose,
+}) {
+  let resolved = false;
+
+  const src = _buildAppKeyClaimUrl({ issuer, claimToken, claimUrl });
+
+  const overlay = document.createElement("div");
+  overlay.style.cssText = `
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.8);
+    backdrop-filter: blur(4px);
+    z-index: 999999;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    animation: aveSheetFadeIn 0.2s ease-out;
+  `;
+
+  const sheet = document.createElement("div");
+  sheet.style.cssText = `
+    width: 100%;
+    max-width: 560px;
+    max-height: 90vh;
+    background: #090909;
+    border-radius: 24px 24px 0 0;
+    overflow: hidden;
+    animation: aveSheetSlideUp 0.3s ease-out;
+    position: relative;
+  `;
+
+  const dragHandle = document.createElement("div");
+  dragHandle.style.cssText = `
+    width: 40px;
+    height: 4px;
+    background: #333;
+    border-radius: 2px;
+    margin: 12px auto;
+  `;
+  sheet.appendChild(dragHandle);
+
+  const iframe = document.createElement("iframe");
+  iframe.src = src;
+  iframe.style.cssText = `
+    width: 100%;
+    height: calc(90vh - 30px);
+    border: none;
+    background: #090909;
+  `;
+  iframe.allow = "publickey-credentials-get";
+
+  sheet.appendChild(iframe);
+  overlay.appendChild(sheet);
+
+  if (!document.getElementById("ave-sheet-styles")) {
+    const style = document.createElement("style");
+    style.id = "ave-sheet-styles";
+    style.textContent = `
+      @keyframes aveSheetFadeIn {
+        from { opacity: 0; }
+        to { opacity: 1; }
+      }
+      @keyframes aveSheetSlideUp {
+        from { transform: translateY(100%); }
+        to { transform: translateY(0); }
+      }
+      @keyframes aveSheetSlideDown {
+        from { transform: translateY(0); }
+        to { transform: translateY(100%); }
+      }
+      @keyframes aveSheetFadeOut {
+        from { opacity: 1; }
+        to { opacity: 0; }
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
+  const close = () => {
+    sheet.style.animation = "aveSheetSlideDown 0.2s ease-in forwards";
+    overlay.style.animation = "aveSheetFadeOut 0.2s ease-in forwards";
+    setTimeout(() => {
+      overlay.remove();
+      window.removeEventListener("message", messageHandler);
+      onClose?.();
+    }, 200);
+  };
+
+  overlay.onclick = (e) => {
+    if (e.target === overlay) close();
+  };
+
+  const messageHandler = (event) => {
+    if (event.origin !== issuer) return;
+    const data = event.data || {};
+    if (resolved) return;
+
+    if (data.type === "ave:success" && data.payload?.kind === "app_key_claim") {
+      resolved = true;
+      close();
+      onSuccess?.(data.payload);
+      return;
+    }
+
+    if (data.type === "ave:error") {
+      resolved = true;
+      close();
+      onError?.(data.payload);
+    }
+  };
+
+  window.addEventListener("message", messageHandler);
+  document.body.appendChild(overlay);
+
+  return { close, iframe };
+}
+
+/**
+ * Same as {@link openAppKeyClaimSheet} but in a centered popup window.
+ */
+export function openAppKeyClaimPopup({
+  claimToken,
+  claimUrl,
+  issuer = "https://aveid.net",
+  width = 480,
+  height = 640,
+  onSuccess,
+  onError,
+  onClose,
+}) {
+  let resolved = false;
+  const src = _buildAppKeyClaimUrl({ issuer, claimToken, claimUrl });
+  const left = (window.innerWidth - width) / 2 + window.screenX;
+  const top = (window.innerHeight - height) / 2 + window.screenY;
+  const popup = window.open(
+    src,
+    "ave_app_key_claim",
+    `width=${width},height=${height},left=${left},top=${top},menubar=no,toolbar=no,location=no,status=no`
+  );
+
+  if (!popup) {
+    onError?.({ error: "popup_blocked", message: "Popup was blocked" });
+    return null;
+  }
+
+  const messageHandler = (event) => {
+    if (event.origin !== issuer) return;
+    const data = event.data || {};
+    if (resolved) return;
+
+    if (data.type === "ave:success" && data.payload?.kind === "app_key_claim") {
+      resolved = true;
+      popup.close();
+      window.removeEventListener("message", messageHandler);
+      onSuccess?.(data.payload);
+      return;
+    }
+
+    if (data.type === "ave:error") {
+      resolved = true;
+      popup.close();
+      window.removeEventListener("message", messageHandler);
+      onError?.(data.payload);
+    }
+  };
+
+  window.addEventListener("message", messageHandler);
+
+  const timer = setInterval(() => {
+    if (popup.closed) {
+      clearInterval(timer);
+      window.removeEventListener("message", messageHandler);
+      if (!resolved) onClose?.();
+    }
+  }, 400);
+
+  return {
+    popup,
+    close() {
+      resolved = true;
+      popup.close();
+      window.removeEventListener("message", messageHandler);
+      clearInterval(timer);
+    },
+  };
+}
+
 /**
  * Backward-compatible wrapper for Iris integrations.
  */

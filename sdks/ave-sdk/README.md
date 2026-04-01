@@ -105,6 +105,15 @@ const tokens = await finishPkceLogin({
 
 `startPkceLogin()` now generates and stores both `state` and `nonce` by default, and `finishPkceLogin()` validates the callback `state`, exchanges the authorization code, and verifies any returned `id_token` / `access_token_jwt` with Ave's JWKS.
 
+## App keys (shared secrets)
+
+For vault-style keys shared between Ave identities (dashboard **App keys**, API **`/api/shared-secrets`**):
+
+- Use **`createSharedSecretWithTransfer`** and **`claimAndStoreSharedSecret`** from `@ave-id/sdk/client`.
+- Use **`listSharedSecrets`** and **`getSharedSecretAccess`** from `@ave-id/sdk`.
+
+Transfers are **initiated from your app** after sign-in, not from the Ave website. See [App keys (shared secrets)](https://docs.aveid.net/sdk/sdk-shared-secrets) and the [guide](https://docs.aveid.net/guides/shared-secret-transfers).
+
 ## Server helpers
 
 ```ts

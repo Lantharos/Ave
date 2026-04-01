@@ -132,7 +132,7 @@
                 <SidebarButton text="My Data" bind:currentlySelected={selectedPage} onclick={() => selectPage("My Data")} />
                 <SidebarButton text="Activity Log" bind:currentlySelected={selectedPage} onclick={() => selectPage("Activity Log")} />
                 <SidebarButton text="Connectors" bind:currentlySelected={selectedPage} onclick={() => selectPage("Connectors")} />
-                <SidebarButton text="Shared Keys" bind:currentlySelected={selectedPage} onclick={() => selectPage("Shared Keys")} />
+                <SidebarButton text="App Keys" bind:currentlySelected={selectedPage} onclick={() => selectPage("App keys")} />
                 
                 <div class="h-px bg-[#878787]/20 w-full my-1"></div>
                 <SidebarButton
@@ -186,7 +186,7 @@
             <SidebarButton text="My Data" bind:currentlySelected={selectedPage} onclick={() => { selectedPage = "My Data"; }} />
             <SidebarButton text="Activity Log" bind:currentlySelected={selectedPage} onclick={() => { selectedPage = "Activity Log"; }} />
             <SidebarButton text="Connectors" bind:currentlySelected={selectedPage} onclick={() => { selectedPage = "Connectors"; }} />
-            <SidebarButton text="Shared Keys" bind:currentlySelected={selectedPage} onclick={() => { selectedPage = "Shared Keys"; }} />
+            <SidebarButton text="App keys" bind:currentlySelected={selectedPage} onclick={() => { selectedPage = "App keys"; }} />
         </div>
         <div class="h-[1px] bg-[#878787]/20 w-full"></div>
         <SidebarButton
@@ -214,7 +214,7 @@
             <ActivityLog />
         {:else if selectedPage === "Connectors"}
             <Connectors />
-        {:else if selectedPage === "Shared Keys"}
+        {:else if selectedPage === "App keys"}
             <SharedKeys />
         {:else}
             <div class="flex items-center justify-center h-full">

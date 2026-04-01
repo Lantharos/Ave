@@ -213,3 +213,42 @@ export function openIrisDelegatedRuntime(options: OpenIrisDelegatedRuntimeOption
   send: (payload: unknown) => void;
   destroy: () => void;
 };
+
+export type AveAppKeyClaimSuccessPayload = {
+  kind: "app_key_claim";
+  redirectUrl: string | null;
+  sharedSecretId: string;
+  transferId: string;
+  identityId: string;
+  handle: string;
+};
+
+export type OpenAppKeyClaimOptions = {
+  /** Raw token from `claimToken` in the transfer API response */
+  claimToken?: string;
+  /** Full claim URL from the API (embed=1 is appended automatically) */
+  claimUrl?: string;
+  issuer?: string;
+  onSuccess?: (payload: AveAppKeyClaimSuccessPayload) => void;
+  onError?: (payload: AveAuthErrorPayload) => void;
+  onClose?: () => void;
+};
+
+export function openAppKeyClaimSheet(
+  options: OpenAppKeyClaimOptions
+): {
+  close: () => void;
+  iframe: HTMLIFrameElement;
+};
+
+export type OpenAppKeyClaimPopupOptions = OpenAppKeyClaimOptions & {
+  width?: number;
+  height?: number;
+};
+
+export function openAppKeyClaimPopup(
+  options: OpenAppKeyClaimPopupOptions
+): {
+  popup: Window;
+  close: () => void;
+} | null;
