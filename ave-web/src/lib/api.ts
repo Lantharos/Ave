@@ -206,6 +206,9 @@ export interface SignatureRequest {
 export interface IdentityEncryptionKey {
   publicKey: string;
   encryptedPrivateKey: string;
+  wrap_mode?: "master" | "oauth_app_key";
+  oauth_app_id?: string;
+  device_key?: string;
 }
 
 export type SharedSecretKind = "app_scoped" | "global";
@@ -647,6 +650,14 @@ export const api = {
         hasKey: boolean;
         publicKey?: string | null;
         encryptedPrivateKey?: string | null;
+        wrapMode?: "master" | "oauth_app_key" | null;
+        oauthAppId?: string | null;
+        oauthWraps?: Array<{
+          oauthAppId: string;
+          deviceKey: string;
+          encryptedPrivateKey: string;
+          createdAt: string;
+        }>;
         createdAt?: string | null;
       }>(`/api/encryption/keys/${identityId}`),
 

@@ -971,11 +971,27 @@ export function openAveConnectorRuntime({
 // App key claim (shared secret transfer) embeds
 // ============================================
 
-function _buildAppKeyClaimUrl({ issuer, claimToken, claimUrl }) {
+function _buildAppKeyClaimUrl({
+  issuer,
+  claimToken,
+  claimUrl,
+  finalizeRecipientWrap,
+  deferFinalize,
+  sharedSecretResourceKey,
+}) {
   if (claimUrl) {
     try {
       const u = new URL(claimUrl);
       u.searchParams.set("embed", "1");
+      if (finalizeRecipientWrap === "citadel_v1") {
+        u.searchParams.set("finalize_wrap", "citadel_v1");
+      }
+      if (deferFinalize) {
+        u.searchParams.set("defer_finalize", "1");
+      }
+      if (sharedSecretResourceKey) {
+        u.searchParams.set("resource_key", sharedSecretResourceKey);
+      }
       return u.toString();
     } catch {
       throw new Error("[Ave] Invalid claimUrl");
@@ -987,6 +1003,15 @@ function _buildAppKeyClaimUrl({ issuer, claimToken, claimUrl }) {
   const u = new URL(`${issuer}/shared/claim`);
   u.searchParams.set("token", claimToken);
   u.searchParams.set("embed", "1");
+  if (finalizeRecipientWrap === "citadel_v1") {
+    u.searchParams.set("finalize_wrap", "citadel_v1");
+  }
+  if (deferFinalize) {
+    u.searchParams.set("defer_finalize", "1");
+  }
+  if (sharedSecretResourceKey) {
+    u.searchParams.set("resource_key", sharedSecretResourceKey);
+  }
   return u.toString();
 }
 
@@ -998,13 +1023,24 @@ export function openAppKeyClaimSheet({
   claimToken,
   claimUrl,
   issuer = "https://aveid.net",
+  finalizeRecipientWrap,
+  deferFinalize,
+  sharedSecretResourceKey,
+  appKeyB64,
   onSuccess,
   onError,
   onClose,
 }) {
   let resolved = false;
 
-  const src = _buildAppKeyClaimUrl({ issuer, claimToken, claimUrl });
+  const src = _buildAppKeyClaimUrl({
+    issuer,
+    claimToken,
+    claimUrl,
+    finalizeRecipientWrap,
+    deferFinalize,
+    sharedSecretResourceKey,
+  });
 
   const overlay = document.createElement("div");
   overlay.style.cssText = `
@@ -1054,6 +1090,15 @@ export function openAppKeyClaimSheet({
   sheet.appendChild(iframe);
   overlay.appendChild(sheet);
 
+  if (finalizeRecipientWrap === "citadel_v1" && appKeyB64) {
+    iframe.addEventListener("load", () => {
+      iframe.contentWindow?.postMessage(
+        { type: "ave:provide_app_key", payload: { appKeyB64 } },
+        issuer
+      );
+    });
+  }
+
   if (!document.getElementById("ave-sheet-styles")) {
     const style = document.createElement("style");
     style.id = "ave-sheet-styles";
@@ -1097,7 +1142,10 @@ export function openAppKeyClaimSheet({
     const data = event.data || {};
     if (resolved) return;
 
-    if (data.type === "ave:success" && data.payload?.kind === "app_key_claim") {
+    if (
+      data.type === "ave:success" &&
+      (data.payload?.kind === "app_key_claim" || data.payload?.kind === "app_key_claim_deferred")
+    ) {
       resolved = true;
       close();
       onSuccess?.(data.payload);
@@ -1126,12 +1174,23 @@ export function openAppKeyClaimPopup({
   issuer = "https://aveid.net",
   width = 480,
   height = 640,
+  finalizeRecipientWrap,
+  deferFinalize,
+  sharedSecretResourceKey,
+  appKeyB64,
   onSuccess,
   onError,
   onClose,
 }) {
   let resolved = false;
-  const src = _buildAppKeyClaimUrl({ issuer, claimToken, claimUrl });
+  const src = _buildAppKeyClaimUrl({
+    issuer,
+    claimToken,
+    claimUrl,
+    finalizeRecipientWrap,
+    deferFinalize,
+    sharedSecretResourceKey,
+  });
   const left = (window.innerWidth - width) / 2 + window.screenX;
   const top = (window.innerHeight - height) / 2 + window.screenY;
   const popup = window.open(
@@ -1145,12 +1204,26 @@ export function openAppKeyClaimPopup({
     return null;
   }
 
+  if (finalizeRecipientWrap === "citadel_v1" && appKeyB64) {
+    const deliver = () => {
+      try {
+        popup.postMessage({ type: "ave:provide_app_key", payload: { appKeyB64 } }, issuer);
+      } catch {
+      }
+    };
+    popup.onload = deliver;
+    setTimeout(deliver, 800);
+  }
+
   const messageHandler = (event) => {
     if (event.origin !== issuer) return;
     const data = event.data || {};
     if (resolved) return;
 
-    if (data.type === "ave:success" && data.payload?.kind === "app_key_claim") {
+    if (
+      data.type === "ave:success" &&
+      (data.payload?.kind === "app_key_claim" || data.payload?.kind === "app_key_claim_deferred")
+    ) {
       resolved = true;
       popup.close();
       window.removeEventListener("message", messageHandler);

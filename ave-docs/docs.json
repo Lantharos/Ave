@@ -55,7 +55,8 @@
               "guides/connector-app-to-app",
               "guides/ave-signing",
               "guides/end-to-end-encryption",
-              "guides/shared-secret-transfers"
+              "guides/shared-secret-transfers",
+              "guides/e2ee-oauth-shared-secrets-spas"
             ]
           },
           {

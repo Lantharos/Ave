@@ -78,6 +78,13 @@
       "when": 1774861200000,
       "tag": "0010_shared_secret_transfers",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1775000000000,
+      "tag": "0011_identity_encryption_wrap_modes",
+      "breakpoints": true
     }
   ]
 }

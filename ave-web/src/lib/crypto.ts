@@ -502,3 +502,39 @@ export async function decryptSecretFromIdentity(
   const sharedKey = await deriveSharedKey(recipientPrivateKey, senderPublicKey);
   return await decrypt(encryptedSecret, sharedKey);
 }
+
+const CITADEL_RECIPIENT_WRAP_INFO = new TextEncoder().encode("citadel-recipient-wrap-v1");
+
+export async function deriveCitadelRecipientStorageKeyFromAppKey(
+  appKeyRaw: ArrayBuffer,
+  resourceKey: string
+): Promise<CryptoKey> {
+  const salt = new TextEncoder().encode(`citadel:ss:${resourceKey}`);
+  const keyMaterial = await crypto.subtle.importKey("raw", appKeyRaw, "HKDF", false, ["deriveKey"]);
+  return crypto.subtle.deriveKey(
+    {
+      name: "HKDF",
+      hash: "SHA-256",
+      salt,
+      info: CITADEL_RECIPIENT_WRAP_INFO,
+    },
+    keyMaterial,
+    { name: "AES-GCM", length: 256 },
+    false,
+    ["encrypt", "decrypt"]
+  );
+}
+
+export function parseAppKeyBase64ToBytes(appKeyB64: string): ArrayBuffer | null {
+  const normalized = appKeyB64.replace(/ /g, "+");
+  try {
+    const binary = atob(normalized);
+    const out = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) {
+      out[i] = binary.charCodeAt(i);
+    }
+    return out.buffer;
+  } catch {
+    return null;
+  }
+}

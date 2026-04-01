@@ -1,4 +1,4 @@
-import { index, integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { index, integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 
 // Users table - core account (not identity)
 export const users = sqliteTable("users", {
@@ -395,10 +395,30 @@ export const identityEncryptionKeys = sqliteTable("identity_encryption_keys", {
   // ECDH public key (base64 SPKI)
   publicKey: text("public_key").notNull(),
 
-  // Private key encrypted with the user's master key (base64 PKCS8 wrapped in AES-GCM)
+  // Private key ciphertext (base64): master-key wrap (Ave web) or app-defined AES-GCM when wrap_mode is oauth_app_key
   encryptedPrivateKey: text("encrypted_private_key").notNull(),
+
+  wrapMode: text("wrap_mode"),
+  oauthAppId: text("oauth_app_id").references(() => oauthApps.id, { onDelete: "set null" }),
 }, (table) => [
   index("identity_encryption_keys_identity_id_idx").on(table.identityId),
+]);
+
+export const identityEncryptionOauthWraps = sqliteTable("identity_encryption_oauth_wraps", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  identityId: text("identity_id").references(() => identities.id, { onDelete: "cascade" }).notNull(),
+  oauthAppId: text("oauth_app_id").references(() => oauthApps.id, { onDelete: "cascade" }).notNull(),
+  deviceKey: text("device_key").notNull().default("default"),
+  createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull().$defaultFn(() => new Date()),
+  encryptedPrivateKey: text("encrypted_private_key").notNull(),
+}, (table) => [
+  index("identity_encryption_oauth_wraps_identity_id_idx").on(table.identityId),
+  index("identity_encryption_oauth_wraps_oauth_app_id_idx").on(table.oauthAppId),
+  uniqueIndex("identity_encryption_oauth_wraps_identity_oauth_device_unique").on(
+    table.identityId,
+    table.oauthAppId,
+    table.deviceKey
+  ),
 ]);
 
 // Shared secret logical records
