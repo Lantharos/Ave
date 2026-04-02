@@ -94,17 +94,20 @@ curl https://api.aveid.net/api/oauth/userinfo \
     - `POST /api/signing/requests/:requestId/deny` — deny a request
   </Accordion>
 
-  <Accordion title="App keys (shared secrets) — session auth plus public lookup">
+  <Accordion title="App keys (shared secrets) — OAuth access tokens plus public lookup">
     Public endpoints:
 
     - `GET /api/encryption/public-key/:handle` — look up an identity encryption key
     - `GET /api/shared-secrets/transfers/:claimToken` — resolve claim-link metadata
 
-    Session-authenticated endpoints:
+    **Identity encryption** (Ave session only — bearer session token or session cookie):
 
     - `GET /api/encryption/keys/:identityId`
     - `POST /api/encryption/keys/:identityId`
     - `PUT /api/encryption/keys/:identityId`
+
+    **Shared secrets** (OAuth **`access_token`** / **`access_token_jwt`** from the token endpoint — see [Shared secret API](/api/shared-secret-endpoints#shared-secrets-auth)):
+
     - `POST /api/shared-secrets`
     - `GET /api/shared-secrets`
     - `POST /api/shared-secrets/:id/transfers`

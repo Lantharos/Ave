@@ -3,6 +3,7 @@ import { db, sessions, devices, users } from "../db";
 import { eq, and, gt, lt } from "drizzle-orm";
 import { hashSessionToken } from "../lib/crypto";
 import { SESSION_COOKIE_NAME, setSessionCookie } from "../lib/session-cookie";
+import type { AccessTokenRecord } from "../lib/oauth-store";
 
 const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 const SESSION_REFRESH_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
@@ -31,6 +32,7 @@ export type AuthUser = {
 declare module "hono" {
   interface ContextVariableMap {
     user: AuthUser | null;
+    oauthAccess?: AccessTokenRecord | null;
   }
 }
 

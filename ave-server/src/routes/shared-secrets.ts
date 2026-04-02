@@ -12,8 +12,14 @@ import {
   sharedSecrets,
   sharedSecretTransferContracts,
 } from "../db";
-import { requireAuth } from "../middleware/auth";
+import type { Context, Next } from "hono";
+import { requireAuth, type AuthUser } from "../middleware/auth";
 import { generateSessionToken, hashSessionToken } from "../lib/crypto";
+import {
+  resolveOAuthAccessFromBearer,
+  oauthTokenAllowsAppScopedSecret,
+  oauthTokenMatchesAppScopedPayload,
+} from "../lib/oauth-access-auth";
 
 const app = new Hono();
 
@@ -108,12 +114,41 @@ app.get("/transfers/:claimToken", async (c) => {
   });
 });
 
+async function sharedSecretsOAuthBridge(c: Context, next: Next) {
+  if (c.get("user")) {
+    c.set("oauthAccess", null);
+    return next();
+  }
+
+  const authHeader = c.req.header("Authorization");
+  const bearer = authHeader?.startsWith("Bearer ") ? authHeader.slice(7).trim() : null;
+  if (!bearer) {
+    c.set("oauthAccess", null);
+    return next();
+  }
+
+  const record = await resolveOAuthAccessFromBearer(bearer);
+  if (record) {
+    c.set("user", {
+      id: record.userId,
+      deviceId: null,
+      authMethod: "oauth_access_token",
+    } satisfies AuthUser);
+    c.set("oauthAccess", record);
+  } else {
+    c.set("oauthAccess", null);
+  }
+
+  return next();
+}
+
+app.use("*", sharedSecretsOAuthBridge);
 app.use("*", requireAuth);
 
 const createSharedSecretSchema = z.object({
   identityId: z.string().uuid(),
   kind: z.enum(["app_scoped", "global"]),
-  appId: z.string().uuid().optional(),
+  appId: z.string().min(1).max(128).optional(),
   resourceKey: z.string().max(128).optional(),
   label: z.string().min(1).max(80).optional(),
   encryptedSecret: z.string().min(1),
@@ -130,6 +165,11 @@ app.post("/", zValidator("json", createSharedSecretSchema), async (c) => {
 
   if (payload.kind === "app_scoped" && !payload.appId) {
     return c.json({ error: "appId is required for app_scoped secrets" }, 400);
+  }
+
+  const oauth = c.get("oauthAccess");
+  if (!oauthTokenMatchesAppScopedPayload(oauth, payload.appId)) {
+    return c.json({ error: "appId does not match access token" }, 403);
   }
 
   const [secret] = await db
@@ -193,7 +233,7 @@ app.get("/", async (c) => {
     return c.json({ created: [], received: [] });
   }
 
-  const created = await db
+  const createdRows = await db
     .select({
       secret: sharedSecrets,
       owner: identities,
@@ -214,6 +254,9 @@ app.get("/", async (c) => {
     .where(inArray(sharedSecrets.ownerIdentityId, identityIds))
     .orderBy(desc(sharedSecrets.createdAt));
 
+  const oauth = c.get("oauthAccess");
+  const created = createdRows.filter((row) => oauthTokenAllowsAppScopedSecret(oauth, row.secret));
+
   const createdTransfers = created.length === 0
     ? []
     : await db
@@ -222,7 +265,7 @@ app.get("/", async (c) => {
         .where(inArray(sharedSecretTransferContracts.sharedSecretId, created.map((row) => row.secret.id)))
         .orderBy(desc(sharedSecretTransferContracts.createdAt));
 
-  const received = await db
+  const receivedRows = await db
     .select({
       access: sharedSecretAccess,
       secret: sharedSecrets,
@@ -235,6 +278,8 @@ app.get("/", async (c) => {
     .leftJoin(oauthApps, eq(oauthApps.id, sharedSecrets.appId))
     .where(and(inArray(sharedSecretAccess.recipientIdentityId, identityIds), isNull(sharedSecretAccess.revokedAt)))
     .orderBy(desc(sharedSecretAccess.createdAt));
+
+  const received = receivedRows.filter((row) => oauthTokenAllowsAppScopedSecret(oauth, row.secret));
 
   return c.json({
     created: created.map((row) => ({
@@ -334,6 +379,11 @@ app.post("/:id/transfers", zValidator("json", createTransferSchema), async (c) =
 
   if (!canCreateTransfer) {
     return c.json({ error: "Shared secret not found" }, 404);
+  }
+
+  const oauth = c.get("oauthAccess");
+  if (!oauthTokenAllowsAppScopedSecret(oauth, secret)) {
+    return c.json({ error: "Forbidden" }, 403);
   }
 
   const normalizedHandle = payload.targetHandle.toLowerCase();
@@ -576,6 +626,11 @@ app.get("/access", async (c) => {
   const requestedAppId = c.req.query("appId");
   const requestedResourceKey = c.req.query("resourceKey");
 
+  const oauth = c.get("oauthAccess");
+  if (oauth && requestedAppId && requestedAppId !== oauth.appId) {
+    return c.json({ error: "appId does not match access token" }, 403);
+  }
+
   const userIdentities = await db
     .select()
     .from(identities)
@@ -601,6 +656,7 @@ app.get("/access", async (c) => {
     .orderBy(desc(sharedSecretAccess.updatedAt));
 
   const filtered = rows.filter((row) => {
+    if (!oauthTokenAllowsAppScopedSecret(oauth, row.secret)) return false;
     if (requestedKind && row.secret.kind !== requestedKind) return false;
     if (requestedAppId && row.secret.appId !== requestedAppId) return false;
     if (requestedResourceKey && row.secret.resourceKey !== requestedResourceKey) return false;
