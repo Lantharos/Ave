@@ -17,6 +17,7 @@ import { requireAuth, type AuthUser } from "../middleware/auth";
 import { generateSessionToken, hashSessionToken } from "../lib/crypto";
 import {
   resolveOAuthAccessFromBearer,
+  resolveOAuthAppInternalId,
   oauthTokenAllowsAppScopedSecret,
   oauthTokenMatchesAppScopedPayload,
   oauthQueryAppIdMatchesAccessToken,
@@ -173,12 +174,20 @@ app.post("/", zValidator("json", createSharedSecretSchema), async (c) => {
     return c.json({ error: "appId does not match access token" }, 403);
   }
 
+  let internalAppId: string | null = null;
+  if (payload.kind === "app_scoped" && payload.appId) {
+    internalAppId = await resolveOAuthAppInternalId(payload.appId);
+    if (!internalAppId) {
+      return c.json({ error: "Unknown app id" }, 400);
+    }
+  }
+
   const [secret] = await db
     .insert(sharedSecrets)
     .values({
       ownerIdentityId: payload.identityId,
       kind: payload.kind,
-      appId: payload.appId || null,
+      appId: internalAppId,
       resourceKey: payload.resourceKey || null,
       label: payload.label || null,
       status: "active",
@@ -199,7 +208,7 @@ app.post("/", zValidator("json", createSharedSecretSchema), async (c) => {
       sharedSecretId: secret.id,
       ownerIdentityId: payload.identityId,
       kind: payload.kind,
-      appId: payload.appId,
+      appId: internalAppId ?? payload.appId,
       resourceKey: payload.resourceKey,
       label: payload.label,
     },
