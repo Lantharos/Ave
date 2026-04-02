@@ -98,7 +98,7 @@ export async function getJwtPublicJwk(): Promise<Record<string, string>> {
   };
 }
 
-export async function verifyJwt(token: string, audience?: string): Promise<Record<string, unknown> | null> {
+async function readVerifiedJwtPayloadWithoutAudience(token: string): Promise<Record<string, unknown> | null> {
   const publicKeyPem = getJwtPublicKeyPem();
   if (!publicKeyPem) {
     return null;
@@ -150,6 +150,19 @@ export async function verifyJwt(token: string, audience?: string): Promise<Recor
     return null;
   }
 
+  return payload as Record<string, unknown>;
+}
+
+export async function verifyJwtSignatureIssuerExp(token: string): Promise<Record<string, unknown> | null> {
+  return readVerifiedJwtPayloadWithoutAudience(token);
+}
+
+export async function verifyJwt(token: string, audience?: string): Promise<Record<string, unknown> | null> {
+  const payload = await readVerifiedJwtPayloadWithoutAudience(token);
+  if (!payload) {
+    return null;
+  }
+
   if (audience) {
     const aud = payload.aud;
     if (Array.isArray(aud)) {
@@ -159,7 +172,7 @@ export async function verifyJwt(token: string, audience?: string): Promise<Recor
     }
   }
 
-  return payload as Record<string, unknown>;
+  return payload;
 }
 
 export function hashToken(token: string): string {

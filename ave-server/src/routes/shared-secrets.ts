@@ -19,6 +19,7 @@ import {
   resolveOAuthAccessFromBearer,
   oauthTokenAllowsAppScopedSecret,
   oauthTokenMatchesAppScopedPayload,
+  oauthQueryAppIdMatchesAccessToken,
 } from "../lib/oauth-access-auth";
 
 const app = new Hono();
@@ -168,7 +169,7 @@ app.post("/", zValidator("json", createSharedSecretSchema), async (c) => {
   }
 
   const oauth = c.get("oauthAccess");
-  if (!oauthTokenMatchesAppScopedPayload(oauth, payload.appId)) {
+  if (!(await oauthTokenMatchesAppScopedPayload(oauth, payload.appId))) {
     return c.json({ error: "appId does not match access token" }, 403);
   }
 
@@ -627,7 +628,7 @@ app.get("/access", async (c) => {
   const requestedResourceKey = c.req.query("resourceKey");
 
   const oauth = c.get("oauthAccess");
-  if (oauth && requestedAppId && requestedAppId !== oauth.appId) {
+  if (!(await oauthQueryAppIdMatchesAccessToken(oauth, requestedAppId))) {
     return c.json({ error: "appId does not match access token" }, 403);
   }
 
