@@ -15,6 +15,7 @@
     let displayName = $state("");
     let handle = $state("");
     let email = $state("");
+    let verificationCode = $state("");
     let birthday = $state("");
     let avatarUrl = $state("");
     let bannerUrl = $state("");
@@ -31,13 +32,16 @@
     let uploadingBanner = $state(false);
     let error = $state("");
     let success = $state("");
+    let showingEmailVerification = $state(false);
 
     // Reset form when identity changes
     $effect(() => {
         if (identity) {
             displayName = identity.displayName;
             handle = identity.handle;
-            email = identity.email || "";
+            email = identity.pendingEmail || identity.email || "";
+            verificationCode = "";
+            showingEmailVerification = false;
             birthday = identity.birthday || "";
             avatarUrl = identity.avatarUrl || "";
             bannerUrl = identity.bannerUrl || "";
@@ -61,9 +65,6 @@
                 case "handle":
                     updateData.handle = handle;
                     break;
-                case "email":
-                    updateData.email = email || null;
-                    break;
                 case "birthday":
                     updateData.birthday = birthday || null;
                     break;
@@ -76,6 +77,94 @@
             setTimeout(() => success = "", 2000);
         } catch (e: any) {
             error = e.message || "Failed to save";
+        } finally {
+            isSaving = false;
+        }
+    }
+
+    async function startEmailVerification() {
+        if (!identity || !email.trim()) return;
+
+        isSaving = true;
+        error = "";
+        success = "";
+
+        try {
+            const { identity: updated } = await api.identities.startEmailVerification(identity.id, email.trim());
+            auth.updateIdentity(updated);
+            email = updated.pendingEmail || updated.email || "";
+            editing.email = false;
+            verificationCode = "";
+            showingEmailVerification = true;
+            success = "Verification code sent";
+            setTimeout(() => success = "", 2000);
+        } catch (e: any) {
+            error = e.message || "Failed to send verification code";
+        } finally {
+            isSaving = false;
+        }
+    }
+
+    async function verifyEmail() {
+        if (!identity || !verificationCode.trim()) return;
+
+        isSaving = true;
+        error = "";
+        success = "";
+
+        try {
+            const { identity: updated } = await api.identities.verifyEmail(identity.id, verificationCode.trim());
+            auth.updateIdentity(updated);
+            email = updated.email || "";
+            verificationCode = "";
+            showingEmailVerification = false;
+            success = "Email verified";
+            setTimeout(() => success = "", 2000);
+        } catch (e: any) {
+            error = e.message || "Failed to verify email";
+        } finally {
+            isSaving = false;
+        }
+    }
+
+    async function resendEmailVerification() {
+        if (!identity) return;
+
+        isSaving = true;
+        error = "";
+        success = "";
+
+        try {
+            const { identity: updated } = await api.identities.resendEmailVerification(identity.id);
+            auth.updateIdentity(updated);
+            email = updated.pendingEmail || updated.email || "";
+            success = "Verification code sent";
+            setTimeout(() => success = "", 2000);
+        } catch (e: any) {
+            error = e.message || "Failed to resend verification code";
+        } finally {
+            isSaving = false;
+        }
+    }
+
+    async function clearEmail() {
+        if (!identity) return;
+
+        isSaving = true;
+        error = "";
+        success = "";
+
+        try {
+            const { identity: updated } = await api.identities.clearEmail(identity.id);
+            auth.updateIdentity(updated);
+            email = "";
+            verificationCode = "";
+            editing.email = false;
+            showingEmailVerification = false;
+            success = "Email removed";
+            setTimeout(() => success = "", 2000);
+        } catch (e: any) {
+            error = e.message || "Failed to remove email";
         } finally {
             isSaving = false;
         }
@@ -412,19 +501,96 @@
                                 />
                                 <button 
                                     class="px-5 py-2 bg-[#FFFFFF] hover:bg-[#E0E0E0] text-[#090909] rounded-full text-[16px] font-medium"
-                                    onclick={() => saveField("email")}
+                                    onclick={startEmailVerification}
                                     disabled={isSaving}
                                 >
-                                    {isSaving ? "..." : "Save"}
+                                    {isSaving ? "..." : "Continue"}
                                 </button>
                             </div>
                         {:else}
-                            <Text type="h" size={24} mobileSize={16} weight="medium">{identity.email || "Not set"}</Text>
+                            <div class="flex flex-row flex-wrap items-center gap-2 md:gap-[14px]">
+                                <Text type="h" size={24} mobileSize={16} weight="medium">{identity.pendingEmail || identity.email || "Not set"}</Text>
+                                {#if identity.pendingEmail}
+                                    <span class="text-[#D2AC57] text-sm md:text-[16px] font-semibold">UNVERIFIED</span>
+                                {/if}
+                            </div>
+                            {#if showingEmailVerification && identity.pendingEmail}
+                                <div class="flex flex-col md:flex-row gap-3 items-stretch md:items-center mt-3 md:mt-[18px]">
+                                    <input
+                                        type="text"
+                                        inputmode="numeric"
+                                        maxlength="6"
+                                        class="flex-1 bg-transparent border-b border-[#333333] pb-[8px] text-white text-lg md:text-[24px] focus:outline-none"
+                                        bind:value={verificationCode}
+                                        placeholder="Enter code"
+                                        autocomplete="one-time-code"
+                                    />
+                                    <button
+                                        class="px-5 py-2 bg-[#FFFFFF] hover:bg-[#E0E0E0] text-[#090909] rounded-full text-[16px] font-medium"
+                                        onclick={verifyEmail}
+                                        disabled={isSaving || verificationCode.trim().length !== 6}
+                                    >
+                                        {isSaving ? "..." : "Verify"}
+                                    </button>
+                                </div>
+                                <div class="flex flex-row gap-3 mt-3 md:mt-[14px]">
+                                    <button
+                                        class="text-[#878787] hover:text-[#FFFFFF] transition-colors text-[14px] md:text-[16px]"
+                                        onclick={resendEmailVerification}
+                                        disabled={isSaving}
+                                    >
+                                        Resend code
+                                    </button>
+                                    <button
+                                        class="text-[#878787] hover:text-[#FFFFFF] transition-colors text-[14px] md:text-[16px]"
+                                        onclick={() => {
+                                            email = identity.pendingEmail || "";
+                                            showingEmailVerification = false;
+                                            editing.email = true;
+                                        }}
+                                        disabled={isSaving}
+                                    >
+                                        Change email
+                                    </button>
+                                    <button
+                                        class="text-[#878787] hover:text-[#FFFFFF] transition-colors text-[14px] md:text-[16px]"
+                                        onclick={clearEmail}
+                                        disabled={isSaving}
+                                    >
+                                        Clear
+                                    </button>
+                                </div>
+                            {/if}
                         {/if}
                     </div>
 
+                    {#if !editing.email && (identity.pendingEmail || identity.email)}
+                        <button
+                            onclick={() => {
+                                if (identity.pendingEmail) {
+                                    showingEmailVerification = !showingEmailVerification;
+                                }
+                            }}
+                            class="w-full md:w-auto md:aspect-square flex-grow h-12 md:h-full p-3 md:p-[40px] bg-[#111111] hover:bg-[#202020] transition-colors duration-300 rounded-[16px] md:rounded-[32px] flex items-center justify-center disabled:cursor-default"
+                            aria-label={identity.pendingEmail ? "verify email" : "email verified"}
+                            disabled={!identity.pendingEmail}
+                        >
+                            {#if identity.pendingEmail}
+                                <svg class="w-6 h-6 md:w-[34px] md:h-[34px]" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                    <path d="M12 22C17.5228 22 22 17.5228 22 12C22 6.47715 17.5228 2 12 2C6.47715 2 2 6.47715 2 12C2 17.5228 6.47715 22 12 22Z" stroke="white" stroke-width="2.5"/>
+                                    <path d="M8.5 12L11 14.5L15.5 10" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+                                </svg>
+                            {:else}
+                                <svg class="w-6 h-6 md:w-[34px] md:h-[34px]" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                    <path d="M12 22C17.5228 22 22 17.5228 22 12C22 6.47715 17.5228 2 12 2C6.47715 2 2 6.47715 2 12C2 17.5228 6.47715 22 12 22Z" stroke="white" stroke-width="2.5"/>
+                                    <path d="M8.5 12L11 14.5L15.5 10" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+                                </svg>
+                            {/if}
+                        </button>
+                    {/if}
+
                     <button 
-                        onclick={() => { editing.email = !editing.email }} 
+                        onclick={() => { editing.email = !editing.email; showingEmailVerification = false; }} 
                         class="w-full md:w-auto md:aspect-square flex-grow h-12 md:h-full p-3 md:p-[40px] bg-[#111111] hover:bg-[#202020] transition-colors duration-300 cursor-pointer rounded-[16px] md:rounded-[32px] flex items-center justify-center" 
                         aria-label="edit email"
                     >

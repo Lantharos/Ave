@@ -162,7 +162,7 @@ See [Connector app-to-app](/guides/connector-app-to-app) for details.
     ```
   </Step>
   <Step title="Handle missing claims gracefully">
-    Treat any optional claim (`email`, `name`, etc.) as potentially absent, even when you requested the scope. Do not throw or break when a claim is missing.
+    Treat any optional claim (`email`, `name`, etc.) as potentially absent. `email` requires both the `email` scope and a verified email on the selected identity. Do not throw or break when a claim is missing.
   </Step>
   <Step title="Review scope changes">
     Adding a new scope changes what users see on the consent screen. Have product and legal review any scope additions.
@@ -176,7 +176,7 @@ See [Connector app-to-app](/guides/connector-app-to-app) for details.
     If your app does not have `allowUserIdScope` enabled, requesting `user_id` in the scope has no effect. The `uid` claim will not appear and the `user_id` field will not be in the token response.
   </Accordion>
   <Accordion title="Assuming email is always present">
-    Email is present only if you requested `email` scope and the identity has an email address. Always treat it as optional.
+    Email is present only if you requested `email` scope and the identity has a verified email address. If the user has not linked and verified an email yet, Ave blocks the authorization flow until they do. Always treat the claim as optional in your app anyway.
   </Accordion>
   <Accordion title="Re-requesting scopes on refresh">
     Refresh token grants cannot add new scopes. The new tokens will have the same scopes as the original grant. To get additional scopes, run a new authorization code flow with the new scope.

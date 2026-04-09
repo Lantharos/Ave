@@ -56,6 +56,10 @@ export const identities = sqliteTable("identities", {
   displayName: text("display_name").notNull(), // encrypted
   handle: text("handle").notNull().unique(), // plaintext for lookup
   email: text("email"), // encrypted
+  pendingEmail: text("pending_email"),
+  emailVerificationCodeHash: text("email_verification_code_hash"),
+  emailVerificationExpiresAt: integer("email_verification_expires_at", { mode: "timestamp_ms" }),
+  emailVerificationSentAt: integer("email_verification_sent_at", { mode: "timestamp_ms" }),
   birthday: text("birthday"), // encrypted
   
   // Avatar and banner URLs (stored in object storage)

@@ -29,6 +29,7 @@ app.get("/export", async (c) => {
       displayName: identities.displayName,
       handle: identities.handle,
       email: identities.email,
+      pendingEmail: identities.pendingEmail,
       birthday: identities.birthday,
       avatarUrl: identities.avatarUrl,
       bannerUrl: identities.bannerUrl,

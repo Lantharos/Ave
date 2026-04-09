@@ -4,6 +4,15 @@ import { z } from "zod";
 import { db, identities, activityLogs, identityEncryptionKeys } from "../db";
 import { requireAuth } from "../middleware/auth";
 import { eq, and } from "drizzle-orm";
+import {
+  beginEmailVerification,
+  canResendEmailVerification,
+  clearPendingEmailVerification,
+  completeEmailVerification,
+  getEmailVerificationCooldownSeconds,
+  normalizeEmail,
+} from "../lib/email-verification";
+import { serializeIdentityForOwner } from "../lib/identity-serialization";
 
 const app = new Hono();
 
@@ -20,17 +29,7 @@ app.get("/", async (c) => {
     .where(eq(identities.userId, user.id));
   
   return c.json({
-    identities: userIdentities.map((i) => ({
-      id: i.id,
-      displayName: i.displayName,
-      handle: i.handle,
-      email: i.email,
-      birthday: i.birthday,
-      avatarUrl: i.avatarUrl,
-      bannerUrl: i.bannerUrl,
-      isPrimary: i.isPrimary,
-      createdAt: i.createdAt,
-    })),
+    identities: userIdentities.map(serializeIdentityForOwner),
   });
 });
 
@@ -50,17 +49,7 @@ app.get("/:identityId", async (c) => {
   }
   
   return c.json({
-    identity: {
-      id: identity.id,
-      displayName: identity.displayName,
-      handle: identity.handle,
-      email: identity.email,
-      birthday: identity.birthday,
-      avatarUrl: identity.avatarUrl,
-      bannerUrl: identity.bannerUrl,
-      isPrimary: identity.isPrimary,
-      createdAt: identity.createdAt,
-    },
+    identity: serializeIdentityForOwner(identity),
   });
 });
 
@@ -111,7 +100,7 @@ app.post("/", zValidator("json", z.object({
       userId: user.id,
       displayName: data.displayName,
       handle: data.handle.toLowerCase(),
-      email: data.email,
+      pendingEmail: data.email ? normalizeEmail(data.email) : null,
       birthday: data.birthday,
       avatarUrl: data.avatarUrl,
       bannerUrl: data.bannerUrl,
@@ -139,16 +128,7 @@ app.post("/", zValidator("json", z.object({
   });
   
   return c.json({
-    identity: {
-      id: identity.id,
-      displayName: identity.displayName,
-      handle: identity.handle,
-      email: identity.email,
-      birthday: identity.birthday,
-      avatarUrl: identity.avatarUrl,
-      bannerUrl: identity.bannerUrl,
-      isPrimary: identity.isPrimary,
-    },
+    identity: serializeIdentityForOwner(identity),
   }, 201);
 });
 
@@ -156,7 +136,6 @@ app.post("/", zValidator("json", z.object({
 app.patch("/:identityId", zValidator("json", z.object({
   displayName: z.string().min(1).max(64).optional(),
   handle: z.string().min(3).max(32).regex(/^[a-zA-Z0-9_]+$/).optional(),
-  email: z.string().email().nullable().optional(),
   birthday: z.string().nullable().optional(),
   avatarUrl: z.string().url().nullable().optional(),
   // bannerUrl can be a URL or a hex color (e.g., #FF6B6B)
@@ -196,7 +175,6 @@ app.patch("/:identityId", zValidator("json", z.object({
   const updateData: Record<string, unknown> = { updatedAt: new Date() };
   if (data.displayName !== undefined) updateData.displayName = data.displayName;
   if (data.handle !== undefined) updateData.handle = data.handle.toLowerCase();
-  if (data.email !== undefined) updateData.email = data.email;
   if (data.birthday !== undefined) updateData.birthday = data.birthday;
   if (data.avatarUrl !== undefined) updateData.avatarUrl = data.avatarUrl;
   if (data.bannerUrl !== undefined) updateData.bannerUrl = data.bannerUrl;
@@ -219,16 +197,178 @@ app.patch("/:identityId", zValidator("json", z.object({
   });
   
   return c.json({
-    identity: {
-      id: updated.id,
-      displayName: updated.displayName,
-      handle: updated.handle,
-      email: updated.email,
-      birthday: updated.birthday,
-      avatarUrl: updated.avatarUrl,
-      bannerUrl: updated.bannerUrl,
-      isPrimary: updated.isPrimary,
-    },
+    identity: serializeIdentityForOwner(updated),
+  });
+});
+
+app.post("/:identityId/email/start", zValidator("json", z.object({
+  email: z.string().email(),
+})), async (c) => {
+  const user = c.get("user")!;
+  const identityId = c.req.param("identityId");
+  const { email } = c.req.valid("json");
+
+  const [identity] = await db
+    .select()
+    .from(identities)
+    .where(and(eq(identities.id, identityId), eq(identities.userId, user.id)))
+    .limit(1);
+
+  if (!identity) {
+    return c.json({ error: "Identity not found" }, 404);
+  }
+
+  if (!canResendEmailVerification(identity)) {
+    return c.json({
+      error: `Please wait ${getEmailVerificationCooldownSeconds(identity)} seconds before requesting another code.`,
+    }, 429);
+  }
+
+  await beginEmailVerification(identity, email);
+
+  const [updated] = await db
+    .select()
+    .from(identities)
+    .where(eq(identities.id, identity.id))
+    .limit(1);
+
+  await db.insert(activityLogs).values({
+    userId: user.id,
+    action: "identity_email_verification_started",
+    details: { identityId, pendingEmail: normalizeEmail(email) },
+    deviceId: user.deviceId,
+    ipAddress: c.req.header("x-forwarded-for") || c.req.header("x-real-ip"),
+    userAgent: c.req.header("user-agent"),
+    severity: "info",
+  });
+
+  return c.json({
+    success: true,
+    identity: updated ? serializeIdentityForOwner(updated) : serializeIdentityForOwner({
+      ...identity,
+      pendingEmail: normalizeEmail(email),
+    } as typeof identity),
+  });
+});
+
+app.post("/:identityId/email/verify", zValidator("json", z.object({
+  code: z.string().min(6).max(6),
+})), async (c) => {
+  const user = c.get("user")!;
+  const identityId = c.req.param("identityId");
+  const { code } = c.req.valid("json");
+
+  const [identity] = await db
+    .select()
+    .from(identities)
+    .where(and(eq(identities.id, identityId), eq(identities.userId, user.id)))
+    .limit(1);
+
+  if (!identity) {
+    return c.json({ error: "Identity not found" }, 404);
+  }
+
+  const updated = await completeEmailVerification(identity, code);
+  if (!updated) {
+    return c.json({ error: "Invalid or expired verification code" }, 400);
+  }
+
+  await db.insert(activityLogs).values({
+    userId: user.id,
+    action: "identity_email_verified",
+    details: { identityId, email: updated.email },
+    deviceId: user.deviceId,
+    ipAddress: c.req.header("x-forwarded-for") || c.req.header("x-real-ip"),
+    userAgent: c.req.header("user-agent"),
+    severity: "info",
+  });
+
+  return c.json({
+    success: true,
+    identity: serializeIdentityForOwner(updated),
+  });
+});
+
+app.post("/:identityId/email/resend", async (c) => {
+  const user = c.get("user")!;
+  const identityId = c.req.param("identityId");
+
+  const [identity] = await db
+    .select()
+    .from(identities)
+    .where(and(eq(identities.id, identityId), eq(identities.userId, user.id)))
+    .limit(1);
+
+  if (!identity) {
+    return c.json({ error: "Identity not found" }, 404);
+  }
+
+  if (!identity.pendingEmail) {
+    return c.json({ error: "No email is waiting to be verified" }, 400);
+  }
+
+  if (!canResendEmailVerification(identity)) {
+    return c.json({
+      error: `Please wait ${getEmailVerificationCooldownSeconds(identity)} seconds before requesting another code.`,
+    }, 429);
+  }
+
+  await beginEmailVerification(identity, identity.pendingEmail);
+
+  const [updated] = await db
+    .select()
+    .from(identities)
+    .where(eq(identities.id, identity.id))
+    .limit(1);
+
+  return c.json({
+    success: true,
+    identity: updated ? serializeIdentityForOwner(updated) : serializeIdentityForOwner(identity),
+  });
+});
+
+app.delete("/:identityId/email", async (c) => {
+  const user = c.get("user")!;
+  const identityId = c.req.param("identityId");
+
+  const [identity] = await db
+    .select()
+    .from(identities)
+    .where(and(eq(identities.id, identityId), eq(identities.userId, user.id)))
+    .limit(1);
+
+  if (!identity) {
+    return c.json({ error: "Identity not found" }, 404);
+  }
+
+  if (identity.pendingEmail) {
+    await clearPendingEmailVerification(identity.id);
+  } else {
+    await db
+      .update(identities)
+      .set({
+        email: null,
+        updatedAt: new Date(),
+      })
+      .where(eq(identities.id, identity.id));
+  }
+
+  const [updated] = await db
+    .select()
+    .from(identities)
+    .where(eq(identities.id, identity.id))
+    .limit(1);
+
+  return c.json({
+    success: true,
+    identity: updated ? serializeIdentityForOwner(updated) : serializeIdentityForOwner({
+      ...identity,
+      email: null,
+      pendingEmail: null,
+      emailVerificationCodeHash: null,
+      emailVerificationExpiresAt: null,
+      emailVerificationSentAt: null,
+    } as typeof identity),
   });
 });
 

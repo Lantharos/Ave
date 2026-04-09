@@ -16,6 +16,8 @@ import { eq } from "drizzle-orm";
 import { requireAuth } from "../middleware/auth";
 import { deleteChallenge, getChallenge, setChallenge } from "../lib/challenge-store";
 import { resolvePasskeyName } from "../lib/passkey-names";
+import { normalizeEmail } from "../lib/email-verification";
+import { serializeIdentityForOwner } from "../lib/identity-serialization";
 
 const app = new Hono();
 
@@ -166,7 +168,7 @@ app.post("/complete", zValidator("json", completeRegistrationSchema), async (c) 
         userId: user.id,
         displayName: data.identity.displayName,
         handle: data.identity.handle.toLowerCase(),
-        email: data.identity.email,
+        pendingEmail: data.identity.email ? normalizeEmail(data.identity.email) : null,
         birthday: data.identity.birthday,
         avatarUrl: data.identity.avatarUrl,
         bannerUrl: data.identity.bannerUrl,
@@ -274,13 +276,7 @@ app.post("/complete", zValidator("json", completeRegistrationSchema), async (c) 
       id: result.user.id,
     },
     identity: {
-      id: result.identity.id,
-      displayName: result.identity.displayName,
-      handle: result.identity.handle,
-      email: result.identity.email,
-      avatarUrl: result.identity.avatarUrl,
-      bannerUrl: result.identity.bannerUrl,
-      isPrimary: result.identity.isPrimary,
+      ...serializeIdentityForOwner(result.identity),
     },
     device: {
       id: result.device.id,

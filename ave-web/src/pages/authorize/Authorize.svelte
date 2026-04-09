@@ -95,6 +95,8 @@
     });
 
     const isQuickAuth = $derived(params.clientId.startsWith("origin:"));
+    const requiresEmailScope = $derived.by(() => params.scope.split(" ").map((value) => value.trim()).filter(Boolean).includes("email"));
+    const selectedIdentityNeedsEmail = $derived.by(() => Boolean(selectedIdentity && requiresEmailScope && !selectedIdentity.email));
     const quickOriginHostname = $derived.by(() => {
         if (!isQuickAuth) return null;
         try { return new URL(params.clientId.slice("origin:".length)).hostname; } catch { return null; }
@@ -122,6 +124,9 @@
     let autoAuthorizing = $state(false);
     let completed = $state(false);
     let error = $state<string | null>(null);
+    let emailDraft = $state("");
+    let emailCode = $state("");
+    let emailSubmitting = $state(false);
     let sliderPosition = $state(0);
     let sliderActive = $state(false);
     let needsMasterKey = $state(false);
@@ -143,6 +148,12 @@
 
     function appDisplayName() {
         return appInfo?.name || quickOriginHostname || "this app";
+    }
+
+    function syncSelectedIdentity(identity: Identity) {
+        auth.updateIdentity(identity);
+        selectedIdentity = identity;
+        emailDraft = identity.pendingEmail || identity.email || "";
     }
 
     async function ensureAppInfo() {
@@ -202,10 +213,11 @@
                 : null;
 
             selectedIdentity = preferredIdentity || existingIdentity || authState.currentIdentity || authState.identities[0] || null;
+            emailDraft = selectedIdentity?.pendingEmail || selectedIdentity?.email || "";
 
             const shouldAutoAuthorize = !!existingAuth && !!existingIdentity && (!bootstrap.app.supportsE2ee || hasMasterKey());
 
-            if (shouldAutoAuthorize) {
+            if (shouldAutoAuthorize && !(requiresEmailScope && !selectedIdentity?.email)) {
                 // Keep UI in loading state while we redirect.
                 autoAuthorizing = true;
                 await handleAuthorize();
@@ -353,6 +365,53 @@
             }
             authorizing = false;
             sliderPosition = 0;
+        }
+    }
+
+    async function handleStartEmailVerification() {
+        if (!selectedIdentity || !emailDraft.trim()) return;
+
+        emailSubmitting = true;
+        error = null;
+        try {
+            const { identity } = await api.identities.startEmailVerification(selectedIdentity.id, emailDraft.trim());
+            syncSelectedIdentity(identity);
+            emailCode = "";
+        } catch (err) {
+            error = err instanceof Error ? err.message : "Failed to send verification code";
+        } finally {
+            emailSubmitting = false;
+        }
+    }
+
+    async function handleVerifyEmail() {
+        if (!selectedIdentity || emailCode.trim().length !== 6) return;
+
+        emailSubmitting = true;
+        error = null;
+        try {
+            const { identity } = await api.identities.verifyEmail(selectedIdentity.id, emailCode.trim());
+            syncSelectedIdentity(identity);
+            emailCode = "";
+        } catch (err) {
+            error = err instanceof Error ? err.message : "Failed to verify email";
+        } finally {
+            emailSubmitting = false;
+        }
+    }
+
+    async function handleResendEmailVerification() {
+        if (!selectedIdentity) return;
+
+        emailSubmitting = true;
+        error = null;
+        try {
+            const { identity } = await api.identities.resendEmailVerification(selectedIdentity.id);
+            syncSelectedIdentity(identity);
+        } catch (err) {
+            error = err instanceof Error ? err.message : "Failed to resend verification code";
+        } finally {
+            emailSubmitting = false;
         }
     }
 
@@ -865,7 +924,7 @@
                                 {#each $identitiesStore as identity}
                                     <button 
                                         class="w-full flex flex-row gap-2 md:gap-[15px] items-center p-3 md:p-[15px] hover:bg-[#222222] transition-colors {identity.id === selectedIdentity.id ? 'bg-[#222222]' : ''}"
-                                        onclick={() => { selectedIdentity = identity; identityDropdownOpen = false; }}
+                                        onclick={() => { selectedIdentity = identity; emailDraft = identity.pendingEmail || identity.email || ""; emailCode = ""; identityDropdownOpen = false; }}
                                     >
                                         {#if identity.avatarUrl}
                                             <img src={identity.avatarUrl} alt="" class="w-8 h-8 md:w-[40px] md:h-[40px] rounded-full object-cover"/>
@@ -909,36 +968,117 @@
                 </IdentityCard>
             </div>
 
-            <!-- Swipe to sign in -->
-            <div class="flex flex-col gap-3 md:gap-[20px] mt-4 md:mt-0">
-                <!-- svelte-ignore a11y_no_static_element_interactions -->
-                <div 
-                    id="auth-slider"
-                    class="rounded-full bg-[#171717] w-full relative h-[50px] md:h-[82px] touch-none select-none"
-                    onpointerdown={handleSliderStart}
-                    onpointermove={handleSliderMove}
-                    onpointerup={handleSliderEnd}
-                    onpointercancel={handleSliderEnd}
-                >
-                    <div 
-                        class="w-[44px] h-[44px] md:w-[70px] md:h-[70px] bg-white rounded-full cursor-grab flex items-center justify-center absolute top-[3px] left-[3px] md:top-[6px] md:left-[6px] z-10 pointer-events-none {sliderActive ? '' : 'transition-[transform] duration-300'}"
-                        style="transform: translateX({sliderMaxTravel > 0 ? sliderPosition * sliderMaxTravel : sliderPosition * 100}px);"
-                    >
-                        {#if authorizing}
-                            <div class="w-5 h-5 md:w-[24px] md:h-[24px] border-2 border-[#090909] border-t-transparent rounded-full animate-spin"></div>
+            {#if selectedIdentityNeedsEmail}
+                <div class="flex flex-col gap-3 md:gap-[18px] mt-4 md:mt-0">
+                    <div class="p-4 md:p-[30px] bg-[#111111] rounded-[20px] md:rounded-[32px] flex flex-col gap-3 md:gap-[16px]">
+                        <div>
+                            <Text type="h" size={22} mobileSize={18} color="#FFFFFF">Email required to continue</Text>
+                            <p class="text-[#878787] text-sm md:text-[16px] mt-2 md:mt-[10px]">
+                                {appDisplayName()} requested access to your email. Add and verify it here, then continue.
+                            </p>
+                        </div>
+
+                        {#if selectedIdentity.pendingEmail}
+                            <div class="flex flex-col gap-3 md:gap-[14px]">
+                                <div class="p-3 md:p-[22px] bg-[#171717] rounded-[18px] md:rounded-[24px]">
+                                    <Text type="hd" size={14} mobileSize={12} color="#878787">PENDING EMAIL</Text>
+                                    <Text type="h" size={22} mobileSize={16} color="#FFFFFF">{selectedIdentity.pendingEmail}</Text>
+                                </div>
+                                <div class="flex flex-col md:flex-row gap-3 items-stretch md:items-center">
+                                    <input
+                                        type="text"
+                                        inputmode="numeric"
+                                        maxlength="6"
+                                        class="flex-1 bg-transparent border-b border-[#333333] pb-[10px] text-white text-lg md:text-[24px] focus:outline-none"
+                                        bind:value={emailCode}
+                                        placeholder="Enter code"
+                                        autocomplete="one-time-code"
+                                    />
+                                    <button
+                                        class="px-5 py-3 bg-[#FFFFFF] hover:bg-[#E0E0E0] text-[#090909] rounded-full text-[16px] font-medium disabled:opacity-60"
+                                        onclick={handleVerifyEmail}
+                                        disabled={emailSubmitting || emailCode.trim().length !== 6}
+                                    >
+                                        {emailSubmitting ? "..." : "Verify"}
+                                    </button>
+                                </div>
+                                <div class="flex flex-row gap-3">
+                                    <button
+                                        class="text-[#878787] hover:text-[#FFFFFF] transition-colors text-[14px] md:text-[16px]"
+                                        onclick={handleResendEmailVerification}
+                                        disabled={emailSubmitting}
+                                    >
+                                        Resend code
+                                    </button>
+                                </div>
+                                <div class="flex flex-col md:flex-row gap-3 items-stretch md:items-center">
+                                    <input
+                                        type="email"
+                                        class="flex-1 bg-transparent border-b border-[#333333] pb-[10px] text-white text-lg md:text-[24px] focus:outline-none"
+                                        bind:value={emailDraft}
+                                        placeholder="Use another email"
+                                        autocomplete="email"
+                                    />
+                                    <button
+                                        class="px-5 py-3 bg-[#171717] hover:bg-[#202020] text-[#FFFFFF] rounded-full text-[16px] font-medium disabled:opacity-60"
+                                        onclick={handleStartEmailVerification}
+                                        disabled={emailSubmitting || !emailDraft.trim()}
+                                    >
+                                        {emailSubmitting ? "..." : "Change"}
+                                    </button>
+                                </div>
+                            </div>
                         {:else}
-                            <svg class="w-5 h-5 md:w-[35px] md:h-[35px]" viewBox="0 0 35 35" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                <path d="M11 30L23 18L11 6" stroke="#090909" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
-                            </svg>
+                            <div class="flex flex-col md:flex-row gap-3 items-stretch md:items-center">
+                                <input
+                                    type="email"
+                                    class="flex-1 bg-transparent border-b border-[#333333] pb-[10px] text-white text-lg md:text-[24px] focus:outline-none"
+                                    bind:value={emailDraft}
+                                    placeholder="Enter email"
+                                    autocomplete="email"
+                                />
+                                <button
+                                    class="px-5 py-3 bg-[#FFFFFF] hover:bg-[#E0E0E0] text-[#090909] rounded-full text-[16px] font-medium disabled:opacity-60"
+                                    onclick={handleStartEmailVerification}
+                                    disabled={emailSubmitting || !emailDraft.trim()}
+                                >
+                                    {emailSubmitting ? "..." : "Send code"}
+                                </button>
+                            </div>
                         {/if}
                     </div>
-
-                    <p class="text-[#878787] text-sm md:text-[18px] font-poppins font-normal absolute top-0 bottom-0 left-0 right-0 text-center flex items-center justify-center pointer-events-none">
-                        {authorizing ? "Signing in..." : "Swipe to Sign In"}
-                    </p>
-
                 </div>
-            </div>
+            {:else}
+                <div class="flex flex-col gap-3 md:gap-[20px] mt-4 md:mt-0">
+                    <!-- svelte-ignore a11y_no_static_element_interactions -->
+                    <div 
+                        id="auth-slider"
+                        class="rounded-full bg-[#171717] w-full relative h-[50px] md:h-[82px] touch-none select-none"
+                        onpointerdown={handleSliderStart}
+                        onpointermove={handleSliderMove}
+                        onpointerup={handleSliderEnd}
+                        onpointercancel={handleSliderEnd}
+                    >
+                        <div 
+                            class="w-[44px] h-[44px] md:w-[70px] md:h-[70px] bg-white rounded-full cursor-grab flex items-center justify-center absolute top-[3px] left-[3px] md:top-[6px] md:left-[6px] z-10 pointer-events-none {sliderActive ? '' : 'transition-[transform] duration-300'}"
+                            style="transform: translateX({sliderMaxTravel > 0 ? sliderPosition * sliderMaxTravel : sliderPosition * 100}px);"
+                        >
+                            {#if authorizing}
+                                <div class="w-5 h-5 md:w-[24px] md:h-[24px] border-2 border-[#090909] border-t-transparent rounded-full animate-spin"></div>
+                            {:else}
+                                <svg class="w-5 h-5 md:w-[35px] md:h-[35px]" viewBox="0 0 35 35" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                    <path d="M11 30L23 18L11 6" stroke="#090909" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+                                </svg>
+                            {/if}
+                        </div>
+
+                        <p class="text-[#878787] text-sm md:text-[18px] font-poppins font-normal absolute top-0 bottom-0 left-0 right-0 text-center flex items-center justify-center pointer-events-none">
+                            {authorizing ? "Signing in..." : "Swipe to Sign In"}
+                        </p>
+
+                    </div>
+                </div>
+            {/if}
         {/if}
     </div>
 

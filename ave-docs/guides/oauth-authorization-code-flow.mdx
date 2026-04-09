@@ -31,7 +31,7 @@ Ave returns two different JWTs on a successful token exchange. Understanding the
     }
     ```
 
-    Profile claims (`name`, `preferred_username`, `picture`) are only present if you requested the `profile` scope. `email` is only present if you requested `email`. `nonce` is only present if you included one in the authorization request.
+    Profile claims (`name`, `preferred_username`, `picture`) are only present if you requested the `profile` scope. `email` is only present if you requested `email` and the selected identity has a verified email. `nonce` is only present if you included one in the authorization request.
 
     **Use `id_token` for:**
     - Establishing your app session (validating who logged in)
@@ -94,7 +94,7 @@ Ave returns two different JWTs on a successful token exchange. Understanding the
 | `nonce` | `id_token` only | Echo of the nonce from the authorization request |
 | `name` | `id_token` only | Display name (requires `profile` scope) |
 | `preferred_username` | `id_token` only | Identity handle (requires `profile` scope) |
-| `email` | `id_token` only | Email address (requires `email` scope) |
+| `email` | `id_token` only | Verified email address (requires `email` scope) |
 | `picture` | `id_token` only | Avatar URL (requires `profile` scope) |
 | `cid` | `access_token_jwt` only | Your client ID |
 | `scope` | `access_token_jwt` only | Space-separated granted scopes |

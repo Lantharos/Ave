@@ -8,6 +8,7 @@ import { randomUUID, timingSafeEqual } from "crypto";
 import { hashSessionToken } from "../lib/crypto";
 import { getIssuer, getResourceAudience, getJwtPublicJwk, signJwt, verifyJwt, hashToken } from "../lib/oidc";
 import { consumeAuthorizationCode, getAccessToken, getAuthorizationCode, setAccessToken, setAuthorizationCode } from "../lib/oauth-store";
+import { hasVerifiedEmail, serializeIdentityForApp, serializeIdentityForOwner } from "../lib/identity-serialization";
 
 const app = new Hono();
 export const oidcRoutes = new Hono();
@@ -228,13 +229,7 @@ async function buildTokenResponseFromAuthorizationCode(params: {
     token_type: "Bearer",
     expires_in: accessTokenTtl,
     scope: authCode.scope,
-    user: identity ? {
-      id: identity.id,
-      handle: identity.handle,
-      displayName: identity.displayName,
-      email: identity.email,
-      avatarUrl: identity.avatarUrl,
-    } : null,
+    user: identity ? serializeIdentityForApp(identity) : null,
   };
 
   const jwtAccessToken = await signJwt({
@@ -494,7 +489,7 @@ app.get("/fedcm/accounts", async (c) => {
       id: identity.id,
       given_name: identity.displayName.split(" ")[0] || identity.displayName,
       name: identity.displayName,
-      email: identity.email || `${identity.handle}@aveid.net`,
+      ...(identity.email ? { email: identity.email } : {}),
       picture: identity.avatarUrl || undefined,
       approved_clients: approvedClientsByIdentity.get(identity.id) || [],
       login_hints: [identity.handle, identity.id],
@@ -567,7 +562,7 @@ app.post("/fedcm/assertion", async (c) => {
     ))
     .limit(1);
 
-  if (oauthApp.supportsE2ee || !existingAuth) {
+  if ((scope.split(" ").map((value) => value.trim()).filter(Boolean).includes("email") && !identity.email) || oauthApp.supportsE2ee || !existingAuth) {
     const continueUrl = new URL(`${getWebBase()}/authorize`);
     continueUrl.searchParams.set("client_id", clientId);
     continueUrl.searchParams.set("redirect_uri", redirectUri);
@@ -784,6 +779,14 @@ app.post("/authorize", requireAuth, zValidator("json", z.object({
   
   if (!identity) {
     return c.json({ error: "Invalid identity" }, 400);
+  }
+
+  if (requestedScopes.includes("email") && !hasVerifiedEmail(identity)) {
+    return c.json({
+      error: identity.pendingEmail
+        ? "Verify your email before continuing"
+        : "Add a verified email before continuing",
+    }, 409);
   }
 
   const authorizationMethod = interactionMode === "instant"
@@ -1640,17 +1643,7 @@ app.get("/session/bootstrap", requireAuth, async (c) => {
   c.header("Cache-Control", "no-store");
 
   return c.json({
-    identities: userIdentities.map((identity) => ({
-      id: identity.id,
-      displayName: identity.displayName,
-      handle: identity.handle,
-      email: identity.email,
-      birthday: identity.birthday,
-      avatarUrl: identity.avatarUrl,
-      bannerUrl: identity.bannerUrl,
-      isPrimary: identity.isPrimary,
-      createdAt: identity.createdAt,
-    })),
+    identities: userIdentities.map(serializeIdentityForOwner),
   });
 });
 

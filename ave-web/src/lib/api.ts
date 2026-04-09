@@ -137,10 +137,12 @@ export interface Identity {
   displayName: string;
   handle: string;
   email?: string;
+  pendingEmail?: string | null;
   birthday?: string;
   avatarUrl?: string;
   bannerUrl?: string;
   isPrimary: boolean;
+  createdAt?: string;
 }
 
 export interface Device {
@@ -478,7 +480,6 @@ export const api = {
     update: (identityId: string, data: Partial<{
       displayName: string;
       handle: string;
-      email: string | null;
       birthday: string | null;
       avatarUrl: string | null;
       bannerUrl: string | null;
@@ -486,6 +487,28 @@ export const api = {
       request<{ identity: Identity }>(`/api/identities/${identityId}`, {
         method: "PATCH",
         body: JSON.stringify(data),
+      }),
+
+    startEmailVerification: (identityId: string, email: string) =>
+      request<{ success: boolean; identity: Identity }>(`/api/identities/${identityId}/email/start`, {
+        method: "POST",
+        body: JSON.stringify({ email }),
+      }),
+
+    verifyEmail: (identityId: string, code: string) =>
+      request<{ success: boolean; identity: Identity }>(`/api/identities/${identityId}/email/verify`, {
+        method: "POST",
+        body: JSON.stringify({ code }),
+      }),
+
+    resendEmailVerification: (identityId: string) =>
+      request<{ success: boolean; identity: Identity }>(`/api/identities/${identityId}/email/resend`, {
+        method: "POST",
+      }),
+
+    clearEmail: (identityId: string) =>
+      request<{ success: boolean; identity: Identity }>(`/api/identities/${identityId}/email`, {
+        method: "DELETE",
       }),
     
     setPrimary: (identityId: string) =>

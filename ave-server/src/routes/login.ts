@@ -19,6 +19,7 @@ import { notifyLoginRequest } from "../lib/websocket";
 import { sendLoginRequestNotification, sendAccountEventNotification, type PushSubscription } from "../lib/webpush";
 import { deleteChallenge, getChallenge, setChallenge } from "../lib/challenge-store";
 import { createQrLoginToken, verifyQrLoginToken } from "../lib/qr-login-token";
+import { serializeIdentityForOwner } from "../lib/identity-serialization";
 
 const app = new Hono();
 
@@ -396,15 +397,7 @@ app.post("/passkey", zValidator("json", z.object({
         name: deviceRecord.name,
         type: deviceRecord.type,
       },
-      identities: userIdentities.map((i) => ({
-        id: i.id,
-        displayName: i.displayName,
-        handle: i.handle,
-        email: i.email,
-        avatarUrl: i.avatarUrl,
-        bannerUrl: i.bannerUrl,
-        isPrimary: i.isPrimary,
-      })),
+      identities: userIdentities.map(serializeIdentityForOwner),
       // PRF-encrypted master key (if this passkey has one stored)
       // Client can use this to decrypt master key if PRF output is available
       prfEncryptedMasterKey: passkey.prfEncryptedMasterKey,
@@ -608,15 +601,7 @@ app.get("/request-status/:requestId", async (c) => {
         name: deviceRecord.name,
         type: deviceRecord.type,
       },
-      identities: userIdentities.map((i) => ({
-        id: i.id,
-        displayName: i.displayName,
-        handle: i.handle,
-        email: i.email,
-        avatarUrl: i.avatarUrl,
-        bannerUrl: i.bannerUrl,
-        isPrimary: i.isPrimary,
-      })),
+      identities: userIdentities.map(serializeIdentityForOwner),
     });
 
   }
@@ -809,15 +794,7 @@ app.post("/trust-code", zValidator("json", z.object({
       name: deviceRecord.name,
       type: deviceRecord.type,
     },
-    identities: userIdentities.map((i) => ({
-      id: i.id,
-      displayName: i.displayName,
-      handle: i.handle,
-      email: i.email,
-      avatarUrl: i.avatarUrl,
-      bannerUrl: i.bannerUrl,
-      isPrimary: i.isPrimary,
-    })),
+    identities: userIdentities.map(serializeIdentityForOwner),
     remainingTrustCodes: remainingCodes ?? 0,
     remainingRecoveryCodes: remainingCodes ?? 0,
   });
