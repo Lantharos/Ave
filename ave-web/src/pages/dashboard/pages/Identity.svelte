@@ -533,15 +533,15 @@
                             disabled={!emailIsPending}
                         >
                             {#if emailIsPending}
-                                <svg class="w-6 h-6 md:w-[34px] md:h-[34px]" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                    <path d="M12 22C17.5228 22 22 17.5228 22 12C22 6.47715 17.5228 2 12 2C6.47715 2 2 6.47715 2 12C2 17.5228 6.47715 22 12 22Z" stroke="white" stroke-width="2.5"/>
-                                    <path d="M12 7.75V12.25" stroke="white" stroke-width="2.5" stroke-linecap="round"/>
-                                    <circle cx="12" cy="16.25" r="1.25" fill="white"/>
+                                <svg class="w-5 h-5 md:w-[42px] md:h-[42px]" viewBox="0 0 42 42" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                    <circle cx="21" cy="21" r="13" stroke="white" stroke-opacity="0.8" stroke-width="4"/>
+                                    <path d="M21 13.75V21.25" stroke="white" stroke-opacity="0.8" stroke-width="4" stroke-linecap="round"/>
+                                    <circle cx="21" cy="27.25" r="2" fill="white" fill-opacity="0.8"/>
                                 </svg>
                             {:else}
-                                <svg class="w-6 h-6 md:w-[34px] md:h-[34px]" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                    <path d="M12 22C17.5228 22 22 17.5228 22 12C22 6.47715 17.5228 2 12 2C6.47715 2 2 6.47715 2 12C2 17.5228 6.47715 22 12 22Z" stroke="white" stroke-width="2.5"/>
-                                    <path d="M8.5 12L11 14.5L15.5 10" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+                                <svg class="w-5 h-5 md:w-[42px] md:h-[42px]" viewBox="0 0 42 42" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                    <circle cx="21" cy="21" r="13" stroke="white" stroke-opacity="0.8" stroke-width="4"/>
+                                    <path d="M16 21.5L19.5 25L27 17.5" stroke="white" stroke-opacity="0.8" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
                                 </svg>
                             {/if}
                         </button>
