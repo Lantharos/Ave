@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import { db, devices, loginRequests, activityLogs } from "../db";
-import { requireAuth } from "../middleware/auth";
+import { requireAuth, requireWritableForMutation } from "../middleware/auth";
 import { eq, and, desc, lt } from "drizzle-orm";
 import { notifyLoginRequestStatus } from "../lib/websocket";
 
@@ -10,6 +10,7 @@ const app = new Hono();
 
 // All routes require authentication
 app.use("*", requireAuth);
+app.use("*", requireWritableForMutation);
 
 // Get all devices for current user
 app.get("/", async (c) => {

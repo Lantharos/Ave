@@ -63,6 +63,7 @@
     let foundIdentity = $state<Identity | null>(null);
     let hasDevices = $state(false);
     let hasPasskeys = $state(false);
+    let demoPasswordEnabled = $state(false);
     let authOptions = $state<PublicKeyCredentialRequestOptions | null>(null);
     let authSessionId = $state<string | null>(null);
     let loginRequestId = $state<string | null>(null);
@@ -83,6 +84,7 @@
         identity: Identity;
         hasDevices: boolean;
         hasPasskeys: boolean;
+        demoPasswordEnabled?: boolean;
         authOptions: PublicKeyCredentialRequestOptions | null;
         authSessionId: string | null;
     }) {
@@ -90,6 +92,7 @@
         foundIdentity = data.identity;
         hasDevices = data.hasDevices;
         hasPasskeys = data.hasPasskeys;
+        demoPasswordEnabled = !!data.demoPasswordEnabled;
         authOptions = data.authOptions;
         authSessionId = data.authSessionId;
         currentPage = "methods";
@@ -174,6 +177,7 @@
             identity={foundIdentity}
             {hasDevices}
             {hasPasskeys}
+            {demoPasswordEnabled}
             {authOptions}
             {authSessionId}
             {handle}

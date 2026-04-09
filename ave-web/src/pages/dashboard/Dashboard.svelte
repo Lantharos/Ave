@@ -12,7 +12,7 @@
     import LoginApproval from "./pages/LoginApproval.svelte";
     import Connectors from "./pages/Connectors.svelte";
     import SharedKeys from "./pages/SharedKeys.svelte";
-    import { auth, identities as identitiesStore, isAuthenticated } from "../../stores/auth";
+    import { auth, identities as identitiesStore, isAuthenticated, isReadOnly } from "../../stores/auth";
     import { websocket } from "../../stores/websocket";
     import { type Identity as IdentityType } from "../../lib/api";
     import { createPendingRequestsQuery, queryKeys } from "../../lib/queries";
@@ -24,6 +24,7 @@
     let isLoggingOut = $state(false);
 
     let identities = $derived($identitiesStore);
+    let readOnly = $derived($isReadOnly);
     const pendingRequestsQuery = createPendingRequestsQuery();
 
     $effect(() => {
@@ -198,6 +199,11 @@
     </div>
 
     <div class="flex flex-col w-full md:w-[75%] z-10 mt-10 md:mt-0">
+        {#if readOnly}
+            <div class="mb-4 md:mb-6 rounded-[24px] bg-[#171717] px-4 py-3 md:px-6 md:py-4">
+                <Text type="p" size={14} color="#B9BBBE">Demo mode is read-only. You can explore the account, but changes are disabled.</Text>
+            </div>
+        {/if}
         {#if selectedIdentity}
             <Identity identity={selectedIdentity} />
         {:else if selectedPage === "New Identity"}

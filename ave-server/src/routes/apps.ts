@@ -133,6 +133,15 @@ async function requireDevUser(c: any, next: any) {
   return c.json({ error: "Unauthorized" }, 401);
 }
 
+async function requireWritableDevUser(c: any, next: any) {
+  const sessionUser = c.get("user");
+  if (sessionUser?.isReadOnly) {
+    return c.json({ error: "Demo account is read-only" }, 403);
+  }
+
+  return next();
+}
+
 export async function listAppResources(appIds: string[]) {
   if (!appIds.length) return [];
   return db
@@ -390,7 +399,7 @@ app.get("/", async (c) => {
   });
 });
 
-app.post("/", zValidator("json", baseAppSchema), async (c) => {
+app.post("/", requireWritableDevUser, zValidator("json", baseAppSchema), async (c) => {
   const userId = c.get("devUserId") as string;
   const data = c.req.valid("json");
   const personalOrganization = await ensurePersonalOrganization(userId);
@@ -486,7 +495,7 @@ app.get("/:appId/overview", async (c) => {
   return c.json({ insights, identities: identitiesPage.items, events: eventsPage.items });
 });
 
-app.patch("/:appId", zValidator("json", baseAppSchema.partial()), async (c) => {
+app.patch("/:appId", requireWritableDevUser, zValidator("json", baseAppSchema.partial()), async (c) => {
   const userId = c.get("devUserId") as string;
   const appId = c.req.param("appId");
   const data = c.req.valid("json");
@@ -527,7 +536,7 @@ app.patch("/:appId", zValidator("json", baseAppSchema.partial()), async (c) => {
   return c.json({ app: serializeApp(updated, resources) });
 });
 
-app.delete("/:appId", async (c) => {
+app.delete("/:appId", requireWritableDevUser, async (c) => {
   const userId = c.get("devUserId") as string;
   const appId = c.req.param("appId");
 
@@ -540,7 +549,7 @@ app.delete("/:appId", async (c) => {
   return c.json({ success: true });
 });
 
-app.post("/:appId/rotate-secret", async (c) => {
+app.post("/:appId/rotate-secret", requireWritableDevUser, async (c) => {
   const userId = c.get("devUserId") as string;
   const appId = c.req.param("appId");
 
@@ -577,7 +586,7 @@ app.get("/:appId/resources", async (c) => {
   return c.json({ resources: resources.map(serializeResource) });
 });
 
-app.post("/:appId/resources", zValidator("json", resourceSchema), async (c) => {
+app.post("/:appId/resources", requireWritableDevUser, zValidator("json", resourceSchema), async (c) => {
   const userId = c.get("devUserId") as string;
   const appId = c.req.param("appId");
   const data = c.req.valid("json");
@@ -621,7 +630,7 @@ app.post("/:appId/resources", zValidator("json", resourceSchema), async (c) => {
   return c.json({ resource: serializeResource(created) });
 });
 
-app.patch("/:appId/resources/:resourceId", zValidator("json", resourceSchema.partial()), async (c) => {
+app.patch("/:appId/resources/:resourceId", requireWritableDevUser, zValidator("json", resourceSchema.partial()), async (c) => {
   const userId = c.get("devUserId") as string;
   const appId = c.req.param("appId");
   const resourceId = c.req.param("resourceId");
@@ -678,7 +687,7 @@ app.patch("/:appId/resources/:resourceId", zValidator("json", resourceSchema.par
   return c.json({ resource: serializeResource(updated) });
 });
 
-app.delete("/:appId/resources/:resourceId", async (c) => {
+app.delete("/:appId/resources/:resourceId", requireWritableDevUser, async (c) => {
   const userId = c.get("devUserId") as string;
   const appId = c.req.param("appId");
   const resourceId = c.req.param("resourceId");

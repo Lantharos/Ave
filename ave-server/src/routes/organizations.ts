@@ -3,7 +3,7 @@ import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import { and, eq, inArray } from "drizzle-orm";
 import { db, identities, oauthApps, oauthAuthorizations, organizationMembers, organizations } from "../db";
-import { requireAuth } from "../middleware/auth";
+import { requireAuth, requireWritableForMutation } from "../middleware/auth";
 import {
   createOrganization,
   getOrganizationMemberships,
@@ -15,6 +15,7 @@ import { listAppResources, serializeApp } from "./apps";
 const app = new Hono();
 
 app.use("*", requireAuth);
+app.use("*", requireWritableForMutation);
 
 const roleSchema = z.enum(["owner", "admin", "viewer"]);
 

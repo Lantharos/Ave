@@ -156,6 +156,11 @@ export interface Device {
   isCurrent?: boolean;
 }
 
+export interface SessionBootstrap {
+  identities: Identity[];
+  readOnly?: boolean;
+}
+
 export interface Passkey {
   id: string;
   name?: string;
@@ -314,11 +319,34 @@ export const api = {
         identity: Identity;
         hasDevices: boolean;
         hasPasskeys: boolean;
+        demoPasswordEnabled?: boolean;
         authOptions?: PublicKeyCredentialRequestOptions;
         authSessionId?: string;
       }>("/api/login/start", {
         method: "POST",
         body: JSON.stringify({ handle }),
+      }),
+
+    demo: (data: {
+      handle: string;
+      password: string;
+      device: {
+        name: string;
+        type: "phone" | "computer" | "tablet";
+        browser?: string;
+        os?: string;
+        fingerprint?: string;
+      };
+    }) =>
+      request<{
+        success: boolean;
+        sessionToken: string;
+        device: Device;
+        identities: Identity[];
+        readOnly: boolean;
+      }>("/api/login/demo", {
+        method: "POST",
+        body: JSON.stringify(data),
       }),
     
     passkey: (data: {
@@ -449,7 +477,7 @@ export const api = {
   
   identities: {
     list: () =>
-      request<{ identities: Identity[] }>("/api/identities"),
+      request<SessionBootstrap>("/api/identities"),
     
     get: (identityId: string) =>
       request<{ identity: Identity }>(`/api/identities/${identityId}`),
@@ -800,9 +828,7 @@ export const api = {
   
   oauth: {
     getSessionBootstrap: (timeoutMs = 1500) =>
-      request<{
-        identities: Identity[];
-      }>("/api/oauth/session/bootstrap", {
+      request<SessionBootstrap>("/api/oauth/session/bootstrap", {
         timeoutMs,
       }),
 

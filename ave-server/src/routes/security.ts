@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import { db, passkeys, trustCodes, activityLogs } from "../db";
-import { requireAuth } from "../middleware/auth";
+import { requireAuth, requireWritableForMutation } from "../middleware/auth";
 import { 
   generateTrustCode, 
   hashTrustCode
@@ -56,6 +56,7 @@ async function createTrustCodes(userId: string): Promise<string[]> {
 
 // All routes require authentication
 app.use("*", requireAuth);
+app.use("*", requireWritableForMutation);
 
 // Get security overview
 app.get("/", async (c) => {

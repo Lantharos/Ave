@@ -19,6 +19,7 @@ import { notifyLoginRequest } from "../lib/websocket";
 import { sendLoginRequestNotification, sendAccountEventNotification, type PushSubscription } from "../lib/webpush";
 import { deleteChallenge, getChallenge, setChallenge } from "../lib/challenge-store";
 import { serializeIdentityForOwner } from "../lib/identity-serialization";
+import { isDemoHandle, isDemoLoginEnabled, verifyDemoPassword } from "../lib/demo-auth";
 
 const app = new Hono();
 
@@ -183,16 +184,36 @@ app.post("/start", zValidator("json", z.object({
   handle: z.string().min(3).max(32),
 })), async (c) => {
   const { handle } = c.req.valid("json");
+  const normalizedHandle = handle.toLowerCase();
   
   // Find identity by handle
   const [identity] = await db
     .select()
     .from(identities)
-    .where(eq(identities.handle, handle.toLowerCase()))
+    .where(eq(identities.handle, normalizedHandle))
     .limit(1);
   
   if (!identity) {
     return c.json({ error: "Account not found" }, 404);
+  }
+
+  const demoPasswordEnabled = isDemoHandle(normalizedHandle) && isDemoLoginEnabled();
+
+  if (demoPasswordEnabled) {
+    return c.json({
+      userId: identity.userId,
+      identity: {
+        id: identity.id,
+        displayName: identity.displayName,
+        handle: identity.handle,
+        avatarUrl: identity.avatarUrl,
+      },
+      hasDevices: false,
+      hasPasskeys: false,
+      demoPasswordEnabled: true,
+      authOptions: null,
+      authSessionId: null,
+    });
   }
   
   // Check if user has trusted devices (for device approval option)
@@ -245,8 +266,86 @@ app.post("/start", zValidator("json", z.object({
     },
     hasDevices: userDevices.length > 0,
     hasPasskeys: userPasskeys.length > 0,
+    demoPasswordEnabled: false,
     authOptions,
     authSessionId,
+  });
+});
+
+app.post("/demo", zValidator("json", z.object({
+  handle: z.string().min(3).max(32),
+  password: z.string().min(1).max(256),
+  device: z.object({
+    name: z.string().max(64),
+    type: z.enum(["phone", "computer", "tablet"]),
+    browser: z.string().optional(),
+    os: z.string().optional(),
+    fingerprint: z.string().max(64).optional(),
+  }),
+})), async (c) => {
+  const { handle, password, device } = c.req.valid("json");
+  const normalizedHandle = handle.toLowerCase();
+
+  if (!isDemoLoginEnabled() || !isDemoHandle(normalizedHandle)) {
+    return c.json({ error: "Demo login is not available" }, 403);
+  }
+
+  if (!verifyDemoPassword(password)) {
+    return c.json({ error: "Invalid demo password" }, 401);
+  }
+
+  const [identity] = await db
+    .select()
+    .from(identities)
+    .where(eq(identities.handle, normalizedHandle))
+    .limit(1);
+
+  if (!identity) {
+    return c.json({ error: "Demo account not found" }, 404);
+  }
+
+  const deviceRecord = await getOrCreateDevice(identity.userId, device);
+  const sessionToken = generateSessionToken();
+  const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+
+  await db.insert(sessions).values({
+    userId: identity.userId,
+    deviceId: deviceRecord.id,
+    tokenHash: hashSessionToken(sessionToken),
+    expiresAt,
+    ipAddress: c.req.header("x-forwarded-for") || c.req.header("x-real-ip"),
+    userAgent: c.req.header("user-agent"),
+    authMethod: "demo",
+  });
+
+  setSessionCookie(c, sessionToken, expiresAt);
+  c.header("Set-Login", "logged-in");
+
+  await db.insert(activityLogs).values({
+    userId: identity.userId,
+    action: "login",
+    details: { method: "demo", deviceName: deviceRecord.name, isNewDevice: deviceRecord.isNew },
+    deviceId: deviceRecord.id,
+    ipAddress: c.req.header("x-forwarded-for") || c.req.header("x-real-ip"),
+    userAgent: c.req.header("user-agent"),
+    severity: "info",
+  });
+
+  const userIdentities = await db
+    .select()
+    .from(identities)
+    .where(eq(identities.userId, identity.userId));
+
+  return c.json({
+    success: true,
+    sessionToken,
+    device: {
+      id: deviceRecord.id,
+      name: deviceRecord.name,
+      type: deviceRecord.type,
+    },
+    identities: userIdentities.map(serializeIdentityForOwner),
+    readOnly: true,
   });
 });
 

@@ -13,7 +13,7 @@ import {
   sharedSecretTransferContracts,
 } from "../db";
 import type { Context, Next } from "hono";
-import { requireAuth, type AuthUser } from "../middleware/auth";
+import { requireAuth, requireWritableForMutation, type AuthUser } from "../middleware/auth";
 import { generateSessionToken, hashSessionToken } from "../lib/crypto";
 import {
   resolveOAuthAccessFromBearer,
@@ -135,6 +135,7 @@ async function sharedSecretsOAuthBridge(c: Context, next: Next) {
       id: record.userId,
       deviceId: null,
       authMethod: "oauth_access_token",
+      isReadOnly: false,
     } satisfies AuthUser);
     c.set("oauthAccess", record);
   } else {
@@ -146,6 +147,7 @@ async function sharedSecretsOAuthBridge(c: Context, next: Next) {
 
 app.use("*", sharedSecretsOAuthBridge);
 app.use("*", requireAuth);
+app.use("*", requireWritableForMutation);
 
 const createSharedSecretSchema = z.object({
   identityId: z.string().uuid(),

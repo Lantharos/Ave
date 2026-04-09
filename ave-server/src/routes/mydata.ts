@@ -1,12 +1,13 @@
 import { Hono } from "hono";
 import { db, users, identities, passkeys, devices, sessions, trustCodes, activityLogs, oauthAuthorizations } from "../db";
-import { requireAuth } from "../middleware/auth";
+import { requireAuth, requireWritableForMutation } from "../middleware/auth";
 import { eq } from "drizzle-orm";
 
 const app = new Hono();
 
 // All routes require authentication
 app.use("*", requireAuth);
+app.use("*", requireWritableForMutation);
 
 // Download all user data (GDPR data export)
 app.get("/export", async (c) => {

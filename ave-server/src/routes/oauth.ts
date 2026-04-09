@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import { db, oauthApps, oauthAuthorizations, oauthRefreshTokens, identities, activityLogs, appAnalyticsEvents, oauthResources, oauthDelegationGrants, oauthDelegationAuditLogs } from "../db";
-import { requireAuth } from "../middleware/auth";
+import { requireAuth, requireWritable } from "../middleware/auth";
 import { eq, and, isNull, desc } from "drizzle-orm";
 import { randomUUID, timingSafeEqual } from "crypto";
 import { hashSessionToken } from "../lib/crypto";
@@ -1643,6 +1643,7 @@ app.get("/session/bootstrap", requireAuth, async (c) => {
   c.header("Cache-Control", "no-store");
 
   return c.json({
+    readOnly: user.isReadOnly,
     identities: userIdentities.map(serializeIdentityForOwner),
   });
 });
@@ -1716,7 +1717,7 @@ app.get("/authorization/:clientId", requireAuth, async (c) => {
 });
 
 // Revoke app authorization
-app.delete("/authorizations/:authId", requireAuth, async (c) => {
+app.delete("/authorizations/:authId", requireAuth, requireWritable, async (c) => {
   const user = c.get("user")!;
   const authId = c.req.param("authId") || "";
   
@@ -1795,7 +1796,7 @@ app.get("/delegations", requireAuth, async (c) => {
 });
 
 // Revoke connector delegation
-app.delete("/delegations/:delegationId", requireAuth, async (c) => {
+app.delete("/delegations/:delegationId", requireAuth, requireWritable, async (c) => {
   const user = c.get("user")!;
   const delegationId = c.req.param("delegationId") || "";
 

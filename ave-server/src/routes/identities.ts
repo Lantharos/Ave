@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import { db, identities, activityLogs, identityEncryptionKeys } from "../db";
-import { requireAuth } from "../middleware/auth";
+import { requireAuth, requireWritableForMutation } from "../middleware/auth";
 import { eq, and } from "drizzle-orm";
 import {
   beginEmailVerification,
@@ -18,6 +18,7 @@ const app = new Hono();
 
 // All routes require authentication
 app.use("*", requireAuth);
+app.use("*", requireWritableForMutation);
 
 // Get all identities for current user
 app.get("/", async (c) => {
@@ -29,6 +30,7 @@ app.get("/", async (c) => {
     .where(eq(identities.userId, user.id));
   
   return c.json({
+    readOnly: user.isReadOnly,
     identities: userIdentities.map(serializeIdentityForOwner),
   });
 });

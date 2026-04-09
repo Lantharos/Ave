@@ -16,6 +16,7 @@
         identity,
         hasDevices,
         hasPasskeys,
+        demoPasswordEnabled,
         authOptions,
         authSessionId,
         handle,
@@ -29,6 +30,7 @@
         identity: Identity | null;
         hasDevices: boolean;
         hasPasskeys: boolean;
+        demoPasswordEnabled?: boolean;
         authOptions: PublicKeyCredentialRequestOptions | null;
         authSessionId: string | null;
         handle: string;
@@ -49,6 +51,8 @@
 
     let isLoading = $state(false);
     let loadingMethod = $state<"passkey" | "device" | null>(null);
+    let demoPassword = $state("");
+    let loggingInWithDemo = $state(false);
 
     async function handlePasskeyLogin() {
         if (!authOptions || !authSessionId) {
@@ -165,6 +169,36 @@
     function handleTrustCode() {
         onSelect?.("trust-code");
     }
+
+    async function handleDemoLogin() {
+        if (!demoPassword.trim()) {
+            onError?.("Enter the demo password");
+            return;
+        }
+
+        loggingInWithDemo = true;
+        try {
+            const deviceInfo = getDeviceInfo();
+            const result = await api.login.demo({
+                handle,
+                password: demoPassword,
+                device: deviceInfo,
+            });
+
+            await auth.login(
+                result.sessionToken,
+                result.identities,
+                result.device,
+                undefined,
+                { isReadOnly: result.readOnly },
+            );
+            onSuccess?.();
+        } catch (e: any) {
+            onError?.(e.message || "Demo sign-in failed");
+        } finally {
+            loggingInWithDemo = false;
+        }
+    }
 </script>
 
 <div class="w-full md:w-[60%] h-auto flex flex-col items-center z-10 gap-6 md:gap-[50px] px-4 md:px-0">
@@ -185,6 +219,37 @@
     {/if}
 
     <div class="flex flex-col w-full gap-2 md:gap-[10px]">
+        {#if demoPasswordEnabled}
+            <div class="flex flex-col gap-4 bg-[#171717] rounded-[20px] md:rounded-[36px] p-4 md:p-[40px]">
+                <div class="flex flex-col gap-1 md:gap-[10px]">
+                    <h2 class="text-sm md:text-[18px] font-black text-white">USE THE DEMO PASSWORD</h2>
+                    <p class="text-[#878787] text-xs md:text-[18px]">This signs you into the read-only review account.</p>
+                </div>
+
+                <div class="flex flex-col md:flex-row gap-3 md:gap-[10px]">
+                    <input
+                        class="flex-1 px-4 md:px-[15px] py-3 md:py-[10px] bg-[#090909]/50 text-[#FFFFFF] text-base md:text-[18px] rounded-full focus:outline-none focus:ring-2 focus:ring-[#B9BBBE] focus:border-[#B9BBBE]"
+                        type="password"
+                        placeholder="Demo password"
+                        bind:value={demoPassword}
+                        disabled={loggingInWithDemo}
+                        onkeydown={(event) => {
+                            if (event.key === "Enter" && demoPassword.trim()) {
+                                void handleDemoLogin();
+                            }
+                        }}
+                    />
+                    <button
+                        class="px-5 md:px-8 py-3 md:py-[10px] bg-white text-black rounded-full disabled:opacity-50"
+                        onclick={handleDemoLogin}
+                        disabled={!demoPassword.trim() || loggingInWithDemo}
+                    >
+                        {loggingInWithDemo ? "SIGNING IN..." : "SIGN IN"}
+                    </button>
+                </div>
+            </div>
+        {/if}
+
         {#if hasPasskeys && authOptions}
             <ActionCard 
                 action="USE PASSKEY" 

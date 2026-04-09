@@ -10,6 +10,7 @@
             identity: Identity;
             hasDevices: boolean;
             hasPasskeys: boolean;
+            demoPasswordEnabled?: boolean;
             authOptions: PublicKeyCredentialRequestOptions | null;
             authSessionId: string | null;
         }) => void;
@@ -55,6 +56,7 @@
                 identity: result.identity,
                 hasDevices: result.hasDevices,
                 hasPasskeys: result.hasPasskeys,
+                demoPasswordEnabled: result.demoPasswordEnabled || false,
                 authOptions: result.authOptions || null,
                 authSessionId: result.authSessionId || null,
             });

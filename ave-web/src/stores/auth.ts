@@ -16,6 +16,7 @@ import { websocket } from "./websocket";
 interface AuthState {
   isAuthenticated: boolean;
   isLoading: boolean;
+  isReadOnly: boolean;
   userId: string | null;
   identities: Identity[];
   currentIdentity: Identity | null;
@@ -40,6 +41,7 @@ function hasStoredSessionToken(): boolean {
 const initialState: AuthState = {
   isAuthenticated: false,
   isLoading: hasStoredSessionToken(),
+  isReadOnly: false,
   userId: null,
   identities: [],
   currentIdentity: null,
@@ -68,13 +70,14 @@ function createAuthStore() {
     }
   }
 
-  async function hydrateAuthenticatedSession(identities: Identity[]) {
+  async function hydrateAuthenticatedSession(identities: Identity[], isReadOnly = false) {
     const masterKey = await loadMasterKey();
 
     update((s) => ({
       ...s,
       isAuthenticated: true,
       isLoading: false,
+      isReadOnly,
       identities,
       currentIdentity: identities.find((i) => i.isPrimary) || identities[0] || null,
       masterKey,
@@ -108,6 +111,7 @@ function createAuthStore() {
           ...s,
           isAuthenticated: false,
           isLoading: false,
+          isReadOnly: false,
           userId: null,
           identities: [],
           currentIdentity: null,
@@ -119,11 +123,11 @@ function createAuthStore() {
       }
 
       try {
-        const identities = token
-          ? (await api.identities.list()).identities
-          : (await api.oauth.getSessionBootstrap(options.timeoutMs)).identities;
+        const session = token
+          ? await api.identities.list()
+          : await api.oauth.getSessionBootstrap(options.timeoutMs);
 
-        await hydrateAuthenticatedSession(identities);
+        await hydrateAuthenticatedSession(session.identities, !!session.readOnly);
 
         if (token) {
           websocket.connectAsUser(token);
@@ -140,6 +144,7 @@ function createAuthStore() {
           ...s,
           isAuthenticated: false,
           isLoading: false,
+          isReadOnly: false,
           userId: null,
           identities: [],
           currentIdentity: null,
@@ -164,7 +169,8 @@ function createAuthStore() {
       sessionToken: string, 
       identities: Identity[], 
       device: Device,
-      masterKey?: CryptoKey
+      masterKey?: CryptoKey,
+      options: { isReadOnly?: boolean } = {}
     ) {
       localStorage.setItem("ave_session_token", sessionToken);
       
@@ -176,6 +182,7 @@ function createAuthStore() {
         ...s,
         isAuthenticated: true,
         isLoading: false,
+        isReadOnly: !!options.isReadOnly,
         identities,
         currentIdentity: identities.find((i) => i.isPrimary) || identities[0] || null,
         device,
@@ -290,3 +297,4 @@ export const isLoading = derived(auth, ($auth) => $auth.isLoading);
 export const currentIdentity = derived(auth, ($auth) => $auth.currentIdentity);
 export const identities = derived(auth, ($auth) => $auth.identities);
 export const hasMasterKeyStore = derived(auth, ($auth) => $auth.hasMasterKey);
+export const isReadOnly = derived(auth, ($auth) => $auth.isReadOnly);

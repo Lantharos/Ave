@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import { db, devices } from "../db";
-import { requireAuth } from "../middleware/auth";
+import { requireAuth, requireWritableForMutation } from "../middleware/auth";
 import { eq } from "drizzle-orm";
 import { getVapidPublicKey, isPushConfigured } from "../lib/webpush";
 
@@ -27,6 +27,7 @@ app.get("/vapid-key", (c) => {
 
 // Protected routes
 app.use("/*", requireAuth);
+app.use("/*", requireWritableForMutation);
 
 // Subscribe to push notifications
 app.post("/subscribe", zValidator("json", z.object({

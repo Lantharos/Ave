@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import { db, signingKeys, signatureRequests, identities, oauthApps, activityLogs } from "../db";
-import { requireAuth } from "../middleware/auth";
+import { requireAuth, requireWritable } from "../middleware/auth";
 import { eq, and, desc } from "drizzle-orm";
 import { verifySignature, isValidPublicKey, isValidSignature } from "../lib/signing";
 import { verifyJwt, getResourceAudience } from "../lib/oidc";
@@ -14,6 +14,15 @@ const app = new Hono();
 function timingSafeEqualString(a: string, b: string): boolean {
   if (a.length !== b.length) return false;
   return timingSafeEqual(Buffer.from(a), Buffer.from(b));
+}
+
+async function requireWritableSigningSession(c: any, next: any) {
+  const user = c.get("user");
+  if (!user) {
+    return c.json({ error: "Unauthorized" }, 401);
+  }
+
+  return requireWritable(c, next);
 }
 
 // ============================================
@@ -86,7 +95,7 @@ app.get("/keys/:identityId", requireAuth, async (c) => {
 });
 
 // Store signing key for an identity (generated client-side)
-app.post("/keys/:identityId", requireAuth, zValidator("json", z.object({
+app.post("/keys/:identityId", requireAuth, requireWritableSigningSession, zValidator("json", z.object({
   publicKey: z.string().min(1),
   encryptedPrivateKey: z.string().min(1),
 })), async (c) => {
@@ -150,7 +159,7 @@ app.post("/keys/:identityId", requireAuth, zValidator("json", z.object({
 });
 
 // Rotate signing key (replace with new one)
-app.put("/keys/:identityId", requireAuth, zValidator("json", z.object({
+app.put("/keys/:identityId", requireAuth, requireWritableSigningSession, zValidator("json", z.object({
   publicKey: z.string().min(1),
   encryptedPrivateKey: z.string().min(1),
 })), async (c) => {
@@ -324,7 +333,7 @@ app.get("/requests/:requestId", requireAuth, async (c) => {
 });
 
 // Sign a request (submit signature from client)
-app.post("/requests/:requestId/sign", requireAuth, zValidator("json", z.object({
+app.post("/requests/:requestId/sign", requireAuth, requireWritableSigningSession, zValidator("json", z.object({
   signature: z.string().min(1),
 })), async (c) => {
   const user = c.get("user")!;
@@ -411,7 +420,7 @@ app.post("/requests/:requestId/sign", requireAuth, zValidator("json", z.object({
 });
 
 // Deny a signature request
-app.post("/requests/:requestId/deny", requireAuth, async (c) => {
+app.post("/requests/:requestId/deny", requireAuth, requireWritableSigningSession, async (c) => {
   const user = c.get("user")!;
   const requestId = c.req.param("requestId") || "";
   

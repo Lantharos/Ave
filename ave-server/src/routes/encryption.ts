@@ -11,7 +11,7 @@ import {
   oauthApps,
 } from "../db";
 import { validateOpaqueKeyEnvelope, validatePublicKeyBlob } from "../lib/encryption-key-payload";
-import { requireAuth } from "../middleware/auth";
+import { requireAuth, requireWritableForMutation } from "../middleware/auth";
 
 const app = new Hono();
 
@@ -93,6 +93,7 @@ app.get("/public-key/:handle", async (c) => {
 });
 
 app.use("/keys/*", requireAuth);
+app.use("/keys/*", requireWritableForMutation);
 
 app.get("/keys/:identityId", async (c) => {
   const user = c.get("user")!;

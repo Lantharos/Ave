@@ -53,6 +53,8 @@ VAPID_PUBLIC_KEY = "BHG45kIltRlb8J3fIIPnTFyAGkMIEvb94XT1kHt5pmvyEJxTen32RQx1Q3XH
 VAPID_SUBJECT = "mailto:hello@lantharos.com"
 UNOSEND_FROM_EMAIL="no-reply@aveid.net"
 UNOSEND_FROM_NAME="Ave"
+DEMO_HANDLE="demo"
+DEMO_PASSWORD="CTP8stZyDF-ou@*gpcpV"
 
 # Keep these as Cloudflare secrets (do NOT commit to wrangler.toml):
 # OIDC_PRIVATE_KEY_PEM

@@ -26,6 +26,7 @@ export type AuthUser = {
   id: string;
   deviceId: string | null;
   authMethod?: string | null;
+  isReadOnly: boolean;
 };
 
 // Extend Hono context with user
@@ -98,6 +99,7 @@ export async function authMiddleware(c: Context, next: Next) {
       id: session.userId,
       deviceId: session.deviceId,
       authMethod: session.authMethod,
+      isReadOnly: session.authMethod === "demo",
     });
   } catch (error) {
     console.error("Auth middleware error:", error);
@@ -118,4 +120,26 @@ export async function requireAuth(c: Context, next: Next) {
   }
   
   return next();
+}
+
+export async function requireWritable(c: Context, next: Next) {
+  const user = c.get("user");
+
+  if (!user) {
+    return c.json({ error: "Unauthorized" }, 401);
+  }
+
+  if (user.isReadOnly) {
+    return c.json({ error: "Demo account is read-only" }, 403);
+  }
+
+  return next();
+}
+
+export async function requireWritableForMutation(c: Context, next: Next) {
+  if (c.req.method === "GET" || c.req.method === "HEAD" || c.req.method === "OPTIONS") {
+    return next();
+  }
+
+  return requireWritable(c, next);
 }

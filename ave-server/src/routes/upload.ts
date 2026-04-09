@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { db, identities, activityLogs, organizations, organizationMembers } from "../db";
-import { requireAuth } from "../middleware/auth";
+import { requireAuth, requireWritable } from "../middleware/auth";
 import { eq, and } from "drizzle-orm";
 import { S3Client, PutObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
 
@@ -89,6 +89,7 @@ const MAX_WORKSPACE_LOGO_SIZE = 5 * 1024 * 1024; // 5MB
 
 // All routes require authentication
 app.use("*", requireAuth);
+app.use("*", requireWritable);
 
 // Upload to R2
 async function uploadToR2(
