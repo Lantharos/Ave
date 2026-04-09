@@ -32,7 +32,7 @@
     let uploadingBanner = $state(false);
     let error = $state("");
     let success = $state("");
-    let showingEmailVerification = $state(false);
+    let showEmailVerificationModal = $state(false);
 
     // Reset form when identity changes
     $effect(() => {
@@ -41,7 +41,7 @@
             handle = identity.handle;
             email = identity.pendingEmail || identity.email || "";
             verificationCode = "";
-            showingEmailVerification = false;
+            showEmailVerificationModal = false;
             birthday = identity.birthday || "";
             avatarUrl = identity.avatarUrl || "";
             bannerUrl = identity.bannerUrl || "";
@@ -95,7 +95,7 @@
             email = updated.pendingEmail || updated.email || "";
             editing.email = false;
             verificationCode = "";
-            showingEmailVerification = true;
+            showEmailVerificationModal = true;
             success = "Verification code sent";
             setTimeout(() => success = "", 2000);
         } catch (e: any) {
@@ -117,7 +117,7 @@
             auth.updateIdentity(updated);
             email = updated.email || "";
             verificationCode = "";
-            showingEmailVerification = false;
+            showEmailVerificationModal = false;
             success = "Email verified";
             setTimeout(() => success = "", 2000);
         } catch (e: any) {
@@ -138,6 +138,7 @@
             const { identity: updated } = await api.identities.resendEmailVerification(identity.id);
             auth.updateIdentity(updated);
             email = updated.pendingEmail || updated.email || "";
+            showEmailVerificationModal = true;
             success = "Verification code sent";
             setTimeout(() => success = "", 2000);
         } catch (e: any) {
@@ -160,7 +161,7 @@
             email = "";
             verificationCode = "";
             editing.email = false;
-            showingEmailVerification = false;
+            showEmailVerificationModal = false;
             success = "Email removed";
             setTimeout(() => success = "", 2000);
         } catch (e: any) {
@@ -317,6 +318,9 @@
     // Delete identity
     let showDeleteConfirm = $state(false);
     let isDeleting = $state(false);
+    let emailActionButtonClass = $derived("w-12 h-12 md:w-[122px] md:h-[122px] shrink-0 p-3 md:p-[40px] bg-[#111111] hover:bg-[#202020] transition-colors duration-300 rounded-[16px] md:rounded-[32px] flex items-center justify-center");
+    let displayedEmail = $derived(identity ? (identity.pendingEmail || identity.email || "Not set") : "Not set");
+    let emailIsPending = $derived(Boolean(identity?.pendingEmail));
 
     async function deleteIdentity() {
         if (!identity) return;
@@ -509,76 +513,30 @@
                             </div>
                         {:else}
                             <div class="flex flex-row flex-wrap items-center gap-2 md:gap-[14px]">
-                                <Text type="h" size={24} mobileSize={16} weight="medium">{identity.pendingEmail || identity.email || "Not set"}</Text>
-                                {#if identity.pendingEmail}
+                                <Text type="h" size={24} mobileSize={16} weight="medium">{displayedEmail}</Text>
+                                {#if emailIsPending}
                                     <span class="text-[#D2AC57] text-sm md:text-[16px] font-semibold">UNVERIFIED</span>
                                 {/if}
                             </div>
-                            {#if showingEmailVerification && identity.pendingEmail}
-                                <div class="flex flex-col md:flex-row gap-3 items-stretch md:items-center mt-3 md:mt-[18px]">
-                                    <input
-                                        type="text"
-                                        inputmode="numeric"
-                                        maxlength="6"
-                                        class="flex-1 bg-transparent border-b border-[#333333] pb-[8px] text-white text-lg md:text-[24px] focus:outline-none"
-                                        bind:value={verificationCode}
-                                        placeholder="Enter code"
-                                        autocomplete="one-time-code"
-                                    />
-                                    <button
-                                        class="px-5 py-2 bg-[#FFFFFF] hover:bg-[#E0E0E0] text-[#090909] rounded-full text-[16px] font-medium"
-                                        onclick={verifyEmail}
-                                        disabled={isSaving || verificationCode.trim().length !== 6}
-                                    >
-                                        {isSaving ? "..." : "Verify"}
-                                    </button>
-                                </div>
-                                <div class="flex flex-row gap-3 mt-3 md:mt-[14px]">
-                                    <button
-                                        class="text-[#878787] hover:text-[#FFFFFF] transition-colors text-[14px] md:text-[16px]"
-                                        onclick={resendEmailVerification}
-                                        disabled={isSaving}
-                                    >
-                                        Resend code
-                                    </button>
-                                    <button
-                                        class="text-[#878787] hover:text-[#FFFFFF] transition-colors text-[14px] md:text-[16px]"
-                                        onclick={() => {
-                                            email = identity.pendingEmail || "";
-                                            showingEmailVerification = false;
-                                            editing.email = true;
-                                        }}
-                                        disabled={isSaving}
-                                    >
-                                        Change email
-                                    </button>
-                                    <button
-                                        class="text-[#878787] hover:text-[#FFFFFF] transition-colors text-[14px] md:text-[16px]"
-                                        onclick={clearEmail}
-                                        disabled={isSaving}
-                                    >
-                                        Clear
-                                    </button>
-                                </div>
-                            {/if}
                         {/if}
                     </div>
 
                     {#if !editing.email && (identity.pendingEmail || identity.email)}
                         <button
                             onclick={() => {
-                                if (identity.pendingEmail) {
-                                    showingEmailVerification = !showingEmailVerification;
+                                if (emailIsPending) {
+                                    showEmailVerificationModal = true;
                                 }
                             }}
-                            class="w-full md:w-auto md:aspect-square flex-grow h-12 md:h-full p-3 md:p-[40px] bg-[#111111] hover:bg-[#202020] transition-colors duration-300 rounded-[16px] md:rounded-[32px] flex items-center justify-center disabled:cursor-default"
-                            aria-label={identity.pendingEmail ? "verify email" : "email verified"}
-                            disabled={!identity.pendingEmail}
+                            class="{emailActionButtonClass} disabled:cursor-default"
+                            aria-label={emailIsPending ? "verify email" : "email verified"}
+                            disabled={!emailIsPending}
                         >
-                            {#if identity.pendingEmail}
+                            {#if emailIsPending}
                                 <svg class="w-6 h-6 md:w-[34px] md:h-[34px]" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                                     <path d="M12 22C17.5228 22 22 17.5228 22 12C22 6.47715 17.5228 2 12 2C6.47715 2 2 6.47715 2 12C2 17.5228 6.47715 22 12 22Z" stroke="white" stroke-width="2.5"/>
-                                    <path d="M8.5 12L11 14.5L15.5 10" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+                                    <path d="M12 7.75V12.25" stroke="white" stroke-width="2.5" stroke-linecap="round"/>
+                                    <circle cx="12" cy="16.25" r="1.25" fill="white"/>
                                 </svg>
                             {:else}
                                 <svg class="w-6 h-6 md:w-[34px] md:h-[34px]" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -590,8 +548,8 @@
                     {/if}
 
                     <button 
-                        onclick={() => { editing.email = !editing.email; showingEmailVerification = false; }} 
-                        class="w-full md:w-auto md:aspect-square flex-grow h-12 md:h-full p-3 md:p-[40px] bg-[#111111] hover:bg-[#202020] transition-colors duration-300 cursor-pointer rounded-[16px] md:rounded-[32px] flex items-center justify-center" 
+                        onclick={() => { editing.email = !editing.email; showEmailVerificationModal = false; }} 
+                        class="{emailActionButtonClass} cursor-pointer" 
                         aria-label="edit email"
                     >
                         {@html editIcon}
@@ -677,3 +635,80 @@
         {/if}
     {/if}
 </div>
+
+{#if showEmailVerificationModal && identity && emailIsPending}
+    <div
+        class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+        onclick={() => showEmailVerificationModal = false}
+        onkeydown={(e) => e.key === "Escape" && (showEmailVerificationModal = false)}
+        role="dialog"
+        aria-modal="true"
+        tabindex="-1"
+    >
+        <div
+            class="bg-[#171717] rounded-[24px] md:rounded-[36px] p-6 md:p-[40px] max-w-[520px] w-full"
+            onclick={(e) => e.stopPropagation()}
+            onkeydown={(e) => e.stopPropagation()}
+            role="presentation"
+        >
+            <Text type="h" size={24} weight="bold">Verify your email</Text>
+            <p class="text-[#878787] text-sm md:text-[16px] mt-2 md:mt-[10px]">
+                Enter the 6-digit code we sent to {identity.pendingEmail}.
+            </p>
+
+            <div class="mt-6 md:mt-[28px] flex flex-col gap-4">
+                <div class="p-4 md:p-[22px] bg-[#111111] rounded-[18px] md:rounded-[24px]">
+                    <Text type="hd" size={14} mobileSize={12} color="#878787">EMAIL</Text>
+                    <Text type="h" size={22} mobileSize={16} color="#FFFFFF">{identity.pendingEmail}</Text>
+                </div>
+
+                <div class="flex flex-col md:flex-row gap-3 items-stretch md:items-center">
+                    <input
+                        type="text"
+                        inputmode="numeric"
+                        maxlength="6"
+                        class="flex-1 bg-transparent border-b border-[#333333] pb-[10px] text-white text-lg md:text-[24px] focus:outline-none"
+                        bind:value={verificationCode}
+                        placeholder="Enter code"
+                        autocomplete="one-time-code"
+                    />
+                    <button
+                        class="px-5 py-3 bg-[#FFFFFF] hover:bg-[#E0E0E0] text-[#090909] rounded-full text-[16px] font-medium disabled:opacity-60"
+                        onclick={verifyEmail}
+                        disabled={isSaving || verificationCode.trim().length !== 6}
+                    >
+                        {isSaving ? "..." : "Verify"}
+                    </button>
+                </div>
+            </div>
+
+            <div class="flex flex-col md:flex-row gap-2 md:gap-[10px] mt-6 md:mt-[30px]">
+                <button
+                    class="flex-1 py-3 md:py-[15px] bg-[#FFFFFF] text-[#090909] font-semibold rounded-[16px] hover:bg-[#E0E0E0] transition-colors disabled:opacity-60"
+                    onclick={resendEmailVerification}
+                    disabled={isSaving}
+                >
+                    Resend code
+                </button>
+                <button
+                    class="flex-1 py-3 md:py-[15px] bg-[#111111] text-[#FFFFFF] font-semibold rounded-[16px] hover:bg-[#202020] transition-colors disabled:opacity-60"
+                    onclick={() => {
+                        email = identity.pendingEmail || "";
+                        showEmailVerificationModal = false;
+                        editing.email = true;
+                    }}
+                    disabled={isSaving}
+                >
+                    Change email
+                </button>
+                <button
+                    class="flex-1 py-3 md:py-[15px] bg-[#111111] text-[#878787] font-semibold rounded-[16px] hover:bg-[#202020] hover:text-[#FFFFFF] transition-colors disabled:opacity-60"
+                    onclick={clearEmail}
+                    disabled={isSaving}
+                >
+                    Clear
+                </button>
+            </div>
+        </div>
+    </div>
+{/if}
