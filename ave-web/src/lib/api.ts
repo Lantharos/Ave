@@ -358,18 +358,9 @@ export const api = {
       request<{
         requestId: string;
         expiresAt: string;
-        qrToken: string;
       }>("/api/login/request-approval", {
         method: "POST",
         body: JSON.stringify(data),
-      }),
-
-    scanClaim: (qrToken: string) =>
-      request<{
-        request: LoginRequest & { handle: string };
-      }>("/api/login/scan-claim", {
-        method: "POST",
-        body: JSON.stringify({ qrToken }),
       }),
     
     checkRequestStatus: (requestId: string) =>

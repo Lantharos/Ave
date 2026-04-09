@@ -126,10 +126,5 @@
             </div>
         </div>
 
-        <div class="hidden md:flex flex-col p-[25px] bg-[#171717]/80 rounded-[42px]">
-            <div class="w-[200px] h-[200px] bg-[#222] rounded-[20px] flex items-center justify-center">
-                <span class="text-[#555] text-sm">QR Login Coming Soon</span>
-            </div>
-        </div>
     </div>
 </div>

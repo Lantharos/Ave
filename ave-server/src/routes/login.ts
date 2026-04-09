@@ -18,7 +18,6 @@ import { eq, and, gt, desc, isNull } from "drizzle-orm";
 import { notifyLoginRequest } from "../lib/websocket";
 import { sendLoginRequestNotification, sendAccountEventNotification, type PushSubscription } from "../lib/webpush";
 import { deleteChallenge, getChallenge, setChallenge } from "../lib/challenge-store";
-import { createQrLoginToken, verifyQrLoginToken } from "../lib/qr-login-token";
 import { serializeIdentityForOwner } from "../lib/identity-serialization";
 
 const app = new Hono();
@@ -497,7 +496,6 @@ app.post("/request-approval", zValidator("json", z.object({
   return c.json({
     requestId: request.id,
     expiresAt: request.expiresAt,
-    qrToken: createQrLoginToken(request.id),
   });
 });
 
@@ -612,64 +610,6 @@ app.get("/request-status/:requestId", async (c) => {
   }
   
   return c.json({ status: "pending" });
-});
-
-app.post("/scan-claim", zValidator("json", z.object({
-  qrToken: z.string().min(1),
-})), async (c) => {
-  const authUser = c.get("user");
-  if (!authUser) {
-    return c.json({ error: "Unauthorized" }, 401);
-  }
-
-  const { qrToken } = c.req.valid("json");
-  const verified = verifyQrLoginToken(qrToken);
-  if (!verified.valid || !verified.requestId) {
-    return c.json({ error: "Invalid or expired QR token" }, 400);
-  }
-
-  const [request] = await db
-    .select()
-    .from(loginRequests)
-    .where(eq(loginRequests.id, verified.requestId))
-    .limit(1);
-
-  if (!request) {
-    return c.json({ error: "Login request not found" }, 404);
-  }
-
-  if (request.status !== "pending") {
-    return c.json({ error: "Login request already handled" }, 400);
-  }
-
-  if (new Date() > request.expiresAt) {
-    return c.json({ error: "Login request expired" }, 400);
-  }
-
-  const userIdentities = await db
-    .select()
-    .from(identities)
-    .where(eq(identities.userId, authUser.id));
-  const handleSet = new Set(userIdentities.map((identity) => identity.handle));
-
-  if (!handleSet.has(request.handle)) {
-    return c.json({ error: "This login request is not for your account" }, 403);
-  }
-
-  return c.json({
-    request: {
-      id: request.id,
-      handle: request.handle,
-      deviceName: request.deviceName,
-      deviceType: request.deviceType,
-      browser: request.browser,
-      os: request.os,
-      ipAddress: request.ipAddress,
-      requesterPublicKey: request.requesterPublicKey,
-      createdAt: request.createdAt,
-      expiresAt: request.expiresAt,
-    },
-  });
 });
 
 // Login with trust code (recovery)

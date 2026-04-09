@@ -22,10 +22,6 @@ export default defineConfig({
             return "vendor-auth";
           }
 
-          if (id.includes("qrcode")) {
-            return "vendor-qr";
-          }
-
           if (id.includes("@mateothegreat")) {
             return "vendor-router";
           }
