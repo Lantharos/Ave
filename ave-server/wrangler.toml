@@ -51,6 +51,8 @@ RP_NAME = "Ave"
 RP_ORIGIN = "https://aveid.net"
 VAPID_PUBLIC_KEY = "BHG45kIltRlb8J3fIIPnTFyAGkMIEvb94XT1kHt5pmvyEJxTen32RQx1Q3XHXGeu34S1NOa-5nk8A3oTx-ldJ3M"
 VAPID_SUBJECT = "mailto:hello@lantharos.com"
+UNOSEND_FROM_EMAIL="no-reply@aveid.net"
+UNOSEND_FROM_NAME="Ave"
 
 # Keep these as Cloudflare secrets (do NOT commit to wrangler.toml):
 # OIDC_PRIVATE_KEY_PEM

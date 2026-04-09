@@ -516,34 +516,29 @@
                                 <Text type="h" size={24} mobileSize={16} weight="medium">{displayedEmail}</Text>
                                 {#if emailIsPending}
                                     <span class="text-[#D2AC57] text-sm md:text-[16px] font-semibold">UNVERIFIED</span>
+                                {:else if identity.email}
+                                    <svg class="w-5 h-5 md:w-[28px] md:h-[28px]" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" aria-label="email verified">
+                                        <circle cx="24" cy="24" r="16" stroke="white" stroke-opacity="0.85" stroke-width="4.5"/>
+                                        <path d="M17.5 24.5L22 29L30.5 20.5" stroke="white" stroke-opacity="0.85" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/>
+                                    </svg>
                                 {/if}
                             </div>
                         {/if}
                     </div>
 
-                    {#if !editing.email && (identity.pendingEmail || identity.email)}
+                    {#if !editing.email && emailIsPending}
                         <button
                             onclick={() => {
-                                if (emailIsPending) {
-                                    showEmailVerificationModal = true;
-                                }
+                                showEmailVerificationModal = true;
                             }}
-                            class="{emailActionButtonClass} disabled:cursor-default"
-                            aria-label={emailIsPending ? "verify email" : "email verified"}
-                            disabled={!emailIsPending}
+                            class="{emailActionButtonClass} cursor-pointer"
+                            aria-label="verify email"
                         >
-                            {#if emailIsPending}
-                                <svg class="w-5 h-5 md:w-[42px] md:h-[42px]" viewBox="0 0 42 42" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                    <circle cx="21" cy="21" r="13" stroke="white" stroke-opacity="0.8" stroke-width="4"/>
-                                    <path d="M21 13.75V21.25" stroke="white" stroke-opacity="0.8" stroke-width="4" stroke-linecap="round"/>
-                                    <circle cx="21" cy="27.25" r="2" fill="white" fill-opacity="0.8"/>
-                                </svg>
-                            {:else}
-                                <svg class="w-5 h-5 md:w-[42px] md:h-[42px]" viewBox="0 0 42 42" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                    <circle cx="21" cy="21" r="13" stroke="white" stroke-opacity="0.8" stroke-width="4"/>
-                                    <path d="M16 21.5L19.5 25L27 17.5" stroke="white" stroke-opacity="0.8" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
-                                </svg>
-                            {/if}
+                            <svg class="w-6 h-6 md:w-[48px] md:h-[48px]" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <circle cx="24" cy="24" r="16" stroke="white" stroke-opacity="0.85" stroke-width="4.5"/>
+                                <path d="M24 15.5V24.5" stroke="white" stroke-opacity="0.85" stroke-width="4.5" stroke-linecap="round"/>
+                                <circle cx="24" cy="31.5" r="2.25" fill="white" fill-opacity="0.85"/>
+                            </svg>
                         </button>
                     {/if}
 
