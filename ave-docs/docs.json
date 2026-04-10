@@ -54,9 +54,7 @@
             "pages": [
               "guides/connector-app-to-app",
               "guides/ave-signing",
-              "guides/end-to-end-encryption",
-              "guides/shared-secret-transfers",
-              "guides/e2ee-oauth-shared-secrets-spas"
+              "guides/end-to-end-encryption"
             ]
           },
           {
@@ -77,8 +75,7 @@
               "sdk/javascript-sdk",
               "sdk/sdk-oauth",
               "sdk/sdk-connector",
-              "sdk/sdk-signing",
-              "sdk/sdk-shared-secrets"
+              "sdk/sdk-signing"
             ]
           },
           {
@@ -97,8 +94,7 @@
             "pages": [
               "api/overview",
               "api/oauth-endpoints",
-              "api/signing-endpoints",
-              "api/shared-secret-endpoints"
+              "api/signing-endpoints"
             ]
           }
         ]

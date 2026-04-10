@@ -6,7 +6,7 @@ import {
   verifyRegistrationResponse,
   type VerifiedRegistrationResponse,
 } from "@simplewebauthn/server";
-import { db, users, identities, passkeys, devices, sessions, activityLogs, identityEncryptionKeys } from "../db";
+import { db, users, identities, passkeys, devices, sessions, activityLogs, signingKeys } from "../db";
 import { 
   generateSessionToken, 
   hashSessionToken,
@@ -177,7 +177,7 @@ app.post("/complete", zValidator("json", completeRegistrationSchema), async (c) 
       .returning();
 
     if (data.encryptionKey) {
-      await db.insert(identityEncryptionKeys).values({
+      await db.insert(signingKeys).values({
         identityId: identity.id,
         publicKey: data.encryptionKey.publicKey,
         encryptedPrivateKey: data.encryptionKey.encryptedPrivateKey,

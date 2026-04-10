@@ -1,17 +1,13 @@
 import {
   buildAuthorizeUrl,
   buildConnectorUrl,
-  claimSharedSecretTransfer,
-  createSharedSecret,
-  createSharedSecretTransfer,
   exchangeCode,
   exchangeFedCmAssertion,
-  finalizeSharedSecretRecipientStorage,
   generateCodeChallenge,
   generateCodeVerifier,
   generateNonce,
   getApiBase,
-  getIdentityEncryptionPublicKey,
+  getIdentityPublicKey,
 } from "./index.js";
 import { isJwtVerificationSupported } from "./crypto-runtime.js";
 import { verifyJwt } from "./jwt.js";
@@ -19,15 +15,18 @@ import type {
   AveIdTokenClaims,
   AveJwtClaims,
   FedCmTokenResponse,
-  SharedSecretKind,
-  SharedSecretRecord,
-  SharedSecretTransferResolution,
   TokenResponse,
-  TransferContract,
+  WrappedIdentityPayload,
 } from "./types.js";
 
 export { fetchJwks, verifyJwt } from "./jwt.js";
-export type { FedCmTokenResponse, VerifyJwtOptions } from "./types.js";
+export type {
+  FedCmTokenResponse,
+  IdentityKeyEnvelope,
+  IdentityPublicKeyRecord,
+  VerifyJwtOptions,
+  WrappedIdentityPayload,
+} from "./types.js";
 
 interface FedCmIdentityCredential extends Credential {
   token?: string;
@@ -82,7 +81,17 @@ function toArrayBuffer(data: string | Uint8Array | ArrayBuffer): ArrayBuffer {
   return data;
 }
 
-async function importSharedSecretPublicKey(publicKeyB64: string): Promise<CryptoKey> {
+function toBase64Url(base64: string): string {
+  return base64.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+}
+
+function fromBase64Url(base64Url: string): string {
+  const normalized = base64Url.replace(/-/g, "+").replace(/_/g, "/");
+  const padded = normalized + "=".repeat((4 - (normalized.length % 4)) % 4);
+  return padded;
+}
+
+async function importIdentityPublicKey(publicKeyB64: string): Promise<CryptoKey> {
   return crypto.subtle.importKey(
     "spki",
     toPlainArrayBuffer(decodeBase64(publicKeyB64)),
@@ -92,7 +101,18 @@ async function importSharedSecretPublicKey(publicKeyB64: string): Promise<Crypto
   );
 }
 
-export async function generateIdentityEncryptionKeyPair(): Promise<{
+async function deriveIdentitySharedKey(privateKey: CryptoKey, peerPublicKeyB64: string): Promise<CryptoKey> {
+  const publicKey = await importIdentityPublicKey(peerPublicKeyB64);
+  return crypto.subtle.deriveKey(
+    { name: "ECDH", public: publicKey },
+    privateKey,
+    { name: "AES-GCM", length: 256 },
+    false,
+    ["encrypt", "decrypt"]
+  );
+}
+
+async function generateEphemeralKeyPair(): Promise<{
   publicKey: string;
   privateKey: CryptoKey;
 }> {
@@ -109,12 +129,12 @@ export async function generateIdentityEncryptionKeyPair(): Promise<{
   };
 }
 
-export async function exportIdentityEncryptionPrivateKey(privateKey: CryptoKey): Promise<string> {
+export async function exportIdentityPrivateKey(privateKey: CryptoKey): Promise<string> {
   const exported = await crypto.subtle.exportKey("pkcs8", privateKey);
   return encodeBase64(new Uint8Array(exported));
 }
 
-export async function importIdentityEncryptionPrivateKey(privateKeyB64: string): Promise<CryptoKey> {
+export async function importIdentityPrivateKey(privateKeyB64: string): Promise<CryptoKey> {
   return crypto.subtle.importKey(
     "pkcs8",
     toPlainArrayBuffer(decodeBase64(privateKeyB64)),
@@ -124,194 +144,59 @@ export async function importIdentityEncryptionPrivateKey(privateKeyB64: string):
   );
 }
 
-async function deriveSharedSecretKey(privateKey: CryptoKey, peerPublicKeyB64: string): Promise<CryptoKey> {
-  const publicKey = await importSharedSecretPublicKey(peerPublicKeyB64);
-  return crypto.subtle.deriveKey(
-    { name: "ECDH", public: publicKey },
-    privateKey,
-    { name: "AES-GCM", length: 256 },
-    false,
-    ["encrypt", "decrypt"]
-  );
-}
-
-async function encryptWithSharedKey(payload: ArrayBuffer, key: CryptoKey): Promise<string> {
+export async function encryptPayloadForIdentity(
+  payload: string | Uint8Array | ArrayBuffer,
+  recipientPublicKey: string
+): Promise<WrappedIdentityPayload> {
+  const sender = await generateEphemeralKeyPair();
+  const sharedKey = await deriveIdentitySharedKey(sender.privateKey, recipientPublicKey);
   const iv = crypto.getRandomValues(new Uint8Array(12));
-  const encrypted = await crypto.subtle.encrypt(
-    { name: "AES-GCM", iv },
-    key,
-    payload
-  );
+  const encrypted = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, sharedKey, toArrayBuffer(payload));
   const packed = new Uint8Array(iv.byteLength + encrypted.byteLength);
   packed.set(iv, 0);
   packed.set(new Uint8Array(encrypted), iv.byteLength);
-  return encodeBase64(packed);
-}
 
-async function decryptWithSharedKey(ciphertextB64: string, key: CryptoKey): Promise<ArrayBuffer> {
-  const packed = decodeBase64(ciphertextB64);
-  const iv = packed.slice(0, 12);
-  const ciphertext = packed.slice(12);
-  return crypto.subtle.decrypt(
-    { name: "AES-GCM", iv },
-    key,
-    ciphertext
-  );
-}
-
-export async function encryptSharedSecretForIdentity(
-  secret: string | Uint8Array | ArrayBuffer,
-  recipientPublicKey: string
-): Promise<{ encryptedSecret: string; senderPublicKey: string }> {
-  const senderKeyPair = await generateIdentityEncryptionKeyPair();
-  const sharedKey = await deriveSharedSecretKey(senderKeyPair.privateKey, recipientPublicKey);
   return {
-    encryptedSecret: await encryptWithSharedKey(toArrayBuffer(secret), sharedKey),
-    senderPublicKey: senderKeyPair.publicKey,
+    encryptedPayload: encodeBase64(packed),
+    senderPublicKey: sender.publicKey,
   };
 }
 
-export async function decryptSharedSecretFromTransfer(
-  encryptedSecret: string,
-  senderPublicKey: string,
+export async function encryptPayloadForHandle(
+  payload: string | Uint8Array | ArrayBuffer,
+  params: { handle: string; issuer?: string }
+): Promise<WrappedIdentityPayload> {
+  const recipient = await getIdentityPublicKey({ issuer: params.issuer }, params.handle);
+  return encryptPayloadForIdentity(payload, recipient.publicKey);
+}
+
+export async function decryptWrappedPayload(
+  wrapped: WrappedIdentityPayload,
   recipientPrivateKey: CryptoKey
 ): Promise<ArrayBuffer> {
-  const sharedKey = await deriveSharedSecretKey(recipientPrivateKey, senderPublicKey);
-  return decryptWithSharedKey(encryptedSecret, sharedKey);
+  const sharedKey = await deriveIdentitySharedKey(recipientPrivateKey, wrapped.senderPublicKey);
+  const packed = decodeBase64(wrapped.encryptedPayload);
+  const iv = packed.slice(0, 12);
+  const ciphertext = packed.slice(12);
+  return crypto.subtle.decrypt({ name: "AES-GCM", iv }, sharedKey, ciphertext);
 }
 
-export async function createSharedSecretPackage(params: {
-  recipientHandle: string;
-  secret: string | Uint8Array | ArrayBuffer;
-  issuer?: string;
-}): Promise<{
-  recipient: Awaited<ReturnType<typeof getIdentityEncryptionPublicKey>>;
-  encryptedSecretForTarget: string;
-  senderPublicKey: string;
-}> {
-  const recipient = await getIdentityEncryptionPublicKey({ issuer: params.issuer }, params.recipientHandle);
-  const encrypted = await encryptSharedSecretForIdentity(params.secret, recipient.publicKey);
+export function encodeWrappedPayloadParam(wrapped: WrappedIdentityPayload): string {
+  const json = JSON.stringify(wrapped);
+  const bytes = new TextEncoder().encode(json);
+  return toBase64Url(encodeBase64(bytes));
+}
+
+export function decodeWrappedPayloadParam(value: string): WrappedIdentityPayload {
+  const json = atob(fromBase64Url(value));
+  const parsed = JSON.parse(json) as Partial<WrappedIdentityPayload>;
+  if (!parsed.encryptedPayload || !parsed.senderPublicKey) {
+    throw new Error("Invalid wrapped payload param");
+  }
   return {
-    recipient,
-    encryptedSecretForTarget: encrypted.encryptedSecret,
-    senderPublicKey: encrypted.senderPublicKey,
+    encryptedPayload: parsed.encryptedPayload,
+    senderPublicKey: parsed.senderPublicKey,
   };
-}
-
-export async function createSharedSecretWithTransfer(params: {
-  issuer?: string;
-  sessionToken: string;
-  ownerIdentityId: string;
-  targetHandle: string;
-  kind: SharedSecretKind;
-  encryptedSecretForOwner: string;
-  secret: string | Uint8Array | ArrayBuffer;
-  appId?: string;
-  resourceKey?: string;
-  label?: string;
-  expiresInHours?: number;
-  returnUrl?: string;
-}): Promise<{
-  secret: SharedSecretRecord;
-  transfer: TransferContract;
-  claimToken: string;
-  claimUrl: string;
-}> {
-  const secretRecord = await createSharedSecret(
-    { issuer: params.issuer },
-    params.sessionToken,
-    {
-      identityId: params.ownerIdentityId,
-      kind: params.kind,
-      encryptedSecret: params.encryptedSecretForOwner,
-      appId: params.appId,
-      resourceKey: params.resourceKey,
-      label: params.label,
-    }
-  );
-
-  const packaged = await createSharedSecretPackage({
-    recipientHandle: params.targetHandle,
-    secret: params.secret,
-    issuer: params.issuer,
-  });
-
-  const transfer = await createSharedSecretTransfer(
-    { issuer: params.issuer },
-    params.sessionToken,
-    secretRecord.id,
-    {
-      identityId: params.ownerIdentityId,
-      targetHandle: params.targetHandle,
-      encryptedSecretForTarget: packaged.encryptedSecretForTarget,
-      senderPublicKey: packaged.senderPublicKey,
-      expiresInHours: params.expiresInHours,
-      returnUrl: params.returnUrl,
-    }
-  );
-
-  return {
-    secret: secretRecord,
-    transfer: transfer.transfer,
-    claimToken: transfer.claimToken,
-    claimUrl: transfer.claimUrl,
-  };
-}
-
-export async function claimAndStoreSharedSecret(params: {
-  issuer?: string;
-  sessionToken: string;
-  claimToken: string;
-  recipientIdentityId: string;
-  recipientPrivateKey: CryptoKey;
-  wrapForRecipientStorage: (secret: ArrayBuffer, transfer: SharedSecretTransferResolution) => Promise<string>;
-}): Promise<{
-  transfer: SharedSecretTransferResolution;
-  encryptedSecretForRecipient: string;
-}> {
-  const transfer = await claimSharedSecretTransfer(
-    { issuer: params.issuer },
-    params.sessionToken,
-    params.claimToken,
-    params.recipientIdentityId
-  );
-
-  const plaintext = await decryptSharedSecretFromTransfer(
-    transfer.encryptedSecretForTarget,
-    transfer.senderPublicKey,
-    params.recipientPrivateKey
-  );
-
-  const encryptedSecretForRecipient = await params.wrapForRecipientStorage(plaintext, transfer);
-
-  await finalizeSharedSecretRecipientStorage(
-    { issuer: params.issuer },
-    params.sessionToken,
-    transfer.sharedSecretId,
-    {
-      identityId: params.recipientIdentityId,
-      transferId: transfer.id,
-      encryptedSecretForRecipient,
-    }
-  );
-
-  return {
-    transfer,
-    encryptedSecretForRecipient,
-  };
-}
-
-export function appendSharedSecretClaimResult(returnUrl: string, params: {
-  sharedSecretId: string;
-  transferId: string;
-  identityId: string;
-}): string {
-  const url = new URL(returnUrl, typeof window !== "undefined" ? window.location.origin : "http://localhost");
-  url.searchParams.set("shared_secret_claimed", "1");
-  url.searchParams.set("shared_secret_id", params.sharedSecretId);
-  url.searchParams.set("transfer_id", params.transferId);
-  url.searchParams.set("identity_id", params.identityId);
-  return url.toString();
 }
 
 // PKCE_STORAGE_KEY is the new canonical SDK storage entry.

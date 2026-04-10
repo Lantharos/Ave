@@ -88,7 +88,7 @@ const fedcmResult = await signIn({
 });
 
 if (fedcmResult) {
-  console.log(fedcmResult.access_token, fedcmResult.app_key);
+  console.log(fedcmResult.access_token);
 }
 
 await startPkceLogin({
@@ -105,14 +105,37 @@ const tokens = await finishPkceLogin({
 
 `startPkceLogin()` now generates and stores both `state` and `nonce` by default, and `finishPkceLogin()` validates the callback `state`, exchanges the authorization code, and verifies any returned `id_token` / `access_token_jwt` with Ave's JWKS.
 
-## App keys (shared secrets)
+## Identity keys and wrapped payloads
 
-For vault-style keys shared between Ave identities (dashboard **App keys**, API **`/api/shared-secrets`**):
+Use the unified identity key model to publish/fetch public keys and exchange wrapped app secrets.
 
-- Use **`createSharedSecretWithTransfer`** and **`claimAndStoreSharedSecret`** from `@ave-id/sdk/client`.
-- Use **`listSharedSecrets`** and **`getSharedSecretAccess`** from `@ave-id/sdk`.
+```ts
+import {
+  getIdentityKey,
+  getIdentityPublicKey,
+} from "@ave-id/sdk";
+import {
+  decryptWrappedPayload,
+  encryptPayloadForHandle,
+  importIdentityPrivateKey,
+} from "@ave-id/sdk/client";
 
-Transfers are **initiated from your app** after sign-in, not from the Ave website. See [App keys (shared secrets)](https://docs.aveid.net/sdk/sdk-shared-secrets) and the [guide](https://docs.aveid.net/guides/shared-secret-transfers).
+// 1) Encrypt a payload for another identity by handle
+const wrapped = await encryptPayloadForHandle("org_key_bytes_or_json", {
+  issuer: "https://aveid.net",
+  handle: "alice",
+});
+
+// 2) Recipient decrypts what was passed in query/body
+const myKeyEnvelope = await getIdentityKey({ issuer: "https://aveid.net" }, sessionToken, identityId);
+const privateKeyB64 = await decryptWithYourLocalMasterKey(myKeyEnvelope.encryptedPrivateKey!);
+const privateKey = await importIdentityPrivateKey(privateKeyB64);
+const plaintext = await decryptWrappedPayload(wrapped, privateKey);
+```
+
+Ave auto-provisions identity keypairs during registration or first interaction. The SDK does not expose on-demand identity keypair generation.
+
+Pass `wrapped` through your auth or invite flow as JSON or a compact query param via `encodeWrappedPayloadParam` / `decodeWrappedPayloadParam` from `@ave-id/sdk/client`.
 
 ## Server helpers
 

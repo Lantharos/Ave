@@ -142,64 +142,20 @@ export interface DelegationGrant {
   targetAudience: string;
 }
 
-export interface IdentityEncryptionPublicKey {
-  identityId: string;
+export interface IdentityPublicKeyRecord {
   handle: string;
   publicKey: string;
   createdAt: string;
 }
 
-export type SharedSecretKind = "app_scoped" | "global";
-
-export interface SharedSecretDescriptor {
-  id: string;
-  kind: SharedSecretKind;
-  appId?: string | null;
-  resourceKey?: string | null;
-  label?: string | null;
-  appName?: string | null;
+export interface IdentityKeyEnvelope {
+  hasKey: boolean;
+  publicKey?: string | null;
+  encryptedPrivateKey?: string | null;
+  createdAt?: string | null;
 }
 
-export interface TransferContract {
-  id: string;
-  targetHandle: string;
-  status: "pending" | "claimed" | "expired";
-  expiresAt: string;
-  descriptor: SharedSecretDescriptor;
-  returnUrl?: string | null;
-}
-
-export interface RecipientSharedSecretEnvelope {
-  id: string;
-  sharedSecretId: string;
-  identityId: string;
-  encryptedSecret: string;
-  claimedAt?: string | null;
-  descriptor: SharedSecretDescriptor;
-  owner: {
-    identityId: string;
-    handle: string;
-    displayName: string;
-  };
-}
-
-export interface SharedSecretRecord extends SharedSecretDescriptor {
-  status: string;
-  createdAt: string;
-}
-
-export interface SharedSecretTransferResolution {
-  id: string;
-  sharedSecretId: string;
-  encryptedSecretForTarget: string;
+export interface WrappedIdentityPayload {
+  encryptedPayload: string;
   senderPublicKey: string;
-  targetHandle: string;
-  expiresAt: string;
-  descriptor: SharedSecretDescriptor;
-  returnUrl?: string | null;
-  owner: {
-    identityId: string;
-    handle: string;
-    displayName: string;
-  };
 }

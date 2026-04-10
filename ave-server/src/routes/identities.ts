@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
-import { db, identities, activityLogs, identityEncryptionKeys } from "../db";
+import { db, identities, activityLogs, signingKeys } from "../db";
 import { requireAuth, requireWritableForMutation } from "../middleware/auth";
 import { eq, and } from "drizzle-orm";
 import {
@@ -67,6 +67,11 @@ app.post("/", zValidator("json", z.object({
     (val) => val === undefined || val.startsWith("#") || z.string().url().safeParse(val).success,
     { message: "Must be a valid URL or hex color" }
   ),
+  identityKey: z.object({
+    publicKey: z.string().min(1),
+    encryptedPrivateKey: z.string().min(1),
+  }).optional(),
+  // Backward compatible alias while clients migrate.
   encryptionKey: z.object({
     publicKey: z.string().min(1),
     encryptedPrivateKey: z.string().min(1),
@@ -110,11 +115,13 @@ app.post("/", zValidator("json", z.object({
     })
     .returning();
 
-  if (data.encryptionKey) {
-    await db.insert(identityEncryptionKeys).values({
+  const identityKey = data.identityKey ?? data.encryptionKey;
+
+  if (identityKey) {
+    await db.insert(signingKeys).values({
       identityId: identity.id,
-      publicKey: data.encryptionKey.publicKey,
-      encryptedPrivateKey: data.encryptionKey.encryptedPrivateKey,
+      publicKey: identityKey.publicKey,
+      encryptedPrivateKey: identityKey.encryptedPrivateKey,
     });
   }
   

@@ -16,7 +16,6 @@
         { path: "/register", component: async () => (await import("./pages/register/Register.svelte")).default },
         { path: "/dashboard", component: async () => (await import("./pages/dashboard/Dashboard.svelte")).default },
         { path: "/dashboard/(.*)", component: async () => (await import("./pages/dashboard/Dashboard.svelte")).default },
-        { path: "/shared/claim", component: async () => (await import("./pages/shared/Claim.svelte")).default },
         { path: "/privacy", component: async () => (await import("./pages/home/legal/PrivacyPolicy.svelte")).default },
         { path: "/terms", component: async () => (await import("./pages/home/legal/TermsOfService.svelte")).default },
         { path: "/authorize", component: async () => (await import("./pages/authorize/Authorize.svelte")).default },

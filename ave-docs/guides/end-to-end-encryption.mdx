@@ -5,8 +5,6 @@ description: "Implement Ave app-key handoff safely, avoid URL-fragment decoding 
 
 Ave can deliver a per-app, per-identity encryption key for E2EE-capable apps.
 
-Ave also supports **shared secret transfers** (shown as **App keys** in the Ave dashboard) for app-scoped or global secrets that need to move between identities. Use the normal app-key handoff for your app's base encryption context, and use shared-secret transfers when you need to grant another identity access to an additional secret such as a vault root or workspace key. Transfers are created from **your app** via the SDK/API, not from the dashboard.
-
 ## How key handoff works
 
 - App is marked `supportsE2ee`
@@ -19,7 +17,6 @@ Ave also supports **shared secret transfers** (shown as **App keys** in the Ave 
 - Key is identity-specific
 - Same identity gets same app key across logins
 - Different identities must map to separate encrypted data domains
-- Shared secrets are also identity-specific after claim, even when they originated from another identity
 
 ## URL-fragment parsing gotcha
 
@@ -50,21 +47,3 @@ window.history.replaceState({}, document.title, window.location.pathname + windo
 - Identity switch returns different key context
 - Key decode failures due to base64 normalization bug
 - Fragment key left in browser history/logs
-- Shared secret claim authenticated as the wrong handle
-- Recipient identity missing an Ave encryption key
-
-## Shared secret transfers
-
-If your app needs to share a secret with another Ave identity:
-
-- look up the recipient encryption key by handle
-- encrypt the secret locally to that public key
-- create a transfer contract in Ave
-- send the claim link to the recipient
-- let the recipient claim and store their own wrapped copy
-
-See:
-
-- [App keys & shared secret transfers](/guides/shared-secret-transfers)
-- [App keys (shared secret) API](/api/shared-secret-endpoints)
-- [@ave-id/sdk — App keys](/sdk/sdk-shared-secrets)

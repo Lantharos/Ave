@@ -335,58 +335,6 @@ function openAveSigningPopup(options: OpenAveSigningPopupOptions): {
 Returns `null` if the popup was blocked. Fall back to sheet.
 
 ---
-
-## App key claim embeds
-
-Use these when your app (e.g. Citadel) sends an **app key / shared secret** invite and you want the recipient to **accept inside your UI** instead of opening a new tab on Ave.
-
-### `openAppKeyClaimSheet(options)`
-
-Loads `https://aveid.net/shared/claim?token=...&embed=1` in a bottom sheet. When the user finishes, Ave posts:
-
-```json
-{
-  "type": "ave:success",
-  "payload": {
-    "kind": "app_key_claim",
-    "redirectUrl": "https://yourapp.com/... or null",
-    "sharedSecretId": "...",
-    "transferId": "...",
-    "identityId": "...",
-    "handle": "recipient"
-  }
-}
-```
-
-With **`deferFinalize: true`**, `payload.kind` is **`app_key_claim_deferred`** and includes **`claimToken`** so your app can run `claimAndStoreSharedSecret` once with your own `wrapForRecipientStorage`.
-
-Optional fields (see [E2EE OAuth apps & SPAs](/guides/e2ee-oauth-shared-secrets-spas)):
-
-- **`finalizeRecipientWrap`**: `"master"` (default) or `"citadel_v1"` — sets `finalize_wrap` on the claim URL.
-- **`sharedSecretResourceKey`**: sets `resource_key` when you need to pin the HKDF salt segment.
-- **`deferFinalize`**: sets `defer_finalize=1` (embed only).
-- **`appKeyB64`**: with `finalizeRecipientWrap: "citadel_v1"`, posts `ave:provide_app_key` into the frame after load.
-
-```ts
-import { openAppKeyClaimSheet } from "@ave-id/embed";
-
-const { close } = openAppKeyClaimSheet({
-  claimUrl: result.claimUrl,
-  onSuccess: (payload) => {
-    if (payload.redirectUrl) window.location.assign(payload.redirectUrl);
-  },
-  onClose: () => {},
-});
-```
-
-Pass either **`claimUrl`** from the transfer API or **`claimToken`** alone (the helper builds the URL).
-
-### `openAppKeyClaimPopup(options)`
-
-Same behavior in a centered popup (`width` / `height` optional). Returns `null` if the popup was blocked. Accepts the same optional fields as the sheet (`finalizeRecipientWrap`, `deferFinalize`, `sharedSecretResourceKey`, `appKeyB64`).
-
----
-
 ## Security rules
 
 <Warning>

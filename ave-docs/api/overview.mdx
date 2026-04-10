@@ -10,9 +10,6 @@ description: "Endpoint families, authentication requirements, and request conven
   <Card title="Signing" icon="pen-nib" href="/api/signing-endpoints">
     Signature request lifecycle, verification, and key management.
   </Card>
-  <Card title="App keys (shared secrets)" icon="key-skeleton" href="/api/shared-secret-endpoints">
-    Identity encryption keys, transfer contracts, claim flows, and recipient access retrieval.
-  </Card>
   <Card title="Security" icon="shield" href="/security/best-practices">
     Hardening checklist for token handling, claims validation, and key safety.
   </Card>
@@ -94,26 +91,22 @@ curl https://api.aveid.net/api/oauth/userinfo \
     - `POST /api/signing/requests/:requestId/deny` — deny a request
   </Accordion>
 
-  <Accordion title="App keys (shared secrets) — OAuth access tokens plus public lookup">
-    Public endpoints:
+  <Accordion title="Identity key endpoints — unified with signing">
+    Identity keys are now the same keypair concept used by signing.
 
-    - `GET /api/encryption/public-key/:handle` — look up an identity encryption key
-    - `GET /api/shared-secrets/transfers/:claimToken` — resolve claim-link metadata
+    Public lookup endpoints:
 
-    **Identity encryption** (Ave session only — bearer session token or session cookie):
+    - `GET /api/signing/public-key/:handle` — canonical identity public key lookup
+    - `GET /api/encryption/public-key/:handle` — compatibility alias
 
-    - `GET /api/encryption/keys/:identityId`
-    - `POST /api/encryption/keys/:identityId`
-    - `PUT /api/encryption/keys/:identityId`
+    Session-authenticated key envelope endpoints:
 
-    **Shared secrets** (OAuth **`access_token`** / **`access_token_jwt`** from the token endpoint — see [Shared secret API](/api/shared-secret-endpoints#shared-secrets-auth)):
-
-    - `POST /api/shared-secrets`
-    - `GET /api/shared-secrets`
-    - `POST /api/shared-secrets/:id/transfers`
-    - `POST /api/shared-secrets/transfers/:claimToken/claim`
-    - `POST /api/shared-secrets/:id/finalize-recipient-storage`
-    - `GET /api/shared-secrets/access`
+    - `GET /api/signing/keys/:identityId`
+    - `POST /api/signing/keys/:identityId`
+    - `PUT /api/signing/keys/:identityId`
+    - `GET /api/encryption/keys/:identityId` (alias)
+    - `POST /api/encryption/keys/:identityId` (alias)
+    - `PUT /api/encryption/keys/:identityId` (alias)
   </Accordion>
 </AccordionGroup>
 

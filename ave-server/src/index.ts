@@ -21,7 +21,6 @@ import organizationsRoutes from "./routes/organizations";
 import pushRoutes from "./routes/push";
 import signingRoutes from "./routes/signing";
 import encryptionRoutes from "./routes/encryption";
-import sharedSecretsRoutes from "./routes/shared-secrets";
 
 import { SESSION_COOKIE_NAME } from "./lib/session-cookie";
 import { initDb, runWithDb } from "./db";
@@ -177,7 +176,6 @@ function buildApp() {
   app.route("/api/push", pushRoutes);
   app.route("/api/signing", signingRoutes);
   app.route("/api/encryption", encryptionRoutes);
-  app.route("/api/shared-secrets", sharedSecretsRoutes);
   app.route("/.well-known", oidcRoutes);
   app.route("/api/upload", uploadRoutes);
 

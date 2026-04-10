@@ -34,7 +34,6 @@ If you omit `clientId`, `startAveAuth()` automatically uses the Quick Ave format
 - **`openAveSheet`**: the best default for mobile/touch UX and app-like flows
 - **`openAvePopup`**: best for desktop dashboards and power-user tools
 - **connector/signing sheets**: use when you need a delegated permission or signing step without leaving the page
-- **`openAppKeyClaimSheet` / `openAppKeyClaimPopup`**: [app key / shared secret](https://docs.aveid.net/guides/shared-secret-transfers) claim flow—recipient accepts an invite inside your app (`payload.kind === "app_key_claim"` or `app_key_claim_deferred` on success). Optional `finalizeRecipientWrap`, `deferFinalize`, `sharedSecretResourceKey`, `appKeyB64` for [Citadel-style wraps](https://docs.aveid.net/guides/e2ee-oauth-shared-secrets-spas).
 
 All auth embeds send results back over `postMessage`. On success you usually receive a `redirectUrl` and should navigate the browser there.
 
