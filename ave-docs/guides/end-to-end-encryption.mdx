@@ -5,6 +5,15 @@ description: "Implement Ave app-key handoff safely, avoid URL-fragment decoding 
 
 Ave can deliver a per-app, per-identity encryption key for E2EE-capable apps.
 
+## Two mechanisms (do not confuse them)
+
+| Mechanism | What gets decrypted | Where the secret appears |
+| --- | --- | --- |
+| **App E2EE key (`app_key`)** | The per-app symmetric key ciphertext Ave stored for this grant | URL **`#fragment`** after consent — see below |
+| **Identity wrapped payloads** | Arbitrary bytes for another user | Encrypted with their **published public key**; ciphertext usually lives in **your** app — see [identity keys](/sdk/sdk-identity-keys) |
+
+`#app_key` is delivered in the fragment because only the **browser** on aveid.net can unlock the master key — not your redirect page alone. Wrapped invite ciphertext is stored **in your app**; the recipient unwraps with `decryptWrappedPayload` in the browser after unlocking the master key. Use the **E2EE app key** for ongoing storage after handoff — it is not the same as wrapped payload crypto. Details: [Identity keys](/sdk/sdk-identity-keys).
+
 ## How key handoff works
 
 - App is marked `supportsE2ee`

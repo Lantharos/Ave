@@ -5,6 +5,7 @@
   import { auth, isAuthenticated } from "../../stores/auth";
   import { setReturnUrl } from "../../util/return-url";
   import { safeGoto } from "../../util/safe-goto";
+  import { postMessageTargetOriginFromRedirectUri } from "../../util/embed-post-message-origin";
 
   type AppInfo = {
     name: string;
@@ -141,7 +142,8 @@
         const target = (window.opener && (window.opener as any).parent)
           ? (window.opener as any).parent
           : (window.opener ?? window.parent);
-        target?.postMessage({ type: "ave:success", payload: { redirectUrl: response.redirectUrl } }, "*");
+        const origin = postMessageTargetOriginFromRedirectUri(params.redirectUri);
+        target?.postMessage({ type: "ave:success", payload: { redirectUrl: response.redirectUrl } }, origin);
         if (window.opener) {
           setTimeout(() => window.close(), 50);
         }
@@ -169,7 +171,8 @@
       const target = (window.opener && (window.opener as any).parent)
         ? (window.opener as any).parent
         : (window.opener ?? window.parent);
-      target?.postMessage({ type: "ave:auth_required" }, "*");
+      const origin = postMessageTargetOriginFromRedirectUri(params.redirectUri);
+      target?.postMessage({ type: "ave:auth_required" }, origin);
     }
     setReturnUrl(window.location.pathname + window.location.search);
     safeGoto(goto, "/login");
@@ -180,7 +183,8 @@
       const target = (window.opener && (window.opener as any).parent)
         ? (window.opener as any).parent
         : (window.opener ?? window.parent);
-      target?.postMessage({ type: "ave:close" }, "*");
+      const origin = postMessageTargetOriginFromRedirectUri(params.redirectUri);
+      target?.postMessage({ type: "ave:close" }, origin);
       if (window.opener) {
         setTimeout(() => window.close(), 50);
       }

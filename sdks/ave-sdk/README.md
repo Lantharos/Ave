@@ -107,35 +107,28 @@ const tokens = await finishPkceLogin({
 
 ## Identity keys and wrapped payloads
 
-Use the unified identity key model to publish/fetch public keys and exchange wrapped app secrets.
+Encrypt for the invitee’s public key, then pass the blob to Ave on the authorize URL as **`wrapped_key`** (see Mintlify docs: Identity keys & wrapped payloads). After consent, Ave returns plaintext in the redirect fragment as **`unwrapped_secret`** (or `unwrappedSecretB64` in embed). You do not unwrap on your own origin without the user’s Ave master key.
 
 ```ts
-import {
-  getIdentityKey,
-  getIdentityPublicKey,
-} from "@ave-id/sdk";
-import {
-  decryptWrappedPayload,
-  encryptPayloadForHandle,
-  importIdentityPrivateKey,
-} from "@ave-id/sdk/client";
+import { buildAuthorizeUrl } from "@ave-id/sdk";
+import { encryptPayloadForHandle, encodeWrappedPayloadParam } from "@ave-id/sdk/client";
 
-// 1) Encrypt a payload for another identity by handle
-const wrapped = await encryptPayloadForHandle("org_key_bytes_or_json", {
-  issuer: "https://aveid.net",
-  handle: "alice",
-});
+const wrapped = await encryptPayloadForHandle(
+  new TextEncoder().encode(JSON.stringify({ secret: "…" })),
+  { issuer: "https://aveid.net", handle: "alice" }
+);
 
-// 2) Recipient decrypts what was passed in query/body
-const myKeyEnvelope = await getIdentityKey({ issuer: "https://aveid.net" }, sessionToken, identityId);
-const privateKeyB64 = await decryptWithYourLocalMasterKey(myKeyEnvelope.encryptedPrivateKey!);
-const privateKey = await importIdentityPrivateKey(privateKeyB64);
-const plaintext = await decryptWrappedPayload(wrapped, privateKey);
+const url = buildAuthorizeUrl(
+  { clientId: "YOUR_CLIENT_ID", redirectUri: "https://yourapp.com/callback" },
+  {
+    codeChallenge,
+    codeChallengeMethod: "S256",
+    extraParams: { wrapped_key: encodeWrappedPayloadParam(wrapped) },
+  }
+);
 ```
 
-Ave auto-provisions identity keypairs during registration or first interaction. The SDK does not expose on-demand identity keypair generation.
-
-Pass `wrapped` through your auth or invite flow as JSON or a compact query param via `encodeWrappedPayloadParam` / `decodeWrappedPayloadParam` from `@ave-id/sdk/client`.
+`decryptWrappedPayload` exists for local testing only; production flows use `wrapped_key` → Ave → `unwrapped_secret`.
 
 ## Server helpers
 

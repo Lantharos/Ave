@@ -61,6 +61,7 @@ description: "Hardening checklist for OAuth, OIDC token validation, Connector de
     <Check>Remove key-bearing URL fragments from browser history immediately after parsing</Check>
     <Check>Keep per-identity encrypted data partitions — never mix data across identities</Check>
     <Check>Never log raw key material</Check>
+    <Check>Use the [embed SDK](/sdk/embed-sdk) for iframe flows; it only accepts `postMessage` from the Ave issuer</Check>
   </Accordion>
 
   <Accordion title="Operational monitoring" icon="chart-line">

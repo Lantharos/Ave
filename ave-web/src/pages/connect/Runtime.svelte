@@ -13,9 +13,11 @@
   let delegatedToken: string | null = null;
   let status = $state("Waiting for connector initialization…");
   let initialized = $state(false);
+  let trustedParentOrigin: string | null = null;
 
   function post(type: string, payload?: unknown) {
-    window.parent?.postMessage({ type, payload }, "*");
+    const target = trustedParentOrigin ?? "*";
+    window.parent?.postMessage({ type, payload }, target);
   }
 
   async function handleRequest(payload: RequestPayload) {
@@ -104,11 +106,16 @@
   function handleMessage(event: MessageEvent) {
     const data = event.data || {};
     if (data.type === "ave:connector:init") {
+      trustedParentOrigin = event.origin;
       const payload = (data.payload || {}) as InitPayload;
       delegatedToken = payload.delegatedToken;
       initialized = true;
       status = "Connector runtime ready";
       post("ave:connector:ready");
+      return;
+    }
+
+    if (trustedParentOrigin && event.origin !== trustedParentOrigin) {
       return;
     }
 

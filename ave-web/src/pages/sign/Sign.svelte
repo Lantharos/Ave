@@ -9,10 +9,14 @@
     import StorageAccessGate from "../../components/StorageAccessGate.svelte";
     import { supportsStorageAccessApi, hasStorageAccess, requestStorageAccess } from "../../lib/storage-access";
     import { unlockMasterKeyWithPasskey } from "../../lib/master-key-unlock";
+    import { postMessageTargetOriginForSigning } from "../../util/embed-post-message-origin";
 
-    function postToEmbedHost(payload: unknown) {
-        const target = (window.opener && (window.opener as any).parent) ? (window.opener as any).parent : (window.opener ?? window.parent);
-        target?.postMessage(payload, "*");
+    function postToEmbedHost(payload: unknown, redirectUri: string | undefined, parentOriginParam: string | null) {
+        const target = (window.opener && (window.opener as any).parent)
+            ? (window.opener as any).parent
+            : (window.opener ?? window.parent);
+        const origin = postMessageTargetOriginForSigning(redirectUri, parentOriginParam);
+        target?.postMessage(payload, origin);
     }
 
     function openSigningPopupHere(): boolean {
@@ -46,6 +50,8 @@
     // Get request ID from URL
     const params = new URLSearchParams(window.location.search);
     const requestId = params.get("requestId");
+    const embedRedirectUri = params.get("redirect_uri") || undefined;
+    const embedParentOrigin = params.get("parent_origin");
     const embed = params.get("embed") === "1";
     const embedPopup = embed && !!window.opener;
     const embedSheet = embed && !embedPopup;
@@ -176,14 +182,18 @@
             
             // Notify parent if embedded
             if (embed) {
-                postToEmbedHost({
-                    type: "ave:signed",
-                    payload: {
-                        requestId: request.id,
-                        signature,
-                        publicKey: signingKey.publicKey,
-                    }
-                });
+                postToEmbedHost(
+                    {
+                        type: "ave:signed",
+                        payload: {
+                            requestId: request.id,
+                            signature,
+                            publicKey: signingKey.publicKey,
+                        },
+                    },
+                    embedRedirectUri,
+                    embedParentOrigin
+                );
                 return;
             }
             
@@ -213,10 +223,11 @@
             
             // Notify parent if embedded
             if (embed) {
-                postToEmbedHost({
-                    type: "ave:denied",
-                    payload: { requestId: request.id }
-                });
+                postToEmbedHost(
+                    { type: "ave:denied", payload: { requestId: request.id } },
+                    embedRedirectUri,
+                    embedParentOrigin
+                );
                 return;
             }
             

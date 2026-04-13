@@ -130,6 +130,10 @@ function buildAuthorizeUrl(
   PKCE challenge from `generateCodeChallenge()`. Required for public clients.
 </ParamField>
 
+<ParamField path="params.extraParams" type="object">
+  Extra query parameters on the Ave sign-in URL. For encrypted invites, set `wrapped_key` to the value from `encodeWrappedPayloadParam()` — see [Identity keys & wrapped payloads](/sdk/sdk-identity-keys).
+</ParamField>
+
 ```ts
 const url = buildAuthorizeUrl(
   { clientId: "YOUR_CLIENT_ID", redirectUri: "https://yourapp.com/callback" },
@@ -518,3 +522,9 @@ try {
   }
 }
 ```
+
+---
+
+## See also
+
+- [Identity keys and wrapped payloads](/sdk/sdk-identity-keys) — `getIdentityKey`, envelope decryption, and passing secrets through redirects after OAuth.

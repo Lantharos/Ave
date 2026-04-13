@@ -503,6 +503,29 @@ export async function decryptSecretFromIdentity(
   return await decrypt(encryptedSecret, sharedKey);
 }
 
+/** Same JSON shape as `@ave-id/sdk/client` `encodeWrappedPayloadParam` (base64url). */
+export function decodeWrappedPayloadParam(value: string): {
+  encryptedPayload: string;
+  senderPublicKey: string;
+} {
+  function fromBase64Url(s: string): string {
+    const n = s.replace(/-/g, "+").replace(/_/g, "/");
+    return n + "=".repeat((4 - (n.length % 4)) % 4);
+  }
+  const json = atob(fromBase64Url(value));
+  const parsed = JSON.parse(json) as Partial<{ encryptedPayload: string; senderPublicKey: string }>;
+  if (!parsed.encryptedPayload || !parsed.senderPublicKey) {
+    throw new Error("Invalid wrapped payload");
+  }
+  return { encryptedPayload: parsed.encryptedPayload, senderPublicKey: parsed.senderPublicKey };
+}
+
+export function base64UrlEncodeBytes(bytes: Uint8Array): string {
+  let binary = "";
+  for (const b of bytes) binary += String.fromCharCode(b);
+  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+}
+
 const CITADEL_RECIPIENT_WRAP_INFO = new TextEncoder().encode("citadel-recipient-wrap-v1");
 
 export async function deriveCitadelRecipientStorageKeyFromAppKey(

@@ -7,6 +7,10 @@ description: "How Ave delivers per-app, per-identity encryption keys — and how
 
 Ave's E2EE model gives each (app, identity) pair a **stable, isolated encryption context**. The server stores an *encrypted* form of your app key — it's encrypted with the user's passkey during the first authorization. From then on, Ave delivers the key back to you on the post-authorization redirect via URL fragment.
 
+At consent time, the Ave UI decrypts that ciphertext **in the browser** using the user's master key, then places the plaintext app key in the fragment. The token and authorization-code responses do not carry the decrypted secret.
+
+For **asymmetric** flows (encrypting an invite or secret for another user's identity), use identity keypairs and wrapped payloads in the [JavaScript SDK](/sdk/sdk-identity-keys).
+
 | Property | Value |
 |---|---|
 | Key isolation | Per-app, per-identity — different identities get different keys |

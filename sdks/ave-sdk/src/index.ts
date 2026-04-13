@@ -425,13 +425,19 @@ export async function verifySignature(
 export function buildSigningUrl(
   config: { issuer?: string },
   requestId: string,
-  options?: { embed?: boolean }
+  options?: { embed?: boolean; redirectUri?: string; parentOrigin?: string }
 ): string {
   const issuer = config.issuer || "https://aveid.net";
   const params = new URLSearchParams({ requestId });
   
   if (options?.embed) {
     params.set("embed", "1");
+  }
+  if (options?.redirectUri) {
+    params.set("redirect_uri", options.redirectUri);
+  }
+  if (options?.parentOrigin) {
+    params.set("parent_origin", options.parentOrigin);
   }
   
   return `${issuer}/sign?${params.toString()}`;

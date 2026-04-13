@@ -74,6 +74,7 @@
             "pages": [
               "sdk/javascript-sdk",
               "sdk/sdk-oauth",
+              "sdk/sdk-identity-keys",
               "sdk/sdk-connector",
               "sdk/sdk-signing"
             ]

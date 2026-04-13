@@ -2,7 +2,19 @@
     import IdentityCard from "../../components/IdentityCard.svelte";
     import Text from "../../components/Text.svelte";
     import { api, type Identity } from "../../lib/api";
-    import { generateAppKey, encryptAppKey, exportAppKey, loadMasterKey, decryptAppKey, hasMasterKey, clearMasterKey } from "../../lib/crypto";
+    import {
+        generateAppKey,
+        encryptAppKey,
+        exportAppKey,
+        loadMasterKey,
+        decryptAppKey,
+        hasMasterKey,
+        clearMasterKey,
+        decodeWrappedPayloadParam,
+        base64UrlEncodeBytes,
+        decryptSecretFromIdentity,
+        loadIdentityEncryptionPrivateKey,
+    } from "../../lib/crypto";
 	import { auth, isAuthenticated, identities as identitiesStore, currentIdentity } from "../../stores/auth";
 	import { setReturnUrl } from "../../util/return-url";
 	import { goto } from "@mateothegreat/svelte5-router";
@@ -11,11 +23,7 @@
 	import StorageAccessGate from "../../components/StorageAccessGate.svelte";
 	import { supportsStorageAccessApi, hasStorageAccess, requestStorageAccess } from "../../lib/storage-access";
 	import { unlockMasterKeyWithPasskey } from "../../lib/master-key-unlock";
-
-	function postToEmbedHost(payload: unknown) {
-		const target = (window.opener && (window.opener as any).parent) ? (window.opener as any).parent : (window.opener ?? window.parent);
-		target?.postMessage(payload, "*");
-	}
+	import { postMessageTargetOriginFromRedirectUri } from "../../util/embed-post-message-origin";
 
 	function openAuthPopupHere(): boolean {
 		const width = 450;
@@ -90,9 +98,21 @@
                 fedcmContinue: searchParams.get("fedcm_continue") === "1",
 				codeChallenge: codeChallenge || undefined,
 				codeChallengeMethod: (codeChallengeMethod === "S256" || codeChallengeMethod === "plain") ? codeChallengeMethod : undefined,
+                wrappedKey: searchParams.get("wrapped_key") || "",
 			};
 
     });
+
+    const MAX_WRAPPED_KEY_PARAM_CHARS = 65536;
+    const MAX_UNWRAPPED_FRAGMENT_CHARS = 1800;
+
+	function postToEmbedHost(payload: unknown) {
+		const target = (window.opener && (window.opener as any).parent)
+			? (window.opener as any).parent
+			: (window.opener ?? window.parent);
+		const origin = postMessageTargetOriginFromRedirectUri(params.redirectUri);
+		target?.postMessage(payload, origin);
+	}
 
     const isQuickAuth = $derived(params.clientId.startsWith("origin:"));
     const requiresEmailScope = $derived.by(() => params.scope.split(" ").map((value) => value.trim()).filter(Boolean).includes("email"));
@@ -262,6 +282,23 @@
             if (params.codeChallengeMethod) {
                 authData.codeChallengeMethod = params.codeChallengeMethod;
             }
+
+            if (params.wrappedKey.length > MAX_WRAPPED_KEY_PARAM_CHARS) {
+                error = "Invite payload is too large.";
+                authorizing = false;
+                return;
+            }
+
+            if (params.wrappedKey.trim() && !appInfo.supportsE2ee) {
+                const mkWrap = await loadMasterKey();
+                if (!mkWrap) {
+                    needsMasterKey = true;
+                    masterKeyError = null;
+                    authorizing = false;
+                    sliderPosition = 0;
+                    return;
+                }
+            }
             
             // For E2EE apps, handle app-specific encryption key
             let rawAppKey: string | null = null;
@@ -311,10 +348,34 @@
             
             const result = await api.oauth.authorize(authData);
 
+            let unwrappedSecretB64: string | null = null;
+            if (params.wrappedKey.trim()) {
+                const mkUnwrap = await loadMasterKey();
+                if (!mkUnwrap) {
+                    throw new Error("Your key is required to open this invite.");
+                }
+                const encState = await api.encryption.getKey(selectedIdentity.id);
+                if (!encState.hasKey || !encState.encryptedPrivateKey) {
+                    throw new Error("This identity does not have an encryption key yet.");
+                }
+                const priv = await loadIdentityEncryptionPrivateKey(encState.encryptedPrivateKey, mkUnwrap);
+                const wrapped = decodeWrappedPayloadParam(params.wrappedKey.trim());
+                const plain = await decryptSecretFromIdentity(
+                    wrapped.encryptedPayload,
+                    wrapped.senderPublicKey,
+                    priv
+                );
+                unwrappedSecretB64 = base64UrlEncodeBytes(new Uint8Array(plain));
+            }
+
             if (params.fedcmContinue && typeof window !== "undefined" && "IdentityProvider" in window) {
                 const code = new URL(result.redirectUrl).searchParams.get("code");
                 if (!code) {
                     throw new Error("FedCM authorization did not return a code");
+                }
+
+                if (unwrappedSecretB64) {
+                    throw new Error("FedCM sign-in does not support wrapped_key yet. Use the standard redirect flow.");
                 }
 
                 const finalized = await api.oauth.fedcmFinalize({
@@ -330,17 +391,30 @@
                 return;
             }
             
-            // For E2EE apps, append the app key as a URL fragment (not sent to server)
             let redirectUrl = result.redirectUrl;
-            if (appInfo.supportsE2ee && rawAppKey) {
-                // Add app key as hash fragment so it's not logged by servers
+            if (unwrappedSecretB64 && !params.embed && unwrappedSecretB64.length > MAX_UNWRAPPED_FRAGMENT_CHARS) {
+                throw new Error("Unwrapped secret is too large for a redirect URL. Use embed mode.");
+            }
+            if (unwrappedSecretB64) {
+                const url = new URL(redirectUrl);
+                const hp = new URLSearchParams();
+                if (appInfo.supportsE2ee && rawAppKey) {
+                    hp.set("app_key", rawAppKey);
+                }
+                hp.set("unwrapped_secret", unwrappedSecretB64);
+                url.hash = hp.toString();
+                redirectUrl = url.toString();
+            } else if (appInfo.supportsE2ee && rawAppKey) {
                 const url = new URL(redirectUrl);
                 url.hash = `app_key=${rawAppKey}`;
                 redirectUrl = url.toString();
             }
             // Redirect back to the app
             if (params.embed) {
-                postToEmbedHost({ type: "ave:success", payload: { redirectUrl } });
+                postToEmbedHost({
+                    type: "ave:success",
+                    payload: { redirectUrl, unwrappedSecretB64 },
+                });
                 completed = true;
                 authorizing = false;
                 if (window.opener) {
