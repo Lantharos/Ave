@@ -656,7 +656,9 @@ export const api = {
         publicKey?: string | null;
         encryptedPrivateKey?: string | null;
         createdAt?: string | null;
-      }>(`/api/encryption/keys/${identityId}`),
+      }>(`/api/encryption/keys/${identityId}`, {
+        timeoutMs: 30000,
+      }),
 
     createKey: (identityId: string, payload: IdentityEncryptionKey) =>
       request<{ success: boolean; publicKey: string; createdAt: string }>(`/api/encryption/keys/${identityId}`, {
@@ -681,6 +683,7 @@ export const api = {
       request<{ assertion: string }>("/api/oauth/fedcm/finalize", {
         method: "POST",
         body: JSON.stringify(data),
+        timeoutMs: 30000,
       }),
 
     getApp: (clientId: string) =>
@@ -764,6 +767,7 @@ export const api = {
       request<{ redirectUrl: string }>("/api/oauth/authorize", {
         method: "POST",
         body: JSON.stringify(data),
+        timeoutMs: 45000,
       }),
 
     
