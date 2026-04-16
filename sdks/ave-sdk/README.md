@@ -154,16 +154,27 @@ For **Convex**, **Svelte**, **Expo**, or any app that must not reimplement refre
 
 ```ts
 import { AveSession, createLocalStorageAdapter } from "@ave-id/sdk";
+import { completeOAuthCallback } from "@ave-id/sdk/client";
 import { wireAveSessionToConvex } from "@ave-id/sdk/convex";
 
 const session = new AveSession({
   oauth: { clientId: process.env.AVE_CLIENT_ID!, redirectUri: "https://yourapp.com/callback" },
   storage: createLocalStorageAdapter(),
+  devtools: true,
+});
+
+await completeOAuthCallback(session, {
+  clientId: process.env.AVE_CLIENT_ID!,
+  redirectUri: "https://yourapp.com/callback",
 });
 
 await session.hydrate();
 wireAveSessionToConvex(convex, session);
+
+session.getAppKeyBase64(); // E2EE, if present on redirect
 ```
+
+**`finishPkceLogin`** (used by `completeOAuthCallback`) merges **`#app_key`** from the callback URL into tokens and clears sensitive fragment parameters.
 
 See the Mintlify guide **Ave Session** in the repository docs (`guides/ave-session-and-tokens`).
 

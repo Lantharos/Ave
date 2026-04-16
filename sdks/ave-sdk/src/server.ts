@@ -34,6 +34,40 @@ export async function verifyAveIdToken(
   });
 }
 
+export interface AveAuthPrincipal {
+  subject: string;
+  claims: AveIdTokenClaims;
+}
+
+const BEARER = /^Bearer\s+(\S+)/i;
+
+/**
+ * Extract Bearer token from an Authorization header value.
+ */
+export function getBearerToken(authorization: string | null | undefined): string | null {
+  if (!authorization) return null;
+  const m = authorization.match(BEARER);
+  return m?.[1] ?? null;
+}
+
+/**
+ * Verify `Authorization: Bearer &lt;id_token&gt;` and return `sub` + claims.
+ */
+export async function verifyAveIdTokenFromAuthHeader(
+  authorization: string | null | undefined,
+  options: {
+    clientId: string;
+    issuer?: string;
+    fetcher?: typeof fetch;
+  }
+): Promise<AveAuthPrincipal | null> {
+  const raw = getBearerToken(authorization);
+  if (!raw) return null;
+  const claims = await verifyAveIdToken(raw, options);
+  if (!claims?.sub) return null;
+  return { subject: claims.sub, claims };
+}
+
 export interface TokenResponse {
   access_token: string;
   access_token_jwt: string;

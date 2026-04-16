@@ -15,12 +15,13 @@ Use this checklist alongside [End-to-end encryption](/guides/end-to-end-encrypti
 
 - The plaintext **app key** is delivered in the **`#fragment`** as `app_key`, not in JSON token bodies.
 - When parsing with `URLSearchParams`, normalize **`+`** so base64 decodes correctly (documented in the E2EE guide).
-- After reading the fragment, **clear it from history** with `history.replaceState` so the key is not left in the URL bar.
+- **`finishPkceLogin`** (`@ave-id/sdk/client`) merges **`app_key`**, then **`stripSensitiveFragmentParams`** removes **`app_key`** / unwrap-style entries from the hash. **`AveSession`** stores the key as **`appKeyBase64`** when you use **`completeOAuthCallback`** or **`setTokensFromResponse`**.
+- If you parse the fragment yourself, clear it from history with `history.replaceState` so the key does not stay in the address bar.
 
 ## Session vs encryption
 
-- **[Ave Session](/guides/ave-session-and-tokens)** handles **OAuth tokens** (`id_token`, refresh). It does **not** replace handling **`#app_key`** — that step remains in your client after consent.
-- Keep encryption keys and **master key** usage on the **client**; do not send plaintext app keys to your server for “convenience.”
+- **[Ave Session](/guides/ave-session-and-tokens)** persists **OAuth tokens** and the optional **app key** for use with **`getAppKeyBase64()`**. You still run Web Crypto (AES-GCM, etc.) in your app per the E2EE guides.
+- Keep **master key** usage and bulk encryption on the **client**; do not send plaintext app keys to your server for convenience.
 
 ## Identity isolation
 

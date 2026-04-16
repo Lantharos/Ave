@@ -9,19 +9,24 @@ For Convex, Ave’s **`id_token`** is validated by Convex itself. For a **custom
 
 Use **`verifyAveIdToken`** from `@ave-id/sdk/server` — it wraps JWKS verification and checks **`aud`** against your registered **`clientId`**.
 
+**Shortcut** — parse the header and verify in one step:
+
 ```ts
-import { verifyAveIdToken } from "@ave-id/sdk/server";
+import { verifyAveIdTokenFromAuthHeader } from "@ave-id/sdk/server";
 
-const claims = await verifyAveIdToken(authorization.replace(/^Bearer\s+/i, ""), {
-  clientId: process.env.AVE_CLIENT_ID!,
-});
+const principal = await verifyAveIdTokenFromAuthHeader(
+  request.headers.get("authorization"),
+  { clientId: process.env.AVE_CLIENT_ID! }
+);
 
-if (!claims?.sub) {
+if (!principal) {
   return new Response("Unauthorized", { status: 401 });
 }
 
-const aveIdentityId = claims.sub;
+const aveIdentityId = principal.subject;
 ```
+
+Or use **`verifyAveIdToken`** on the raw JWT string.
 
 Pass the **same** `id_token` your SPA would send in the `Authorization` header. Do not accept **`access_token_jwt`** as a substitute for identity unless you intentionally validate the API JWT audience — for app users, **`id_token`** is the right signal.
 

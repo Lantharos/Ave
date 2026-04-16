@@ -77,6 +77,8 @@ export interface TokenResponse {
   access_token_jwt: string;
   id_token?: string;
   refresh_token?: string;
+  /** Plaintext app encryption key (e.g. FedCM) or after merging `#app_key` from redirect fragment */
+  app_key?: string;
   expires_in: number;
   scope: string;
   user?: {

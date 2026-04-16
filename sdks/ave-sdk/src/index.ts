@@ -20,6 +20,13 @@ export {
 } from "./session-storage.js";
 export type { AsyncSecureStoreLike } from "./session-storage.js";
 
+export {
+  extractAppKeyFromUrl,
+  mergeAppKeyFromUrl,
+  normalizeAppKeyBase64,
+  stripSensitiveFragmentParams,
+} from "./app-key.js";
+
 export { configureCryptoRuntime, createExpoCryptoRuntime, isJwtVerificationSupported } from "./crypto-runtime.js";
 export type { AveCryptoRuntime } from "./crypto-runtime.js";
 export { fetchJwks, verifyJwt } from "./jwt.js";
