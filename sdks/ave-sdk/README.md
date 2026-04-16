@@ -182,6 +182,16 @@ session.getAppKeyBase64(); // E2EE, if present on redirect
 
 See the Mintlify guide **Ave Session** in the repository docs (`guides/ave-session-and-tokens`).
 
+## Next.js (App Router)
+
+```tsx
+"use client";
+import { AveSessionProvider, AveConvexBridge } from "@ave-id/sdk/next";
+import { createLocalStorageAdapter } from "@ave-id/sdk";
+```
+
+Peer dependency: **`react` >= 18**. See `guides/nextjs-ave-session` in the docs repo.
+
 ## Verify JWTs with the SDK
 
 ```ts

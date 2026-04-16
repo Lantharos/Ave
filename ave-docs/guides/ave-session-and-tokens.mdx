@@ -61,6 +61,10 @@ wireAveSessionToConvex(convex, session);
 
 Call `session.setTokensFromResponse` after login. `wireAveSessionToConvex` passes a function that calls `getValidIdToken()` so Convex always receives a valid token.
 
+## Next.js (App Router)
+
+Use **`AveSessionProvider`** and **`useAveSession`** from **`@ave-id/sdk/next`**, and optionally **`AveConvexBridge`** instead of calling **`wireAveSessionToConvex`** manually. See [Next.js App Router + Ave Session](/guides/nextjs-ave-session).
+
 ## Svelte
 
 ```ts

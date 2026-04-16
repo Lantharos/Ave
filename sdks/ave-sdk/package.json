@@ -52,7 +52,14 @@
     "./expo-session": {
       "types": "./dist/expo-session.d.ts",
       "default": "./dist/expo-session.js"
+    },
+    "./next": {
+      "types": "./dist/next/react.d.ts",
+      "default": "./dist/next/react.js"
     }
+  },
+  "peerDependencies": {
+    "react": ">=18.0.0"
   },
   "files": [
     "dist"
@@ -62,6 +69,8 @@
   },
   "dependencies": {},
   "devDependencies": {
+    "@types/react": "^19.0.0",
+    "react": "^19.0.0",
     "typescript": "^5.9.3"
   }
 }
