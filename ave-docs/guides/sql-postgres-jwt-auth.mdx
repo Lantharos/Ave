@@ -43,11 +43,6 @@ export async function getOrCreateUserFromAveIdToken(
   db: Database,
   claims: { sub: string; name?: string; email?: string; picture?: string }
 ) {
-  const existing = await db.query.users.findFirst({
-    where: eq(schema.users.aveIdentityId, claims.sub),
-  });
-  if (existing) return existing;
-
   const [row] = await db
     .insert(schema.users)
     .values({
@@ -56,11 +51,21 @@ export async function getOrCreateUserFromAveIdToken(
       email: claims.email ?? null,
       imageUrl: claims.picture ?? null,
     })
+    .onConflictDoUpdate({
+      target: schema.users.aveIdentityId,
+      set: {
+        displayName: claims.name ?? "Unknown",
+        email: claims.email ?? null,
+        imageUrl: claims.picture ?? null,
+      },
+    })
     .returning();
 
   return row;
 }
 ```
+
+SQLite / dialect differences: use your driver’s upsert form, or **`onConflictDoNothing`** then **`findFirst`** by **`aveIdentityId`**, or **try/catch** on unique constraint and **`findFirst`** on retry.
 
 Use a **unique index** on `ave_identity_id`. If you need a stable ID across Ave identities for one human user, consider the **`user_id`** scope and separate columns — see [Convex custom auth](/guides/convex-custom-auth) for how **`sub`** vs **`user_id`** differ.
 

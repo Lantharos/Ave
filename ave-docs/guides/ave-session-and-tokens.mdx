@@ -68,7 +68,7 @@ Use **`AveSessionProvider`** and **`useAveSession`** from **`@ave-id/sdk/next`**
 ## Svelte
 
 ```ts
-import { aveSessionToStore } from "@ave-id/svelte";
+import { aveSessionToStore } from "@ave-id/sdk/svelte";
 
 const sessionStore = aveSessionToStore(session);
 // sessionStore.subscribe(...) — status + snapshot
@@ -93,7 +93,7 @@ import {
   onExpoAppForegroundRefresh,
   warmUpExpoAuthBrowser,
 } from "@ave-id/sdk/expo-session";
-import AppState from "react-native";
+import { AppState } from "react-native";
 
 initExpoOAuthBrowserSession(WebBrowser);
 configureAveSdkForExpo(ExpoCrypto);

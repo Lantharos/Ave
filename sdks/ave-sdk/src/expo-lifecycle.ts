@@ -1,7 +1,13 @@
 import type { AveSession } from "./session.js";
 
+export type AppStateChangePayload = string | { nextAppState: string };
+
 export interface AppStateModuleLike {
-  addEventListener(event: "change", handler: (state: { nextAppState: string }) => void): { remove?: () => void } | void;
+  addEventListener(event: "change", handler: (state: AppStateChangePayload) => void): { remove?: () => void } | void;
+}
+
+function nextAppStateFromPayload(s: AppStateChangePayload): string {
+  return typeof s === "string" ? s : s.nextAppState;
 }
 
 /**
@@ -12,8 +18,8 @@ export function onExpoAppForegroundRefresh(
   appState: AppStateModuleLike,
   session: AveSession
 ): () => void {
-  const handler = (s: { nextAppState: string }) => {
-    if (s.nextAppState === "active") {
+  const handler = (s: AppStateChangePayload) => {
+    if (nextAppStateFromPayload(s) === "active") {
       void session.getValidIdToken().catch(() => {
         // signed out or no refresh — ignore
       });

@@ -98,5 +98,5 @@ export function stripSensitiveFragmentParams(url?: string): void {
   if (!changed) return;
   const rest = params.toString();
   const newUrl = u.pathname + u.search + (rest ? `#${rest}` : "");
-  window.history.replaceState({}, "", newUrl);
+  window.history.replaceState(window.history.state, "", newUrl);
 }

@@ -227,8 +227,8 @@ export class AveSession {
    */
   async setTokensFromResponse(tr: TokenResponse): Promise<void> {
     const next = snapshotFromTokenResponse(tr, this.snapshot);
-    this.snapshot = next;
     await this.storage.save(next);
+    this.snapshot = next;
     this.bc?.postMessage({ type: "session_updated" });
     this.hydrated = true;
     this.setStatus("signedIn");
@@ -248,13 +248,15 @@ export class AveSession {
     if (!this.snapshot) {
       throw new Error("Not signed in");
     }
+    let next: AveSessionSnapshot;
     if (base64 === null) {
       const { appKeyBase64: _, ...rest } = this.snapshot;
-      this.snapshot = rest as AveSessionSnapshot;
+      next = rest as AveSessionSnapshot;
     } else {
-      this.snapshot = { ...this.snapshot, appKeyBase64: base64 };
+      next = { ...this.snapshot, appKeyBase64: base64 };
     }
-    await this.storage.save(this.snapshot);
+    await this.storage.save(next);
+    this.snapshot = next;
     this.bc?.postMessage({ type: "session_updated" });
     this.emit();
   }
@@ -289,8 +291,37 @@ export class AveSession {
     return fn();
   }
 
+  private shouldSignOutAfterRefreshError(e: unknown): boolean {
+    const status = typeof e === "object" && e !== null && "status" in e ? (e as { status: number }).status : undefined;
+    const msg = e instanceof Error ? e.message : String(e);
+    if (status === 401) return true;
+    if (/invalid_grant|invalid.*refresh|unauthorized/i.test(msg)) return true;
+    return false;
+  }
+
   private async runRefresh(): Promise<void> {
     await this.withRefreshLock(async () => {
+      const mem = this.snapshot;
+      const fromDisk = await this.storage.load().catch(() => null);
+      if (fromDisk && mem) {
+        const diskFresh =
+          fromDisk.expiresAtMs > mem.expiresAtMs ||
+          (fromDisk.refresh_token != null &&
+            fromDisk.refresh_token !== mem.refresh_token);
+        if (diskFresh) {
+          this.lastRefreshError = null;
+          const merged = {
+            ...mem,
+            ...fromDisk,
+            expiresAtMs: fromDisk.expiresAtMs || jwtExpMs(fromDisk.id_token || fromDisk.access_token_jwt),
+          };
+          this.snapshot = merged;
+          this.setStatus("signedIn");
+          this.emit();
+          return;
+        }
+      }
+
       const prev = this.snapshot;
       if (!prev?.refresh_token && !this.customRefresh) {
         await this.signOut();
@@ -313,14 +344,16 @@ export class AveSession {
         }
       } catch (e) {
         this.lastRefreshError = e instanceof Error ? e : new Error(String(e));
-        await this.signOut();
-        throw new Error("Session refresh failed — sign in again");
+        if (this.shouldSignOutAfterRefreshError(e)) {
+          await this.signOut();
+        }
+        throw e instanceof Error ? e : new Error(String(e));
       }
 
       this.lastRefreshError = null;
       const next = snapshotFromTokenResponse(tr, prev);
-      this.snapshot = next;
       await this.storage.save(next);
+      this.snapshot = next;
       this.bc?.postMessage({ type: "session_updated" });
       this.emit();
     });

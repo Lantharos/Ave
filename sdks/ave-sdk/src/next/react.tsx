@@ -49,6 +49,9 @@ export function AveSessionProvider({ options, children }: AveSessionProviderProp
 
   useEffect(() => {
     let alive = true;
+    setIsHydrated(false);
+    setStatus("loading");
+    setSnapshot(null);
     const unsub = session.subscribe((s) => {
       if (!alive) return;
       setStatus(s.status);
@@ -96,7 +99,10 @@ export interface AveConvexProviderProps {
 export function AveConvexBridge({ client, children }: AveConvexProviderProps): ReactElement {
   const { session } = useAveSession();
   useEffect(() => {
-    wireAveSessionToConvex(client, session);
+    const dispose = wireAveSessionToConvex(client, session);
+    return () => {
+      if (typeof dispose === "function") dispose();
+    };
   }, [client, session]);
   return <>{children}</>;
 }

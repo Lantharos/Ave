@@ -31,15 +31,11 @@ export function createLocalStorageAdapter(storageKey = STORAGE_KEY): AveSessionS
     },
     async save(snapshot) {
       if (typeof localStorage === "undefined") return;
-      try {
-        if (snapshot === null) {
-          localStorage.removeItem(storageKey);
-        } else {
-          localStorage.setItem(storageKey, JSON.stringify(snapshot));
-        }
-      } catch {
-        // ignore quota / private mode
+      if (snapshot === null) {
+        localStorage.removeItem(storageKey);
+        return;
       }
+      localStorage.setItem(storageKey, JSON.stringify(snapshot));
     },
   };
 }

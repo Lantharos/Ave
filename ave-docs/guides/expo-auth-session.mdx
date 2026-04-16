@@ -124,6 +124,8 @@ import { ConvexReactClient } from "convex/react";
 
 configureAveSdkForExpo(ExpoCrypto);
 
+const convex = new ConvexReactClient(process.env.EXPO_PUBLIC_CONVEX_URL!);
+
 const session = new AveSession({
   oauth: { clientId: CLIENT_ID, redirectUri },
   storage: createSecureStoreAdapter(SecureStore),
@@ -131,11 +133,17 @@ const session = new AveSession({
 });
 
 // After AuthSession success — pass full URL when E2EE may include #app_key on web:
-await completeExpoOAuthCallback(session, { clientId: CLIENT_ID, redirectUri }, {
-  code: response.params.code,
-  codeVerifier: request.codeVerifier!,
-  redirectUrlWithFragment: response.url,
-});
+await completeExpoOAuthCallback(
+  session,
+  { clientId: CLIENT_ID, redirectUri },
+  {
+    code: response.params.code,
+    codeVerifier: request.codeVerifier!,
+    expectedState: request.state,
+    responseState: response.params.state,
+    redirectUrlWithFragment: response.url,
+  }
+);
 
 wireAveSessionToConvex(convex, session);
 ```

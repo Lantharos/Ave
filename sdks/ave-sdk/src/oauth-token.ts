@@ -19,8 +19,19 @@ export async function refreshAccessToken(
   });
 
   if (!response.ok) {
-    const data = (await response.json()) as { error?: string };
-    throw new Error(data.error || "Failed to refresh token");
+    const raw = await response.text();
+    let message = `Failed to refresh token (${response.status} ${response.statusText})`;
+    try {
+      const data = JSON.parse(raw) as { error?: string; error_description?: string };
+      const part = data.error_description || data.error;
+      if (part) message = `${message}: ${part}`;
+      else if (raw) message = `${message}: ${raw.slice(0, 500)}`;
+    } catch {
+      if (raw) message = `${message}: ${raw.slice(0, 500)}`;
+    }
+    const err = new Error(message) as Error & { status: number };
+    err.status = response.status;
+    throw err;
   }
 
   return response.json() as Promise<TokenResponse>;

@@ -99,15 +99,36 @@ export async function completeExpoOAuthCallback(
   params: {
     code: string;
     codeVerifier: string;
+    /** PKCE / CSRF: **`AuthSession` `request.state`**. */
+    expectedState: string;
+    /** **`response.params.state`** — compared to **`expectedState`** before **`exchangeCode`**. */
+    responseState?: string;
     redirectUrlWithFragment?: string;
   }
 ): Promise<TokenResponse> {
+  if (params.responseState !== undefined && params.responseState !== params.expectedState) {
+    throw new Error("[Ave] OAuth state mismatch — possible CSRF attack.");
+  }
+
+  const mergeSource = params.redirectUrlWithFragment;
+  if (mergeSource) {
+    const { state } = parseExpoOAuthRedirectUrl(mergeSource);
+    if (state !== null && state !== params.expectedState) {
+      throw new Error("[Ave] OAuth state mismatch — possible CSRF attack.");
+    }
+  }
+
+  if (params.responseState === undefined && (!mergeSource || parseExpoOAuthRedirectUrl(mergeSource).state === null)) {
+    throw new Error(
+      "[Ave] Pass responseState (AuthSession response.params.state) or redirectUrlWithFragment containing state= for CSRF verification."
+    );
+  }
+
   let tr = await exchangeCode(oauth, {
     code: params.code,
     codeVerifier: params.codeVerifier,
   });
 
-  const mergeSource = params.redirectUrlWithFragment;
   if (mergeSource) {
     tr = mergeAppKeyFromUrl(mergeSource, tr);
   }
