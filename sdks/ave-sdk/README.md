@@ -8,6 +8,8 @@ Typed helpers for Ave OAuth + OIDC flows.
 npm install @ave-id/sdk
 ```
 
+**What gets installed:** the package has **no** `dependencies` — not React, not Expo. **`expo-crypto`**, **`expo-auth-session`**, etc. are yours to add only for Expo ([`@ave-id/sdk/expo-session`](./src/expo-session.ts)). **`react`** is an **optional** `peerDependency` for **`@ave-id/sdk/next`** only; Svelte / vanilla / Node installs do not need React (npm will not require it with `peerDependenciesMeta.optional`).
+
 For Expo apps, also install:
 
 ```bash
