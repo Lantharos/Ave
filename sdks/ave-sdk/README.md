@@ -27,6 +27,8 @@ This enables the SDK's PKCE helpers in Expo (`generateCodeVerifier`, `generateCo
 
 On Expo native, `verifyJwt()` is not supported. The SDK's callback helpers skip client-side JWT verification in that runtime so successful logins do not fail after token exchange. If you need JWT signature verification, do it on your server or use a service like Convex that validates the `id_token` itself.
 
+**SHA-256 for PKCE** uses Web Crypto in browsers; on Expo native you **must** call **`configureAveSdkForExpo(ExpoCrypto)`** from **`@ave-id/sdk/expo-session`** (or `configureCryptoRuntime(createExpoCryptoRuntime(ExpoCrypto))`) before `generateCodeChallenge` / `exchangeCode`. **`AveSession`** + **`completeExpoOAuthCallback`** live in **`@ave-id/sdk/expo-session`** for SecureStore and deep-link flows without `window`.
+
 ## Quick Ave (no app registration)
 
 If you want the sign-in UI to stay inside your app, pair the SDK with `@ave-id/embed` and use `startAveAuth()` as the default entry point.

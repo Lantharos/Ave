@@ -24,7 +24,9 @@ export {
   extractAppKeyFromUrl,
   mergeAppKeyFromUrl,
   normalizeAppKeyBase64,
+  stripOAuthQueryParamsFromUrlString,
   stripSensitiveFragmentParams,
+  stripSensitiveHashFromUrlString,
 } from "./app-key.js";
 
 export { configureCryptoRuntime, createExpoCryptoRuntime, isJwtVerificationSupported } from "./crypto-runtime.js";

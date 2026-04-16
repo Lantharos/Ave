@@ -26,16 +26,26 @@ Expo's current AuthSession docs note that `expo-crypto` is a peer dependency of 
 
 ## Configure the Ave SDK for Expo
 
-The Ave SDK uses Web Crypto by default. In Expo, configure it once with `expo-crypto` during app startup:
+**Expo native does not provide Web Crypto for SHA-256** (needed for PKCE code challenge). Use **`expo-crypto`**, not browser `crypto.subtle`, for **`digest`** and **`getRandomValues`**.
+
+### One import (recommended)
 
 ```ts
 import * as ExpoCrypto from "expo-crypto";
+import { configureAveSdkForExpo } from "@ave-id/sdk/expo-session";
+
+configureAveSdkForExpo(ExpoCrypto);
+```
+
+This is equivalent to:
+
+```ts
 import { configureCryptoRuntime, createExpoCryptoRuntime } from "@ave-id/sdk";
 
 configureCryptoRuntime(createExpoCryptoRuntime(ExpoCrypto));
 ```
 
-Put that near your app bootstrap, before any Ave PKCE helpers run.
+Put it near app bootstrap, **before** any PKCE helpers (`generateCodeChallenge`, `startPkceLogin`, or AuthSession’s PKCE).
 
 <Warning>
   `verifyJwt()` is not supported on Expo native today. The Ave SDK skips client-side JWT verification in Expo callback helpers so your login flow does not crash, but if you need signature verification you should do it on your server or let a verifier like Convex validate the `id_token`.
@@ -69,6 +79,42 @@ Register that exact redirect URI in the Ave developer portal for your app.
 <Note>
   In Expo development builds and standalone apps, `makeRedirectUri()` uses your app scheme. On web it uses the current website origin. Keep the redirect URI you register in Ave aligned with the platform you are testing.
 </Note>
+
+## Ave Session + SecureStore (single-flight refresh)
+
+For **`offline_access`**, token refresh, and optional **`#app_key`** (E2EE) merged from the redirect URL string:
+
+```ts
+import * as ExpoCrypto from "expo-crypto";
+import * as SecureStore from "expo-secure-store";
+import {
+  AveSession,
+  completeExpoOAuthCallback,
+  configureAveSdkForExpo,
+  createSecureStoreAdapter,
+  wireAveSessionToConvex,
+} from "@ave-id/sdk/expo-session";
+import { ConvexReactClient } from "convex/react";
+
+configureAveSdkForExpo(ExpoCrypto);
+
+const session = new AveSession({
+  oauth: { clientId: CLIENT_ID, redirectUri },
+  storage: createSecureStoreAdapter(SecureStore),
+  crossTabSync: false,
+});
+
+// After AuthSession success — pass full URL when E2EE may include #app_key on web:
+await completeExpoOAuthCallback(session, { clientId: CLIENT_ID, redirectUri }, {
+  code: response.params.code,
+  codeVerifier: request.codeVerifier!,
+  redirectUrlWithFragment: response.url,
+});
+
+wireAveSessionToConvex(convex, session);
+```
+
+`completeExpoOAuthCallback` calls **`exchangeCode`** and **`session.setTokensFromResponse`** (no `sessionStorage` / `window`). Use **`onExpoAppForegroundRefresh`** from the same module for background refresh nudges.
 
 ## Minimal implementation
 

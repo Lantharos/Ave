@@ -35,8 +35,47 @@ export function mergeAppKeyFromUrl(url: string | URL, tr: TokenResponse): TokenR
 const HASH_SECRET_KEYS = ["app_key", "unwrapped_secret", "unwrappedSecretB64"];
 
 /**
- * Remove sensitive fragment parameters from the current URL (after reading them).
- * Safe to call when no hash is present.
+ * Remove sensitive hash parameters from a URL string (Expo deep link, tests).
+ * Does not use `window` — safe on React Native.
+ */
+export function stripSensitiveHashFromUrlString(url: string): string {
+  try {
+    const u = new URL(url);
+    if (!u.hash || u.hash.length <= 1) return url;
+    const params = new URLSearchParams(u.hash.slice(1));
+    let changed = false;
+    for (const k of HASH_SECRET_KEYS) {
+      if (params.has(k)) {
+        params.delete(k);
+        changed = true;
+      }
+    }
+    if (!changed) return url;
+    const rest = params.toString();
+    u.hash = rest ? `#${rest}` : "";
+    return u.toString();
+  } catch {
+    return url;
+  }
+}
+
+/**
+ * Remove `code` and `state` from the query string (post-callback cleanup). Works without `window`.
+ */
+export function stripOAuthQueryParamsFromUrlString(url: string): string {
+  try {
+    const u = new URL(url);
+    u.searchParams.delete("code");
+    u.searchParams.delete("state");
+    return u.toString();
+  } catch {
+    return url;
+  }
+}
+
+/**
+ * Remove sensitive fragment parameters from the current URL (browser only).
+ * For Expo native, use **`stripSensitiveHashFromUrlString`** on the deep link string.
  */
 export function stripSensitiveFragmentParams(url?: string): void {
   if (typeof window === "undefined" || typeof window.history === "undefined") return;

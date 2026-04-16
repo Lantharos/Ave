@@ -74,17 +74,26 @@ Hydrate in `onMount` before relying on authenticated UI.
 
 ## Expo
 
-Use **`createSecureStoreAdapter`** with `expo-secure-store`, and optionally **`onExpoAppForegroundRefresh`** from `@ave-id/sdk/expo-lifecycle` with `AppState` to nudge refresh when returning from background.
+Native Expo has **no Web Crypto** for PKCE SHA-256 — configure **`expo-crypto`** once via **`configureAveSdkForExpo`** from **`@ave-id/sdk/expo-session`**, then use **`AveSession`** with **`createSecureStoreAdapter`** and **`completeExpoOAuthCallback`** (no `window` / no `sessionStorage`). See [Expo with AuthSession](/guides/expo-auth-session).
 
 ```ts
+import * as ExpoCrypto from "expo-crypto";
 import * as SecureStore from "expo-secure-store";
-import { AveSession, createSecureStoreAdapter } from "@ave-id/sdk";
-import { onExpoAppForegroundRefresh } from "@ave-id/sdk/expo-lifecycle";
+import {
+  AveSession,
+  completeExpoOAuthCallback,
+  configureAveSdkForExpo,
+  createSecureStoreAdapter,
+  onExpoAppForegroundRefresh,
+} from "@ave-id/sdk/expo-session";
 import AppState from "react-native";
+
+configureAveSdkForExpo(ExpoCrypto);
 
 const session = new AveSession({
   oauth: { clientId: "...", redirectUri: "myapp://callback" },
   storage: createSecureStoreAdapter(SecureStore),
+  crossTabSync: false,
 });
 
 onExpoAppForegroundRefresh(AppState, session);

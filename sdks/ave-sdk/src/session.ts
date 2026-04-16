@@ -8,7 +8,7 @@ export interface AveSessionSnapshot {
   access_token_jwt: string;
   id_token?: string;
   refresh_token?: string;
-  /** E2EE app key (base64) from `#app_key` or token response — browser storage only */
+  /** E2EE app key (base64) from `#app_key` or token response */
   appKeyBase64?: string;
   expiresAtMs: number;
   scope?: string;

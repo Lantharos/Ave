@@ -48,6 +48,10 @@
     "./expo-lifecycle": {
       "types": "./dist/expo-lifecycle.d.ts",
       "default": "./dist/expo-lifecycle.js"
+    },
+    "./expo-session": {
+      "types": "./dist/expo-session.d.ts",
+      "default": "./dist/expo-session.js"
     }
   },
   "files": [
