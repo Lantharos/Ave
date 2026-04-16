@@ -13,6 +13,42 @@ export { onExpoAppForegroundRefresh } from "./expo-lifecycle.js";
 export { wireAveSessionToConvex } from "./convex.js";
 
 /**
+ * Shape of **`expo-web-browser`** used for OAuth. Pass **`import * as WebBrowser from "expo-web-browser"`**.
+ */
+export interface ExpoWebBrowserModule {
+  maybeCompleteAuthSession: () => void;
+  warmUpAsync?: () => Promise<void>;
+  coolDownAsync?: () => Promise<void>;
+  /**
+   * Optional — used if you build the auth URL yourself; AuthSession **`promptAsync`** already uses the in-app browser.
+   */
+  openAuthSessionAsync?: (url: string, redirectUrl?: string) => Promise<{ type: string }>;
+}
+
+/**
+ * Call **once** at app entry (e.g. root **`App.tsx`**), before any auth UI.
+ *
+ * - **`maybeCompleteAuthSession`** — required on **web** so the auth popup can hand off; safe on native.
+ * - Optionally **`warmUpAsync`** / **`coolDownAsync`** improve cold start on **Android** (pair with lifecycle below).
+ */
+export function initExpoOAuthBrowserSession(web: Pick<ExpoWebBrowserModule, "maybeCompleteAuthSession">): void {
+  web.maybeCompleteAuthSession();
+}
+
+/**
+ * Android: pre-warm the browser process. Call **`dispose()`** on unmount (calls **`coolDownAsync`** when present).
+ */
+export function warmUpExpoAuthBrowser(web: ExpoWebBrowserModule): () => void {
+  let done = false;
+  void web.warmUpAsync?.();
+  return () => {
+    if (done) return;
+    done = true;
+    void web.coolDownAsync?.();
+  };
+}
+
+/**
  * Call once at app startup **before** PKCE (`generateCodeChallenge` / `exchangeCode`).
  * Expo native has no Web Crypto for SHA-256 — **`expo-crypto`** supplies it.
  *
