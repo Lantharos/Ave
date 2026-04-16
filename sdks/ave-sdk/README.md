@@ -144,6 +144,29 @@ const tokens = await exchangeCodeServer({
 });
 ```
 
+## Ave Session (OAuth persistence and refresh)
+
+For **Convex**, **Svelte**, **Expo**, or any app that must not reimplement refresh and rotation:
+
+- Import **`AveSession`**, **`createLocalStorageAdapter`** (or **`createSecureStoreAdapter`** on native) from `@ave-id/sdk`.
+- Call **`await session.hydrate()`** on startup, then **`await session.setTokensFromResponse(tokens)`** after `exchangeCode`.
+- Use **`await session.getValidIdToken()`** wherever you need a non-expired **`id_token`** (e.g. wire to Convex).
+
+```ts
+import { AveSession, createLocalStorageAdapter } from "@ave-id/sdk";
+import { wireAveSessionToConvex } from "@ave-id/sdk/convex";
+
+const session = new AveSession({
+  oauth: { clientId: process.env.AVE_CLIENT_ID!, redirectUri: "https://yourapp.com/callback" },
+  storage: createLocalStorageAdapter(),
+});
+
+await session.hydrate();
+wireAveSessionToConvex(convex, session);
+```
+
+See the Mintlify guide **Ave Session** in the repository docs (`guides/ave-session-and-tokens`).
+
 ## Verify JWTs with the SDK
 
 ```ts

@@ -1,5 +1,12 @@
 export type Scope = "openid" | "profile" | "email" | "offline_access" | "user_id";
 
+/** OAuth client config for PKCE and token calls */
+export interface AveConfig {
+  clientId: string;
+  redirectUri: string;
+  issuer?: string;
+}
+
 export interface JwtHeader {
   alg?: string;
   typ?: string;

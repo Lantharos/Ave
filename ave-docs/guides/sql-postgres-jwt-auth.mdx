@@ -1,0 +1,65 @@
+---
+title: "Postgres, SQLite, and JWT auth"
+description: "Verify Ave id_tokens on your API and upsert users with Drizzle — same identity model as Convex."
+---
+
+For Convex, Ave’s **`id_token`** is validated by Convex itself. For a **custom backend** (Hono, Express, Elysia, etc.) backed by **Postgres** or **SQLite**, you validate the JWT on each request and map **`sub`** (Ave identity UUID) to your `users` table.
+
+## Verify `id_token` on the server
+
+Use **`verifyAveIdToken`** from `@ave-id/sdk/server` — it wraps JWKS verification and checks **`aud`** against your registered **`clientId`**.
+
+```ts
+import { verifyAveIdToken } from "@ave-id/sdk/server";
+
+const claims = await verifyAveIdToken(authorization.replace(/^Bearer\s+/i, ""), {
+  clientId: process.env.AVE_CLIENT_ID!,
+});
+
+if (!claims?.sub) {
+  return new Response("Unauthorized", { status: 401 });
+}
+
+const aveIdentityId = claims.sub;
+```
+
+Pass the **same** `id_token` your SPA would send in the `Authorization` header. Do not accept **`access_token_jwt`** as a substitute for identity unless you intentionally validate the API JWT audience — for app users, **`id_token`** is the right signal.
+
+## Drizzle upsert (Postgres or SQLite)
+
+Example: one row per Ave identity, keyed by `ave_identity_id`.
+
+```ts
+import { eq } from "drizzle-orm";
+import type { Database } from "./db"; // your Drizzle db
+import * as schema from "./schema";
+
+export async function getOrCreateUserFromAveIdToken(
+  db: Database,
+  claims: { sub: string; name?: string; email?: string; picture?: string }
+) {
+  const existing = await db.query.users.findFirst({
+    where: eq(schema.users.aveIdentityId, claims.sub),
+  });
+  if (existing) return existing;
+
+  const [row] = await db
+    .insert(schema.users)
+    .values({
+      aveIdentityId: claims.sub,
+      displayName: claims.name ?? "Unknown",
+      email: claims.email ?? null,
+      imageUrl: claims.picture ?? null,
+    })
+    .returning();
+
+  return row;
+}
+```
+
+Use a **unique index** on `ave_identity_id`. If you need a stable ID across Ave identities for one human user, consider the **`user_id`** scope and separate columns — see [Convex custom auth](/guides/convex-custom-auth) for how **`sub`** vs **`user_id`** differ.
+
+## Scopes
+
+Request **`openid profile email offline_access`** for SPAs that refresh tokens; the server only needs the `Authorization: Bearer` value carrying the **`id_token`** (or your own session cookie after establishing trust once).
+

@@ -1,0 +1,33 @@
+---
+title: "E2EE integration checklist"
+description: "Registered app, app_key fragment handling, and identity isolation — use with Ave Session for apps that encrypt data."
+---
+
+Use this checklist alongside [End-to-end encryption](/guides/end-to-end-encryption) and [Encryption model and key lifecycle](/security/encryption-model-and-key-lifecycle).
+
+## Before you ship
+
+- Register an OAuth app with **E2EE support** enabled in the developer portal. **Quick Ave** does not support E2EE app keys.
+- Request scopes needed for your product (`openid`, `profile`, `email`, `offline_access` as appropriate).
+- On first authorization for an E2EE-capable app, supply encrypted key material per the E2EE guides; the server stores ciphertext only.
+
+## Redirect and URL fragment
+
+- The plaintext **app key** is delivered in the **`#fragment`** as `app_key`, not in JSON token bodies.
+- When parsing with `URLSearchParams`, normalize **`+`** so base64 decodes correctly (documented in the E2EE guide).
+- After reading the fragment, **clear it from history** with `history.replaceState` so the key is not left in the URL bar.
+
+## Session vs encryption
+
+- **[Ave Session](/guides/ave-session-and-tokens)** handles **OAuth tokens** (`id_token`, refresh). It does **not** replace handling **`#app_key`** — that step remains in your client after consent.
+- Keep encryption keys and **master key** usage on the **client**; do not send plaintext app keys to your server for “convenience.”
+
+## Identity isolation
+
+- Use a **separate encrypted data domain** per Ave identity (`sub` / identity UUID). Switching identity must switch key context.
+
+## Related
+
+- [Ave Session](/guides/ave-session-and-tokens)
+- [SDK identity keys](/sdk/sdk-identity-keys)
+

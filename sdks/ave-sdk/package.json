@@ -24,6 +24,26 @@
     "./types": {
       "types": "./dist/types.d.ts",
       "default": "./dist/types.js"
+    },
+    "./session": {
+      "types": "./dist/session.d.ts",
+      "default": "./dist/session.js"
+    },
+    "./session-storage": {
+      "types": "./dist/session-storage.d.ts",
+      "default": "./dist/session-storage.js"
+    },
+    "./convex": {
+      "types": "./dist/convex.d.ts",
+      "default": "./dist/convex.js"
+    },
+    "./svelte": {
+      "types": "./dist/svelte.d.ts",
+      "default": "./dist/svelte.js"
+    },
+    "./expo-lifecycle": {
+      "types": "./dist/expo-lifecycle.d.ts",
+      "default": "./dist/expo-lifecycle.js"
     }
   },
   "files": [

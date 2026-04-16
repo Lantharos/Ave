@@ -155,3 +155,12 @@ Everything else — the `fetchAccessToken` implementation, Convex function auth,
 | `startQuickSessionMonitor()` | Periodic refresh token check | Use `refreshToken()` on a timer |
 | `user.token` | `tokens.access_token_jwt` | Same JWT format, same claims |
 | `user.idToken` | `tokens.id_token` | Same OIDC token, `aud` changes to your clientId |
+
+## If you still get logged out with `offline_access`
+
+Quick Ave **never** gives a refresh token — sessions are **bounded by access token TTL** (~one hour by default). After upgrading to a registered app:
+
+- Request **`openid profile email offline_access`** and persist the full token response.
+- After **every** refresh response, save the **new** `refresh_token` immediately (tokens can rotate).
+- Avoid **parallel** `refreshToken` calls from different components — use a **single session layer** ([Ave Session](/guides/ave-session-and-tokens)) so refresh is single-flight.
+- For Convex, do not pass a **stale** `id_token` string to `setAuth` — pass a function that returns a valid token (see [Convex custom auth](/guides/convex-custom-auth)).

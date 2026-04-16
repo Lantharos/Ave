@@ -1,3 +1,6 @@
+import { fetchJwks, verifyJwt } from "./jwt.js";
+import type { AveIdTokenClaims, VerifyJwtOptions } from "./types.js";
+
 export interface ServerConfig {
   issuer?: string;
   clientId: string;
@@ -5,8 +8,31 @@ export interface ServerConfig {
   redirectUri: string;
 }
 
-export { fetchJwks, verifyJwt } from "./jwt.js";
-export type { VerifyJwtOptions } from "./types.js";
+export { fetchJwks, verifyJwt };
+export type { VerifyJwtOptions };
+
+const DEFAULT_ISSUER = "https://aveid.net";
+
+/**
+ * Verify an Ave `id_token` for your registered `clientId` (JWT `aud`).
+ * Use in Hono/Express/Next route handlers before trusting `sub`.
+ */
+export async function verifyAveIdToken(
+  token: string,
+  options: {
+    clientId: string;
+    issuer?: string;
+    fetcher?: typeof fetch;
+  }
+): Promise<AveIdTokenClaims | null> {
+  const issuer = options.issuer ?? DEFAULT_ISSUER;
+  return verifyJwt<AveIdTokenClaims>(token, {
+    audience: options.clientId,
+    issuer,
+    expectedIssuer: issuer,
+    fetcher: options.fetcher,
+  });
+}
 
 export interface TokenResponse {
   access_token: string;
