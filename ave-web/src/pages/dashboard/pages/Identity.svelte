@@ -33,18 +33,25 @@
     let error = $state("");
     let success = $state("");
     let showEmailVerificationModal = $state(false);
+    let lastSyncedIdentityId = $state<string | null>(null);
 
-    // Reset form when identity changes
     $effect(() => {
         if (identity) {
+            const switchedIdentity = lastSyncedIdentityId !== identity.id;
+            if (switchedIdentity) {
+                lastSyncedIdentityId = identity.id;
+                verificationCode = "";
+                showEmailVerificationModal = false;
+            }
             displayName = identity.displayName;
             handle = identity.handle;
             email = identity.pendingEmail || identity.email || "";
-            verificationCode = "";
-            showEmailVerificationModal = false;
             birthday = identity.birthday || "";
             avatarUrl = identity.avatarUrl || "";
             bannerUrl = identity.bannerUrl || "";
+        } else {
+            lastSyncedIdentityId = null;
+            showEmailVerificationModal = false;
         }
     });
 
@@ -641,7 +648,7 @@
         tabindex="-1"
     >
         <div
-            class="bg-[#171717] rounded-[24px] md:rounded-[36px] p-6 md:p-[40px] max-w-[520px] w-full"
+            class="bg-[#171717] rounded-[24px] md:rounded-[36px] p-6 md:p-[40px] max-w-[520px] w-full min-w-0 overflow-x-hidden"
             onclick={(e) => e.stopPropagation()}
             onkeydown={(e) => e.stopPropagation()}
             role="presentation"
@@ -657,18 +664,19 @@
                     <Text type="h" size={22} mobileSize={16} color="#FFFFFF">{identity.pendingEmail}</Text>
                 </div>
 
-                <div class="flex flex-col md:flex-row gap-3 items-stretch md:items-center">
+                <div class="flex flex-col gap-3 min-w-0">
                     <input
                         type="text"
                         inputmode="numeric"
                         maxlength="6"
-                        class="flex-1 bg-transparent border-b border-[#333333] pb-[10px] text-white text-lg md:text-[24px] focus:outline-none"
+                        class="w-full min-w-0 bg-transparent border-b border-[#333333] pb-[10px] text-white text-lg md:text-[24px] focus:outline-none"
                         bind:value={verificationCode}
                         placeholder="Enter code"
                         autocomplete="one-time-code"
                     />
                     <button
-                        class="px-5 py-3 bg-[#FFFFFF] hover:bg-[#E0E0E0] text-[#090909] rounded-full text-[16px] font-medium disabled:opacity-60"
+                        type="button"
+                        class="w-full sm:w-auto sm:self-end shrink-0 px-5 py-3 bg-[#FFFFFF] hover:bg-[#E0E0E0] text-[#090909] rounded-full text-[16px] font-medium disabled:opacity-60"
                         onclick={verifyEmail}
                         disabled={isSaving || verificationCode.trim().length !== 6}
                     >
@@ -679,6 +687,7 @@
 
             <div class="flex flex-col md:flex-row gap-2 md:gap-[10px] mt-6 md:mt-[30px]">
                 <button
+                    type="button"
                     class="flex-1 py-3 md:py-[15px] bg-[#FFFFFF] text-[#090909] font-semibold rounded-[16px] hover:bg-[#E0E0E0] transition-colors disabled:opacity-60"
                     onclick={resendEmailVerification}
                     disabled={isSaving}
@@ -686,6 +695,7 @@
                     Resend code
                 </button>
                 <button
+                    type="button"
                     class="flex-1 py-3 md:py-[15px] bg-[#111111] text-[#FFFFFF] font-semibold rounded-[16px] hover:bg-[#202020] transition-colors disabled:opacity-60"
                     onclick={() => {
                         email = identity.pendingEmail || "";
@@ -697,6 +707,7 @@
                     Change email
                 </button>
                 <button
+                    type="button"
                     class="flex-1 py-3 md:py-[15px] bg-[#111111] text-[#878787] font-semibold rounded-[16px] hover:bg-[#202020] hover:text-[#FFFFFF] transition-colors disabled:opacity-60"
                     onclick={clearEmail}
                     disabled={isSaving}

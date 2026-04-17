@@ -1058,18 +1058,19 @@
                                     <Text type="hd" size={14} mobileSize={12} color="#878787">PENDING EMAIL</Text>
                                     <Text type="h" size={22} mobileSize={16} color="#FFFFFF">{selectedIdentity.pendingEmail}</Text>
                                 </div>
-                                <div class="flex flex-col md:flex-row gap-3 items-stretch md:items-center">
+                                <div class="flex flex-col gap-3 min-w-0">
                                     <input
                                         type="text"
                                         inputmode="numeric"
                                         maxlength="6"
-                                        class="flex-1 bg-transparent border-b border-[#333333] pb-[10px] text-white text-lg md:text-[24px] focus:outline-none"
+                                        class="w-full min-w-0 bg-transparent border-b border-[#333333] pb-[10px] text-white text-lg md:text-[24px] focus:outline-none"
                                         bind:value={emailCode}
                                         placeholder="Enter code"
                                         autocomplete="one-time-code"
                                     />
                                     <button
-                                        class="px-5 py-3 bg-[#FFFFFF] hover:bg-[#E0E0E0] text-[#090909] rounded-full text-[16px] font-medium disabled:opacity-60"
+                                        type="button"
+                                        class="w-full sm:w-auto sm:self-end shrink-0 px-5 py-3 bg-[#FFFFFF] hover:bg-[#E0E0E0] text-[#090909] rounded-full text-[16px] font-medium disabled:opacity-60"
                                         onclick={handleVerifyEmail}
                                         disabled={emailSubmitting || emailCode.trim().length !== 6}
                                     >
@@ -1078,6 +1079,7 @@
                                 </div>
                                 <div class="flex flex-row gap-3">
                                     <button
+                                        type="button"
                                         class="text-[#878787] hover:text-[#FFFFFF] transition-colors text-[14px] md:text-[16px]"
                                         onclick={handleResendEmailVerification}
                                         disabled={emailSubmitting}
@@ -1085,16 +1087,17 @@
                                         Resend code
                                     </button>
                                 </div>
-                                <div class="flex flex-col md:flex-row gap-3 items-stretch md:items-center">
+                                <div class="flex flex-col gap-3 min-w-0">
                                     <input
                                         type="email"
-                                        class="flex-1 bg-transparent border-b border-[#333333] pb-[10px] text-white text-lg md:text-[24px] focus:outline-none"
+                                        class="w-full min-w-0 bg-transparent border-b border-[#333333] pb-[10px] text-white text-lg md:text-[24px] focus:outline-none"
                                         bind:value={emailDraft}
                                         placeholder="Use another email"
                                         autocomplete="email"
                                     />
                                     <button
-                                        class="px-5 py-3 bg-[#171717] hover:bg-[#202020] text-[#FFFFFF] rounded-full text-[16px] font-medium disabled:opacity-60"
+                                        type="button"
+                                        class="w-full sm:w-auto sm:self-end shrink-0 px-5 py-3 bg-[#171717] hover:bg-[#202020] text-[#FFFFFF] rounded-full text-[16px] font-medium disabled:opacity-60"
                                         onclick={handleStartEmailVerification}
                                         disabled={emailSubmitting || !emailDraft.trim()}
                                     >
@@ -1103,16 +1106,17 @@
                                 </div>
                             </div>
                         {:else}
-                            <div class="flex flex-col md:flex-row gap-3 items-stretch md:items-center">
+                            <div class="flex flex-col gap-3 min-w-0">
                                 <input
                                     type="email"
-                                    class="flex-1 bg-transparent border-b border-[#333333] pb-[10px] text-white text-lg md:text-[24px] focus:outline-none"
+                                    class="w-full min-w-0 bg-transparent border-b border-[#333333] pb-[10px] text-white text-lg md:text-[24px] focus:outline-none"
                                     bind:value={emailDraft}
                                     placeholder="Enter email"
                                     autocomplete="email"
                                 />
                                 <button
-                                    class="px-5 py-3 bg-[#FFFFFF] hover:bg-[#E0E0E0] text-[#090909] rounded-full text-[16px] font-medium disabled:opacity-60"
+                                    type="button"
+                                    class="w-full sm:w-auto sm:self-end shrink-0 px-5 py-3 bg-[#FFFFFF] hover:bg-[#E0E0E0] text-[#090909] rounded-full text-[16px] font-medium disabled:opacity-60"
                                     onclick={handleStartEmailVerification}
                                     disabled={emailSubmitting || !emailDraft.trim()}
                                 >
