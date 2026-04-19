@@ -46,7 +46,8 @@
               "guides/fedcm-browser-sign-in",
               "guides/pkce-for-public-clients",
               "guides/server-side-confidential-clients",
-              "guides/scopes-and-claims"
+              "guides/scopes-and-claims",
+              "guides/ave-session-and-tokens"
             ]
           },
           {
@@ -54,14 +55,18 @@
             "pages": [
               "guides/connector-app-to-app",
               "guides/ave-signing",
-              "guides/end-to-end-encryption"
+              "guides/end-to-end-encryption",
+              "guides/e2ee-integration-checklist"
             ]
           },
           {
             "group": "Frameworks",
             "pages": [
               "guides/expo-auth-session",
-              "guides/convex-custom-auth"
+              "guides/convex-custom-auth",
+              "guides/nextjs-ave-session",
+              "guides/sql-postgres-jwt-auth",
+              "guides/better-auth-ave"
             ]
           }
         ]

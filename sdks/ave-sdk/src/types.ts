@@ -1,5 +1,12 @@
 export type Scope = "openid" | "profile" | "email" | "offline_access" | "user_id";
 
+/** OAuth client config for PKCE and token calls */
+export interface AveConfig {
+  clientId: string;
+  redirectUri: string;
+  issuer?: string;
+}
+
 export interface JwtHeader {
   alg?: string;
   typ?: string;
@@ -70,6 +77,8 @@ export interface TokenResponse {
   access_token_jwt: string;
   id_token?: string;
   refresh_token?: string;
+  /** Plaintext app encryption key (e.g. FedCM) or after merging `#app_key` from redirect fragment */
+  app_key?: string;
   expires_in: number;
   scope: string;
   user?: {

@@ -1,3 +1,6 @@
+import { fetchJwks, verifyJwt } from "./jwt.js";
+import type { AveIdTokenClaims, VerifyJwtOptions } from "./types.js";
+
 export interface ServerConfig {
   issuer?: string;
   clientId: string;
@@ -5,8 +8,65 @@ export interface ServerConfig {
   redirectUri: string;
 }
 
-export { fetchJwks, verifyJwt } from "./jwt.js";
-export type { VerifyJwtOptions } from "./types.js";
+export { fetchJwks, verifyJwt };
+export type { VerifyJwtOptions };
+
+const DEFAULT_ISSUER = "https://aveid.net";
+
+/**
+ * Verify an Ave `id_token` for your registered `clientId` (JWT `aud`).
+ * Use in Hono/Express/Next route handlers before trusting `sub`.
+ */
+export async function verifyAveIdToken(
+  token: string,
+  options: {
+    clientId: string;
+    issuer?: string;
+    fetcher?: typeof fetch;
+  }
+): Promise<AveIdTokenClaims | null> {
+  const issuer = options.issuer ?? DEFAULT_ISSUER;
+  return verifyJwt<AveIdTokenClaims>(token, {
+    audience: options.clientId,
+    issuer,
+    expectedIssuer: issuer,
+    fetcher: options.fetcher,
+  });
+}
+
+export interface AveAuthPrincipal {
+  subject: string;
+  claims: AveIdTokenClaims;
+}
+
+const BEARER = /^Bearer\s+(\S+)/i;
+
+/**
+ * Extract Bearer token from an Authorization header value.
+ */
+export function getBearerToken(authorization: string | null | undefined): string | null {
+  if (!authorization) return null;
+  const m = authorization.match(BEARER);
+  return m?.[1] ?? null;
+}
+
+/**
+ * Verify `Authorization: Bearer &lt;id_token&gt;` and return `sub` + claims.
+ */
+export async function verifyAveIdTokenFromAuthHeader(
+  authorization: string | null | undefined,
+  options: {
+    clientId: string;
+    issuer?: string;
+    fetcher?: typeof fetch;
+  }
+): Promise<AveAuthPrincipal | null> {
+  const raw = getBearerToken(authorization);
+  if (!raw) return null;
+  const claims = await verifyAveIdToken(raw, options);
+  if (!claims?.sub) return null;
+  return { subject: claims.sub, claims };
+}
 
 export interface TokenResponse {
   access_token: string;

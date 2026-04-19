@@ -1,0 +1,135 @@
+---
+title: "Ave Session (smooth OAuth sessions)"
+description: "Use @ave-id/sdk AveSession for single-flight refresh, durable storage, and framework helpers — Convex, Svelte, Expo."
+---
+
+The OAuth **`access_token` JWT** and **`id_token`** expire on a short clock (often about **one hour** by default). That is separate from how long a *user* should stay signed in: with **`offline_access`**, Ave issues a **`refresh_token`** so your app can rotate tokens without sending the user through the consent screen again.
+
+The painful part in real apps is **session semantics**: duplicated refresh calls, lost refresh rotation, races on cold start, and Convex receiving an expired `id_token`. **`AveSession`** in `@ave-id/sdk` encodes one supported lifecycle: persist the bundle, refresh in a safety window before expiry, single in-flight refresh (with **`navigator.locks`** when available), **BroadcastChannel** updates when another tab refreshes or signs out, and atomic save after rotation.
+
+## When to use AveSession
+
+- You want **`convex.setAuth`** to always receive a **fresh `id_token`**.
+- You use a **registered** OAuth app and requested **`offline_access`** (Quick Ave does not issue refresh tokens — see [Upgrading from Quick Ave](/guides/quick-ave-to-standard)).
+
+## Basic usage
+
+```ts
+import { AveSession, createLocalStorageAdapter } from "@ave-id/sdk";
+import { completeOAuthCallback } from "@ave-id/sdk/client";
+
+const session = new AveSession({
+  oauth: {
+    clientId: process.env.AVE_CLIENT_ID!,
+    redirectUri: "https://yourapp.com/callback",
+  },
+  storage: createLocalStorageAdapter(),
+  devtools: process.env.NODE_ENV === "development",
+});
+
+// OAuth callback route — exchanges code, merges #app_key, clears sensitive hash, persists session:
+await completeOAuthCallback(session, {
+  clientId: process.env.AVE_CLIENT_ID!,
+  redirectUri: "https://yourapp.com/callback",
+});
+
+await session.hydrate();
+const idToken = await session.getValidIdToken();
+```
+
+**One-liner:** `completeOAuthCallback` runs **`finishPkceLogin`** and **`setTokensFromResponse`** together.
+
+`finishPkceLogin` reads **`#app_key`** from the redirect URL (E2EE), merges it into the token response, then **strips** `app_key` / unwrap params from the hash. **`session.getAppKeyBase64()`** returns the stored key after hydrate.
+
+<Tip>
+  Set **`devtools: true`** only in development — it exposes **`window.__aveSessionDev`** (state, expiry, **`lastRefreshError`**).
+</Tip>
+
+`getValidIdToken()` awaits proactive refresh when the JWT is near expiry. Prefer **`createMemoryStorage()`** or a **BFF** for production refresh-token handling instead of `localStorage` (see [Quickstart](/quickstart) storage guidance).
+
+## Convex
+
+```ts
+import { ConvexReactClient } from "convex/react";
+import { wireAveSessionToConvex } from "@ave-id/sdk/convex";
+
+const convex = new ConvexReactClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
+
+await session.hydrate();
+wireAveSessionToConvex(convex, session);
+```
+
+Call `session.setTokensFromResponse` after login. `wireAveSessionToConvex` passes a function that calls `getValidIdToken()` so Convex always receives a valid token.
+
+## Next.js (App Router)
+
+Use **`AveSessionProvider`** and **`useAveSession`** from **`@ave-id/sdk/next`**, and optionally **`AveConvexBridge`** instead of calling **`wireAveSessionToConvex`** manually. See [Next.js App Router + Ave Session](/guides/nextjs-ave-session).
+
+## Svelte
+
+```ts
+import { aveSessionToStore } from "@ave-id/sdk/svelte";
+
+const sessionStore = aveSessionToStore(session);
+// sessionStore.subscribe(...) — status + snapshot
+```
+
+Hydrate in `onMount` before relying on authenticated UI.
+
+## Expo
+
+Native Expo has **no Web Crypto** for PKCE SHA-256 — configure **`expo-crypto`** once via **`configureAveSdkForExpo`** from **`@ave-id/sdk/expo-session`**, then use **`AveSession`** with **`createSecureStoreAdapter`** and **`completeExpoOAuthCallback`** (no `window` / no `sessionStorage`). See [Expo with AuthSession](/guides/expo-auth-session).
+
+```ts
+import * as ExpoCrypto from "expo-crypto";
+import * as SecureStore from "expo-secure-store";
+import * as WebBrowser from "expo-web-browser";
+import {
+  AveSession,
+  completeExpoOAuthCallback,
+  configureAveSdkForExpo,
+  createSecureStoreAdapter,
+  initExpoOAuthBrowserSession,
+  onExpoAppForegroundRefresh,
+  warmUpExpoAuthBrowser,
+} from "@ave-id/sdk/expo-session";
+import { AppState } from "react-native";
+
+initExpoOAuthBrowserSession(WebBrowser);
+configureAveSdkForExpo(ExpoCrypto);
+
+const session = new AveSession({
+  oauth: { clientId: "...", redirectUri: "myapp://callback" },
+  storage: createSecureStoreAdapter(SecureStore),
+  crossTabSync: false,
+});
+
+onExpoAppForegroundRefresh(AppState, session);
+
+// Optional: in your login screen component
+// useEffect(() => warmUpExpoAuthBrowser(WebBrowser), []);
+```
+
+## BFF (HttpOnly refresh)
+
+Pass **`customRefresh`** in `AveSession` options to POST to your own `/api/session/refresh` that reads an HttpOnly cookie and returns a **`TokenResponse`-shaped** JSON body. The client never stores the refresh token.
+
+## E2EE app key
+
+For registered **E2EE** apps, Ave may append **`#app_key=...`** after consent. **`finishPkceLogin`** merges that value into the returned **`TokenResponse`**, and **`AveSession`** stores it as **`appKeyBase64`** next to your OAuth tokens so you can use **`session.getAppKeyBase64()`** after `hydrate()`.
+
+You still own crypto policy: import the key with Web Crypto (AES-GCM, etc.) per [End-to-end encryption](/guides/end-to-end-encryption). FedCM flows may set **`app_key`** on the token response directly; that is merged the same way.
+
+## Dev tools
+
+With **`devtools: true`**, **`window.__aveSessionDev`** exposes **`getState()`**, expiry helpers, and **`lastRefreshError`** in development builds.
+
+## Server APIs (Postgres / Hono)
+
+Use **`getBearerToken`**, **`verifyAveIdTokenFromAuthHeader`** from `@ave-id/sdk/server` to turn **`Authorization: Bearer &lt;id_token&gt;`** into **`subject`** + claims — see [Postgres, SQLite, and JWT auth](/guides/sql-postgres-jwt-auth).
+
+## Related
+
+- [Convex custom auth](/guides/convex-custom-auth) — `applicationID`, which token to pass
+- [Why sessions still fail](/guides/convex-custom-auth#sessions-still-flaky) — troubleshooting matrix
+

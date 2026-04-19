@@ -1,3 +1,4 @@
+import { mergeAppKeyFromUrl, stripSensitiveFragmentParams } from "./app-key.js";
 import {
   buildAuthorizeUrl,
   buildConnectorUrl,
@@ -11,6 +12,7 @@ import {
 } from "./index.js";
 import { isJwtVerificationSupported } from "./crypto-runtime.js";
 import { verifyJwt } from "./jwt.js";
+import type { AveSession } from "./session.js";
 import type {
   AveIdTokenClaims,
   AveJwtClaims,
@@ -19,6 +21,12 @@ import type {
   WrappedIdentityPayload,
 } from "./types.js";
 
+export {
+  extractAppKeyFromUrl,
+  mergeAppKeyFromUrl,
+  normalizeAppKeyBase64,
+  stripSensitiveFragmentParams,
+} from "./app-key.js";
 export { fetchJwks, verifyJwt } from "./jwt.js";
 export type {
   FedCmTokenResponse,
@@ -441,7 +449,7 @@ export async function finishPkceLogin(options: {
     throw new Error("[Ave] State mismatch — possible CSRF attack.");
   }
 
-  const token = await exchangeCode(
+  let token = await exchangeCode(
     {
       clientId: options.clientId,
       redirectUri: options.redirectUri,
@@ -453,6 +461,8 @@ export async function finishPkceLogin(options: {
     },
   );
 
+  token = mergeAppKeyFromUrl(callbackUrl, token);
+
   clearPkceState();
 
   await verifyReturnedTokens({
@@ -463,13 +473,29 @@ export async function finishPkceLogin(options: {
     idToken: token.id_token,
   });
 
-  if (options.cleanUrl !== false && typeof window !== "undefined" && typeof window.history !== "undefined") {
-    const cleanUrl = new URL(window.location.href);
-    cleanUrl.searchParams.delete("code");
-    cleanUrl.searchParams.delete("state");
-    history.replaceState({}, "", cleanUrl.toString());
+  if (typeof window !== "undefined" && typeof window.history !== "undefined") {
+    stripSensitiveFragmentParams();
+    if (options.cleanUrl !== false) {
+      const cleanUrl = new URL(window.location.href);
+      cleanUrl.searchParams.delete("code");
+      cleanUrl.searchParams.delete("state");
+      history.replaceState({}, "", cleanUrl.pathname + cleanUrl.search + cleanUrl.hash);
+    }
   }
 
+  return token;
+}
+
+/**
+ * `finishPkceLogin` + `session.setTokensFromResponse` — persists OAuth tokens and optional **`app_key`** from the hash.
+ */
+export async function completeOAuthCallback(
+  session: AveSession,
+  options: Parameters<typeof finishPkceLogin>[0]
+): Promise<TokenResponse | null> {
+  const token = await finishPkceLogin(options);
+  if (!token) return null;
+  await session.setTokensFromResponse(token);
   return token;
 }
 

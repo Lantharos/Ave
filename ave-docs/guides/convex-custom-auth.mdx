@@ -147,8 +147,10 @@ The `subject` is the Ave identity UUID — this is the value you should use as y
     });
     ```
   </Step>
-  <Step title="Handle token refresh">
-    `id_token` expires (check `exp` claim). When it expires, refresh your Ave tokens and pass the new `id_token` to Convex.
+  <Step title="Handle token refresh (recommended: Ave Session)">
+    `id_token` expires (check `exp` claim). **Do not** pass a static `tokens.id_token` to `setAuth` — Convex validates `exp` on every request. Prefer **[Ave Session](/guides/ave-session-and-tokens)** (`AveSession` + `wireAveSessionToConvex`) so refresh is **single-flight**, **persisted**, and runs **before** expiry.
+
+    Manual refresh (if you are not using `AveSession` yet):
 
     ```ts
     import { refreshToken } from "@ave-id/sdk";
@@ -158,15 +160,28 @@ The `subject` is the Ave identity UUID — this is the value you should use as y
       { refreshToken: storedRefreshToken }
     );
 
-    // Update Convex with the new id_token
+    // Persist new refresh_token immediately if the server rotated it — then:
     convex.setAuth(async () => newTokens.id_token);
     ```
 
     <Note>
-      `id_token` and `access_token` share the same `expires_in`. Use the expiry to proactively refresh before Convex starts rejecting requests.
+      Default token lifetime is often about **one hour** (`expires_in`). Quick Ave has **no** refresh token — upgrade to a [registered app](/guides/quick-ave-to-standard) with **`offline_access`**. See also [Sessions still flaky](#sessions-still-flaky) below.
     </Note>
   </Step>
 </Steps>
+
+## Sessions still flaky
+
+If users drop out after ~**one hour**, or behavior feels random even with **`offline_access`**:
+
+| Cause | What to do |
+| --- | --- |
+| **Quick Ave** (`origin:…` clientId) | No refresh tokens — [upgrade](/guides/quick-ave-to-standard) |
+| **Missing `offline_access`** | Request it — refresh tokens are not issued without it |
+| **Using static `id_token` in `setAuth`** | Use a **function** that returns a **fresh** token ([Ave Session](/guides/ave-session-and-tokens)) |
+| **Refresh rotation not saved** | After every refresh, persist the **new** `refresh_token` before other requests run |
+| **Concurrent refresh** | Two callers refreshing at once can invalidate rotated refresh tokens — use **single-flight** (`AveSession`) |
+| **Cold start** | Ensure **`hydrate()`** (or equivalent) finishes before authenticated Convex calls |
 
 ## Complete id_token payload reference
 

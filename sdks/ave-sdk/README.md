@@ -8,6 +8,8 @@ Typed helpers for Ave OAuth + OIDC flows.
 npm install @ave-id/sdk
 ```
 
+**What gets installed:** the package has **no** `dependencies` — not React, not Expo. **`expo-crypto`**, **`expo-auth-session`**, etc. are yours to add only for Expo ([`@ave-id/sdk/expo-session`](./src/expo-session.ts)). **`react`** is an **optional** `peerDependency` for **`@ave-id/sdk/next`** only; Svelte / vanilla / Node installs do not need React (npm will not require it with `peerDependenciesMeta.optional`).
+
 For Expo apps, also install:
 
 ```bash
@@ -26,6 +28,10 @@ configureCryptoRuntime(createExpoCryptoRuntime(ExpoCrypto));
 This enables the SDK's PKCE helpers in Expo (`generateCodeVerifier`, `generateCodeChallenge`, and `generateNonce`). `verifyJwt()` still requires a runtime with `SubtleCrypto` RSA verification support.
 
 On Expo native, `verifyJwt()` is not supported. The SDK's callback helpers skip client-side JWT verification in that runtime so successful logins do not fail after token exchange. If you need JWT signature verification, do it on your server or use a service like Convex that validates the `id_token` itself.
+
+**SHA-256 for PKCE** uses Web Crypto in browsers; on Expo native you **must** call **`configureAveSdkForExpo(ExpoCrypto)`** from **`@ave-id/sdk/expo-session`** (or `configureCryptoRuntime(createExpoCryptoRuntime(ExpoCrypto))`) before `generateCodeChallenge` / `exchangeCode`. **`AveSession`** + **`completeExpoOAuthCallback`** live in **`@ave-id/sdk/expo-session`** for SecureStore and deep-link flows without `window`.
+
+**Browser:** use **`expo-auth-session`**’s **`promptAsync()`** so Ave opens in **`expo-web-browser`** (Custom Tabs / SFSafariViewController). Call **`initExpoOAuthBrowserSession(WebBrowser)`** from **`@ave-id/sdk/expo-session`** at startup — see **`ave-docs/guides/expo-auth-session.mdx`** in this repository.
 
 ## Quick Ave (no app registration)
 
@@ -143,6 +149,50 @@ const tokens = await exchangeCodeServer({
   code: "CODE_FROM_CALLBACK",
 });
 ```
+
+## Ave Session (OAuth persistence and refresh)
+
+For **Convex**, **Svelte**, **Expo**, or any app that must not reimplement refresh and rotation:
+
+- Import **`AveSession`**, **`createLocalStorageAdapter`** (or **`createSecureStoreAdapter`** on native) from `@ave-id/sdk`.
+- Call **`await session.hydrate()`** on startup, then **`await session.setTokensFromResponse(tokens)`** after `exchangeCode`.
+- Use **`await session.getValidIdToken()`** wherever you need a non-expired **`id_token`** (e.g. wire to Convex).
+
+```ts
+import { AveSession, createLocalStorageAdapter } from "@ave-id/sdk";
+import { completeOAuthCallback } from "@ave-id/sdk/client";
+import { wireAveSessionToConvex } from "@ave-id/sdk/convex";
+
+const session = new AveSession({
+  oauth: { clientId: process.env.AVE_CLIENT_ID!, redirectUri: "https://yourapp.com/callback" },
+  storage: createLocalStorageAdapter(),
+  devtools: true,
+});
+
+await completeOAuthCallback(session, {
+  clientId: process.env.AVE_CLIENT_ID!,
+  redirectUri: "https://yourapp.com/callback",
+});
+
+await session.hydrate();
+wireAveSessionToConvex(convex, session);
+
+session.getAppKeyBase64(); // E2EE, if present on redirect
+```
+
+**`finishPkceLogin`** (used by `completeOAuthCallback`) merges **`#app_key`** from the callback URL into tokens and clears sensitive fragment parameters.
+
+See the Mintlify guide **Ave Session** in the repository docs (`guides/ave-session-and-tokens`).
+
+## Next.js (App Router)
+
+```tsx
+"use client";
+import { AveSessionProvider, AveConvexBridge } from "@ave-id/sdk/next";
+import { createLocalStorageAdapter } from "@ave-id/sdk";
+```
+
+Peer dependency: **`react` >= 18**. See `guides/nextjs-ave-session` in the docs repo.
 
 ## Verify JWTs with the SDK
 

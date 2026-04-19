@@ -15,6 +15,8 @@ npm install @ave-id/sdk
 |---|---|---|
 | `@ave-id/sdk` | Core OAuth, PKCE helpers, `verifyJwt`, `fetchJwks` | Browser or Node |
 | `@ave-id/sdk/client` | `startPkceLogin`, `finishPkceLogin`, `signIn`, `signInWithFedCm` — browser redirect + FedCM helpers | Browser only |
+| `@ave-id/sdk/expo-session` | `configureAveSdkForExpo`, `completeExpoOAuthCallback`, `AveSession`, SecureStore adapter, `wireAveSessionToConvex` — React Native / Expo (needs `expo-crypto` for PKCE) | Expo |
+| `@ave-id/sdk/next` | `AveSessionProvider`, `useAveSession`, `AveConvexBridge` — Next.js App Router (peer: `react`) | Browser |
 | `@ave-id/sdk/server` | `exchangeCodeServer`, `refreshTokenServer`, `verifyJwt` — uses `clientSecret` | Server only |
 
 <Warning>

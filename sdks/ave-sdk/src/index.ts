@@ -1,5 +1,34 @@
 export type Scope = "openid" | "profile" | "email" | "offline_access" | "user_id";
 
+export type { AveConfig } from "./types.js";
+export { getApiBase } from "./api-base.js";
+
+export {
+  AveSession,
+  snapshotFromTokenResponse,
+} from "./session.js";
+export type {
+  AveSessionOptions,
+  AveSessionSnapshot,
+  AveSessionStatus,
+  AveSessionStorage,
+} from "./session.js";
+export {
+  createLocalStorageAdapter,
+  createMemoryStorage,
+  createSecureStoreAdapter,
+} from "./session-storage.js";
+export type { AsyncSecureStoreLike } from "./session-storage.js";
+
+export {
+  extractAppKeyFromUrl,
+  mergeAppKeyFromUrl,
+  normalizeAppKeyBase64,
+  stripOAuthQueryParamsFromUrlString,
+  stripSensitiveFragmentParams,
+  stripSensitiveHashFromUrlString,
+} from "./app-key.js";
+
 export { configureCryptoRuntime, createExpoCryptoRuntime, isJwtVerificationSupported } from "./crypto-runtime.js";
 export type { AveCryptoRuntime } from "./crypto-runtime.js";
 export { fetchJwks, verifyJwt } from "./jwt.js";
@@ -16,13 +45,10 @@ export type {
   OidcConfiguration,
   VerifyJwtOptions,
 } from "./types.js";
+import { getApiBase } from "./api-base.js";
+import { refreshAccessToken } from "./oauth-token.js";
+import type { AveConfig } from "./types.js";
 import { digestSha256, fillRandomValues } from "./crypto-runtime.js";
-
-export interface AveConfig {
-  clientId: string;
-  redirectUri: string;
-  issuer?: string;
-}
 
 export function generateCodeVerifier(): string {
   const bytes = new Uint8Array(32);
@@ -115,23 +141,7 @@ export async function exchangeCode(config: AveConfig, payload: {
 }
 
 export async function refreshToken(config: AveConfig, payload: { refreshToken: string }): Promise<import("./types.js").TokenResponse> {
-  const apiBase = getApiBase(config.issuer);
-  const response = await fetch(`${apiBase}/api/oauth/token`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      grantType: "refresh_token",
-      refreshToken: payload.refreshToken,
-      clientId: config.clientId,
-    }),
-  });
-
-  if (!response.ok) {
-    const data = await response.json();
-    throw new Error(data.error || "Failed to refresh token");
-  }
-
-  return response.json();
+  return refreshAccessToken(config, payload);
 }
 
 export async function exchangeFedCmAssertion(
@@ -242,10 +252,6 @@ export async function fetchUserInfo(config: AveConfig, accessToken: string): Pro
   return response.json();
 }
 
-export function getApiBase(issuer?: string): string {
-  const base = issuer || "https://aveid.net";
-  return base.replace("https://aveid.net", "https://api.aveid.net");
-}
 
 export async function getIdentityPublicKey(
   config: { issuer?: string },

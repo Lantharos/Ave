@@ -5,9 +5,11 @@ description: "Use Ave in an Expo app with expo-auth-session and expo-web-browser
 
 Expo is a great fit for Ave's public-client OAuth flow. The clean setup is:
 
-- `expo-auth-session` to start the authorization code flow with PKCE
-- `expo-web-browser` to handle the system browser session cleanly
-- `@ave-id/sdk` to exchange the code and refresh tokens against Ave's API
+- **`expo-auth-session`** — builds the Ave authorize URL and runs PKCE; **`promptAsync()`** opens the **in-app system browser** (Chrome Custom Tabs on Android, **SFSafariViewController** on iOS) via **`expo-web-browser`**, not a raw `WebView` and not Safari/Chrome leaving your app without a return path.
+- **`expo-web-browser`** — session completion (`maybeCompleteAuthSession`), optional **`warmUpAsync` / `coolDownAsync`** on Android
+- **`@ave-id/sdk`** — exchange the code, refresh tokens, optional **Ave Session**
+
+Do **not** use `Linking.openURL(authorizeUrl)` alone for login — you lose the secure auth-session handoff. Use **`useAuthRequest`** + **`promptAsync()`** (or `WebBrowser.openAuthSessionAsync` with the same redirect URL you registered).
 
 If you're using Convex too, see [Convex custom auth](/guides/convex-custom-auth). The short version: pass Convex the Ave `id_token`, not `access_token_jwt`.
 
@@ -26,16 +28,50 @@ Expo's current AuthSession docs note that `expo-crypto` is a peer dependency of 
 
 ## Configure the Ave SDK for Expo
 
-The Ave SDK uses Web Crypto by default. In Expo, configure it once with `expo-crypto` during app startup:
+**Expo native does not provide Web Crypto for SHA-256** (needed for PKCE code challenge). Use **`expo-crypto`**, not browser `crypto.subtle`, for **`digest`** and **`getRandomValues`**.
+
+### One import (recommended)
 
 ```ts
 import * as ExpoCrypto from "expo-crypto";
+import { configureAveSdkForExpo } from "@ave-id/sdk/expo-session";
+
+configureAveSdkForExpo(ExpoCrypto);
+```
+
+This is equivalent to:
+
+```ts
 import { configureCryptoRuntime, createExpoCryptoRuntime } from "@ave-id/sdk";
 
 configureCryptoRuntime(createExpoCryptoRuntime(ExpoCrypto));
 ```
 
-Put that near your app bootstrap, before any Ave PKCE helpers run.
+Put it near app bootstrap, **before** any PKCE helpers (`generateCodeChallenge`, `startPkceLogin`, or AuthSession’s PKCE).
+
+## System browser (`expo-web-browser`)
+
+Ave MUST open in the **Expo-managed browser session** so the redirect returns to your app.
+
+1. **Import at root** (before your first auth prompt):
+
+```ts
+import * as WebBrowser from "expo-web-browser";
+import { initExpoOAuthBrowserSession, warmUpExpoAuthBrowser } from "@ave-id/sdk/expo-session";
+
+initExpoOAuthBrowserSession(WebBrowser);
+```
+
+2. **Android**: warm the custom tab while your login screen is mounted (same pattern as Expo’s own AuthSession examples):
+
+```ts
+useEffect(() => {
+  const dispose = warmUpExpoAuthBrowser(WebBrowser);
+  return dispose;
+}, []);
+```
+
+3. **`AuthSession.useAuthRequest`** + **`promptAsync()`** — this is what actually opens the authorization URL in **`expo-web-browser`**. You do not need to call `openBrowserAsync` yourself for the standard flow.
 
 <Warning>
   `verifyJwt()` is not supported on Expo native today. The Ave SDK skips client-side JWT verification in Expo callback helpers so your login flow does not crash, but if you need signature verification you should do it on your server or let a verifier like Convex validate the `id_token`.
@@ -70,6 +106,50 @@ Register that exact redirect URI in the Ave developer portal for your app.
   In Expo development builds and standalone apps, `makeRedirectUri()` uses your app scheme. On web it uses the current website origin. Keep the redirect URI you register in Ave aligned with the platform you are testing.
 </Note>
 
+## Ave Session + SecureStore (single-flight refresh)
+
+For **`offline_access`**, token refresh, and optional **`#app_key`** (E2EE) merged from the redirect URL string:
+
+```ts
+import * as ExpoCrypto from "expo-crypto";
+import * as SecureStore from "expo-secure-store";
+import {
+  AveSession,
+  completeExpoOAuthCallback,
+  configureAveSdkForExpo,
+  createSecureStoreAdapter,
+  wireAveSessionToConvex,
+} from "@ave-id/sdk/expo-session";
+import { ConvexReactClient } from "convex/react";
+
+configureAveSdkForExpo(ExpoCrypto);
+
+const convex = new ConvexReactClient(process.env.EXPO_PUBLIC_CONVEX_URL!);
+
+const session = new AveSession({
+  oauth: { clientId: CLIENT_ID, redirectUri },
+  storage: createSecureStoreAdapter(SecureStore),
+  crossTabSync: false,
+});
+
+// After AuthSession success — pass full URL when E2EE may include #app_key on web:
+await completeExpoOAuthCallback(
+  session,
+  { clientId: CLIENT_ID, redirectUri },
+  {
+    code: response.params.code,
+    codeVerifier: request.codeVerifier!,
+    expectedState: request.state,
+    responseState: response.params.state,
+    redirectUrlWithFragment: response.url,
+  }
+);
+
+wireAveSessionToConvex(convex, session);
+```
+
+`completeExpoOAuthCallback` calls **`exchangeCode`** and **`session.setTokensFromResponse`** (no `sessionStorage` / `window`). Use **`onExpoAppForegroundRefresh`** from the same module for background refresh nudges.
+
 ## Minimal implementation
 
 This example uses Expo for the browser redirect and PKCE request, then uses `@ave-id/sdk` for Ave's token exchange and refresh helpers.
@@ -80,8 +160,9 @@ import { Button, Text, View } from "react-native";
 import * as AuthSession from "expo-auth-session";
 import * as WebBrowser from "expo-web-browser";
 import { exchangeCode, fetchUserInfo, refreshToken } from "@ave-id/sdk";
+import { initExpoOAuthBrowserSession, warmUpExpoAuthBrowser } from "@ave-id/sdk/expo-session";
 
-WebBrowser.maybeCompleteAuthSession();
+initExpoOAuthBrowserSession(WebBrowser);
 
 const CLIENT_ID = "YOUR_CLIENT_ID";
 const ISSUER = "https://aveid.net";
@@ -113,10 +194,7 @@ export default function AveLoginScreen() {
   );
 
   useEffect(() => {
-    WebBrowser.warmUpAsync();
-    return () => {
-      WebBrowser.coolDownAsync();
-    };
+    return warmUpExpoAuthBrowser(WebBrowser);
   }, []);
 
   useEffect(() => {
