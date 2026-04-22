@@ -3,7 +3,7 @@ import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import { db, oauthApps, oauthAuthorizations, oauthRefreshTokens, identities, activityLogs, appAnalyticsEvents, oauthResources, oauthDelegationGrants, oauthDelegationAuditLogs } from "../db";
 import { requireAuth, requireWritable } from "../middleware/auth";
-import { eq, and, isNull, desc } from "drizzle-orm";
+import { eq, and, isNull, desc, inArray } from "drizzle-orm";
 import { randomUUID, timingSafeEqual } from "crypto";
 import { hashSessionToken } from "../lib/crypto";
 import { getIssuer, getResourceAudience, getJwtPublicJwk, signJwt, verifyJwt, hashToken } from "../lib/oidc";
@@ -75,6 +75,36 @@ function nowSeconds(): number {
 
 function parseScopes(scope: string): string[] {
   return scope.split(" ").map((s) => s.trim()).filter(Boolean);
+}
+
+async function getRefreshTokenFamilyIds(seedId: string): Promise<string[]> {
+  const familyIds = new Set<string>([seedId]);
+  let frontier = [seedId];
+
+  while (frontier.length > 0) {
+    const descendants = await db
+      .select({ id: oauthRefreshTokens.id })
+      .from(oauthRefreshTokens)
+      .where(inArray(oauthRefreshTokens.rotatedFromId, frontier));
+
+    frontier = descendants
+      .map((token) => token.id)
+      .filter((tokenId) => {
+        if (familyIds.has(tokenId)) return false;
+        familyIds.add(tokenId);
+        return true;
+      });
+  }
+
+  return [...familyIds];
+}
+
+async function markRefreshTokenFamilyReuse(seedId: string, detectedAt = new Date()): Promise<void> {
+  const familyIds = await getRefreshTokenFamilyIds(seedId);
+  await db
+    .update(oauthRefreshTokens)
+    .set({ reuseDetectedAt: detectedAt })
+    .where(inArray(oauthRefreshTokens.id, familyIds));
 }
 
 function normalizeOauthTokenPayload(input: unknown): unknown {
@@ -1194,16 +1224,15 @@ app.post("/token", zValidator("json", oauthTokenRequestSchema), async (c) => {
       .limit(1);
 
     if (!storedRefresh) {
-      await db.update(oauthRefreshTokens)
-        .set({ reuseDetectedAt: new Date() })
-        .where(and(eq(oauthRefreshTokens.appId, oauthApp.id), isNull(oauthRefreshTokens.revokedAt)));
       return c.json({ error: "invalid_grant", error_description: "Refresh token not found" }, 400);
     }
 
+    if (storedRefresh.appId !== oauthApp.id) {
+      return c.json({ error: "invalid_grant", error_description: "Refresh token does not belong to client" }, 400);
+    }
+
     if (storedRefresh.revokedAt || storedRefresh.reuseDetectedAt) {
-      await db.update(oauthRefreshTokens)
-        .set({ reuseDetectedAt: new Date() })
-        .where(eq(oauthRefreshTokens.appId, storedRefresh.appId));
+      await markRefreshTokenFamilyReuse(storedRefresh.id);
       return c.json({ error: "invalid_grant", error_description: "Refresh token revoked" }, 400);
     }
 

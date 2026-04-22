@@ -64,7 +64,7 @@ description: "Frequent integration bugs, protocol mismatches, and how to fix the
     - Token was revoked by the user or by the server
     - Reuse detection triggered — you sent the same refresh token twice (rotation means the old one is immediately invalidated after first use)
 
-    **Fix:** Treat `invalid_grant` on a refresh as a terminal session loss and re-authenticate the user. Store the **new** refresh token returned by every successful refresh immediately.
+    **Fix:** Treat `invalid_grant` on a refresh as a terminal session loss for that session and re-authenticate the user. Store the **new** refresh token returned by every successful refresh immediately. Ave only invalidates the rotated token lineage that was reused, so unrelated sessions on other devices should stay signed in.
   </Accordion>
 
   <Accordion title="Connector token exchange denied" icon="triangle-exclamation">

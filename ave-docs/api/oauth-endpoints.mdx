@@ -128,7 +128,7 @@ Returns tokens and user profile payload.
 
 ### Refresh token grant
 
-Validates token hash record, revoked/reuse/expiry state, then rotates refresh token and returns new access+refresh.
+Validates token hash record, client ownership, and revoked/reuse/expiry state, then rotates refresh token and returns new access+refresh. Reuse detection is scoped to the rotated token lineage that was reused, not unrelated refresh tokens held by the same app on other devices.
 
 ### Token exchange grant (Connector)
 
