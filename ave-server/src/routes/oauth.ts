@@ -9,6 +9,7 @@ import { hashSessionToken } from "../lib/crypto";
 import { getIssuer, getResourceAudience, getJwtPublicJwk, signJwt, verifyJwt, hashToken } from "../lib/oidc";
 import { consumeAuthorizationCode, getAccessToken, getAuthorizationCode, setAccessToken, setAuthorizationCode } from "../lib/oauth-store";
 import { hasVerifiedEmail, serializeIdentityForApp, serializeIdentityForOwner } from "../lib/identity-serialization";
+import { isOriginAllowedForApp, isRedirectUriAllowedForApp } from "../lib/redirect-uri";
 
 const app = new Hono();
 export const oidcRoutes = new Hono();
@@ -169,26 +170,6 @@ async function resolveOauthAppForClient(clientId: string) {
     .limit(1);
 
   return app ?? null;
-}
-
-function isAllowedClientOriginForApp(oauthApp: typeof oauthApps.$inferSelect, origin: string): boolean {
-  const allowedOrigins = new Set<string>();
-
-  for (const redirectUri of (oauthApp.redirectUris || []) as string[]) {
-    try {
-      allowedOrigins.add(new URL(redirectUri).origin);
-    } catch {
-    }
-  }
-
-  if (oauthApp.websiteUrl) {
-    try {
-      allowedOrigins.add(new URL(oauthApp.websiteUrl).origin);
-    } catch {
-    }
-  }
-
-  return allowedOrigins.has(origin);
 }
 
 async function issueAuthorizationCodeForApp(params: {
@@ -355,6 +336,7 @@ function buildQuickApp(clientId: string) {
     accessTokenTtlSeconds: QUICK_AUTH_ACCESS_TOKEN_TTL_SECONDS,
     refreshTokenTtlSeconds: 0,
     allowUserIdScope: false,
+    developmentMode: false,
     supportsE2ee: false,
     ownerId: null as string | null,
     createdAt: new Date(),
@@ -564,11 +546,11 @@ app.post("/fedcm/assertion", async (c) => {
     return c.json({ error: { code: "unauthorized_client", url: `${getWebBase()}/docs` } }, 400);
   }
 
-  if (!origin || !isAllowedClientOriginForApp(oauthApp, origin)) {
+  if (!origin || !isOriginAllowedForApp(oauthApp, origin)) {
     return c.json({ error: { code: "access_denied", url: `${getWebBase()}/docs` } }, 403);
   }
 
-  if (!redirectUri || !(oauthApp.redirectUris as string[]).includes(redirectUri)) {
+  if (!redirectUri || !isRedirectUriAllowedForApp(oauthApp, redirectUri)) {
     return c.json({ error: { code: "invalid_request", url: `${getWebBase()}/docs` } }, 400);
   }
 
@@ -786,8 +768,7 @@ app.post("/authorize", requireAuth, zValidator("json", z.object({
     oauthApp = app;
 
     // Validate redirect URI
-    const allowedUris = oauthApp.redirectUris as string[];
-    if (!allowedUris.includes(redirectUri)) {
+    if (!isRedirectUriAllowedForApp(oauthApp, redirectUri)) {
       return c.json({ error: "Invalid redirect_uri" }, 400);
     }
   }

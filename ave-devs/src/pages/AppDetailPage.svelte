@@ -190,6 +190,13 @@
         <Textarea bind:value={draft.redirectUrisText} rows={4} placeholder="https://example.com/callback" />
       </label>
 
+      <div class="flex flex-col gap-2">
+        <Toggle bind:checked={draft.developmentMode} label="Development mode" />
+        <p class="m-0 text-[13px] text-[#666]">
+          Allows localhost, loopback, and Expo Go redirect URLs without listing each one.
+        </p>
+      </div>
+
       <div class="flex flex-col gap-4">
         <div>
           <span class="text-[14px] text-[#8a8a8a]">Organization</span>

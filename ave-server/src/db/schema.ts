@@ -255,6 +255,7 @@ export const oauthApps = sqliteTable("oauth_apps", {
   clientId: text("client_id").notNull().unique(),
   clientSecretHash: text("client_secret_hash").notNull(),
   redirectUris: text("redirect_uris", { mode: "json" }).$type<string[]>().notNull(),
+  developmentMode: integer("development_mode", { mode: "boolean" }).default(false).notNull(),
   
   // OIDC settings
   allowedScopes: text("allowed_scopes", { mode: "json" })

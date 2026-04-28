@@ -365,6 +365,8 @@ The returned claims depend on the scopes your access token has. The response alw
   </Accordion>
   <Accordion title="Redirect URI must match exactly">
     Protocol, hostname, path, and query string must all match exactly. A trailing slash difference will cause `invalid_grant`. Register the exact URI you use.
+
+    Development mode relaxes this only for localhost, loopback, and Expo Go redirect URLs so local ports can change without adding every callback. Production callback URLs still need explicit registration.
   </Accordion>
   <Accordion title="Missing id_token">
     The `openid` scope was not requested or was not granted. Add `openid` to your scope list.

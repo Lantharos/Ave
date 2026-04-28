@@ -345,6 +345,7 @@
     websiteUrl: string;
     iconUrl: string;
     redirectUris: string;
+    developmentMode: boolean;
     supportsE2ee: boolean;
     allowUserIdScope: boolean;
     accessTokenTtlSeconds: number;
@@ -369,6 +370,7 @@
         websiteUrl: form.websiteUrl || undefined,
         iconUrl: form.iconUrl || undefined,
         redirectUris,
+        developmentMode: form.developmentMode,
         supportsE2ee: form.supportsE2ee,
         allowUserIdScope: form.allowUserIdScope,
         accessTokenTtlSeconds: form.accessTokenTtlSeconds,
@@ -434,6 +436,7 @@
           .split("\n")
           .map((uri) => uri.trim())
           .filter(Boolean),
+        developmentMode: app.developmentMode,
         supportsE2ee: app.supportsE2ee,
         allowedScopes: app.allowedScopes,
         accessTokenTtlSeconds: app.accessTokenTtlSeconds,

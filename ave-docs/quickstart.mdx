@@ -40,6 +40,8 @@ startAveAuth({
   </Step>
   <Step title="Register your redirect URI">
     Add the exact callback URL where Ave should redirect after login (e.g. `https://yourapp.com/callback`). The URI must match exactly — no wildcards, no trailing-slash differences.
+
+    For local development, enable development mode on the app to allow localhost, loopback, and Expo Go callback URLs without registering every port. Keep production callbacks registered explicitly.
   </Step>
 </Steps>
 

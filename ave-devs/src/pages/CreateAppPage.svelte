@@ -17,6 +17,7 @@
     websiteUrl: string;
     iconUrl: string;
     redirectUris: string;
+    developmentMode: boolean;
     supportsE2ee: boolean;
     allowUserIdScope: boolean;
     accessTokenTtlSeconds: number;
@@ -32,6 +33,7 @@
     websiteUrl: "",
     iconUrl: "",
     redirectUris: "",
+    developmentMode: false,
     supportsE2ee: false,
     allowUserIdScope: false,
     accessTokenTtlSeconds: 3600,
@@ -79,6 +81,13 @@
       <span class="text-[13px] md:text-[14px] text-[#878787]/60">One per line</span>
       <Textarea bind:value={form.redirectUris} rows={3} placeholder="https://example.com/callback" />
     </label>
+
+    <div class="flex flex-col gap-2">
+      <Toggle bind:checked={form.developmentMode} label="Development mode" />
+      <p class="m-0 text-[13px] md:text-[14px] text-[#878787]/60">
+        Allows localhost, loopback, and Expo Go redirect URLs without listing each one.
+      </p>
+    </div>
 
     <div class="grid grid-cols-1 sm:grid-cols-2 gap-6 md:gap-8">
         <label class="flex flex-col gap-3">
