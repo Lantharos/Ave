@@ -9,7 +9,7 @@ import { hashSessionToken } from "../lib/crypto";
 import { getIssuer, getResourceAudience, getJwtPublicJwk, signJwt, verifyJwt, hashToken } from "../lib/oidc";
 import { consumeAuthorizationCode, getAccessToken, getAuthorizationCode, setAccessToken, setAuthorizationCode } from "../lib/oauth-store";
 import { hasVerifiedEmail, serializeIdentityForApp, serializeIdentityForOwner } from "../lib/identity-serialization";
-import { isOriginAllowedForApp, isRedirectUriAllowedForApp } from "../lib/redirect-uri";
+import { isOriginAllowedForApp, isRedirectUriAllowedForApp, normalizeRedirectUri } from "../lib/redirect-uri";
 
 const app = new Hono();
 export const oidcRoutes = new Hono();
@@ -118,7 +118,9 @@ function normalizeOauthTokenPayload(input: unknown): unknown {
   return {
     ...raw,
     grantType: raw.grantType ?? raw.grant_type,
-    redirectUri: raw.redirectUri ?? raw.redirect_uri,
+    redirectUri: typeof (raw.redirectUri ?? raw.redirect_uri) === "string"
+      ? normalizeRedirectUri(String(raw.redirectUri ?? raw.redirect_uri))
+      : raw.redirectUri ?? raw.redirect_uri,
     clientId: raw.clientId ?? raw.client_id,
     clientSecret: raw.clientSecret ?? raw.client_secret,
     codeVerifier: raw.codeVerifier ?? raw.code_verifier,
@@ -536,7 +538,7 @@ app.post("/fedcm/assertion", async (c) => {
     }
   }
 
-  const redirectUri = typeof extraParams.redirectUri === "string" ? extraParams.redirectUri : "";
+  const redirectUri = typeof extraParams.redirectUri === "string" ? normalizeRedirectUri(extraParams.redirectUri) : "";
   const scope = typeof extraParams.scope === "string" ? extraParams.scope : "openid profile email";
   const state = typeof extraParams.state === "string" ? extraParams.state : "";
   const nonce = typeof extraParams.nonce === "string" ? extraParams.nonce : undefined;
@@ -697,7 +699,7 @@ app.get("/authorize/bootstrap/:clientId", requireAuth, async (c) => {
 // Authorization endpoint - user grants access
 app.post("/authorize", requireAuth, zValidator("json", z.object({
   clientId: z.string(),
-  redirectUri: z.string().url(),
+  redirectUri: z.string().transform(normalizeRedirectUri).pipe(z.string().url()),
   scope: z.string().optional().default("profile"),
   state: z.string().optional(),
   identityId: z.string().uuid(),

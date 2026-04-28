@@ -28,6 +28,22 @@ export function isLoopbackRedirectUri(value: string): boolean {
   }
 }
 
+export function normalizeRedirectUri(value: string): string {
+  const trimmed = value.trim();
+
+  try {
+    return new URL(trimmed).toString();
+  } catch {
+  }
+
+  try {
+    const decoded = decodeURIComponent(trimmed);
+    return new URL(decoded).toString();
+  } catch {
+    return trimmed;
+  }
+}
+
 export function isExpoGoRedirectUri(value: string): boolean {
   try {
     const url = new URL(value);
