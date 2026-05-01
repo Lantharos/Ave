@@ -15,10 +15,7 @@
         "groups": [
           {
             "group": "Overview",
-            "pages": [
-              "index",
-              "quickstart"
-            ]
+            "pages": ["index", "quickstart"]
           },
           {
             "group": "Core concepts",
@@ -34,10 +31,7 @@
         "groups": [
           {
             "group": "Start",
-            "pages": [
-              "guides/quick-ave",
-              "guides/quick-ave-to-standard"
-            ]
+            "pages": ["guides/quick-ave", "guides/quick-ave-to-standard"]
           },
           {
             "group": "OAuth",
@@ -86,9 +80,7 @@
           },
           {
             "group": "Embed SDK",
-            "pages": [
-              "sdk/embed-sdk"
-            ]
+            "pages": ["sdk/embed-sdk"]
           }
         ]
       },
@@ -117,9 +109,7 @@
           },
           {
             "group": "Troubleshooting",
-            "pages": [
-              "troubleshooting/common-mistakes-and-edge-cases"
-            ]
+            "pages": ["troubleshooting/common-mistakes-and-edge-cases"]
           }
         ]
       }
@@ -145,6 +135,9 @@
   },
   "favicon": "/images/Group6.png",
   "logo": "/images/Group6.png",
+  "background": {
+    "decoration": "gradient"
+  },
   "appearance": {
     "default": "dark"
   },
