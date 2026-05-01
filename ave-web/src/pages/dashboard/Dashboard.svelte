@@ -11,16 +11,20 @@
     import ActivityLog from "./pages/ActivityLog.svelte";
     import LoginApproval from "./pages/LoginApproval.svelte";
     import Connectors from "./pages/Connectors.svelte";
+    import PasskeySetupPrompt from "./components/PasskeySetupPrompt.svelte";
     import { auth, identities as identitiesStore, isAuthenticated, isReadOnly } from "../../stores/auth";
     import { websocket } from "../../stores/websocket";
     import { type Identity as IdentityType } from "../../lib/api";
     import { createPendingRequestsQuery, queryKeys } from "../../lib/queries";
     import { queryClient } from "../../lib/query-client";
+    import { clearPendingPasskeySetupPrompt, readPendingPasskeySetupPrompt, type PendingPasskeySetupPrompt } from "../../lib/passkey-setup-prompt";
+    import { isPlatformAuthenticatorAvailable } from "../../lib/webauthn";
 
     let selectedPage = $state<string>("");
     let pendingApprovals = $state(0);
     let mobileSidebarOpen = $state(false);
     let isLoggingOut = $state(false);
+    let passkeySetupPrompt = $state<PendingPasskeySetupPrompt | null>(null);
 
     let identities = $derived($identitiesStore);
     let readOnly = $derived($isReadOnly);
@@ -43,7 +47,27 @@
         websocket.onLoginRequest(() => {
             queryClient.invalidateQueries({ queryKey: queryKeys.pendingRequests });
         });
+
+        await preparePasskeySetupPrompt();
     });
+
+    async function preparePasskeySetupPrompt() {
+        if (readOnly) {
+            clearPendingPasskeySetupPrompt();
+            return;
+        }
+
+        const prompt = readPendingPasskeySetupPrompt();
+        if (!prompt) return;
+
+        const available = await isPlatformAuthenticatorAvailable();
+        if (!available) {
+            clearPendingPasskeySetupPrompt();
+            return;
+        }
+
+        passkeySetupPrompt = prompt;
+    }
 
     async function handleLogout() {
         if (isLoggingOut) return;
@@ -226,5 +250,12 @@
 
     <AuroraBackdrop preset="dashboard-tr" cclass="absolute top-0 right-0 w-[70%] pointer-events-none select-none" />
     <AuroraBackdrop preset="dashboard-bl" cclass="absolute bottom-0 left-0 w-[80%] pointer-events-none select-none" />
+
+    {#if passkeySetupPrompt}
+        <PasskeySetupPrompt
+            prompt={passkeySetupPrompt}
+            onClose={() => { passkeySetupPrompt = null; }}
+        />
+    {/if}
 
 </div>

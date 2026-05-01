@@ -154,6 +154,7 @@ export interface Device {
   lastSeenAt?: string;
   isActive: boolean;
   isCurrent?: boolean;
+  isNew?: boolean;
 }
 
 export interface SessionBootstrap {

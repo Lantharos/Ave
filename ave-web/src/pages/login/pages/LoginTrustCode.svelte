@@ -106,7 +106,8 @@
                             result.sessionToken,
                             result.identities,
                             result.device,
-                            masterKey
+                            masterKey,
+                            { offerPasskeySetup: Boolean(result.device.isNew) }
                         );
                     } else {
                         // Login succeeded but couldn't recover master key

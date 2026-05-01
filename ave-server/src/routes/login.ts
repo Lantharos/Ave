@@ -343,6 +343,7 @@ app.post("/demo", zValidator("json", z.object({
       id: deviceRecord.id,
       name: deviceRecord.name,
       type: deviceRecord.type,
+      isNew: deviceRecord.isNew,
     },
     identities: userIdentities.map(serializeIdentityForOwner),
     readOnly: true,
@@ -494,6 +495,7 @@ app.post("/passkey", zValidator("json", z.object({
         id: deviceRecord.id,
         name: deviceRecord.name,
         type: deviceRecord.type,
+        isNew: deviceRecord.isNew,
       },
       identities: userIdentities.map(serializeIdentityForOwner),
       // PRF-encrypted master key (if this passkey has one stored)
@@ -697,6 +699,7 @@ app.get("/request-status/:requestId", async (c) => {
         id: deviceRecord.id,
         name: deviceRecord.name,
         type: deviceRecord.type,
+        isNew: deviceRecord.isNew,
       },
       identities: userIdentities.map(serializeIdentityForOwner),
     });
@@ -832,6 +835,7 @@ app.post("/trust-code", zValidator("json", z.object({
       id: deviceRecord.id,
       name: deviceRecord.name,
       type: deviceRecord.type,
+      isNew: deviceRecord.isNew,
     },
     identities: userIdentities.map(serializeIdentityForOwner),
     remainingTrustCodes: remainingCodes ?? 0,

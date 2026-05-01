@@ -12,6 +12,7 @@ import {
   createStoredIdentityEncryptionKeyPair,
 } from "../lib/crypto";
 import { websocket } from "./websocket";
+import { queuePasskeySetupPrompt } from "../lib/passkey-setup-prompt";
 
 interface AuthState {
   isAuthenticated: boolean;
@@ -28,6 +29,11 @@ interface AuthState {
 interface InitOptions {
   allowCookieSession?: boolean;
   timeoutMs?: number;
+}
+
+interface LoginOptions {
+  isReadOnly?: boolean;
+  offerPasskeySetup?: boolean;
 }
 
 function hasStoredSessionToken(): boolean {
@@ -170,7 +176,7 @@ function createAuthStore() {
       identities: Identity[], 
       device: Device,
       masterKey?: CryptoKey,
-      options: { isReadOnly?: boolean } = {}
+      options: LoginOptions = {}
     ) {
       localStorage.setItem("ave_session_token", sessionToken);
       
@@ -191,6 +197,10 @@ function createAuthStore() {
       }));
 
       void ensureIdentityEncryptionKeys(identities, masterKey || null);
+
+      if (options.offerPasskeySetup && !options.isReadOnly) {
+        queuePasskeySetupPrompt(device);
+      }
       
       // Connect WebSocket for real-time notifications
       websocket.connectAsUser(sessionToken);

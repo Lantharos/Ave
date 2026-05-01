@@ -136,7 +136,8 @@
             data.sessionToken,
             data.identities,
             data.device,
-            masterKey
+            masterKey,
+            { offerPasskeySetup: Boolean(data.device?.isNew && masterKey) }
         );
 
         // Small delay to let auth state propagate before redirect

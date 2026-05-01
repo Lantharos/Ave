@@ -5,8 +5,8 @@
     import { api } from "../../../lib/api";
     import { createDeletePasskeyMutation, createSecurityQuery, queryKeys } from "../../../lib/queries";
     import { queryClient } from "../../../lib/query-client";
-    import { registerPasskey, authenticateWithPasskey, isPlatformAuthenticatorAvailable } from "../../../lib/webauthn";
-    import { loadMasterKey, encryptMasterKeyWithPrf, createMasterKeyBackup } from "../../../lib/crypto";
+    import { createMasterKeyBackup, loadMasterKey } from "../../../lib/crypto";
+    import { PasskeySetupUnavailableError, setUpPasskeyForCurrentDevice } from "../../../lib/passkey-setup";
     import { getPushStatus, subscribeToPushNotifications, unsubscribeFromPushNotifications, getPushSupportDetails } from "../../../lib/push";
 
     const securityQuery = createSecurityQuery();
@@ -59,20 +59,7 @@
             addingPasskey = true;
             error = null;
 
-            const platformAuthenticatorAvailable = await isPlatformAuthenticatorAvailable();
-            if (!platformAuthenticatorAvailable) {
-                error = "This device can't create a passkey right now. Set up recovery codes here, then sign in on another device with Windows Hello or another passkey-capable device to add one there.";
-                return;
-            }
-            
-            const { options } = await api.security.registerPasskey();
-            
-            const { credential, prfSupported } = await registerPasskey(options);
-            
-            const result = await api.security.completePasskeyRegistration(
-                credential, 
-                "New Passkey"
-            );
+            const result = await setUpPasskeyForCurrentDevice();
             
             queryClient.setQueryData<any>(queryKeys.security, (previous: any) => {
                 if (!previous) return previous;
@@ -81,50 +68,10 @@
                     passkeys: [...previous.passkeys, result.passkey],
                 };
             });
-            
-            if (prfSupported) {
-                console.log("[Security] PRF supported, authenticating to get PRF output...");
-                const masterKey = await loadMasterKey();
-                
-                if (masterKey) {
-                    try {
-                        const bytesToBase64url = (bytes: Uint8Array): string => {
-                            const base64 = btoa(String.fromCharCode(...bytes));
-                            return base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-                        };
-                        
-                        const challengeBytes = crypto.getRandomValues(new Uint8Array(32));
-                        const challenge = bytesToBase64url(challengeBytes);
-                        
-                        const credentialId = result.passkey.id;
-                        
-                        const authOptions = {
-                            challenge,
-                            rpId: window.location.hostname,
-                            allowCredentials: [{
-                                id: credentialId,
-                                type: "public-key" as const,
-                            }],
-                            userVerification: "required",
-                            timeout: 60000,
-                        };
-                        
-                        const { prfOutput } = await authenticateWithPasskey(authOptions as any, true);
-                        
-                        if (prfOutput) {
-                            const prfEncryptedMasterKey = await encryptMasterKeyWithPrf(masterKey, prfOutput);
-                            console.log("[Security] Updating passkey with PRF-encrypted master key");
-                            
-                            await api.security.updatePasskeyPrf(result.passkey.id, prfEncryptedMasterKey);
-                            console.log("[Security] PRF-encrypted master key saved successfully");
-                        }
-                    } catch (prfError) {
-                        console.warn("[Security] Failed to set up PRF encryption:", prfError);
-                    }
-                }
-            }
         } catch (err) {
-            if (err instanceof Error && err.name === "NotAllowedError") {
+            if (err instanceof PasskeySetupUnavailableError) {
+                error = "This device can't create a passkey right now. Set up recovery codes here, then sign in on another device with Windows Hello or another passkey-capable device to add one there.";
+            } else if (err instanceof Error && err.name === "NotAllowedError") {
                 error = "Passkey setup was cancelled. You can try again, set up recovery codes here, or sign in on another device to add a passkey there.";
             } else {
                 error = err instanceof Error ? err.message : "Failed to add passkey";
