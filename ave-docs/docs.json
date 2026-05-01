@@ -1,8 +1,8 @@
 {
   "$schema": "https://mintlify.com/docs.json",
   "theme": "mint",
-  "name": "Ave Docs",
-  "description": "Not another login. Not another password. Just you.",
+  "name": "Ave",
+  "description": "Passkey identity, OAuth/OIDC, delegation, signing, and encrypted app-key delivery.",
   "colors": {
     "primary": "#D3D3D3",
     "light": "#e5e5e5",
@@ -11,7 +11,7 @@
   "navigation": {
     "tabs": [
       {
-        "tab": "Get Started",
+        "tab": "Start",
         "groups": [
           {
             "group": "Overview",
@@ -21,7 +21,7 @@
             ]
           },
           {
-            "group": "Concepts",
+            "group": "Core concepts",
             "pages": [
               "reference/how-it-works",
               "reference/base-urls-and-concepts"
@@ -33,14 +33,14 @@
         "tab": "Guides",
         "groups": [
           {
-            "group": "Quick Ave",
+            "group": "Start",
             "pages": [
               "guides/quick-ave",
               "guides/quick-ave-to-standard"
             ]
           },
           {
-            "group": "Standard OAuth",
+            "group": "OAuth",
             "pages": [
               "guides/oauth-authorization-code-flow",
               "guides/fedcm-browser-sign-in",
@@ -48,15 +48,6 @@
               "guides/server-side-confidential-clients",
               "guides/scopes-and-claims",
               "guides/ave-session-and-tokens"
-            ]
-          },
-          {
-            "group": "Advanced",
-            "pages": [
-              "guides/connector-app-to-app",
-              "guides/ave-signing",
-              "guides/end-to-end-encryption",
-              "guides/e2ee-integration-checklist"
             ]
           },
           {
@@ -68,6 +59,15 @@
               "guides/sql-postgres-jwt-auth",
               "guides/better-auth-ave"
             ]
+          },
+          {
+            "group": "Capabilities",
+            "pages": [
+              "guides/connector-app-to-app",
+              "guides/ave-signing",
+              "guides/end-to-end-encryption",
+              "guides/e2ee-integration-checklist"
+            ]
           }
         ]
       },
@@ -75,7 +75,7 @@
         "tab": "SDKs",
         "groups": [
           {
-            "group": "@ave-id/sdk",
+            "group": "JavaScript SDK",
             "pages": [
               "sdk/javascript-sdk",
               "sdk/sdk-oauth",
@@ -85,7 +85,7 @@
             ]
           },
           {
-            "group": "@ave-id/embed",
+            "group": "Embed SDK",
             "pages": [
               "sdk/embed-sdk"
             ]
@@ -96,7 +96,7 @@
         "tab": "API Reference",
         "groups": [
           {
-            "group": "API Reference",
+            "group": "Endpoints",
             "pages": [
               "api/overview",
               "api/oauth-endpoints",
@@ -106,7 +106,7 @@
         ]
       },
       {
-        "tab": "Security & Help",
+        "tab": "Security",
         "groups": [
           {
             "group": "Security",
@@ -145,9 +145,6 @@
   },
   "favicon": "/images/Group6.png",
   "logo": "/images/Group6.png",
-  "background": {
-    "decoration": "gradient"
-  },
   "appearance": {
     "default": "dark"
   },

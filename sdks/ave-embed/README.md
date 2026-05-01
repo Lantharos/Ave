@@ -5,7 +5,7 @@ Lightweight iframe embed for Ave sign-in with postMessage callbacks.
 ## Install
 
 ```bash
-npm install @ave-id/embed
+bun add @ave-id/embed
 ```
 
 ## Recommended default

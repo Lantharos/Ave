@@ -1,15 +1,15 @@
 ---
 title: "Quickstart"
-description: "Set up Ave login from scratch: register an app, run the authorization code flow with PKCE, exchange the code for tokens, and use each token correctly."
+description: "Register an Ave app, run the OAuth authorization code flow with PKCE, exchange the code, and create your app session."
 ---
 
 <Note>
-  Want to skip registration entirely? [Quick Ave](/guides/quick-ave) gets you working auth in 3 lines with no dashboard, no client ID, and no environment variables. Come back here when you need refresh tokens, app branding, or a confidential client.
+  Need auth before you register an app? Start with [Quick Ave](/guides/quick-ave). Come back here when you need refresh tokens, app branding, configured redirect URIs, or a confidential client.
 </Note>
 
-## Recommended integration
+## Start with the embed flow
 
-For most web apps, start with the embed flow so people stay inside your app while signing in.
+For most web apps, open Ave from your sign-in button and let the embed choose the best browser surface.
 
 ```ts
 import { startAveAuth } from "@ave-id/embed";
@@ -23,7 +23,7 @@ startAveAuth({
 });
 ```
 
-`startAveAuth()` opens the Ave sheet first, escalates to a popup if a top-level browser context is required, and falls back to a redirect if the popup is blocked. You can omit the clientId to start with Quick Ave without any registration.
+`startAveAuth()` opens the Ave sheet first, escalates to a popup when a top-level browser context is required, and falls back to a redirect when popups are blocked. Omit `clientId` to use Quick Ave.
 
 ## Prerequisites
 
@@ -177,7 +177,7 @@ startAveAuth({
     }
     ```
 
-    You get **two access tokens** with different purposes:
+    Ave returns two access tokens with different purposes:
 
     | Token | Format | `aud` claim | Use for |
     |---|---|---|---|
@@ -187,7 +187,7 @@ startAveAuth({
     | `refresh_token` | Opaque string | — | Getting new tokens without re-login |
 
     <Note>
-      `id_token` and `access_token_jwt` are both signed JWTs with **different audiences**. The `id_token` audience is your `clientId`. The `access_token_jwt` audience is `https://aveid.net`. This matters for Convex and any library that validates JWT audience.
+      `id_token` and `access_token_jwt` are both signed JWTs with different audiences. The `id_token` audience is your `clientId`. The `access_token_jwt` audience is `https://aveid.net`. This matters for Convex and any library that validates JWT audience.
 
       `id_token` is only returned when you request the `openid` scope. `refresh_token` is only returned with `offline_access`.
     </Note>
@@ -214,7 +214,7 @@ startAveAuth({
     // claims.sub, claims.email, claims.name, etc.
     ```
 
-    Store `refresh_token` securely (HTTP-only cookie or server-side session) if you requested `offline_access`. Never put it in `localStorage`.
+    Store `refresh_token` securely, such as in an HTTP-only cookie or server-side session, if you requested `offline_access`. Never put it in `localStorage`.
   </Step>
 </Steps>
 
@@ -262,7 +262,7 @@ const newTokens = await refreshToken(
 
 <CardGroup cols={2}>
   <Card title="Token details" href="/guides/oauth-authorization-code-flow">
-    Full JWT payload reference for `id_token` and `access_token_jwt`, validation steps, and refresh token rotation.
+    JWT payload reference for `id_token` and `access_token_jwt`, validation steps, and refresh token rotation.
   </Card>
   <Card title="PKCE deep dive" href="/guides/pkce-for-public-clients">
     PKCE security model, browser storage guidance, and anti-patterns to avoid.

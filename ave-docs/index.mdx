@@ -1,76 +1,67 @@
 ---
-title: "Ave OAuth + OIDC"
-description: "Passwordless identity, OAuth 2.0/OIDC, app-to-app delegation, signing, and E2EE — all in one."
+title: "Ave"
+description: "Passkey identity, OAuth/OIDC, delegation, signing, and encrypted app-key delivery for modern apps."
 ---
 
-Ave is an **OAuth 2.0 + OpenID Connect provider** built around passkey-based, passwordless identity. It handles sign-in, token issuance, delegated app access, cryptographic signing, and optional per-app encryption key delivery.
+Ave is a passkey-first identity platform built on OAuth 2.0 and OpenID Connect. It handles hosted sign-in, token issuance, refresh, delegated app access, identity-backed signing, and optional per-app encryption key delivery.
 
-<Tip>
-  **Just want to ship something?** Skip the setup entirely. [Quick Ave](/guides/quick-ave) gets you working auth in 3 lines with no registration, no client ID, and no environment variables.
-</Tip>
-
-## Choose your path
+## Choose a path
 
 <CardGroup cols={2}>
   <Card title="Quick Ave" icon="bolt" href="/guides/quick-ave">
-    **No setup required.** Auth in 3 lines — no dashboard, no client ID, no env vars. Perfect for prototypes and internal tools.
+    Add sign-in without registering an app. Use it for prototypes, internal tools, and the first version of an integration.
   </Card>
-  <Card title="Full OAuth / OIDC" icon="key" href="/quickstart">
-    Register an app and get the full flow: PKCE, refresh tokens, app branding, and confidential client support.
-  </Card>
-  <Card title="Convex integration" icon="database" href="/guides/convex-custom-auth">
-    Use Ave as a Convex OIDC provider. Works with both Quick Ave and registered apps.
-  </Card>
-  <Card title="Connector delegation" icon="link" href="/guides/connector-app-to-app">
-    App-to-app delegated access. Users approve once; your app acts on their behalf.
-  </Card>
-  <Card title="Ave Signing" icon="pen-nib" href="/guides/ave-signing">
-    Identity-backed Ed25519 signatures for high-integrity approval flows.
-  </Card>
-  <Card title="End-to-end encryption" icon="lock" href="/guides/end-to-end-encryption">
-    Per-app, per-identity encryption keys — server never sees plaintext.
+  <Card title="Registered OAuth" icon="key" href="/quickstart">
+    Register an app when you need PKCE, refresh tokens, app branding, configured redirect URIs, or a confidential client.
   </Card>
 </CardGroup>
 
-## Key URLs
+## What Ave includes
+
+<CardGroup cols={2}>
+  <Card title="Convex integration" icon="database" href="/guides/convex-custom-auth">
+    Use Ave as a Convex OIDC provider and keep Convex supplied with fresh ID tokens.
+  </Card>
+  <Card title="Connector delegation" icon="link" href="/guides/connector-app-to-app">
+    Let one app request scoped access to another Ave-registered resource on a user's behalf.
+  </Card>
+  <Card title="Signing" icon="pen-nib" href="/guides/ave-signing">
+    Request identity-backed Ed25519 signatures for approvals that need a verifiable user action.
+  </Card>
+  <Card title="End-to-end encryption" icon="lock" href="/guides/end-to-end-encryption">
+    Deliver per-app, per-identity encryption keys without exposing plaintext key material to the server.
+  </Card>
+</CardGroup>
+
+## Hosts
+
+Ave uses two hosts. Keep them separate in your integration.
+
+| Host | Use it for |
+| --- | --- |
+| `https://aveid.net` | Sign-in UI, Connector consent, OIDC discovery, JWKS |
+| `https://api.aveid.net` | Token exchange, userinfo, signing, management, API calls |
 
 <Warning>
-  Ave uses **two separate hosts**. The sign-in UI, OIDC discovery, and JWKS are on `aveid.net`. All API calls (token exchange, userinfo, signing) go to `api.aveid.net`.
+  Send OAuth token exchanges to `https://api.aveid.net/api/oauth/token`. User-facing authorization pages stay on `https://aveid.net`.
 </Warning>
-
-<AccordionGroup>
-  <Accordion title="Auth UI endpoints">
-    | Purpose | URL |
-    |---|---|
-    | Sign-in page | `https://aveid.net/signin` |
-    | Connector consent page | `https://aveid.net/connect` |
-  </Accordion>
-  <Accordion title="API endpoints">
-    | Purpose | URL |
-    |---|---|
-    | OAuth token endpoint | `https://api.aveid.net/api/oauth/token` |
-    | Userinfo endpoint | `https://api.aveid.net/api/oauth/userinfo` |
-    | OIDC discovery | `https://aveid.net/.well-known/openid-configuration` |
-    | JWKS (JWT verification keys) | `https://aveid.net/.well-known/jwks.json` |
-  </Accordion>
-</AccordionGroup>
 
 ## How to get started
 
 <Steps>
   <Step title="Try Quick Ave first">
-    [Quick Ave](/guides/quick-ave) — zero-setup auth in 3 lines. No registration required. Great for prototypes, hackathons, and internal tools.
+    [Quick Ave](/guides/quick-ave) gives you origin-based auth without a dashboard, client ID, or redirect URI setup.
   </Step>
-  <Step title="Read the quickstart for production">
-    [Quickstart](/quickstart) covers the full OAuth/OIDC flow: PKCE, token exchange, what each token is for, and how to register an app.
+  <Step title="Move to registered OAuth">
+    [Quickstart](/quickstart) covers app registration, PKCE, token exchange, refresh tokens, and session creation.
   </Step>
   <Step title="Understand the tokens">
-    [OAuth authorization code flow](/guides/oauth-authorization-code-flow) explains `id_token` vs `access_token_jwt`, their JWT payloads, and when to use each.
+    [OAuth authorization code flow](/guides/oauth-authorization-code-flow) explains `id_token`, `access_token`, `access_token_jwt`, and refresh token rotation.
   </Step>
   <Step title="Pick your client model">
-    Browser/SPA apps → [PKCE for public clients](/guides/pkce-for-public-clients). Server apps with a secret → [Server-side confidential clients](/guides/server-side-confidential-clients).
+    Browser and mobile apps use [PKCE](/guides/pkce-for-public-clients). Server apps can use [confidential clients](/guides/server-side-confidential-clients).
   </Step>
   <Step title="Add advanced features when ready">
-    [Connector app-to-app](/guides/connector-app-to-app) · [Ave Signing](/guides/ave-signing) · [E2EE](/guides/end-to-end-encryption) · [Convex auth](/guides/convex-custom-auth)
+    Add [Connector delegation](/guides/connector-app-to-app), [Signing](/guides/ave-signing), [end-to-end encryption](/guides/end-to-end-encryption), or [Convex auth](/guides/convex-custom-auth) when your app needs them.
   </Step>
 </Steps>

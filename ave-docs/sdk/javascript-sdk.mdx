@@ -1,42 +1,42 @@
 ---
-title: "@ave-id/sdk — Quick Ave"
-description: "Zero-setup auth functions for Quick Ave. Full SDK reference for OAuth, Connector, and Signing is split across focused pages."
+title: "@ave-id/sdk"
+description: "Typed helpers for Quick Ave, OAuth, Connector delegation, Signing, and framework session integrations."
 ---
 
 ```bash
-npm install @ave-id/sdk
+bun add @ave-id/sdk
 ```
 
-The SDK is split into focused pages — go straight to what you need:
+The SDK is split into focused pages. Start with the surface you need:
 
 <CardGroup cols={3}>
-  <Card title="Quick Ave functions (this page)" icon="bolt">
-    `startQuickSignIn`, `handleQuickCallback`, `getQuickIdentity` — zero-setup auth, no registration required.
+  <Card title="Quick Ave" icon="bolt">
+    `startQuickSignIn`, `handleQuickCallback`, `getQuickIdentity`.
   </Card>
-  <Card title="OAuth / PKCE functions" icon="key" href="/sdk/sdk-oauth">
+  <Card title="OAuth and PKCE" icon="key" href="/sdk/sdk-oauth">
     `buildAuthorizeUrl`, `exchangeCode`, `refreshToken`, `startPkceLogin`, server helpers.
   </Card>
-  <Card title="Ave Session (smooth sessions)" icon="rotate" href="/guides/ave-session-and-tokens">
-    `AveSession`, storage adapters, Convex and Svelte helpers — single-flight refresh.
+  <Card title="Ave Session" icon="rotate" href="/guides/ave-session-and-tokens">
+    `AveSession`, storage adapters, Convex helpers, Svelte helpers, refresh coordination.
   </Card>
-  <Card title="Connector functions" icon="link" href="/sdk/sdk-connector">
+  <Card title="Connector" icon="link" href="/sdk/sdk-connector">
     `buildConnectorUrl`, `exchangeDelegatedToken`, `startConnectorFlow`, delegation management.
   </Card>
-  <Card title="Signing functions" icon="pen-nib" href="/sdk/sdk-signing">
+  <Card title="Signing" icon="pen-nib" href="/sdk/sdk-signing">
     `createSignatureRequest`, `getSignatureStatus`, `verifySignature`, `openSigningPopup`.
   </Card>
-  <Card title="Identity keys & wrapped payloads" icon="lock" href="/sdk/sdk-identity-keys">
+  <Card title="Identity keys" icon="lock" href="/sdk/sdk-identity-keys">
     `getIdentityKey`, `encryptPayloadForHandle`, `decryptWrappedPayload`, URL-safe payload params.
   </Card>
 </CardGroup>
 
 ---
 
-## Quick Ave — Zero Setup Auth
+## Quick Ave
 
 No dashboard. No client IDs. No environment variables. No redirect configuration.
 
-**Protect a page** — add this wherever you need the user to be signed in:
+**Protect a page**:
 
 ```ts
 import { getQuickIdentity, startQuickSignIn } from "@ave-id/sdk/client";
