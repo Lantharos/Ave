@@ -22,10 +22,11 @@ import pushRoutes from "./routes/push";
 import signingRoutes from "./routes/signing";
 import encryptionRoutes from "./routes/encryption";
 
-import { SESSION_COOKIE_NAME } from "./lib/session-cookie";
+import { getCookieValue, SESSION_COOKIE_NAME } from "./lib/session-cookie";
 import { initDb, runWithDb } from "./db";
 import { initChallengeStorage } from "./lib/challenge-store";
 import { runWithOAuthStorage } from "./lib/oauth-store";
+import { initRateLimitStorage } from "./lib/rate-limit";
 
 import uploadRoutes from "./routes/upload";
 
@@ -35,10 +36,30 @@ type Bindings = {
   INTERNAL_API_TOKEN?: string;
 };
 
-function isAllowedOrigin(origin: string | null | undefined): boolean {
+function isLocalhostHost(host: string | null | undefined): boolean {
+  if (!host) return false;
+  const hostname = host.split(":")[0]?.toLowerCase();
+  return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "[::1]";
+}
+
+function allowsLocalhostOrigins(requestHost?: string | null): boolean {
+  if (process.env.ALLOW_LOCALHOST_ORIGINS === "true") return true;
+  if (isLocalhostHost(requestHost)) return true;
+
+  const rpOrigin = process.env.RP_ORIGIN;
+  if (!rpOrigin) return true;
+
+  try {
+    return isLocalhostHost(new URL(rpOrigin).host);
+  } catch {
+    return false;
+  }
+}
+
+function isAllowedOrigin(origin: string | null | undefined, requestHost?: string | null): boolean {
   if (!origin) return false;
 
-  if (origin.startsWith("http://localhost:") || origin.startsWith("http://127.0.0.1:")) {
+  if (allowsLocalhostOrigins(requestHost) && (origin.startsWith("http://localhost:") || origin.startsWith("http://127.0.0.1:"))) {
     return true;
   }
 
@@ -59,8 +80,8 @@ function isAllowedOrigin(origin: string | null | undefined): boolean {
   return false;
 }
 
-function resolveCorsOrigin(origin: string | undefined): string {
-  if (isAllowedOrigin(origin)) {
+function resolveCorsOrigin(origin: string | undefined, requestHost?: string | null): string {
+  if (isAllowedOrigin(origin, requestHost)) {
     return origin!;
   }
   return "https://aveid.net";
@@ -70,6 +91,23 @@ const D1_BOOKMARK_HEADER = "x-d1-bookmark";
 
 function buildApp() {
   const app = new Hono<{ Bindings: Bindings }>();
+
+  app.use("*", async (c, next) => {
+    await next();
+
+    c.header("X-Content-Type-Options", "nosniff");
+    c.header("Referrer-Policy", "no-referrer");
+    c.header("Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=()");
+
+    const host = c.req.header("host");
+    if (host === "api.aveid.net" || host === "aveid.net" || host?.endsWith(".aveid.net")) {
+      c.header("Strict-Transport-Security", "max-age=31536000; includeSubDomains; preload");
+    }
+
+    if (c.req.path.startsWith("/api/") && !c.res.headers.has("Cache-Control")) {
+      c.header("Cache-Control", "no-store");
+    }
+  });
 
   app.use("/api/oauth/token", cors({
     origin: "*",
@@ -88,7 +126,7 @@ function buildApp() {
       if (path === "/api/oauth/session/check") {
         return origin || "https://aveid.net";
       }
-      return resolveCorsOrigin(origin);
+      return resolveCorsOrigin(origin, c.req.header("host"));
     },
     credentials: true,
     allowMethods: ["GET", "POST", "OPTIONS"],
@@ -117,7 +155,7 @@ function buildApp() {
     }
 
     const corsMiddleware = cors({
-      origin: (origin) => resolveCorsOrigin(origin),
+      origin: (origin, c) => resolveCorsOrigin(origin, c.req.header("host")),
       credentials: true,
       allowMethods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
       allowHeaders: ["Content-Type", "Authorization", D1_BOOKMARK_HEADER],
@@ -144,7 +182,7 @@ function buildApp() {
       return c.json({ error: "origin_required" }, 403);
     }
 
-    if (isAllowedOrigin(origin)) {
+    if (isAllowedOrigin(origin, c.req.header("host"))) {
       return next();
     }
 
@@ -243,8 +281,13 @@ function appendBookmarkHeader(response: Response, requestDatabase: D1DatabaseSes
 }
 
 function createWebSocketResponse(request: Request, requestDatabase: D1Database | D1DatabaseSession): Response {
+  const origin = request.headers.get("Origin");
+  if (origin && !isAllowedOrigin(origin, request.headers.get("host"))) {
+    return new Response("Forbidden", { status: 403 });
+  }
+
   const url = new URL(request.url);
-  const authToken = url.searchParams.get("token") || undefined;
+  const authToken = url.searchParams.get("token") || getCookieValue(request.headers.get("Cookie") || "", SESSION_COOKIE_NAME) || undefined;
   const requestId = url.searchParams.get("requestId") || undefined;
 
   const webSocketPair = new WebSocketPair();
@@ -294,6 +337,7 @@ export class ApiAppDurableObject {
     private readonly env: Bindings
   ) {
     initChallengeStorage(this.state.storage);
+    initRateLimitStorage(this.state.storage);
   }
 
   async fetch(request: Request): Promise<Response> {

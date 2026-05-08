@@ -36,17 +36,9 @@ interface LoginOptions {
   offerPasskeySetup?: boolean;
 }
 
-function hasStoredSessionToken(): boolean {
-  try {
-    return Boolean(localStorage.getItem("ave_session_token"));
-  } catch {
-    return false;
-  }
-}
-
 const initialState: AuthState = {
   isAuthenticated: false,
-  isLoading: hasStoredSessionToken(),
+  isLoading: true,
   isReadOnly: false,
   userId: null,
   identities: [],
@@ -105,60 +97,59 @@ function createAuthStore() {
       }
 
       initPromise = (async () => {
-      let token: string | null = null;
-      try {
-        token = localStorage.getItem("ave_session_token");
-      } catch {
-        token = null;
-      }
-
-      if (!token && !options.allowCookieSession) {
-        update((s) => ({
-          ...s,
-          isAuthenticated: false,
-          isLoading: false,
-          isReadOnly: false,
-          userId: null,
-          identities: [],
-          currentIdentity: null,
-          device: null,
-          masterKey: null,
-          hasMasterKey: false,
-        }));
-        return;
-      }
-
-      try {
-        const session = token
-          ? await api.identities.list()
-          : await api.oauth.getSessionBootstrap(options.timeoutMs);
-
-        await hydrateAuthenticatedSession(session.identities, !!session.readOnly);
-
-        if (token) {
-          websocket.connectAsUser(token);
+        const allowCookieSession = options.allowCookieSession ?? true;
+        let token: string | null = null;
+        try {
+          token = localStorage.getItem("ave_session_token");
+        } catch {
+          token = null;
         }
-      } catch {
-        if (token) {
-          try {
-            localStorage.removeItem("ave_session_token");
-          } catch {
+
+        if (!token && !allowCookieSession) {
+          update((s) => ({
+            ...s,
+            isAuthenticated: false,
+            isLoading: false,
+            isReadOnly: false,
+            userId: null,
+            identities: [],
+            currentIdentity: null,
+            device: null,
+            masterKey: null,
+            hasMasterKey: false,
+          }));
+          return;
+        }
+
+        try {
+          const session = token
+            ? await api.identities.list()
+            : await api.oauth.getSessionBootstrap(options.timeoutMs);
+
+          await hydrateAuthenticatedSession(session.identities, !!session.readOnly);
+
+          websocket.connectAsUser(token || undefined);
+        } catch {
+          if (token) {
+            try {
+              localStorage.removeItem("ave_session_token");
+            } catch {
+            }
           }
+          websocket.disconnect();
+          update((s) => ({
+            ...s,
+            isAuthenticated: false,
+            isLoading: false,
+            isReadOnly: false,
+            userId: null,
+            identities: [],
+            currentIdentity: null,
+            device: null,
+            masterKey: null,
+            hasMasterKey: false,
+          }));
         }
-        websocket.disconnect();
-        update((s) => ({
-          ...s,
-          isAuthenticated: false,
-          isLoading: false,
-          isReadOnly: false,
-          userId: null,
-          identities: [],
-          currentIdentity: null,
-          device: null,
-          masterKey: null,
-          hasMasterKey: false,
-        }));
-      }
       })();
 
       try {
@@ -172,13 +163,16 @@ function createAuthStore() {
      * Login successfully
      */
     async login(
-      sessionToken: string, 
-      identities: Identity[], 
+      _sessionToken: string,
+      identities: Identity[],
       device: Device,
       masterKey?: CryptoKey,
       options: LoginOptions = {}
     ) {
-      localStorage.setItem("ave_session_token", sessionToken);
+      try {
+        localStorage.removeItem("ave_session_token");
+      } catch {
+      }
       
       if (masterKey) {
         await storeMasterKey(masterKey);
@@ -203,7 +197,7 @@ function createAuthStore() {
       }
       
       // Connect WebSocket for real-time notifications
-      websocket.connectAsUser(sessionToken);
+      websocket.connectAsUser();
     },
     
     /**
@@ -229,7 +223,10 @@ function createAuthStore() {
       }
       
       clearD1Bookmark();
-      localStorage.removeItem("ave_session_token");
+      try {
+        localStorage.removeItem("ave_session_token");
+      } catch {
+      }
       clearMasterKey();
       websocket.disconnect();
       set(initialState);

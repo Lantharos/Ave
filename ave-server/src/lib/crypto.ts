@@ -11,17 +11,16 @@
  * The server only stores encrypted blobs it cannot decrypt.
  */
 
-import { createHash, randomBytes } from "crypto";
+import { createHash, randomBytes, randomInt } from "crypto";
 import { TRUST_CODE_WORDS } from "./trust-code-words";
 
 // Generate a trust code in format ALPHA-BRAVO-CHARLIE-DELTA
 export function generateTrustCode(): string {
-  const segments = 4;
+  const segments = 6;
   const parts: string[] = [];
 
   for (let i = 0; i < segments; i++) {
-    const randomIndex = randomBytes(1)[0] % TRUST_CODE_WORDS.length;
-    parts.push(TRUST_CODE_WORDS[randomIndex]);
+    parts.push(TRUST_CODE_WORDS[randomInt(TRUST_CODE_WORDS.length)]);
   }
 
   return parts.join("-");

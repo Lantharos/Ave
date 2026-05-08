@@ -10,20 +10,32 @@
     import { queryClient } from "./lib/query-client";
     import { auth, isLoading } from "./stores/auth";
 
+    const loadHome = async () => (await import("./pages/home/Home.svelte")).default;
+    const loadLogin = async () => (await import("./pages/login/Login.svelte")).default;
+    const loadRegister = async () => (await import("./pages/register/Register.svelte")).default;
+    const loadDashboard = async () => (await import("./pages/dashboard/Dashboard.svelte")).default;
+    const loadPrivacy = async () => (await import("./pages/home/legal/PrivacyPolicy.svelte")).default;
+    const loadTerms = async () => (await import("./pages/home/legal/TermsOfService.svelte")).default;
+    const loadAuthorize = async () => (await import("./pages/authorize/Authorize.svelte")).default;
+    const loadConnect = async () => (await import("./pages/connect/Connect.svelte")).default;
+    const loadRuntime = async () => (await import("./pages/connect/Runtime.svelte")).default;
+    const loadDocs = async () => (await import("./pages/docs/DocsRedirect.svelte")).default;
+    const loadSign = async () => (await import("./pages/sign/Sign.svelte")).default;
+
     const routes = [
-        { path: "/", component: async () => (await import("./pages/home/Home.svelte")).default },
-        { path: "/login", component: async () => (await import("./pages/login/Login.svelte")).default },
-        { path: "/register", component: async () => (await import("./pages/register/Register.svelte")).default },
-        { path: "/dashboard", component: async () => (await import("./pages/dashboard/Dashboard.svelte")).default },
-        { path: "/dashboard/(.*)", component: async () => (await import("./pages/dashboard/Dashboard.svelte")).default },
-        { path: "/privacy", component: async () => (await import("./pages/home/legal/PrivacyPolicy.svelte")).default },
-        { path: "/terms", component: async () => (await import("./pages/home/legal/TermsOfService.svelte")).default },
-        { path: "/authorize", component: async () => (await import("./pages/authorize/Authorize.svelte")).default },
-        { path: "/signin", component: async () => (await import("./pages/authorize/Authorize.svelte")).default },
-        { path: "/connect", component: async () => (await import("./pages/connect/Connect.svelte")).default },
-        { path: "/connect/runtime", component: async () => (await import("./pages/connect/Runtime.svelte")).default },
-        { path: "/docs(#.*)?", component: async () => (await import("./pages/docs/DocsRedirect.svelte")).default },
-        { path: "/sign", component: async () => (await import("./pages/sign/Sign.svelte")).default },
+        { path: "/", component: loadHome },
+        { path: "/login", component: loadLogin },
+        { path: "/register", component: loadRegister },
+        { path: "/dashboard", component: loadDashboard },
+        { path: "/dashboard/(.*)", component: loadDashboard },
+        { path: "/privacy", component: loadPrivacy },
+        { path: "/terms", component: loadTerms },
+        { path: "/authorize", component: loadAuthorize },
+        { path: "/signin", component: loadAuthorize },
+        { path: "/connect", component: loadConnect },
+        { path: "/connect/runtime", component: loadRuntime },
+        { path: "/docs(#.*)?", component: loadDocs },
+        { path: "/sign", component: loadSign },
     ];
 
     const statuses: Statuses = {
@@ -32,8 +44,31 @@
 
     setQueryClientContext(queryClient);
 
+    function warmLikelyRoutes() {
+        const warm = [loadLogin, loadRegister, loadAuthorize, loadDashboard, loadSign];
+        for (const load of warm) {
+            void load();
+        }
+    }
+
+    function scheduleRouteWarmup() {
+        if (typeof window === "undefined") return;
+        const idleWindow = window as Window & {
+            requestIdleCallback?: (callback: () => void, options?: { timeout?: number }) => number;
+        };
+
+        if (idleWindow.requestIdleCallback) {
+            idleWindow.requestIdleCallback(warmLikelyRoutes, { timeout: 2000 });
+            return;
+        }
+
+        window.setTimeout(warmLikelyRoutes, 1200);
+    }
+
     onMount(async () => {
-        await auth.init();
+        const init = auth.init();
+        scheduleRouteWarmup();
+        await init;
     });
 
     const staticRoutes = [

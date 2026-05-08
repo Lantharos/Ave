@@ -2,25 +2,12 @@ import { Context, Next } from "hono";
 import { db, sessions, devices, users } from "../db";
 import { eq, and, gt, lt } from "drizzle-orm";
 import { hashSessionToken } from "../lib/crypto";
-import { SESSION_COOKIE_NAME, setSessionCookie } from "../lib/session-cookie";
+import { getCookieValue, SESSION_COOKIE_NAME, setSessionCookie } from "../lib/session-cookie";
 import type { AccessTokenRecord } from "../lib/oauth-store";
 
 const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 const SESSION_REFRESH_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 const DEVICE_LAST_SEEN_UPDATE_INTERVAL_MS = 5 * 60 * 1000;
-
-function getCookieValue(cookieHeader: string, name: string): string | null {
-  const parts = cookieHeader.split(";");
-  for (const part of parts) {
-    const [k, ...rest] = part.trim().split("=");
-    if (!k) continue;
-    if (k === name) {
-      const v = rest.join("=");
-      return v ? decodeURIComponent(v) : "";
-    }
-  }
-  return null;
-}
 
 export type AuthUser = {
   id: string;

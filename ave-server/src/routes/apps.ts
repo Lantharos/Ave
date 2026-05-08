@@ -115,8 +115,11 @@ async function requireDevUser(c: any, next: any) {
       const payload = await verifyJwt(token, getResourceAudience());
 
       if (payload) {
-        const userId = (payload.uid || payload.sid) as string | undefined;
-        if (userId) {
+        const devPortalClientId = process.env.DEV_PORTAL_CLIENT_ID;
+        const userId = typeof payload.uid === "string" ? payload.uid : null;
+        const tokenClientId = typeof payload.cid === "string" ? payload.cid : "";
+        const tokenScopes = typeof payload.scope === "string" ? payload.scope.split(/\s+/).filter(Boolean) : [];
+        if (devPortalClientId && tokenClientId === devPortalClientId && userId && tokenScopes.includes("user_id") && payload.quick !== true) {
           c.set("devUserId", userId);
           c.set("devAuthMethod", null);
           return next();

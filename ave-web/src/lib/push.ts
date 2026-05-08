@@ -72,7 +72,7 @@ export async function requestNotificationPermission(): Promise<boolean> {
  */
 async function getVapidPublicKey(): Promise<string | null> {
   try {
-    const response = await fetch(`${API_BASE}/api/push/vapid-key`);
+    const response = await fetch(`${API_BASE}/api/push/vapid-key`, { credentials: "include" });
     const data = await response.json();
     
     if (!data.enabled || !data.publicKey) {
@@ -142,9 +142,15 @@ export async function subscribeToPushNotifications(): Promise<boolean> {
     console.log("[Push] Push subscription created");
     
     // Send subscription to server
-    const token = localStorage.getItem("ave_session_token");
+    let token: string | null = null;
+    try {
+      token = localStorage.getItem("ave_session_token");
+    } catch {
+      token = null;
+    }
     const response = await fetch(`${API_BASE}/api/push/subscribe`, {
       method: "POST",
+      credentials: "include",
       headers: {
         "Content-Type": "application/json",
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -186,9 +192,15 @@ export async function unsubscribeFromPushNotifications(): Promise<boolean> {
     }
     
     // Notify server
-    const token = localStorage.getItem("ave_session_token");
+    let token: string | null = null;
+    try {
+      token = localStorage.getItem("ave_session_token");
+    } catch {
+      token = null;
+    }
     await fetch(`${API_BASE}/api/push/unsubscribe`, {
       method: "POST",
+      credentials: "include",
       headers: {
         "Content-Type": "application/json",
         ...(token ? { Authorization: `Bearer ${token}` } : {}),

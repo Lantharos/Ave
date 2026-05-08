@@ -3,10 +3,11 @@ import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import { db, signingKeys, signatureRequests, identities, oauthApps, activityLogs } from "../db";
 import { requireAuth, requireWritable } from "../middleware/auth";
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, gt, inArray } from "drizzle-orm";
 import { verifySignature, isValidPublicKey, isValidSignature } from "../lib/signing";
 import { verifyJwt, getResourceAudience } from "../lib/oidc";
 import { hashSessionToken } from "../lib/crypto";
+import { enforceRateLimits, ipRateLimit, subjectRateLimit } from "../lib/rate-limit";
 import { timingSafeEqual } from "crypto";
 
 const app = new Hono();
@@ -245,14 +246,15 @@ app.get("/requests", requireAuth, async (c) => {
     .from(signatureRequests)
     .innerJoin(oauthApps, eq(oauthApps.id, signatureRequests.appId))
     .innerJoin(identities, eq(identities.id, signatureRequests.identityId))
-    .where(eq(signatureRequests.status, "pending"))
+    .where(and(
+      eq(signatureRequests.status, "pending"),
+      gt(signatureRequests.expiresAt, new Date()),
+      inArray(signatureRequests.identityId, identityIds),
+    ))
     .orderBy(desc(signatureRequests.createdAt));
   
-  // Filter to user's identities
-  const userRequests = requests.filter((r) => identityIds.includes(r.identity.id));
-  
   return c.json({
-    requests: userRequests.map((r) => ({
+    requests: requests.map((r) => ({
       id: r.request.id,
       payload: r.request.payload,
       metadata: r.request.metadata,
@@ -519,6 +521,12 @@ app.post("/request", zValidator("json", z.object({
   expiresInSeconds: z.number().min(60).max(3600).default(300), // 5 min default, max 1 hour
 })), async (c) => {
   const { clientId, clientSecret, identityId, payload, metadata, expiresInSeconds } = c.req.valid("json");
+  const rateLimitResponse = await enforceRateLimits(c, [
+    ipRateLimit(c, "signing:request:ip", 120, 60 * 1000),
+    subjectRateLimit("signing:request:client", clientId, 120, 60 * 1000),
+    subjectRateLimit("signing:request:identity", identityId, 30, 60 * 1000),
+  ]);
+  if (rateLimitResponse) return rateLimitResponse;
   
   // Verify app credentials
   const [app] = await db
@@ -586,6 +594,11 @@ app.get("/request/:requestId/status", zValidator("query", z.object({
 })), async (c) => {
   const requestId = c.req.param("requestId");
   const { clientId } = c.req.valid("query");
+  const rateLimitResponse = await enforceRateLimits(c, [
+    ipRateLimit(c, "signing:status:ip", 240, 60 * 1000),
+    subjectRateLimit("signing:status:request", requestId, 240, 60 * 1000),
+  ]);
+  if (rateLimitResponse) return rateLimitResponse;
   
   const [result] = await db
     .select({
@@ -634,6 +647,10 @@ app.post("/verify", zValidator("json", z.object({
   publicKey: z.string().min(1),
 })), async (c) => {
   const { message, signature, publicKey } = c.req.valid("json");
+  const rateLimitResponse = await enforceRateLimits(c, [
+    ipRateLimit(c, "signing:verify:ip", 180, 60 * 1000),
+  ]);
+  if (rateLimitResponse) return rateLimitResponse;
   
   if (!isValidPublicKey(publicKey)) {
     return c.json({ valid: false, error: "Invalid public key format" });

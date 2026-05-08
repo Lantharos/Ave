@@ -50,36 +50,77 @@ function getR2Client(): { client: S3Client; config: R2Config } {
   return { client: r2Client, config };
 }
 
-// Generate unique filename
-function generateFilename(originalName: string): string {
-  const ext = originalName.split(".").pop()?.toLowerCase() || "png";
-  const timestamp = Date.now();
-  const random = Math.random().toString(36).substring(2, 8);
-  return `${timestamp}-${random}.${ext}`;
-}
+type ImageType = {
+  contentType: "image/jpeg" | "image/png" | "image/gif" | "image/webp";
+  extension: "jpg" | "png" | "gif" | "webp";
+};
 
-// Validate file type
-function isValidImageType(type: string): boolean {
-  const validTypes = ["image/jpeg", "image/png", "image/gif", "image/webp"];
-  return validTypes.includes(type);
-}
-
-// Get content type from filename
-function getContentType(filename: string): string {
-  const ext = filename.split(".").pop()?.toLowerCase();
-  switch (ext) {
-    case "jpg":
-    case "jpeg":
-      return "image/jpeg";
-    case "png":
-      return "image/png";
-    case "gif":
-      return "image/gif";
-    case "webp":
-      return "image/webp";
-    default:
-      return "application/octet-stream";
+function detectImageType(buffer: Buffer): ImageType | null {
+  if (buffer.length >= 3 && buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff) {
+    return { contentType: "image/jpeg", extension: "jpg" };
   }
+
+  if (
+    buffer.length >= 8
+    && buffer[0] === 0x89
+    && buffer[1] === 0x50
+    && buffer[2] === 0x4e
+    && buffer[3] === 0x47
+    && buffer[4] === 0x0d
+    && buffer[5] === 0x0a
+    && buffer[6] === 0x1a
+    && buffer[7] === 0x0a
+  ) {
+    return { contentType: "image/png", extension: "png" };
+  }
+
+  if (buffer.length >= 6 && (buffer.subarray(0, 6).toString("ascii") === "GIF87a" || buffer.subarray(0, 6).toString("ascii") === "GIF89a")) {
+    return { contentType: "image/gif", extension: "gif" };
+  }
+
+  if (buffer.length >= 12 && buffer.subarray(0, 4).toString("ascii") === "RIFF" && buffer.subarray(8, 12).toString("ascii") === "WEBP") {
+    return { contentType: "image/webp", extension: "webp" };
+  }
+
+  return null;
+}
+
+function generateFilename(imageType: ImageType): string {
+  return `${Date.now()}-${crypto.randomUUID()}.${imageType.extension}`;
+}
+
+function rejectLargeRequest(c: any, maxSize: number): Response | null {
+  const contentLength = Number(c.req.header("content-length") || 0);
+  if (Number.isFinite(contentLength) && contentLength > maxSize + 1024 * 1024) {
+    return c.json({ error: "File too large" }, 413);
+  }
+  return null;
+}
+
+async function prepareImageUpload(file: File, maxSize: number): Promise<
+  | { ok: true; buffer: Buffer; contentType: ImageType["contentType"]; filename: string }
+  | { ok: false; error: string; status: 400 | 413 }
+> {
+  if (file.size <= 0) {
+    return { ok: false, error: "File is empty", status: 400 };
+  }
+
+  if (file.size > maxSize) {
+    return { ok: false, error: "File too large", status: 413 };
+  }
+
+  const buffer = Buffer.from(await file.arrayBuffer());
+  const imageType = detectImageType(buffer);
+  if (!imageType) {
+    return { ok: false, error: "Invalid file type. Allowed: JPEG, PNG, GIF, WebP", status: 400 };
+  }
+
+  return {
+    ok: true,
+    buffer,
+    contentType: imageType.contentType,
+    filename: generateFilename(imageType),
+  };
 }
 
 // Max file sizes (in bytes)
@@ -130,15 +171,38 @@ async function deleteFromR2(key: string): Promise<void> {
 // Extract key from URL
 function getKeyFromUrl(url: string): string | null {
   const { publicUrl } = getR2Config();
-  if (!url.startsWith(publicUrl)) {
+  let parsedUrl: URL;
+  let parsedPublicUrl: URL;
+  try {
+    parsedUrl = new URL(url);
+    parsedPublicUrl = new URL(publicUrl);
+  } catch {
     return null;
   }
-  return url.replace(`${publicUrl}/`, "");
+
+  const publicPath = parsedPublicUrl.pathname.replace(/\/+$/, "");
+  if (parsedUrl.origin !== parsedPublicUrl.origin || !parsedUrl.pathname.startsWith(`${publicPath}/`)) {
+    return null;
+  }
+
+  let key: string;
+  try {
+    key = decodeURIComponent(parsedUrl.pathname.slice(publicPath.length + 1));
+  } catch {
+    return null;
+  }
+  if (!key || key.startsWith("/") || key.includes("..")) {
+    return null;
+  }
+
+  return key;
 }
 
 // Upload avatar
 app.post("/avatar", async (c) => {
   const user = c.get("user")!;
+  const sizeResponse = rejectLargeRequest(c, MAX_AVATAR_SIZE);
+  if (sizeResponse) return sizeResponse;
 
   const body = await c.req.parseBody();
   const file = body.file as File | undefined;
@@ -163,25 +227,13 @@ app.post("/avatar", async (c) => {
     return c.json({ error: "Identity not found" }, 404);
   }
 
-  // Validate file type
-  if (!isValidImageType(file.type)) {
-    return c.json(
-      { error: "Invalid file type. Allowed: JPEG, PNG, GIF, WebP" },
-      400
-    );
+  const upload = await prepareImageUpload(file, MAX_AVATAR_SIZE);
+  if (!upload.ok) {
+    return c.json({ error: upload.error }, upload.status);
   }
 
-  // Validate file size
-  if (file.size > MAX_AVATAR_SIZE) {
-    return c.json({ error: "File too large. Maximum size: 5MB" }, 400);
-  }
-
-  // Generate filename and upload to R2
-  const filename = generateFilename(file.name);
-  const key = `avatars/${filename}`;
-
-  const buffer = Buffer.from(await file.arrayBuffer());
-  const avatarUrl = await uploadToR2(buffer, key, file.type);
+  const key = `avatars/${upload.filename}`;
+  const avatarUrl = await uploadToR2(upload.buffer, key, upload.contentType);
 
   // Delete old avatar if exists
   if (identity.avatarUrl) {
@@ -213,6 +265,8 @@ app.post("/avatar", async (c) => {
 
 app.post("/workspace-logo", async (c) => {
   const user = c.get("user")!;
+  const sizeResponse = rejectLargeRequest(c, MAX_WORKSPACE_LOGO_SIZE);
+  if (sizeResponse) return sizeResponse;
 
   const body = await c.req.parseBody();
   const file = body.file as File | undefined;
@@ -249,21 +303,13 @@ app.post("/workspace-logo", async (c) => {
     return c.json({ error: "Organization not found" }, 404);
   }
 
-  if (!isValidImageType(file.type)) {
-    return c.json(
-      { error: "Invalid file type. Allowed: JPEG, PNG, GIF, WebP" },
-      400,
-    );
+  const upload = await prepareImageUpload(file, MAX_WORKSPACE_LOGO_SIZE);
+  if (!upload.ok) {
+    return c.json({ error: upload.error }, upload.status);
   }
 
-  if (file.size > MAX_WORKSPACE_LOGO_SIZE) {
-    return c.json({ error: "File too large. Maximum size: 5MB" }, 400);
-  }
-
-  const filename = generateFilename(file.name);
-  const key = `workspace-logos/${filename}`;
-  const buffer = Buffer.from(await file.arrayBuffer());
-  const logoUrl = await uploadToR2(buffer, key, file.type);
+  const key = `workspace-logos/${upload.filename}`;
+  const logoUrl = await uploadToR2(upload.buffer, key, upload.contentType);
 
   if (organization.logoUrl) {
     const oldKey = getKeyFromUrl(organization.logoUrl);
@@ -293,6 +339,8 @@ app.post("/workspace-logo", async (c) => {
 // Upload banner
 app.post("/banner", async (c) => {
   const user = c.get("user")!;
+  const sizeResponse = rejectLargeRequest(c, MAX_BANNER_SIZE);
+  if (sizeResponse) return sizeResponse;
 
   const body = await c.req.parseBody();
   const file = body.file as File | undefined;
@@ -317,25 +365,13 @@ app.post("/banner", async (c) => {
     return c.json({ error: "Identity not found" }, 404);
   }
 
-  // Validate file type
-  if (!isValidImageType(file.type)) {
-    return c.json(
-      { error: "Invalid file type. Allowed: JPEG, PNG, GIF, WebP" },
-      400
-    );
+  const upload = await prepareImageUpload(file, MAX_BANNER_SIZE);
+  if (!upload.ok) {
+    return c.json({ error: upload.error }, upload.status);
   }
 
-  // Validate file size
-  if (file.size > MAX_BANNER_SIZE) {
-    return c.json({ error: "File too large. Maximum size: 10MB" }, 400);
-  }
-
-  // Generate filename and upload to R2
-  const filename = generateFilename(file.name);
-  const key = `banners/${filename}`;
-
-  const buffer = Buffer.from(await file.arrayBuffer());
-  const bannerUrl = await uploadToR2(buffer, key, file.type);
+  const key = `banners/${upload.filename}`;
+  const bannerUrl = await uploadToR2(upload.buffer, key, upload.contentType);
 
   // Delete old banner if exists (only if it's an R2 URL, not a color)
   if (identity.bannerUrl && !identity.bannerUrl.startsWith("#")) {

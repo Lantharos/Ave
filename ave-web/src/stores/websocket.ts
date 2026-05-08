@@ -21,6 +21,7 @@ function createWebSocketStore() {
   let ws: WebSocket | null = null;
   let reconnectTimeout: number | null = null;
   let pingInterval: number | null = null;
+  let reconnectConfig: { token?: string; requestId?: string } | null = null;
   
   // Event handlers that can be registered
   const eventHandlers: {
@@ -28,16 +29,19 @@ function createWebSocketStore() {
     loginRequestStatus?: (data: { status: string; [key: string]: any }) => void;
   } = {};
   
-  function connect(token?: string, requestId?: string) {
+  function connect(token?: string, requestId?: string, shouldReconnect = false) {
     if (ws?.readyState === WebSocket.OPEN) {
       return;
     }
+
+    reconnectConfig = shouldReconnect ? { token, requestId } : null;
     
     const params = new URLSearchParams();
     if (token) params.set("token", token);
     if (requestId) params.set("requestId", requestId);
     
-    const url = `${WS_URL}?${params.toString()}`;
+    const query = params.toString();
+    const url = query ? `${WS_URL}?${query}` : WS_URL;
     ws = new WebSocket(url);
     
     ws.onopen = () => {
@@ -59,11 +63,11 @@ function createWebSocketStore() {
         pingInterval = null;
       }
       
-      // Reconnect after 5 seconds (only if we had a token)
-      if (token && !reconnectTimeout) {
+      if (reconnectConfig && !reconnectTimeout) {
+        const nextConfig = reconnectConfig;
         reconnectTimeout = window.setTimeout(() => {
           reconnectTimeout = null;
-          connect(token);
+          connect(nextConfig.token, nextConfig.requestId, true);
         }, 5000);
       }
     };
@@ -116,6 +120,7 @@ function createWebSocketStore() {
       clearTimeout(reconnectTimeout);
       reconnectTimeout = null;
     }
+    reconnectConfig = null;
     
     if (pingInterval) {
       clearInterval(pingInterval);
@@ -136,15 +141,15 @@ function createWebSocketStore() {
     /**
      * Connect as an authenticated user (to receive login requests)
      */
-    connectAsUser(token: string) {
-      connect(token);
+    connectAsUser(token?: string) {
+      connect(token, undefined, true);
     },
     
     /**
      * Connect to subscribe to a login request status
      */
     subscribeToLoginRequest(requestId: string) {
-      connect(undefined, requestId);
+      connect(undefined, requestId, false);
     },
     
     /**

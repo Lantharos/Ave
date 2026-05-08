@@ -17,6 +17,7 @@ import {
 import { isAllowedWebauthnOrigin } from "../lib/webauthn-origin";
 import { deleteChallenge, getChallenge, setChallenge } from "../lib/challenge-store";
 import { resolvePasskeyName } from "../lib/passkey-names";
+import { enforceRateLimits, ipRateLimit, subjectRateLimit } from "../lib/rate-limit";
 
 const app = new Hono();
 const RECOVERY_CODE_COUNT = 5;
@@ -90,6 +91,11 @@ app.get("/", async (c) => {
 // Get passkey registration options
 app.post("/passkeys/register", async (c) => {
   const user = c.get("user")!;
+  const rateLimitResponse = await enforceRateLimits(c, [
+    ipRateLimit(c, "security:passkey-register:ip", 20, 60 * 60 * 1000),
+    subjectRateLimit("security:passkey-register:user", user.id, 10, 60 * 60 * 1000),
+  ]);
+  if (rateLimitResponse) return rateLimitResponse;
   
   const rpId = process.env.RP_ID || "localhost";
   const rpName = process.env.RP_NAME || "Ave";
@@ -136,8 +142,11 @@ app.post("/passkeys/complete", zValidator("json", z.object({
 })), async (c) => {
   const user = c.get("user")!;
   const { credential, name, prfEncryptedMasterKey } = c.req.valid("json");
-  
-  console.log("[Security] Passkey registration - prfEncryptedMasterKey received:", prfEncryptedMasterKey ? `${prfEncryptedMasterKey.substring(0, 50)}...` : "undefined");
+  const rateLimitResponse = await enforceRateLimits(c, [
+    ipRateLimit(c, "security:passkey-complete:ip", 20, 60 * 60 * 1000),
+    subjectRateLimit("security:passkey-complete:user", user.id, 10, 60 * 60 * 1000),
+  ]);
+  if (rateLimitResponse) return rateLimitResponse;
   
   const storedChallenge = await getChallenge<{ challenge: string }>(
     "security-passkey-register",
@@ -267,6 +276,11 @@ app.patch("/passkeys/:passkeyId", zValidator("json", z.object({
 
 app.post("/master-key/unlock/start", async (c) => {
   const user = c.get("user")!;
+  const rateLimitResponse = await enforceRateLimits(c, [
+    ipRateLimit(c, "security:unlock-start:ip", 30, 60 * 1000),
+    subjectRateLimit("security:unlock-start:user", user.id, 20, 10 * 60 * 1000),
+  ]);
+  if (rateLimitResponse) return rateLimitResponse;
 
   const rpId = process.env.RP_ID || "localhost";
 
@@ -316,6 +330,11 @@ app.post(
   async (c) => {
     const user = c.get("user")!;
     const { unlockSessionId, credential } = c.req.valid("json");
+    const rateLimitResponse = await enforceRateLimits(c, [
+      ipRateLimit(c, "security:unlock-finish:ip", 30, 60 * 1000),
+      subjectRateLimit("security:unlock-finish:session", unlockSessionId, 10, 10 * 60 * 1000),
+    ]);
+    if (rateLimitResponse) return rateLimitResponse;
 
     const storedChallenge = await getChallenge<{ userId: string; challenge: string }>(
       "security-unlock",
@@ -369,6 +388,10 @@ app.post(
       });
 
       if (!verification.verified) {
+        return c.json({ error: "passkey_verification_failed" }, 400);
+      }
+
+      if ((verification.authenticationInfo as { userVerified?: boolean }).userVerified === false) {
         return c.json({ error: "passkey_verification_failed" }, 400);
       }
 
@@ -437,6 +460,11 @@ app.delete("/passkeys/:passkeyId", async (c) => {
 
 app.post("/trust-codes/issue", async (c) => {
   const user = c.get("user")!;
+  const rateLimitResponse = await enforceRateLimits(c, [
+    ipRateLimit(c, "security:trust-codes-issue:ip", 10, 60 * 60 * 1000),
+    subjectRateLimit("security:trust-codes-issue:user", user.id, 3, 60 * 60 * 1000),
+  ]);
+  if (rateLimitResponse) return rateLimitResponse;
 
   const trustCodesRemaining = await countUnusedTrustCodes(user.id);
   if (trustCodesRemaining > 0) {
@@ -465,6 +493,11 @@ app.post("/trust-codes/issue", async (c) => {
 // Regenerate trust codes
 app.post("/trust-codes/regenerate", async (c) => {
   const user = c.get("user")!;
+  const rateLimitResponse = await enforceRateLimits(c, [
+    ipRateLimit(c, "security:trust-codes-regenerate:ip", 10, 60 * 60 * 1000),
+    subjectRateLimit("security:trust-codes-regenerate:user", user.id, 3, 60 * 60 * 1000),
+  ]);
+  if (rateLimitResponse) return rateLimitResponse;
 
   await db.delete(trustCodes).where(eq(trustCodes.userId, user.id));
   const codes = await createTrustCodes(user.id);

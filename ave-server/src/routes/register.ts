@@ -18,6 +18,7 @@ import { deleteChallenge, getChallenge, setChallenge } from "../lib/challenge-st
 import { resolvePasskeyName } from "../lib/passkey-names";
 import { normalizeEmail } from "../lib/email-verification";
 import { serializeIdentityForOwner } from "../lib/identity-serialization";
+import { enforceRateLimits, ipRateLimit, subjectRateLimit } from "../lib/rate-limit";
 
 const app = new Hono();
 
@@ -29,12 +30,18 @@ const startRegistrationSchema = z.object({
 // Start registration - returns WebAuthn options
 app.post("/start", zValidator("json", startRegistrationSchema), async (c) => {
   const { handle } = c.req.valid("json");
+  const normalizedHandle = handle.toLowerCase();
+  const rateLimitResponse = await enforceRateLimits(c, [
+    ipRateLimit(c, "register:start:ip", 20, 10 * 60 * 1000),
+    subjectRateLimit("register:start:handle", normalizedHandle, 10, 10 * 60 * 1000),
+  ]);
+  if (rateLimitResponse) return rateLimitResponse;
   
   // Check if handle is taken
   const existing = await db
     .select({ id: identities.id })
     .from(identities)
-    .where(eq(identities.handle, handle.toLowerCase()))
+    .where(eq(identities.handle, normalizedHandle))
     .limit(1);
   
   if (existing.length > 0) {
@@ -105,6 +112,11 @@ const completeRegistrationSchema = z.object({
 // Complete registration
 app.post("/complete", zValidator("json", completeRegistrationSchema), async (c) => {
   const data = c.req.valid("json");
+  const rateLimitResponse = await enforceRateLimits(c, [
+    ipRateLimit(c, "register:complete:ip", 20, 10 * 60 * 1000),
+    subjectRateLimit("register:complete:session", data.tempUserId, 8, 10 * 60 * 1000),
+  ]);
+  if (rateLimitResponse) return rateLimitResponse;
   
   // Verify challenge
   const storedChallenge = await getChallenge<{ challenge: string }>("registration", data.tempUserId);
@@ -289,6 +301,10 @@ app.post("/complete", zValidator("json", completeRegistrationSchema), async (c) 
 // Check if handle is available
 app.get("/check-handle/:handle", async (c) => {
   const handle = c.req.param("handle").toLowerCase();
+  const rateLimitResponse = await enforceRateLimits(c, [
+    ipRateLimit(c, "register:check-handle:ip", 120, 60 * 1000),
+  ]);
+  if (rateLimitResponse) return rateLimitResponse;
   
   if (handle.length < 3 || handle.length > 32) {
     return c.json({ available: false, reason: "Handle must be 3-32 characters" });

@@ -13,6 +13,7 @@ import {
   normalizeEmail,
 } from "../lib/email-verification";
 import { serializeIdentityForOwner } from "../lib/identity-serialization";
+import { enforceRateLimits, ipRateLimit, subjectRateLimit } from "../lib/rate-limit";
 
 const app = new Hono();
 
@@ -216,6 +217,11 @@ app.post("/:identityId/email/start", zValidator("json", z.object({
   const user = c.get("user")!;
   const identityId = c.req.param("identityId");
   const { email } = c.req.valid("json");
+  const rateLimitResponse = await enforceRateLimits(c, [
+    ipRateLimit(c, "identity:email:start:ip", 30, 60 * 1000),
+    subjectRateLimit("identity:email:start:identity", `${user.id}:${identityId}`, 8, 60 * 60 * 1000),
+  ]);
+  if (rateLimitResponse) return rateLimitResponse;
 
   const [identity] = await db
     .select()
@@ -266,6 +272,11 @@ app.post("/:identityId/email/verify", zValidator("json", z.object({
   const user = c.get("user")!;
   const identityId = c.req.param("identityId");
   const { code } = c.req.valid("json");
+  const rateLimitResponse = await enforceRateLimits(c, [
+    ipRateLimit(c, "identity:email:verify:ip", 30, 60 * 1000),
+    subjectRateLimit("identity:email:verify:identity", `${user.id}:${identityId}`, 8, 15 * 60 * 1000),
+  ]);
+  if (rateLimitResponse) return rateLimitResponse;
 
   const [identity] = await db
     .select()
@@ -301,6 +312,11 @@ app.post("/:identityId/email/verify", zValidator("json", z.object({
 app.post("/:identityId/email/resend", async (c) => {
   const user = c.get("user")!;
   const identityId = c.req.param("identityId");
+  const rateLimitResponse = await enforceRateLimits(c, [
+    ipRateLimit(c, "identity:email:resend:ip", 30, 60 * 1000),
+    subjectRateLimit("identity:email:resend:identity", `${user.id}:${identityId}`, 8, 60 * 60 * 1000),
+  ]);
+  if (rateLimitResponse) return rateLimitResponse;
 
   const [identity] = await db
     .select()

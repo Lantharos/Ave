@@ -3,6 +3,23 @@ import { deleteCookie, setCookie } from "hono/cookie";
 
 export const SESSION_COOKIE_NAME = "ave_session";
 
+export function getCookieValue(cookieHeader: string, name: string): string | null {
+  const parts = cookieHeader.split(";");
+  for (const part of parts) {
+    const [k, ...rest] = part.trim().split("=");
+    if (!k) continue;
+    if (k === name) {
+      const v = rest.join("=");
+      try {
+        return v ? decodeURIComponent(v) : "";
+      } catch {
+        return null;
+      }
+    }
+  }
+  return null;
+}
+
 function getCookieDomain(c: Context): string | undefined {
   const envDomain = process.env.COOKIE_DOMAIN;
   if (envDomain) return envDomain;

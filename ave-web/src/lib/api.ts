@@ -122,10 +122,21 @@ async function request<T>(
     clearD1Bookmark();
   }
   
-  const data = await response.json();
+  let data: unknown = {};
+  const responseText = response.status === 204 ? "" : await response.text();
+  if (responseText) {
+    try {
+      data = JSON.parse(responseText);
+    } catch {
+      data = { error: responseText };
+    }
+  }
   
   if (!response.ok) {
-    throw new ApiError(response.status, data.error || "Request failed");
+    const message = data && typeof data === "object" && "error" in data && typeof data.error === "string"
+      ? data.error
+      : "Request failed";
+    throw new ApiError(response.status, message);
   }
   
   return data as T;

@@ -1,9 +1,9 @@
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
-import { db, devices, loginRequests, activityLogs } from "../db";
+import { db, devices, identities, loginRequests, activityLogs } from "../db";
 import { requireAuth, requireWritableForMutation } from "../middleware/auth";
-import { eq, and, desc, lt } from "drizzle-orm";
+import { eq, and, desc, gt, inArray, lt } from "drizzle-orm";
 import { notifyLoginRequestStatus } from "../lib/websocket";
 
 const app = new Hono();
@@ -40,42 +40,28 @@ app.get("/", async (c) => {
 app.get("/pending-requests", async (c) => {
   const user = c.get("user")!;
   
-  // Get user's handle to find their login requests
-  const userDevices = await db
-    .select()
-    .from(devices)
-    .where(eq(devices.userId, user.id))
-    .limit(1);
-  
-  if (userDevices.length === 0) {
-    return c.json({ requests: [] });
-  }
-  
-  // Find pending login requests for this user
-  // We need to join through identities to get the user's handles
-  const { identities } = await import("../db");
-  
   const userIdentities = await db
     .select()
     .from(identities)
     .where(eq(identities.userId, user.id));
   
   const handles = userIdentities.map((i) => i.handle);
+  if (handles.length === 0) {
+    return c.json({ requests: [] });
+  }
   
-  // Get pending requests for any of user's handles
   const pendingRequests = await db
     .select()
     .from(loginRequests)
     .where(and(
       eq(loginRequests.status, "pending"),
+      gt(loginRequests.expiresAt, new Date()),
+      inArray(loginRequests.handle, handles),
     ))
     .orderBy(desc(loginRequests.createdAt));
   
-  // Filter to only this user's handles
-  const userRequests = pendingRequests.filter((r) => handles.includes(r.handle));
-  
   return c.json({
-    requests: userRequests.map((r) => ({
+    requests: pendingRequests.map((r) => ({
       id: r.id,
       deviceName: r.deviceName,
       deviceType: r.deviceType,

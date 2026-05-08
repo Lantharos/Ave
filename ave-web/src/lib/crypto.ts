@@ -10,8 +10,114 @@
 
 // Constants
 const MASTER_KEY_STORAGE_KEY = "ave_master_key";
+const MASTER_KEY_AVAILABLE_KEY = "ave_master_key_available";
+const MASTER_KEY_DB_NAME = "ave_key_storage";
+const MASTER_KEY_STORE_NAME = "keys";
+const MASTER_KEY_ID = "master_key";
 const ALGORITHM = "AES-GCM";
 const KEY_LENGTH = 256;
+
+function bytesToBase64(bytes: Uint8Array): string {
+  let binary = "";
+  for (const byte of bytes) {
+    binary += String.fromCharCode(byte);
+  }
+  return btoa(binary);
+}
+
+function base64ToBytes(value: string): Uint8Array {
+  const binary = atob(value);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return bytes;
+}
+
+function getLocalStorageValue(key: string): string | null {
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function setLocalStorageValue(key: string, value: string): void {
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+  }
+}
+
+function removeLocalStorageValue(key: string): void {
+  try {
+    localStorage.removeItem(key);
+  } catch {
+  }
+}
+
+function openMasterKeyDatabase(): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    if (typeof indexedDB === "undefined") {
+      reject(new Error("IndexedDB unavailable"));
+      return;
+    }
+
+    const request = indexedDB.open(MASTER_KEY_DB_NAME, 1);
+    request.onupgradeneeded = () => {
+      const db = request.result;
+      if (!db.objectStoreNames.contains(MASTER_KEY_STORE_NAME)) {
+        db.createObjectStore(MASTER_KEY_STORE_NAME);
+      }
+    };
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error || new Error("IndexedDB open failed"));
+  });
+}
+
+async function putStoredMasterKey(masterKey: CryptoKey): Promise<void> {
+  const db = await openMasterKeyDatabase();
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const transaction = db.transaction(MASTER_KEY_STORE_NAME, "readwrite");
+      transaction.objectStore(MASTER_KEY_STORE_NAME).put(masterKey, MASTER_KEY_ID);
+      transaction.oncomplete = () => resolve();
+      transaction.onerror = () => reject(transaction.error || new Error("IndexedDB write failed"));
+      transaction.onabort = () => reject(transaction.error || new Error("IndexedDB write aborted"));
+    });
+  } finally {
+    db.close();
+  }
+}
+
+async function getStoredMasterKey(): Promise<CryptoKey | null> {
+  const db = await openMasterKeyDatabase();
+  try {
+    return await new Promise<CryptoKey | null>((resolve, reject) => {
+      const transaction = db.transaction(MASTER_KEY_STORE_NAME, "readonly");
+      const request = transaction.objectStore(MASTER_KEY_STORE_NAME).get(MASTER_KEY_ID);
+      request.onsuccess = () => resolve((request.result as CryptoKey | undefined) || null);
+      request.onerror = () => reject(request.error || new Error("IndexedDB read failed"));
+    });
+  } finally {
+    db.close();
+  }
+}
+
+async function deleteStoredMasterKey(): Promise<void> {
+  const db = await openMasterKeyDatabase();
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const transaction = db.transaction(MASTER_KEY_STORE_NAME, "readwrite");
+      transaction.objectStore(MASTER_KEY_STORE_NAME).delete(MASTER_KEY_ID);
+      transaction.oncomplete = () => resolve();
+      transaction.onerror = () => reject(transaction.error || new Error("IndexedDB delete failed"));
+      transaction.onabort = () => reject(transaction.error || new Error("IndexedDB delete aborted"));
+    });
+  } finally {
+    db.close();
+  }
+}
 
 /**
  * Generate a new master key
@@ -283,23 +389,48 @@ export async function decryptMasterKeyFromDevice(
  * In a real implementation, you might use IndexedDB with device binding
  */
 export async function storeMasterKey(masterKey: CryptoKey): Promise<void> {
-  // For simplicity, we store the raw key in localStorage
-  // In production, you'd want to use IndexedDB and possibly bind to device
+  try {
+    await putStoredMasterKey(masterKey);
+    setLocalStorageValue(MASTER_KEY_AVAILABLE_KEY, "1");
+    removeLocalStorageValue(MASTER_KEY_STORAGE_KEY);
+    return;
+  } catch {
+  }
+
   const keyData = await exportMasterKey(masterKey);
-  const encoded = btoa(String.fromCharCode(...new Uint8Array(keyData)));
-  localStorage.setItem(MASTER_KEY_STORAGE_KEY, encoded);
+  const encoded = bytesToBase64(new Uint8Array(keyData));
+  setLocalStorageValue(MASTER_KEY_STORAGE_KEY, encoded);
+  setLocalStorageValue(MASTER_KEY_AVAILABLE_KEY, "1");
 }
 
 /**
  * Load master key from browser storage
  */
 export async function loadMasterKey(): Promise<CryptoKey | null> {
-  const encoded = localStorage.getItem(MASTER_KEY_STORAGE_KEY);
-  if (!encoded) return null;
-  
   try {
-    const keyData = Uint8Array.from(atob(encoded), (c) => c.charCodeAt(0));
-    return await importMasterKey(keyData.buffer);
+    const storedKey = await getStoredMasterKey();
+    if (storedKey) {
+      setLocalStorageValue(MASTER_KEY_AVAILABLE_KEY, "1");
+      removeLocalStorageValue(MASTER_KEY_STORAGE_KEY);
+      return storedKey;
+    }
+  } catch {
+  }
+
+  const encoded = getLocalStorageValue(MASTER_KEY_STORAGE_KEY);
+  if (!encoded) return null;
+
+  try {
+    const keyData = base64ToBytes(encoded);
+    const keyBuffer = keyData.buffer.slice(keyData.byteOffset, keyData.byteOffset + keyData.byteLength) as ArrayBuffer;
+    const masterKey = await importMasterKey(keyBuffer);
+    try {
+      await putStoredMasterKey(masterKey);
+      removeLocalStorageValue(MASTER_KEY_STORAGE_KEY);
+    } catch {
+    }
+    setLocalStorageValue(MASTER_KEY_AVAILABLE_KEY, "1");
+    return masterKey;
   } catch {
     return null;
   }
@@ -309,14 +440,16 @@ export async function loadMasterKey(): Promise<CryptoKey | null> {
  * Clear master key from storage
  */
 export function clearMasterKey(): void {
-  localStorage.removeItem(MASTER_KEY_STORAGE_KEY);
+  removeLocalStorageValue(MASTER_KEY_STORAGE_KEY);
+  removeLocalStorageValue(MASTER_KEY_AVAILABLE_KEY);
+  void deleteStoredMasterKey();
 }
 
 /**
  * Check if master key exists in storage
  */
 export function hasMasterKey(): boolean {
-  return localStorage.getItem(MASTER_KEY_STORAGE_KEY) !== null;
+  return getLocalStorageValue(MASTER_KEY_AVAILABLE_KEY) !== null || getLocalStorageValue(MASTER_KEY_STORAGE_KEY) !== null;
 }
 
 /**

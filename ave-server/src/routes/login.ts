@@ -20,6 +20,7 @@ import { sendLoginRequestNotification, sendAccountEventNotification, type PushSu
 import { deleteChallenge, getChallenge, setChallenge } from "../lib/challenge-store";
 import { serializeIdentityForOwner } from "../lib/identity-serialization";
 import { isDemoHandle, isDemoLoginEnabled, verifyDemoPassword } from "../lib/demo-auth";
+import { enforceRateLimits, ipRateLimit, subjectRateLimit } from "../lib/rate-limit";
 
 const app = new Hono();
 
@@ -185,6 +186,11 @@ app.post("/start", zValidator("json", z.object({
 })), async (c) => {
   const { handle } = c.req.valid("json");
   const normalizedHandle = handle.toLowerCase();
+  const rateLimitResponse = await enforceRateLimits(c, [
+    ipRateLimit(c, "login:start:ip", 60, 60 * 1000),
+    subjectRateLimit("login:start:handle", normalizedHandle, 20, 5 * 60 * 1000),
+  ]);
+  if (rateLimitResponse) return rateLimitResponse;
   
   // Find identity by handle
   const [identity] = await db
@@ -242,7 +248,7 @@ app.post("/start", zValidator("json", z.object({
       // Don't restrict to specific credentials - allow discoverable credentials
       // This helps with password managers like 1Password
       allowCredentials: [],
-      userVerification: "preferred",
+      userVerification: "required",
     });
     
     await setChallenge(
@@ -285,6 +291,11 @@ app.post("/demo", zValidator("json", z.object({
 })), async (c) => {
   const { handle, password, device } = c.req.valid("json");
   const normalizedHandle = handle.toLowerCase();
+  const rateLimitResponse = await enforceRateLimits(c, [
+    ipRateLimit(c, "login:demo:ip", 8, 60 * 1000),
+    subjectRateLimit("login:demo:handle", normalizedHandle, 8, 15 * 60 * 1000),
+  ]);
+  if (rateLimitResponse) return rateLimitResponse;
 
   if (!isDemoLoginEnabled() || !isDemoHandle(normalizedHandle)) {
     return c.json({ error: "Demo login is not available" }, 403);
@@ -363,6 +374,11 @@ app.post("/passkey", zValidator("json", z.object({
   }),
 })), async (c) => {
   const { authSessionId, credential, device } = c.req.valid("json");
+  const rateLimitResponse = await enforceRateLimits(c, [
+    ipRateLimit(c, "login:passkey:ip", 30, 60 * 1000),
+    subjectRateLimit("login:passkey:session", authSessionId, 10, 10 * 60 * 1000),
+  ]);
+  if (rateLimitResponse) return rateLimitResponse;
   
   const storedChallenge = await getChallenge<{ challenge: string; userId: string }>(
     "login-auth",
@@ -428,6 +444,10 @@ app.post("/passkey", zValidator("json", z.object({
     });
     
     if (!verification.verified) {
+      return c.json({ error: "Passkey verification failed" }, 400);
+    }
+
+    if ((verification.authenticationInfo as { userVerified?: boolean }).userVerified === false) {
       return c.json({ error: "Passkey verification failed" }, 400);
     }
     
@@ -524,12 +544,18 @@ app.post("/request-approval", zValidator("json", z.object({
   }),
 })), async (c) => {
   const { handle, requesterPublicKey, device } = c.req.valid("json");
+  const normalizedHandle = handle.toLowerCase();
+  const rateLimitResponse = await enforceRateLimits(c, [
+    ipRateLimit(c, "login:approval:ip", 10, 60 * 1000),
+    subjectRateLimit("login:approval:handle", normalizedHandle, 6, 5 * 60 * 1000),
+  ]);
+  if (rateLimitResponse) return rateLimitResponse;
   
   // Find identity by handle
   const [identity] = await db
     .select()
     .from(identities)
-    .where(eq(identities.handle, handle.toLowerCase()))
+    .where(eq(identities.handle, normalizedHandle))
     .limit(1);
   
   if (!identity) {
@@ -540,7 +566,7 @@ app.post("/request-approval", zValidator("json", z.object({
   const [request] = await db
     .insert(loginRequests)
     .values({
-      handle: handle.toLowerCase(),
+      handle: normalizedHandle,
       deviceName: device.name,
       deviceType: device.type,
       browser: device.browser,
@@ -553,7 +579,7 @@ app.post("/request-approval", zValidator("json", z.object({
     .returning();
   
   // Notify user's connected devices via WebSocket
-  notifyLoginRequest(handle.toLowerCase(), {
+  notifyLoginRequest(normalizedHandle, {
     id: request.id,
     deviceName: request.deviceName,
     deviceType: request.deviceType,
@@ -603,6 +629,11 @@ app.post("/request-approval", zValidator("json", z.object({
 // Check login request status (polling endpoint)
 app.get("/request-status/:requestId", async (c) => {
   const requestId = c.req.param("requestId");
+  const rateLimitResponse = await enforceRateLimits(c, [
+    ipRateLimit(c, "login:status:ip", 180, 60 * 1000),
+    subjectRateLimit("login:status:request", requestId, 180, 60 * 1000),
+  ]);
+  if (rateLimitResponse) return rateLimitResponse;
   
   const [request] = await db
     .select()
@@ -727,12 +758,18 @@ app.post("/trust-code", zValidator("json", z.object({
   }),
 })), async (c) => {
   const { handle, code, device } = c.req.valid("json");
+  const normalizedHandle = handle.toLowerCase();
+  const rateLimitResponse = await enforceRateLimits(c, [
+    ipRateLimit(c, "login:trust-code:ip", 5, 15 * 60 * 1000),
+    subjectRateLimit("login:trust-code:handle", normalizedHandle, 5, 30 * 60 * 1000),
+  ]);
+  if (rateLimitResponse) return rateLimitResponse;
   
   // Find identity by handle
   const [identity] = await db
     .select()
     .from(identities)
-    .where(eq(identities.handle, handle.toLowerCase()))
+    .where(eq(identities.handle, normalizedHandle))
     .limit(1);
   
   if (!identity) {
@@ -850,12 +887,18 @@ app.post("/recover-key", zValidator("json", z.object({
   code: z.string(),
 })), async (c) => {
   const { handle, code } = c.req.valid("json");
+  const normalizedHandle = handle.toLowerCase();
+  const rateLimitResponse = await enforceRateLimits(c, [
+    ipRateLimit(c, "login:recover-key:ip", 5, 15 * 60 * 1000),
+    subjectRateLimit("login:recover-key:handle", normalizedHandle, 5, 30 * 60 * 1000),
+  ]);
+  if (rateLimitResponse) return rateLimitResponse;
   
   // Find identity by handle
   const [identity] = await db
     .select()
     .from(identities)
-    .where(eq(identities.handle, handle.toLowerCase()))
+    .where(eq(identities.handle, normalizedHandle))
     .limit(1);
   
   if (!identity) {

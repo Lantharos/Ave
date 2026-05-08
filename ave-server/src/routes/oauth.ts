@@ -10,6 +10,7 @@ import { getIssuer, getResourceAudience, getJwtPublicJwk, signJwt, verifyJwt, ha
 import { consumeAuthorizationCode, getAccessToken, getAuthorizationCode, setAccessToken, setAuthorizationCode } from "../lib/oauth-store";
 import { hasVerifiedEmail, serializeIdentityForApp, serializeIdentityForOwner } from "../lib/identity-serialization";
 import { isOriginAllowedForApp, isRedirectUriAllowedForApp, normalizeRedirectUri } from "../lib/redirect-uri";
+import { enforceRateLimits, ipRateLimit, subjectRateLimit } from "../lib/rate-limit";
 
 const app = new Hono();
 export const oidcRoutes = new Hono();
@@ -63,6 +64,10 @@ function timingSafeEqualString(a: string, b: string): boolean {
   bBuffer.copy(paddedB);
   const lengthMismatch = aBuffer.length ^ bBuffer.length;
   return timingSafeEqual(paddedA, paddedB) && lengthMismatch === 0;
+}
+
+function isClientSecretValid(expectedHash: string, clientSecret: string): boolean {
+  return timingSafeEqualString(hashSessionToken(clientSecret), expectedHash);
 }
 
 // Generate refresh token
@@ -211,8 +216,9 @@ async function buildTokenResponseFromAuthorizationCode(params: {
   clientId: string;
   redirectUri: string;
   includeEncryptedAppKey?: boolean;
+  issueRefreshToken?: boolean;
 }) {
-  const { authCode, oauthApp, clientId, redirectUri, includeEncryptedAppKey } = params;
+  const { authCode, oauthApp, clientId, redirectUri, includeEncryptedAppKey, issueRefreshToken = false } = params;
 
   const accessToken = generateAccessToken();
   const accessTokenTtl = oauthApp.accessTokenTtlSeconds || 3600;
@@ -253,7 +259,6 @@ async function buildTokenResponseFromAuthorizationCode(params: {
     iat: issuedAt,
     scope: authCode.scope,
     cid: oauthApp.clientId,
-    sid: authCode.userId,
     uid: hasScope(authCode.scope, "user_id") && oauthApp.allowUserIdScope ? authCode.userId : undefined,
     ...(isQuickClient(clientId) ? { quick: true } : {}),
   });
@@ -273,7 +278,6 @@ async function buildTokenResponseFromAuthorizationCode(params: {
       iat: issuedAt,
       auth_time: issuedAt,
       azp: oauthApp.clientId,
-      sid: authCode.userId,
       nonce: authCode.nonce,
       name: hasScope(authCode.scope, "profile") ? identity?.displayName : undefined,
       preferred_username: hasScope(authCode.scope, "profile") ? identity?.handle : undefined,
@@ -283,7 +287,7 @@ async function buildTokenResponseFromAuthorizationCode(params: {
     response.id_token = idToken;
   }
 
-  if (hasScope(authCode.scope, "offline_access") && !isQuickClient(clientId)) {
+  if (issueRefreshToken && hasScope(authCode.scope, "offline_access") && !isQuickClient(clientId)) {
     const refreshToken = generateRefreshToken();
     await db.insert(oauthRefreshTokens).values({
       userId: authCode.userId,
@@ -528,6 +532,12 @@ app.post("/fedcm/assertion", async (c) => {
   const accountId = String(form.account_id || "");
   const origin = c.req.header("Origin") || "";
   const rawParams = String(form.params || "");
+  const rateLimitResponse = await enforceRateLimits(c, [
+    ipRateLimit(c, "oauth:fedcm-assertion:ip", 120, 60 * 1000),
+    subjectRateLimit("oauth:fedcm-assertion:user", user.id, 120, 60 * 1000),
+    subjectRateLimit("oauth:fedcm-assertion:client", clientId, 120, 60 * 1000),
+  ]);
+  if (rateLimitResponse) return rateLimitResponse;
 
   let extraParams: Record<string, unknown> = {};
   if (rawParams) {
@@ -603,7 +613,6 @@ app.post("/fedcm/assertion", async (c) => {
     iss: getIssuer(),
     aud: clientId,
     sub: identity.id,
-    sid: user.id,
     typ: "ave_fedcm",
     code,
     client_id: clientId,
@@ -730,6 +739,12 @@ app.post("/authorize", requireAuth, zValidator("json", z.object({
     communicationMode,
     interactionMode,
   } = c.req.valid("json");
+  const rateLimitResponse = await enforceRateLimits(c, [
+    ipRateLimit(c, "oauth:authorize:ip", 120, 60 * 1000),
+    subjectRateLimit("oauth:authorize:user", user.id, 120, 60 * 1000),
+    subjectRateLimit("oauth:authorize:client", clientId, 180, 60 * 1000),
+  ]);
+  if (rateLimitResponse) return rateLimitResponse;
 
   
   // Find (or derive) the OAuth app
@@ -1034,6 +1049,11 @@ const oauthTokenRequestSchema = z.preprocess(normalizeOauthTokenPayload, z.discr
 // Token endpoint - exchange code for access token
 app.post("/token", zValidator("json", oauthTokenRequestSchema), async (c) => {
   const payload = c.req.valid("json");
+  const rateLimitResponse = await enforceRateLimits(c, [
+    ipRateLimit(c, "oauth:token:ip", 300, 60 * 1000),
+    subjectRateLimit("oauth:token:client", payload.clientId, 180, 60 * 1000),
+  ]);
+  if (rateLimitResponse) return rateLimitResponse;
 
   if (payload.grantType === "urn:ietf:params:oauth:grant-type:token-exchange") {
     const { subjectToken, requestedResource, requestedScope, clientId, clientSecret, actor } = payload;
@@ -1048,12 +1068,8 @@ app.post("/token", zValidator("json", oauthTokenRequestSchema), async (c) => {
       return c.json({ error: "invalid_client", error_description: "Client not found" }, 400);
     }
 
-    if (clientSecret) {
-      const expectedHash = sourceApp.clientSecretHash;
-      const providedHash = hashSessionToken(clientSecret);
-      if (expectedHash !== providedHash) {
-        return c.json({ error: "invalid_client", error_description: "Invalid client secret" }, 400);
-      }
+    if (!clientSecret || !isClientSecretValid(sourceApp.clientSecretHash, clientSecret)) {
+      return c.json({ error: "invalid_client", error_description: "Invalid client secret" }, 400);
     }
 
     let subject: {
@@ -1082,8 +1098,9 @@ app.post("/token", zValidator("json", oauthTokenRequestSchema), async (c) => {
           .limit(1);
 
         if (tokenApp) {
+          const userId = typeof jwtPayload.uid === "string" ? jwtPayload.uid : "";
           subject = {
-            userId: String(jwtPayload.sid || ""),
+            userId,
             identityId: String(jwtPayload.sub || ""),
             sourceAppId: tokenApp.id,
             scope: String(jwtPayload.scope || ""),
@@ -1092,7 +1109,7 @@ app.post("/token", zValidator("json", oauthTokenRequestSchema), async (c) => {
       }
     }
 
-    if (!subject) {
+    if (!subject?.userId) {
       return c.json({ error: "invalid_grant", error_description: "Subject token is invalid" }, 400);
     }
 
@@ -1146,7 +1163,7 @@ app.post("/token", zValidator("json", oauthTokenRequestSchema), async (c) => {
       aud: resource.audience,
       exp: expiresAt,
       iat: issuedAt,
-      sid: subject.userId,
+      uid: subject.userId,
       cid: sourceApp.clientId,
       scope: requestedConnectorScopes.join(" "),
       grant_id: grant.id,
@@ -1191,12 +1208,8 @@ app.post("/token", zValidator("json", oauthTokenRequestSchema), async (c) => {
       return c.json({ error: "invalid_client", error_description: "Client not found" }, 400);
     }
 
-    if (clientSecret) {
-      const expectedHash = oauthApp.clientSecretHash;
-      const providedHash = hashSessionToken(clientSecret);
-      if (expectedHash !== providedHash) {
-        return c.json({ error: "invalid_client", error_description: "Invalid client secret" }, 400);
-      }
+    if (!clientSecret || !isClientSecretValid(oauthApp.clientSecretHash, clientSecret)) {
+      return c.json({ error: "invalid_client", error_description: "Invalid client secret" }, 400);
     }
 
     const tokenHash = hashToken(refreshToken);
@@ -1271,7 +1284,6 @@ app.post("/token", zValidator("json", oauthTokenRequestSchema), async (c) => {
       iat: issuedAt,
       auth_time: issuedAt,
       azp: oauthApp.clientId,
-      sid: storedRefresh.userId,
       name: hasScope(storedRefresh.scope, "profile") ? identity?.displayName : undefined,
       preferred_username: hasScope(storedRefresh.scope, "profile") ? identity?.handle : undefined,
       email: hasScope(storedRefresh.scope, "email") ? identity?.email : undefined,
@@ -1286,7 +1298,6 @@ app.post("/token", zValidator("json", oauthTokenRequestSchema), async (c) => {
       iat: issuedAt,
       scope: storedRefresh.scope,
       cid: oauthApp.clientId,
-      sid: storedRefresh.userId,
       uid: hasScope(storedRefresh.scope, "user_id") && oauthApp.allowUserIdScope ? storedRefresh.userId : undefined,
     });
 
@@ -1371,8 +1382,17 @@ app.post("/token", zValidator("json", oauthTokenRequestSchema), async (c) => {
     return c.json({ error: "invalid_grant", error_description: "client_id does not match authorization" }, 400);
   }
 
+  let clientSecretAuthenticated = false;
+
   // Verify client secret or PKCE code verifier
   if (authCode.codeChallenge) {
+    if (clientSecret) {
+      if (!isClientSecretValid(oauthApp.clientSecretHash, clientSecret)) {
+        return c.json({ error: "invalid_client", error_description: "Invalid client secret" }, 400);
+      }
+      clientSecretAuthenticated = true;
+    }
+
     // PKCE flow
     if (!codeVerifier) {
       return c.json({ error: "invalid_request", error_description: "Code verifier required" }, 400);
@@ -1396,11 +1416,10 @@ app.post("/token", zValidator("json", oauthTokenRequestSchema), async (c) => {
     }
   } else if (clientSecret) {
     // Client secret flow
-    const expectedHash = oauthApp.clientSecretHash;
-    const providedHash = hashSessionToken(clientSecret); // Using same hash function
-    if (expectedHash !== providedHash) {
+    if (!isClientSecretValid(oauthApp.clientSecretHash, clientSecret)) {
       return c.json({ error: "invalid_client", error_description: "Invalid client secret" }, 400);
     }
+    clientSecretAuthenticated = true;
   } else {
     return c.json({ error: "invalid_request", error_description: "Client authentication required" }, 400);
   }
@@ -1417,11 +1436,16 @@ app.post("/token", zValidator("json", oauthTokenRequestSchema), async (c) => {
     return c.json({ error: "invalid_scope", error_description: `Invalid scopes: ${invalidScopes.join(", ")}` }, 400);
   }
 
+  if (hasScope(authCode.scope, "offline_access") && !clientSecretAuthenticated) {
+    return c.json({ error: "invalid_request", error_description: "offline_access requires client authentication" }, 400);
+  }
+
   const response = await buildTokenResponseFromAuthorizationCode({
     authCode,
     oauthApp,
     clientId,
     redirectUri,
+    issueRefreshToken: clientSecretAuthenticated,
   });
   
   // Note: the app key is NOT included in the JSON token response.
@@ -1467,6 +1491,12 @@ app.get("/userinfo", async (c) => {
   }
 
   const token = authHeader.slice(7);
+  const rateLimitResponse = await enforceRateLimits(c, [
+    ipRateLimit(c, "oauth:userinfo:ip", 300, 60 * 1000),
+    subjectRateLimit("oauth:userinfo:token", token.slice(0, 32), 180, 60 * 1000),
+  ]);
+  if (rateLimitResponse) return rateLimitResponse;
+
   let record = await getAccessToken(token);
 
   if (!record) {
@@ -1476,7 +1506,7 @@ app.get("/userinfo", async (c) => {
     }
 
     record = {
-      userId: String(jwtPayload.sid || ""),
+      userId: typeof jwtPayload.uid === "string" ? jwtPayload.uid : "",
       identityId: String(jwtPayload.sub || ""),
       appId: String(jwtPayload.cid || ""),
       scope: String(jwtPayload.scope || ""),
@@ -1510,13 +1540,12 @@ app.get("/userinfo", async (c) => {
   }
 
   if (hasScope(record.scope, "user_id")) {
-    const [oauthApp] = await db
-      .select()
-      .from(oauthApps)
-      .where(eq(oauthApps.id, record.appId))
-      .limit(1);
+    const appLookup = record.appId.startsWith("app_")
+      ? eq(oauthApps.clientId, record.appId)
+      : eq(oauthApps.id, record.appId);
+    const [oauthApp] = await db.select().from(oauthApps).where(appLookup).limit(1);
 
-    if (oauthApp?.allowUserIdScope) {
+    if (oauthApp?.allowUserIdScope && record.userId) {
       response.user_id = record.userId;
     }
   }
@@ -1535,6 +1564,11 @@ app.post("/session/check", async (c) => {
   }
 
   const token = authHeader.slice(7);
+  const rateLimitResponse = await enforceRateLimits(c, [
+    ipRateLimit(c, "oauth:session-check:ip", 300, 60 * 1000),
+    subjectRateLimit("oauth:session-check:token", token.slice(0, 32), 120, 60 * 1000),
+  ]);
+  if (rateLimitResponse) return rateLimitResponse;
 
   // Check stored opaque access tokens first
   const record = await getAccessToken(token);
@@ -1559,6 +1593,11 @@ app.post("/fedcm/finalize", requireAuth, zValidator("json", z.object({
 })), async (c) => {
   const user = c.get("user")!;
   const { code, clientId, state, appKey } = c.req.valid("json");
+  const rateLimitResponse = await enforceRateLimits(c, [
+    ipRateLimit(c, "oauth:fedcm-finalize:ip", 120, 60 * 1000),
+    subjectRateLimit("oauth:fedcm-finalize:user", user.id, 120, 60 * 1000),
+  ]);
+  if (rateLimitResponse) return rateLimitResponse;
 
   const authCodeResult = await getAuthorizationCode(code);
   if (!authCodeResult.value) {
@@ -1579,7 +1618,6 @@ app.post("/fedcm/finalize", requireAuth, zValidator("json", z.object({
     iss: getIssuer(),
     aud: clientId,
     sub: authCode.identityId,
-    sid: authCode.userId,
     typ: "ave_fedcm",
     code,
     app_key: appKey || undefined,
@@ -1599,6 +1637,12 @@ app.post("/fedcm/exchange", zValidator("json", z.object({
   clientId: z.string(),
 })), async (c) => {
   const { assertion, clientId } = c.req.valid("json");
+  const rateLimitResponse = await enforceRateLimits(c, [
+    ipRateLimit(c, "oauth:fedcm-exchange:ip", 120, 60 * 1000),
+    subjectRateLimit("oauth:fedcm-exchange:client", clientId, 120, 60 * 1000),
+  ]);
+  if (rateLimitResponse) return rateLimitResponse;
+
   const assertionPayload = await verifyJwt(assertion, clientId);
 
   if (!assertionPayload || assertionPayload.typ !== "ave_fedcm") {
