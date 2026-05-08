@@ -70,6 +70,11 @@ function isClientSecretValid(expectedHash: string, clientSecret: string): boolea
   return timingSafeEqualString(hashSessionToken(clientSecret), expectedHash);
 }
 
+function isAllowedPublicClientRequest(c: any, app: Pick<typeof oauthApps.$inferSelect, "redirectUris" | "developmentMode" | "websiteUrl">): boolean {
+  const origin = c.req.header("Origin");
+  return !origin || isOriginAllowedForApp(app, origin);
+}
+
 // Generate refresh token
 function generateRefreshToken(): string {
   return `rt_${randomUUID().replace(/-/g, "")}`;
@@ -1208,8 +1213,12 @@ app.post("/token", zValidator("json", oauthTokenRequestSchema), async (c) => {
       return c.json({ error: "invalid_client", error_description: "Client not found" }, 400);
     }
 
-    if (!clientSecret || !isClientSecretValid(oauthApp.clientSecretHash, clientSecret)) {
-      return c.json({ error: "invalid_client", error_description: "Invalid client secret" }, 400);
+    if (clientSecret) {
+      if (!isClientSecretValid(oauthApp.clientSecretHash, clientSecret)) {
+        return c.json({ error: "invalid_client", error_description: "Invalid client secret" }, 400);
+      }
+    } else if (!isAllowedPublicClientRequest(c, oauthApp)) {
+      return c.json({ error: "invalid_client", error_description: "Request origin is not allowed for this client" }, 400);
     }
 
     const tokenHash = hashToken(refreshToken);
@@ -1383,6 +1392,7 @@ app.post("/token", zValidator("json", oauthTokenRequestSchema), async (c) => {
   }
 
   let clientSecretAuthenticated = false;
+  let pkceAuthenticated = false;
 
   // Verify client secret or PKCE code verifier
   if (authCode.codeChallenge) {
@@ -1414,6 +1424,7 @@ app.post("/token", zValidator("json", oauthTokenRequestSchema), async (c) => {
     if (!timingSafeEqualString(computedChallenge, authCode.codeChallenge)) {
       return c.json({ error: "invalid_grant", error_description: "Code verifier mismatch" }, 400);
     }
+    pkceAuthenticated = true;
   } else if (clientSecret) {
     // Client secret flow
     if (!isClientSecretValid(oauthApp.clientSecretHash, clientSecret)) {
@@ -1436,16 +1447,12 @@ app.post("/token", zValidator("json", oauthTokenRequestSchema), async (c) => {
     return c.json({ error: "invalid_scope", error_description: `Invalid scopes: ${invalidScopes.join(", ")}` }, 400);
   }
 
-  if (hasScope(authCode.scope, "offline_access") && !clientSecretAuthenticated) {
-    return c.json({ error: "invalid_request", error_description: "offline_access requires client authentication" }, 400);
-  }
-
   const response = await buildTokenResponseFromAuthorizationCode({
     authCode,
     oauthApp,
     clientId,
     redirectUri,
-    issueRefreshToken: clientSecretAuthenticated,
+    issueRefreshToken: clientSecretAuthenticated || pkceAuthenticated,
   });
   
   // Note: the app key is NOT included in the JSON token response.
