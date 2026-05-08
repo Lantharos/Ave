@@ -1,10 +1,12 @@
 import { createHash, randomInt } from "crypto";
 import { db, identities, type Identity } from "../db";
 import { and, eq } from "drizzle-orm";
+import { renderEmailVerificationEmail } from "./email-templates";
 import { sendMail } from "./mail";
 
 const EMAIL_CODE_LENGTH = 6;
-const EMAIL_CODE_TTL_MS = 15 * 60 * 1000;
+const EMAIL_CODE_TTL_MINUTES = 15;
+const EMAIL_CODE_TTL_MS = EMAIL_CODE_TTL_MINUTES * 60 * 1000;
 const EMAIL_RESEND_COOLDOWN_MS = 60 * 1000;
 
 export function normalizeEmail(email: string): string {
@@ -57,12 +59,8 @@ export async function beginEmailVerification(identity: Identity, rawEmail: strin
     .where(eq(identities.id, identity.id));
 
   try {
-    await sendMail({
-      to: pendingEmail,
-      subject: "Verify your Ave email",
-      text: `Your Ave verification code is ${code}. It expires in 15 minutes.`,
-      html: `<p>Your Ave verification code is <strong>${code}</strong>.</p><p>It expires in 15 minutes.</p>`,
-    });
+    const email = renderEmailVerificationEmail({ code, expiresInMinutes: EMAIL_CODE_TTL_MINUTES });
+    await sendMail({ to: pendingEmail, ...email });
   } catch (error) {
     await db
       .update(identities)

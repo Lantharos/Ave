@@ -5,23 +5,25 @@ type SendEmailInput = {
   text: string;
 };
 
+const RESEND_EMAILS_ENDPOINT = "https://api.resend.com/emails";
+
 function getFromAddress(): string {
-  const fromEmail = process.env.UNOSEND_FROM_EMAIL;
+  const fromEmail = process.env.RESEND_FROM_EMAIL;
   if (!fromEmail) {
-    throw new Error("UNOSEND_FROM_EMAIL is not configured");
+    throw new Error("RESEND_FROM_EMAIL is not configured");
   }
 
-  const fromName = process.env.UNOSEND_FROM_NAME?.trim();
+  const fromName = process.env.RESEND_FROM_NAME?.trim();
   return fromName ? `${fromName} <${fromEmail}>` : fromEmail;
 }
 
 export async function sendMail(input: SendEmailInput): Promise<void> {
-  const apiKey = process.env.UNOSEND_API_KEY;
+  const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) {
-    throw new Error("UNOSEND_API_KEY is not configured");
+    throw new Error("RESEND_API_KEY is not configured");
   }
 
-  const response = await fetch("https://www.unosend.co/api/v1/emails", {
+  const response = await fetch(RESEND_EMAILS_ENDPOINT, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${apiKey}`,
@@ -41,5 +43,5 @@ export async function sendMail(input: SendEmailInput): Promise<void> {
   }
 
   const payload = await response.text();
-  throw new Error(`UnoSend request failed (${response.status}): ${payload}`);
+  throw new Error(`Resend request failed (${response.status}): ${payload}`);
 }
