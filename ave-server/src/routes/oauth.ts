@@ -990,7 +990,7 @@ app.post("/authorize", requireAuth, zValidator("json", z.object({
   await db.insert(activityLogs).values({
     userId: user.id,
     action: "oauth_authorized",
-    appId: oauthApp.id,
+    appId: isQuick ? null : oauthApp.id,
     details: {
       appName: oauthApp.name,
       appId: oauthApp.id,
