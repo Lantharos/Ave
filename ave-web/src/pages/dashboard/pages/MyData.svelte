@@ -71,7 +71,7 @@
 
     <ActionCard 
         action="DOWNLOAD MY DATA" 
-        description="This package includes only metadata tied to your Ave ID. App-level data must be exported from those apps directly." 
+        description="This package includes account, identity, device, security, session, activity, and connected-app metadata stored by Ave. App-level data must be exported from those apps directly."
         buttons={[
             { 
                 icon: "/icons/chevron-right-68.svg", 
@@ -85,7 +85,7 @@
     <ActionCard 
         color="#E14747" 
         action="DELETE MY DATA" 
-        description="Deleting your ID permanently erases all encrypted data and breaks access for apps using this identity. This action cannot be undone." 
+        description="Deletes your Ave account records and breaks connected-app access. It cannot remove data already copied by connected apps or cached public image copies."
         buttons={[
             { 
                 icon: "/icons/chevron-right-68.svg", 
@@ -95,7 +95,7 @@
         ]}
     />
 
-    <Text type="p" size={16} color="#878787" cclass="self-center">Ave is designed to minimize stored data. What little exists is encrypted end-to-end and visible only to you.</Text>
+    <Text type="p" size={16} color="#878787" cclass="self-center">Ave encrypts key material we do not need to read. Profile details and security metadata are stored so the service can work.</Text>
 </div>
 
 {#if showDeleteConfirm}
@@ -103,7 +103,7 @@
         <div class="bg-[#171717] rounded-[24px] md:rounded-[36px] p-6 md:p-[40px] max-w-[500px] w-full">
             <Text type="h" size={24} weight="bold" color="#E14747">Delete Account</Text>
             <p class="text-[#878787] text-sm md:text-[16px] mt-2 md:mt-[10px]">
-                This will permanently delete your account and all associated data. This action cannot be undone.
+                This deletes your Ave account records, active sessions, identities, passkeys, recovery-code records, and Ave authorization records. It cannot remove data already copied by connected apps, and public image caches may expire later.
             </p>
             <p class="text-[#FFFFFF] text-sm md:text-[16px] mt-4 md:mt-[20px]">
                 Type <span class="font-bold text-[#E14747]">DELETE MY ACCOUNT</span> to confirm:

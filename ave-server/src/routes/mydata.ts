@@ -166,7 +166,7 @@ app.delete("/", async (c) => {
   
   return c.json({ 
     success: true,
-    message: "Your account and all associated data have been permanently deleted.",
+    message: "Your Ave account records have been deleted. Data already copied by connected apps and cached public image copies may remain outside Ave's direct control.",
   });
 });
 
