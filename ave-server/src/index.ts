@@ -89,6 +89,14 @@ function resolveCorsOrigin(origin: string | undefined, requestHost?: string | nu
 
 const D1_BOOKMARK_HEADER = "x-d1-bookmark";
 
+function isPublicOAuthCorsPath(path: string): boolean {
+  return path === "/api/oauth/token"
+    || path === "/api/oauth/userinfo"
+    || path === "/api/oauth/session/check"
+    || path.startsWith("/api/oauth/app/")
+    || path.startsWith("/api/oauth/resource/");
+}
+
 function buildApp() {
   const app = new Hono<{ Bindings: Bindings }>();
 
@@ -109,21 +117,18 @@ function buildApp() {
     }
   });
 
-  app.use("/api/oauth/token", cors({
+  const publicOAuthCorsMiddleware = cors({
     origin: "*",
     credentials: false,
-    allowMethods: ["POST", "OPTIONS"],
+    allowMethods: ["GET", "POST", "OPTIONS"],
     allowHeaders: ["Content-Type", "Authorization", D1_BOOKMARK_HEADER],
     exposeHeaders: [D1_BOOKMARK_HEADER],
-  }));
+  });
 
   const oauthCorsMiddleware = cors({
     origin: (origin, c) => {
       const path = c.req.path;
       if (path.startsWith("/api/oauth/fedcm/")) {
-        return origin || "https://aveid.net";
-      }
-      if (path === "/api/oauth/session/check") {
         return origin || "https://aveid.net";
       }
       return resolveCorsOrigin(origin, c.req.header("host"));
@@ -135,8 +140,8 @@ function buildApp() {
   });
 
   app.use("/api/oauth/*", async (c, next) => {
-    if (c.req.path === "/api/oauth/token") {
-      return next();
+    if (isPublicOAuthCorsPath(c.req.path)) {
+      return publicOAuthCorsMiddleware(c, next);
     }
     return oauthCorsMiddleware(c, next);
   });
