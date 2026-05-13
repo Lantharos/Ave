@@ -686,7 +686,7 @@ export const api = {
   },
   
   oauth: {
-    getSessionBootstrap: (timeoutMs = 1500) =>
+    getSessionBootstrap: (timeoutMs = 5000) =>
       request<SessionBootstrap>("/api/oauth/session/bootstrap", {
         timeoutMs,
       }),

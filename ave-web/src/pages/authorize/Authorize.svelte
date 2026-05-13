@@ -15,7 +15,7 @@
         decryptSecretFromIdentity,
         loadIdentityEncryptionPrivateKey,
     } from "../../lib/crypto";
-	import { auth, isAuthenticated, identities as identitiesStore, currentIdentity } from "../../stores/auth";
+	import { auth, isAuthenticated, isLoading, identities as identitiesStore, currentIdentity } from "../../stores/auth";
 	import { setReturnUrl } from "../../util/return-url";
 	import { goto } from "@mateothegreat/svelte5-router";
 	import { safeGoto } from "../../util/safe-goto";
@@ -162,6 +162,8 @@
     let resolvedAppInfo = $state(false);
     let authorizeBootstrapClientId = $state<string | null>(null);
     let loadedAuthorizeBootstrapClientId = $state<string | null>(null);
+    let retryingCookieSession = $state(false);
+    let attemptedCookieSessionRetry = $state(false);
 
     const embedPopup = $derived.by(() => params.embed && !!window.opener);
     const embedSheet = $derived.by(() => params.embed && !embedPopup);
@@ -604,6 +606,17 @@
 
     }
 
+    async function retryCookieSessionBeforeLogin() {
+        if (retryingCookieSession || attemptedCookieSessionRetry) return;
+        attemptedCookieSessionRetry = true;
+        retryingCookieSession = true;
+        try {
+            await auth.init({ allowCookieSession: true, timeoutMs: 7000 });
+        } finally {
+            retryingCookieSession = false;
+        }
+    }
+
     // Check auth and load app info
 	$effect(() => {
         if (loadedAuthorizeBootstrapClientId && loadedAuthorizeBootstrapClientId !== params.clientId) {
@@ -619,6 +632,11 @@
         if (completed) return;
         void ensureAppInfo();
 		if (!$isAuthenticated) {
+            if ($isLoading || retryingCookieSession) return;
+            if (!attemptedCookieSessionRetry && !embedSheet) {
+                void retryCookieSessionBeforeLogin();
+                return;
+            }
 			if (redirectingToLogin) return;
             if (embedSheet) {
                 if (requestingStorageAccess) return;
