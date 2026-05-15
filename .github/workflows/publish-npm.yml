@@ -11,7 +11,7 @@ on:
           - sdks/ave-sdk
           - sdks/ave-embed
       version:
-        description: "Package version to publish, must match package.json"
+        description: "Package version to write and publish"
         required: true
         type: string
       access:
@@ -24,8 +24,12 @@ on:
           - restricted
 
 permissions:
-  contents: read
+  contents: write
   id-token: write
+
+concurrency:
+  group: publish-npm-${{ inputs.package }}
+  cancel-in-progress: false
 
 jobs:
   publish:
@@ -33,6 +37,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-node@v4
         with:
@@ -41,12 +47,14 @@ jobs:
 
       - uses: oven-sh/setup-bun@v2
 
+      - name: Update npm
+        run: npm install -g npm@latest
+
       - name: Validate package and version
         run: |
           set -euo pipefail
 
           package_dir="${{ inputs.package }}"
-          version="${{ inputs.version }}"
 
           case "$package_dir" in
             sdks/ave-sdk|sdks/ave-embed) ;;
@@ -64,9 +72,6 @@ jobs:
 
           if (!manifest.name) throw new Error("package.json is missing name");
           if (manifest.private === true) throw new Error(`${manifest.name} is private`);
-          if (manifest.version !== requestedVersion) {
-            throw new Error(`${manifest.name} version is ${manifest.version}, expected ${requestedVersion}`);
-          }
           if (!/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/.test(requestedVersion)) {
             throw new Error(`Invalid semver version: ${requestedVersion}`);
           }
@@ -77,6 +82,15 @@ jobs:
           PACKAGE_DIR: ${{ inputs.package }}
           REQUESTED_VERSION: ${{ inputs.version }}
 
+      - name: Check publish branch
+        run: |
+          set -euo pipefail
+
+          if [ "$GITHUB_REF_TYPE" != "branch" ]; then
+            echo "Run this workflow from a branch so the version bump can be committed." >&2
+            exit 1
+          fi
+
       - name: Check npm version availability
         run: |
           set -euo pipefail
@@ -86,6 +100,45 @@ jobs:
             exit 1
           fi
 
+      - name: Bump package version
+        run: |
+          set -euo pipefail
+
+          bun pm pkg set version="${{ inputs.version }}"
+
+          node <<'NODE'
+          const fs = require("node:fs");
+          const path = require("node:path");
+
+          const packageDir = process.cwd();
+          const requestedVersion = process.env.REQUESTED_VERSION;
+          const packageJsonPath = path.join(packageDir, "package.json");
+          const lockPath = path.join(packageDir, "package-lock.json");
+          const manifest = JSON.parse(fs.readFileSync(packageJsonPath, "utf8"));
+
+          if (manifest.version !== requestedVersion) {
+            throw new Error(`Version bump failed: package.json has ${manifest.version}, expected ${requestedVersion}`);
+          }
+
+          fs.writeFileSync(packageJsonPath, `${JSON.stringify(manifest, null, 2)}\n`);
+
+          if (fs.existsSync(lockPath)) {
+            const lock = JSON.parse(fs.readFileSync(lockPath, "utf8"));
+
+            if (typeof lock.version === "string") {
+              lock.version = requestedVersion;
+            }
+            if (lock.packages && lock.packages[""] && typeof lock.packages[""].version === "string") {
+              lock.packages[""].version = requestedVersion;
+            }
+
+            fs.writeFileSync(lockPath, `${JSON.stringify(lock, null, 2)}\n`);
+          }
+          NODE
+        working-directory: ${{ inputs.package }}
+        env:
+          REQUESTED_VERSION: ${{ inputs.version }}
+
       - name: Install dependencies
         run: bun install
         working-directory: ${{ inputs.package }}
@@ -93,6 +146,26 @@ jobs:
       - name: Build package
         run: bun run build
         working-directory: ${{ inputs.package }}
+
+      - name: Commit version bump
+        run: |
+          set -euo pipefail
+
+          package_dir="${{ inputs.package }}"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "$package_dir/package.json"
+          if [ -f "$package_dir/package-lock.json" ]; then
+            git add "$package_dir/package-lock.json"
+          fi
+
+          if git diff --cached --quiet; then
+            echo "No version changes to commit."
+          else
+            git commit -m "chore: release $PACKAGE_NAME@${{ inputs.version }}"
+            git push origin "HEAD:$GITHUB_REF_NAME"
+          fi
 
       - name: Publish package
         run: npm publish --access "${{ inputs.access }}"

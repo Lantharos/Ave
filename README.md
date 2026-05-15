@@ -180,7 +180,7 @@ bun run build:windows
 
 ### Publishing SDK packages
 
-SDK packages publish through `.github/workflows/publish-npm.yml` with npm trusted publishing. The workflow is manual, only accepts the SDK package folders, and requires a `version` input that must match the committed package version before it will publish.
+SDK packages publish through `.github/workflows/publish-npm.yml` with npm trusted publishing. The workflow is manual, only accepts the SDK package folders, writes the requested `version` into the selected package, commits the bump back to the branch, and then publishes.
 
 Before first use, configure each npm package's trusted publisher on npmjs.com for this repository and workflow file:
 
@@ -192,9 +192,11 @@ Then run the workflow with:
 
 ```txt
 package: sdks/ave-sdk or sdks/ave-embed
-version: the exact package.json version
+version: the package version to write and publish
 access: public or restricted
 ```
+
+Run it from a branch, not a tag, so the release commit can be pushed. No npm token is required. The workflow uses GitHub OIDC, so the npm package trusted publisher must point at this repository and workflow file before the first publish.
 
 ## Docs
 
