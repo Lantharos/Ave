@@ -43,6 +43,7 @@ If you need extra app permissions, layer them after Ave membership. Do not let a
 Your app needs an Ave organization ID before it can request organization context. Common patterns:
 
 - After a normal Ave sign-in, call Ave's organization lookup API with the returned `access_token`.
+- Let the user create a new Ave workspace from your app with the workspace creation API.
 - The organization admin links an Ave Business organization during app onboarding.
 - An invite or workspace URL contains the app workspace slug, and your app maps that slug to `aveOrgId`.
 - After a successful organization-context login, your app remembers the `org_id` as a recent workspace choice.
@@ -61,6 +62,25 @@ const selected = organizations[0];
 ```
 
 Use the returned `name`, `slug`, and `logoUrl` for the picker UI. Use the returned `id` as `organizationId` when starting the organization-context login.
+
+## Create a workspace from your app
+
+Apps can create an Ave Business workspace for the signed-in identity. Before calling the endpoint, tell the user that this creates an Ave-managed workspace and that membership, SSO, and organization access will be managed through Ave.
+
+```ts
+import { createAveWorkspaceOrganization } from "@ave-id/sdk";
+
+const organization = await createAveWorkspaceOrganization(
+  { clientId: "YOUR_CLIENT_ID" },
+  tokens.access_token,
+  {
+    name: "Example Co",
+    userConfirmedAveWorkspaceCreation: true,
+  }
+);
+```
+
+The created identity becomes the owner of the new Ave workspace. Your app should store `organization.id` as the workspace's `aveOrgId`, then start an organization-context login with that ID before allowing workspace actions.
 
 ## Sign in to a workspace
 

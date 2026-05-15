@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { KeyRound } from "lucide-svelte";
   import { api } from "../lib/api";
   import { signBusinessAction } from "../lib/business-actions";
   import type { BusinessEncryptionMode, BusinessOrganizationDetail, KmsProvider } from "../lib/types";
@@ -40,6 +39,15 @@
       && !busy
       && (modeDraft !== "enterprise_managed" || Boolean(keyRefDraft.trim())),
   );
+  const modeDescription = $derived.by(() => {
+    if (modeDraft === "enterprise_managed") {
+      return "Ave stores the organization policy and key reference. The key itself stays in the customer-managed KMS.";
+    }
+    if (modeDraft === "e2ee") {
+      return "Resources use identity-wrapped grants. Members need enrolled identity keys before encrypted access can be issued.";
+    }
+    return "Resources follow organization access policy without asking every member to set up an encryption key.";
+  });
 
   async function savePolicy() {
     if (!canSave) return;
@@ -78,20 +86,18 @@
           Standard is seamless. KMS keeps the customer key reference on the org. E2EE uses identity-wrapped grants.
         </p>
       </div>
-      <div class="flex min-h-11 items-center gap-2 rounded-full bg-white/[0.04] px-4 text-[13px] text-[#9a9a9a]">
-        <KeyRound size={15} />
-        <span>{detail.encryptionPolicy.mode === "enterprise_managed" ? "KMS" : detail.encryptionPolicy.mode}</span>
-      </div>
     </div>
 
-    <div class="grid gap-4 lg:grid-cols-[auto_1fr_auto] lg:items-end">
+    <div class="grid gap-5">
       <div>
         <p class="m-0 mb-2 text-[13px] text-[#777]">Mode</p>
         <Segmented value={modeDraft} options={modeOptions} onchange={(value) => (modeDraft = value)} />
       </div>
 
+      <p class="m-0 max-w-[720px] text-[14px] leading-6 text-[#858585]">{modeDescription}</p>
+
       {#if modeDraft === "enterprise_managed"}
-        <div class="grid gap-3 md:grid-cols-[auto_1fr_0.5fr] md:items-end">
+        <div class="grid gap-3 md:grid-cols-[auto_minmax(0,1fr)_minmax(140px,0.4fr)] md:items-end">
           <div>
             <p class="m-0 mb-2 text-[13px] text-[#777]">Provider</p>
             <Segmented value={providerDraft} options={providerOptions} onchange={(value) => (providerDraft = value)} />
@@ -99,15 +105,11 @@
           <Input bind:value={keyRefDraft} placeholder="KMS key ARN, Key Vault URL, or Cloud KMS resource" />
           <Input bind:value={keyVersionDraft} placeholder="Version" />
         </div>
-      {:else}
-        <div class="min-h-11 rounded-[24px] bg-white/[0.03] px-5 py-3 text-[14px] leading-6 text-[#858585]">
-          {modeDraft === "e2ee"
-            ? "Encrypted resources require identity key enrollment before grants can be issued."
-            : "Encrypted resources can follow org SSO and normal access policy without user key setup."}
-        </div>
       {/if}
 
-      <Button onclick={savePolicy} disabled={!canSave}>Save</Button>
+      <div class="flex justify-end">
+        <Button onclick={savePolicy} disabled={!canSave}>Save</Button>
+      </div>
     </div>
   </div>
 </Panel>

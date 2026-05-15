@@ -11,6 +11,7 @@ export interface ServerConfig {
 export { fetchJwks, verifyJwt };
 export type { VerifyJwtOptions };
 export {
+  createAveWorkspaceOrganization,
   getAveWorkspaceContext,
   getAveWorkspaceContextFromUserInfo,
   hasAveWorkspaceRole,

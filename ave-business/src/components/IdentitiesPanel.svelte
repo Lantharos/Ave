@@ -12,6 +12,7 @@
     addHandle: string;
     addRole: BusinessRole;
     roleOptions: { value: BusinessRole; label: string }[];
+    actingIdentityId: string;
     canManageIdentities: boolean;
     busy: boolean;
     onAdd: () => void;
@@ -24,12 +25,21 @@
     addHandle = $bindable(),
     addRole = $bindable(),
     roleOptions,
+    actingIdentityId,
     canManageIdentities,
     busy,
     onAdd,
     onRoleChange,
     onRemove,
   }: Props = $props();
+
+  function canEditMember(member: BusinessMember) {
+    return canManageIdentities && member.role !== "owner" && member.identityId !== actingIdentityId;
+  }
+
+  function roleLabel(member: BusinessMember) {
+    return member.identityId === actingIdentityId ? `${member.role} · you` : member.role;
+  }
 </script>
 
 <Panel>
@@ -52,7 +62,7 @@
 
     <div class="flex flex-col gap-2">
       {#each members as member (member.id)}
-        <div class="grid gap-4 rounded-[24px] bg-white/[0.03] px-4 py-4 xl:grid-cols-[1fr_auto_auto] xl:items-center">
+        <div class="flex flex-wrap items-center justify-between gap-4 rounded-[24px] bg-white/[0.03] px-4 py-4">
           <div class="flex min-w-0 items-center gap-3">
             <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white/[0.05] text-[13px] font-black text-white">
               {initials(member.displayName)}
@@ -62,14 +72,20 @@
               <p class="m-0 mt-1 truncate text-[13px] text-[#777]">@{member.handle}{member.hasEncryptionKey ? "" : " · no identity key"}</p>
             </div>
           </div>
-          <Segmented value={member.role} options={roleOptions} onchange={(role) => onRoleChange(member, role)} />
-          <button
-            class="flex min-h-10 w-10 items-center justify-center rounded-full bg-white/[0.04] text-[#777] transition-colors duration-300 hover:bg-[#E14747]/10 hover:text-[#E14747]"
-            onclick={() => onRemove(member)}
-            aria-label={`Remove ${member.handle}`}
-          >
-            <Trash2 size={16} />
-          </button>
+          <div class="flex min-h-10 items-center gap-3">
+            {#if canEditMember(member)}
+              <Segmented value={member.role} options={roleOptions} onchange={(role) => onRoleChange(member, role)} />
+              <button
+                class="flex min-h-10 w-10 items-center justify-center rounded-full bg-white/[0.04] text-[#777] transition-colors duration-300 hover:bg-[#E14747]/10 hover:text-[#E14747]"
+                onclick={() => onRemove(member)}
+                aria-label={`Remove ${member.handle}`}
+              >
+                <Trash2 size={16} />
+              </button>
+            {:else}
+              <span class="rounded-full bg-white/[0.04] px-4 py-2 text-[13px] text-[#9a9a9a]">{roleLabel(member)}</span>
+            {/if}
+          </div>
         </div>
       {/each}
     </div>

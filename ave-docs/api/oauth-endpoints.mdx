@@ -246,6 +246,61 @@ Errors:
 - `401 invalid_token` invalid/expired/unresolvable token
 - `403 invalid_client` token does not belong to the requested `client_id`
 
+## `POST /api/oauth/workspaces`
+
+Authorization: `Bearer <access_token>`
+
+Creates a new Ave Business workspace for the token identity. Apps should call this only after the user confirms that the app will create an Ave-managed workspace.
+
+Body:
+
+```json
+{
+  "name": "Example Co",
+  "client_id": "YOUR_CLIENT_ID",
+  "userConfirmedAveWorkspaceCreation": true
+}
+```
+
+<ParamField path="name" type="string" required>
+  Display name for the new Ave workspace.
+</ParamField>
+<ParamField path="client_id" type="string">
+  Verifies that the bearer token belongs to your app.
+</ParamField>
+<ParamField path="userConfirmedAveWorkspaceCreation" type="boolean" required>
+  Must be `true`. Set it only after your UI tells the user that this creates an Ave Business workspace.
+</ParamField>
+
+Response:
+
+```json
+{
+  "organization": {
+    "id": "org_...",
+    "name": "Example Co",
+    "slug": "example-co",
+    "logoUrl": null,
+    "role": "owner",
+    "scopes": ["read", "sign", "approve", "manage_identities", "manage_keys", "manage_sso", "manage_org"],
+    "signingAuthority": true,
+    "ssoRequired": false,
+    "encryptionMode": "standard",
+    "keyCustody": "ave_standard"
+  }
+}
+```
+
+The returned `organization.id` is the `organizationId` to use in the next authorization request.
+
+Errors:
+
+- `400 invalid_request` mismatched `clientId` and `client_id`
+- `400 workspace_creation_failed` the identity could not create the workspace
+- `401 unauthorized` missing bearer token
+- `401 invalid_token` invalid/expired/unresolvable token
+- `403 invalid_client` token is not for a registered Ave app or does not match `client_id`
+
 ## `GET /.well-known/openid-configuration`
 
 Returns issuer metadata, endpoints, supported scopes, response types, grant types, and signing algs.

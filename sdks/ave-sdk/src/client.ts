@@ -29,6 +29,7 @@ export {
 } from "./app-key.js";
 export { fetchJwks, verifyJwt } from "./jwt.js";
 export {
+  createAveWorkspaceOrganization,
   getAveWorkspaceContext,
   getAveWorkspaceContextFromUserInfo,
   hasAveWorkspaceRole,

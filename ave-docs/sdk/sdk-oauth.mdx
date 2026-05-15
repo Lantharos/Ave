@@ -246,6 +246,39 @@ Pass the selected organization's `id` as `organizationId` to `startPkceLogin()` 
 
 ---
 
+### `createAveWorkspaceOrganization(config, accessToken, params)`
+
+Creates an Ave Business workspace for the token identity. Call this only after your UI tells the user that it will create an Ave-managed workspace.
+
+```ts
+function createAveWorkspaceOrganization(
+  config: { issuer?: string; clientId?: string; fetcher?: typeof fetch },
+  accessToken: string,
+  params: {
+    name: string;
+    clientId?: string;
+    userConfirmedAveWorkspaceCreation: true;
+  }
+): Promise<AveWorkspaceOrganization>
+```
+
+```ts
+import { createAveWorkspaceOrganization } from "@ave-id/sdk";
+
+const organization = await createAveWorkspaceOrganization(
+  { clientId: "YOUR_CLIENT_ID" },
+  tokens.access_token,
+  {
+    name: "Example Co",
+    userConfirmedAveWorkspaceCreation: true,
+  }
+);
+```
+
+The returned `organization.id` is the `organizationId` for the follow-up workspace sign-in.
+
+---
+
 ## Client helpers
 
 Import from `@ave-id/sdk/client`. Browser-only.

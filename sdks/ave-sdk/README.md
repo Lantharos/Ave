@@ -115,14 +115,28 @@ const tokens = await finishPkceLogin({
 
 Apps can use Ave Business organizations as workspaces by passing `organizationId` during sign-in. Ave manages membership, roles, SSO policy, and org scopes; your app stores product data keyed by `org_id`.
 
+If your app creates the workspace, show the user that it will create an Ave-managed workspace before calling `createAveWorkspaceOrganization`.
+
 ```ts
-import { listAveWorkspaceOrganizations } from "@ave-id/sdk";
+import { createAveWorkspaceOrganization, listAveWorkspaceOrganizations } from "@ave-id/sdk";
 import { startPkceLogin } from "@ave-id/sdk/client";
 
-const organizations = await listAveWorkspaceOrganizations(
+let organizations = await listAveWorkspaceOrganizations(
   { clientId: "YOUR_CLIENT_ID" },
   tokens.access_token
 );
+
+if (!organizations.length) {
+  const organization = await createAveWorkspaceOrganization(
+    { clientId: "YOUR_CLIENT_ID" },
+    tokens.access_token,
+    {
+      name: "Example Co",
+      userConfirmedAveWorkspaceCreation: true,
+    }
+  );
+  organizations = [organization];
+}
 
 await startPkceLogin({
   clientId: "YOUR_CLIENT_ID",

@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { Building2, Fingerprint, KeyRound, LockKeyhole, Network, Plus, RefreshCw, ScrollText, ShieldCheck } from "lucide-svelte";
+  import { Building2, Fingerprint, KeyRound, LockKeyhole, Network, Plus, RefreshCw, ScrollText } from "lucide-svelte";
   import AuroraBackdrop from "./components/AuroraBackdrop.svelte";
   import Button from "./components/Button.svelte";
   import AuditPanel from "./components/AuditPanel.svelte";
@@ -299,20 +299,10 @@
         {#if detail}
           <section class="flex flex-col gap-5">
             <Panel class="p-6 md:p-8">
-              <div class="flex flex-wrap items-start justify-between gap-4">
-                <div>
-                  <p class="m-0 text-[14px] text-[#777]">@{detail.organization.actingHandle} acting in</p>
-                  <h2 class="m-0 mt-1 text-[30px] font-black text-white md:text-[40px]">{detail.organization.name}</h2>
-                  <p class="m-0 mt-2 max-w-[680px] text-[14px] leading-6 text-[#858585]">Use dedicated identities for each organization when data boundaries matter.</p>
-                </div>
-                <Button
-                  variant={detail.organization.ssoRequired ? "primary" : "ghost"}
-                  onclick={toggleSsoRequired}
-                  disabled={!canManageSso || busy || (!detail.organization.ssoRequired && !hasActiveSsoConnection)}
-                >
-                  <ShieldCheck size={16} />
-                  <span class="ml-2">{detail.organization.ssoRequired ? "SSO required" : "SSO optional"}</span>
-                </Button>
+              <div>
+                <p class="m-0 text-[14px] text-[#777]">@{detail.organization.actingHandle} acting in</p>
+                <h2 class="m-0 mt-1 text-[30px] font-black text-white md:text-[40px]">{detail.organization.name}</h2>
+                <p class="m-0 mt-2 max-w-[680px] text-[14px] leading-6 text-[#858585]">Use dedicated identities for each organization when data boundaries matter.</p>
               </div>
             </Panel>
 
@@ -324,6 +314,7 @@
                 bind:addHandle
                 bind:addRole
                 {roleOptions}
+                actingIdentityId={detail.organization.actingIdentityId}
                 {canManageIdentities}
                 {busy}
                 onAdd={addIdentity}
@@ -355,6 +346,8 @@
                 {busy}
                 setBusy={(value) => (busy = value)}
                 setError={(message) => (error = message)}
+                {hasActiveSsoConnection}
+                onToggleSsoRequired={toggleSsoRequired}
                 reload={() => (detail ? loadOrganization(detail.organization.id) : Promise.resolve())}
               />
             {:else}

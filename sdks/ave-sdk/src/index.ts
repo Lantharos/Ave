@@ -33,6 +33,7 @@ export { configureCryptoRuntime, createExpoCryptoRuntime, isJwtVerificationSuppo
 export type { AveCryptoRuntime } from "./crypto-runtime.js";
 export { fetchJwks, verifyJwt } from "./jwt.js";
 export {
+  createAveWorkspaceOrganization,
   getAveWorkspaceContext,
   getAveWorkspaceContextFromUserInfo,
   hasAveWorkspaceRole,

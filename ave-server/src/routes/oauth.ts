@@ -11,12 +11,19 @@ import { consumeAuthorizationCode, getAccessToken, getAuthorizationCode, setAcce
 import { hasVerifiedEmail, serializeIdentityForApp, serializeIdentityForOwner } from "../lib/identity-serialization";
 import { isOriginAllowedForApp, isRedirectUriAllowedForApp, normalizeRedirectUri } from "../lib/redirect-uri";
 import { enforceRateLimits, ipRateLimit, subjectRateLimit } from "../lib/rate-limit";
-import { hasEnterpriseSsoSessionForOrganization, scopesForRole, type BusinessRole } from "../lib/business";
+import { createBusinessOrganization, hasEnterpriseSsoSessionForOrganization, scopesForRole, type BusinessRole } from "../lib/business";
 import { serializeEncryptionPolicy } from "../lib/business-encryption";
 import { getRequiredEnterpriseSsoForOrganization } from "../lib/enterprise-sso-policy";
 
 const app = new Hono();
 export const oidcRoutes = new Hono();
+
+const createWorkspaceSchema = z.object({
+  name: z.string().trim().min(1).max(100),
+  client_id: z.string().optional(),
+  clientId: z.string().optional(),
+  userConfirmedAveWorkspaceCreation: z.literal(true),
+});
 
 oidcRoutes.get("/webfinger", (c) => {
   const resource = c.req.query("resource");
@@ -214,6 +221,25 @@ function organizationResponse(record: {
     authMethod: record.organizationAuthMethod,
     ssoConnectionId: record.organizationSsoConnectionId,
     e2eeKeyDelivery: "ave_identity_grants_only",
+  };
+}
+
+function workspaceOrganizationResponse(
+  organization: typeof organizations.$inferSelect,
+  member: typeof organizationIdentityMembers.$inferSelect,
+  encryptionPolicy: ReturnType<typeof serializeEncryptionPolicy>
+) {
+  return {
+    id: organization.id,
+    name: organization.name,
+    slug: organization.slug,
+    logoUrl: organization.logoUrl,
+    role: member.role,
+    scopes: scopesForRole(member.role as BusinessRole, member.scopes as string[] | null),
+    signingAuthority: member.signingAuthority,
+    ssoRequired: organization.ssoRequired,
+    encryptionMode: encryptionPolicy.mode,
+    keyCustody: keyCustodyForEncryptionMode(encryptionPolicy.mode),
   };
 }
 
@@ -1896,20 +1922,83 @@ app.get("/organizations", async (c) => {
   return c.json({
     organizations: memberships.map(({ member, organization }) => {
       const encryptionPolicy = serializeEncryptionPolicy(policyByOrganizationId.get(organization.id) ?? null, organization.id);
-      return {
-        id: organization.id,
-        name: organization.name,
-        slug: organization.slug,
-        logoUrl: organization.logoUrl,
-        role: member.role,
-        scopes: scopesForRole(member.role as BusinessRole, member.scopes as string[] | null),
-        signingAuthority: member.signingAuthority,
-        ssoRequired: organization.ssoRequired,
-        encryptionMode: encryptionPolicy.mode,
-        keyCustody: keyCustodyForEncryptionMode(encryptionPolicy.mode),
-      };
+      return workspaceOrganizationResponse(organization, member, encryptionPolicy);
     }),
   });
+});
+
+app.post("/workspaces", zValidator("json", createWorkspaceSchema), async (c) => {
+  const authHeader = c.req.header("Authorization");
+  if (!authHeader?.startsWith("Bearer ")) {
+    return c.json({ error: "unauthorized" }, 401);
+  }
+
+  const body = c.req.valid("json");
+  const requestedClientId = body.clientId ?? body.client_id;
+  if (body.clientId && body.client_id && body.clientId !== body.client_id) {
+    return c.json({ error: "invalid_request", error_description: "clientId and client_id must match" }, 400);
+  }
+
+  const token = authHeader.slice(7);
+  const rateLimitResponse = await enforceRateLimits(c, [
+    ipRateLimit(c, "oauth:workspaces-create:ip", 30, 60 * 1000),
+    subjectRateLimit("oauth:workspaces-create:token", token.slice(0, 32), 10, 60 * 1000),
+  ]);
+  if (rateLimitResponse) return rateLimitResponse;
+
+  const record = await resolveAccessTokenRecord(token);
+  if (!record) {
+    return c.json({ error: "invalid_token" }, 401);
+  }
+
+  const oauthApp = await resolveOauthAppForAccessRecord(record);
+  if (!oauthApp) {
+    return c.json({ error: "invalid_client", error_description: "Workspace creation requires a registered Ave app token" }, 403);
+  }
+  if (requestedClientId && oauthApp.clientId !== requestedClientId) {
+    return c.json({ error: "invalid_client", error_description: "Token does not belong to that client" }, 403);
+  }
+
+  const [identity] = await db
+    .select()
+    .from(identities)
+    .where(eq(identities.id, record.identityId))
+    .limit(1);
+
+  if (!identity) {
+    return c.json({ error: "invalid_token" }, 401);
+  }
+
+  const identityRateLimit = await enforceRateLimits(c, [
+    subjectRateLimit("oauth:workspaces-create:identity", identity.id, 5, 60 * 1000),
+  ]);
+  if (identityRateLimit) return identityRateLimit;
+
+  const created = await createBusinessOrganization(identity.userId, body.name, identity.id);
+  if (!created) {
+    return c.json({ error: "workspace_creation_failed" }, 400);
+  }
+
+  const encryptionPolicy = serializeEncryptionPolicy(null, created.organization.id);
+  const organization = workspaceOrganizationResponse(created.organization, created.member, encryptionPolicy);
+
+  await db.insert(activityLogs).values({
+    userId: identity.userId,
+    action: "oauth_workspace_created",
+    appId: oauthApp?.id,
+    details: {
+      organizationId: created.organization.id,
+      organizationName: created.organization.name,
+      identityId: identity.id,
+      clientId: oauthApp?.clientId ?? requestedClientId,
+      source: "oauth_workspace_endpoint",
+    },
+    ipAddress: c.req.header("x-forwarded-for") || c.req.header("x-real-ip"),
+    userAgent: c.req.header("user-agent"),
+    severity: "info",
+  });
+
+  return c.json({ organization }, 201);
 });
 
 

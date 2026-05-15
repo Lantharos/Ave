@@ -145,6 +145,45 @@ export async function listAveWorkspaceOrganizations(
   return payload.organizations || [];
 }
 
+export async function createAveWorkspaceOrganization(
+  config: { issuer?: string; clientId?: string; fetcher?: typeof fetch },
+  accessToken: string,
+  params: {
+    name: string;
+    clientId?: string;
+    userConfirmedAveWorkspaceCreation: true;
+  }
+): Promise<AveWorkspaceOrganization> {
+  const fetcher = config.fetcher ?? globalThis.fetch;
+  if (!fetcher) {
+    throw new Error("No fetch implementation available for Ave workspace creation.");
+  }
+
+  const response = await fetcher(`${getApiBase(config.issuer)}/api/oauth/workspaces`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      name: params.name,
+      client_id: params.clientId ?? config.clientId,
+      userConfirmedAveWorkspaceCreation: params.userConfirmedAveWorkspaceCreation,
+    }),
+  });
+
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({})) as { error?: string; error_description?: string };
+    throw new Error(data.error_description || data.error || `Failed to create Ave workspace organization (${response.status})`);
+  }
+
+  const payload = await response.json() as { organization?: AveWorkspaceOrganization };
+  if (!payload.organization) {
+    throw new Error("Ave workspace creation response did not include an organization.");
+  }
+  return payload.organization;
+}
+
 export function requireAveWorkspaceContext(
   claims: AveJwtClaims | AveIdTokenClaims | JwtPayload | null | undefined
 ): AveWorkspaceContext {
