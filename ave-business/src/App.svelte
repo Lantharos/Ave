@@ -1,19 +1,19 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { Plus, RefreshCw, ShieldCheck, Trash2 } from "lucide-svelte";
+  import { Building2, Fingerprint, KeyRound, LockKeyhole, Network, Plus, RefreshCw, ScrollText, ShieldCheck } from "lucide-svelte";
   import AuroraBackdrop from "./components/AuroraBackdrop.svelte";
   import Button from "./components/Button.svelte";
   import AuditPanel from "./components/AuditPanel.svelte";
   import DomainsSsoPanel from "./components/DomainsSsoPanel.svelte";
   import EncryptionPanel from "./components/EncryptionPanel.svelte";
+  import IdentitiesPanel from "./components/IdentitiesPanel.svelte";
   import Input from "./components/Input.svelte";
+  import OrganizationOverview from "./components/OrganizationOverview.svelte";
   import OrgKeysPanel from "./components/OrgKeysPanel.svelte";
   import Panel from "./components/Panel.svelte";
-  import Segmented from "./components/Segmented.svelte";
   import SignInPanel from "./components/SignInPanel.svelte";
   import { ApiError, api } from "./lib/api";
   import { scopesForRole, signBusinessAction } from "./lib/business-actions";
-  import { initials } from "./lib/format";
   import { businessReturnTarget, resolveAveOrigin } from "./lib/origins";
   import type {
     BusinessIdentity,
@@ -22,6 +22,7 @@
     BusinessOrganizationSummary,
     BusinessRole,
   } from "./lib/types";
+  type SectionId = "overview" | "identities" | "keys" | "encryption" | "sso" | "audit";
   const roleOptions: { value: BusinessRole; label: string }[] = [
     { value: "member", label: "member" },
     { value: "signer", label: "signer" },
@@ -40,11 +41,20 @@
   let ownerIdentityId = $state("");
   let addHandle = $state("");
   let addRole = $state<BusinessRole>("member");
+  let activeSection = $state<SectionId>("overview");
   const activeMembers = $derived(detail?.members.filter((member) => member.status === "active") || []);
   const canManageIdentities = $derived(Boolean(detail?.organization.scopes.includes("manage_identities")));
   const canManageKeys = $derived(Boolean(detail?.organization.scopes.includes("manage_keys")));
   const canManageSso = $derived(Boolean(detail?.organization.scopes.includes("manage_sso")));
   const hasActiveSsoConnection = $derived(Boolean(detail?.ssoConnections.some((connection) => connection.status === "active")));
+  const navItems = $derived([
+    { id: "overview" as const, label: "overview", count: "" },
+    { id: "identities" as const, label: "identities", count: String(activeMembers.length) },
+    { id: "keys" as const, label: "keys", count: String(detail?.keys.length || 0) },
+    { id: "encryption" as const, label: "encryption", count: detail?.encryptionPolicy.mode === "enterprise_managed" ? "KMS" : detail?.encryptionPolicy.mode || "" },
+    { id: "sso" as const, label: "domains and SSO", count: String((detail?.domains.length || 0) + (detail?.ssoConnections.length || 0)) },
+    { id: "audit" as const, label: "audit", count: String(detail?.auditEvents.length || 0) },
+  ]);
   onMount(() => {
     void loadBootstrap();
   });
@@ -75,6 +85,10 @@
       error = err instanceof Error ? err.message : "Failed to load organization";
     }
   }
+  async function selectOrganization(organizationId: string) {
+    activeSection = "overview";
+    await loadOrganization(organizationId);
+  }
   async function reloadDetail() {
     if (detail) await loadOrganization(detail.organization.id);
   }
@@ -88,6 +102,7 @@
       const result = await api.createOrganization(name, ownerIdentityId, signedAction);
       createName = "";
       await loadBootstrap();
+      activeSection = "overview";
       await loadOrganization(result.organization.id);
     } catch (err) {
       error = err instanceof Error ? err.message : "Failed to create organization";
@@ -180,8 +195,8 @@
     <AuroraBackdrop preset="business-tr" cclass="absolute top-0 right-0 w-[70%] pointer-events-none select-none" />
     <AuroraBackdrop preset="business-bl" cclass="absolute bottom-0 left-0 w-[80%] pointer-events-none select-none" />
 
-    <div class="relative z-10 mx-auto flex w-full max-w-[1440px] flex-col gap-5">
-      <header class="rounded-[30px] bg-[#0d0d0d]/88 px-5 py-5 shadow-[0_24px_80px_rgba(0,0,0,0.24)]">
+    <div class="relative z-10 mx-auto flex w-full max-w-[1320px] flex-col gap-5">
+      <header class="rounded-[30px] bg-[#0d0d0d]/88 px-5 py-5 shadow-[0_24px_80px_rgba(0,0,0,0.24)] md:px-7">
         <div class="flex flex-wrap items-center justify-between gap-4">
           <div>
             <p class="m-0 text-[14px] text-[#7d7d7d]">business.aveid.net</p>
@@ -201,8 +216,8 @@
         </div>
       {/if}
 
-      <div class="grid gap-5 lg:grid-cols-[320px_1fr]">
-        <aside class="flex flex-col gap-4">
+      <div class="grid gap-5 xl:grid-cols-[300px_minmax(0,1fr)]">
+        <aside class="flex flex-col gap-4 xl:sticky xl:top-5 xl:self-start">
           <Panel>
             <div class="flex flex-col gap-4">
               <div class="flex items-center justify-between">
@@ -213,7 +228,7 @@
                 {#each organizations as org (org.id)}
                   <button
                     class="flex min-h-14 items-center justify-between gap-3 rounded-[20px] px-4 text-left transition-[background-color,scale] duration-300 active:scale-[0.96] {selectedOrganizationId === org.id ? 'bg-white/[0.08]' : 'bg-white/[0.03] hover:bg-white/[0.05]'}"
-                    onclick={() => loadOrganization(org.id)}
+                    onclick={() => selectOrganization(org.id)}
                   >
                     <span class="min-w-0">
                       <span class="block truncate text-[14px] font-semibold text-white">{org.name}</span>
@@ -225,6 +240,39 @@
               </div>
             </div>
           </Panel>
+
+          {#if detail}
+            <Panel>
+              <nav class="flex flex-col gap-1" aria-label="Organization sections">
+                {#each navItems as item (item.id)}
+                  <button
+                    class="flex min-h-11 items-center justify-between gap-3 rounded-full px-4 text-left transition-[background-color,color,scale] duration-300 active:scale-[0.96] {activeSection === item.id ? 'bg-[#B9BBBE] text-[#090909]' : 'bg-transparent text-[#8c8c8c] hover:bg-white/[0.04] hover:text-white'}"
+                    onclick={() => (activeSection = item.id)}
+                  >
+                    <span class="flex min-w-0 items-center gap-3">
+                      {#if item.id === "overview"}
+                        <Building2 size={15} />
+                      {:else if item.id === "identities"}
+                        <Fingerprint size={15} />
+                      {:else if item.id === "keys"}
+                        <KeyRound size={15} />
+                      {:else if item.id === "encryption"}
+                        <LockKeyhole size={15} />
+                      {:else if item.id === "sso"}
+                        <Network size={15} />
+                      {:else}
+                        <ScrollText size={15} />
+                      {/if}
+                      <span class="truncate text-[14px] font-semibold">{item.label}</span>
+                    </span>
+                    {#if item.count}
+                      <span class="shrink-0 tabular-nums text-[12px] opacity-60">{item.count}</span>
+                    {/if}
+                  </button>
+                {/each}
+              </nav>
+            </Panel>
+          {/if}
 
           <Panel>
             <div class="flex flex-col gap-4">
@@ -250,7 +298,7 @@
 
         {#if detail}
           <section class="flex flex-col gap-5">
-            <Panel>
+            <Panel class="p-6 md:p-8">
               <div class="flex flex-wrap items-start justify-between gap-4">
                 <div>
                   <p class="m-0 text-[14px] text-[#777]">@{detail.organization.actingHandle} acting in</p>
@@ -268,46 +316,21 @@
               </div>
             </Panel>
 
-            <div class="grid gap-5 xl:grid-cols-[1.05fr_0.95fr]">
-              <Panel>
-                <div class="flex flex-col gap-5">
-                  <div class="flex flex-wrap items-center justify-between gap-3">
-                    <h3 class="m-0 text-[22px] font-semibold text-white">Identities</h3>
-                    <span class="tabular-nums text-[13px] text-[#777]">{activeMembers.length} active</span>
-                  </div>
-                  {#if canManageIdentities}
-                    <div class="grid gap-3 md:grid-cols-[1fr_auto_auto]">
-                      <Input bind:value={addHandle} placeholder="@handle" />
-                      <Segmented value={addRole} options={roleOptions} onchange={(role) => (addRole = role)} />
-                      <Button onclick={addIdentity} disabled={busy || !addHandle.trim()}>Add</Button>
-                    </div>
-                  {/if}
-                  <div class="flex flex-col overflow-hidden rounded-[24px] bg-[#0b0b0b]">
-                    {#each activeMembers as member (member.id)}
-                      <div class="grid gap-4 px-4 py-4 odd:bg-white/[0.02] md:grid-cols-[1fr_auto_auto] md:items-center">
-                        <div class="flex min-w-0 items-center gap-3">
-                          <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white/[0.05] text-[13px] font-black text-white">
-                            {initials(member.displayName)}
-                          </div>
-                          <div class="min-w-0">
-                            <p class="m-0 truncate text-[15px] font-semibold text-white">{member.displayName}</p>
-                            <p class="m-0 mt-1 truncate text-[13px] text-[#777]">@{member.handle}{member.hasEncryptionKey ? "" : " · no identity key"}</p>
-                          </div>
-                        </div>
-                        <Segmented value={member.role} options={roleOptions} onchange={(role) => updateRole(member, role)} />
-                        <button
-                          class="flex min-h-10 w-10 items-center justify-center rounded-full bg-white/[0.04] text-[#777] transition-colors duration-300 hover:bg-[#E14747]/10 hover:text-[#E14747]"
-                          onclick={() => removeMember(member)}
-                          aria-label={`Remove ${member.handle}`}
-                        >
-                          <Trash2 size={16} />
-                        </button>
-                      </div>
-                    {/each}
-                  </div>
-                </div>
-              </Panel>
-
+            {#if activeSection === "overview"}
+              <OrganizationOverview {detail} activeMembers={activeMembers.length} onSelect={(section) => (activeSection = section)} />
+            {:else if activeSection === "identities"}
+              <IdentitiesPanel
+                members={activeMembers}
+                bind:addHandle
+                bind:addRole
+                {roleOptions}
+                {canManageIdentities}
+                {busy}
+                onAdd={addIdentity}
+                onRoleChange={updateRole}
+                onRemove={removeMember}
+              />
+            {:else if activeSection === "keys"}
               <OrgKeysPanel
                 {detail}
                 {canManageKeys}
@@ -316,27 +339,27 @@
                 setError={(message) => (error = message)}
                 reload={reloadDetail}
               />
-            </div>
-
-            <EncryptionPanel
-              {detail}
-              {canManageKeys}
-              {busy}
-              setBusy={(value) => (busy = value)}
-              setError={(message) => (error = message)}
-              reload={reloadDetail}
-            />
-
-            <DomainsSsoPanel
-              {detail}
-              {canManageSso}
-              {busy}
-              setBusy={(value) => (busy = value)}
-              setError={(message) => (error = message)}
-              reload={() => (detail ? loadOrganization(detail.organization.id) : Promise.resolve())}
-            />
-
-            <AuditPanel events={detail.auditEvents} />
+            {:else if activeSection === "encryption"}
+              <EncryptionPanel
+                {detail}
+                {canManageKeys}
+                {busy}
+                setBusy={(value) => (busy = value)}
+                setError={(message) => (error = message)}
+                reload={reloadDetail}
+              />
+            {:else if activeSection === "sso"}
+              <DomainsSsoPanel
+                {detail}
+                {canManageSso}
+                {busy}
+                setBusy={(value) => (busy = value)}
+                setError={(message) => (error = message)}
+                reload={() => (detail ? loadOrganization(detail.organization.id) : Promise.resolve())}
+              />
+            {:else}
+              <AuditPanel events={detail.auditEvents} />
+            {/if}
           </section>
         {:else}
           <Panel>
