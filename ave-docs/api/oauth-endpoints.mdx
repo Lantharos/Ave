@@ -179,6 +179,7 @@ Organization context shape:
 {
   "organization": {
     "id": "org_...",
+    "name": "Example Co",
     "memberId": "orgmem_...",
     "role": "admin",
     "scopes": ["read", "sign", "approve"],
@@ -205,6 +206,45 @@ Errors:
 
 - `401 unauthorized` missing bearer token
 - `401 invalid_token` invalid/expired/unresolvable token
+
+## `GET /api/oauth/organizations`
+
+Authorization: `Bearer <access_token_or_access_token_jwt>`
+
+Lists the active Ave Business organizations for the token identity. Apps use this after a normal sign-in to build a workspace picker, then pass the selected organization `id` as `organizationId` in the next authorization request.
+
+Optional query:
+
+<ParamField path="client_id" type="string">
+  When present, Ave verifies that the bearer token belongs to that client.
+</ParamField>
+
+Response:
+
+```json
+{
+  "organizations": [
+    {
+      "id": "org_...",
+      "name": "Example Co",
+      "slug": "example-co",
+      "logoUrl": "https://...",
+      "role": "admin",
+      "scopes": ["read", "sign", "approve"],
+      "signingAuthority": true,
+      "ssoRequired": true,
+      "encryptionMode": "standard",
+      "keyCustody": "ave_standard"
+    }
+  ]
+}
+```
+
+Errors:
+
+- `401 unauthorized` missing bearer token
+- `401 invalid_token` invalid/expired/unresolvable token
+- `403 invalid_client` token does not belong to the requested `client_id`
 
 ## `GET /.well-known/openid-configuration`
 

@@ -32,6 +32,7 @@ export interface AveJwtClaims extends JwtPayload {
   quick?: boolean;
   auth_context?: "organization" | string;
   org_id?: string;
+  org_name?: string;
   org_member_id?: string;
   org_role?: "owner" | "admin" | "signer" | "member" | "viewer" | string;
   org_scopes?: string[];
@@ -52,6 +53,7 @@ export interface AveIdTokenClaims extends JwtPayload {
   picture?: string;
   auth_context?: "organization" | string;
   org_id?: string;
+  org_name?: string;
   org_member_id?: string;
   org_role?: "owner" | "admin" | "signer" | "member" | "viewer" | string;
   org_scopes?: string[];
@@ -109,6 +111,19 @@ export interface TokenResponse {
     avatarUrl?: string;
   } | null;
   user_id?: string;
+  organization?: {
+    id: string;
+    name?: string;
+    memberId?: string;
+    role?: "owner" | "admin" | "signer" | "member" | "viewer" | string;
+    scopes: string[];
+    signingAuthority: boolean;
+    encryptionMode?: "standard" | "enterprise_managed" | "e2ee" | string;
+    keyCustody?: "ave_standard" | "customer_kms" | "identity_grants" | string;
+    authMethod?: "ave_session" | "enterprise_sso" | string;
+    ssoConnectionId?: string;
+    e2eeKeyDelivery?: "ave_identity_grants_only" | string;
+  };
 }
 
 export interface FedCmTokenResponse extends TokenResponse {
@@ -126,6 +141,7 @@ export interface UserInfo {
   user_id?: string;
   organization?: {
     id: string;
+    name?: string;
     memberId?: string;
     role?: "owner" | "admin" | "signer" | "member" | "viewer" | string;
     scopes: string[];

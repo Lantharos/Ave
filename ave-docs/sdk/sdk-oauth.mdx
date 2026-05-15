@@ -222,6 +222,30 @@ Returns `UserInfo` with `sub`, `name?`, `preferred_username?`, `email?`, `pictur
 
 ---
 
+### `listAveWorkspaceOrganizations(config, accessToken)`
+
+Lists Ave Business organizations that the token identity can use. Use it to build a workspace picker before requesting organization context.
+
+```ts
+function listAveWorkspaceOrganizations(
+  config: { issuer?: string; clientId?: string; fetcher?: typeof fetch },
+  accessToken: string
+): Promise<AveWorkspaceOrganization[]>
+```
+
+```ts
+import { listAveWorkspaceOrganizations } from "@ave-id/sdk";
+
+const organizations = await listAveWorkspaceOrganizations(
+  { clientId: "YOUR_CLIENT_ID" },
+  tokens.access_token
+);
+```
+
+Pass the selected organization's `id` as `organizationId` to `startPkceLogin()` or `buildAuthorizeUrl()`.
+
+---
+
 ## Client helpers
 
 Import from `@ave-id/sdk/client`. Browser-only.

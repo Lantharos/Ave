@@ -42,11 +42,25 @@ If you need extra app permissions, layer them after Ave membership. Do not let a
 
 Your app needs an Ave organization ID before it can request organization context. Common patterns:
 
+- After a normal Ave sign-in, call Ave's organization lookup API with the returned `access_token`.
 - The organization admin links an Ave Business organization during app onboarding.
 - An invite or workspace URL contains the app workspace slug, and your app maps that slug to `aveOrgId`.
 - After a successful organization-context login, your app remembers the `org_id` as a recent workspace choice.
 
 The remembered list is only navigation state. Do not authorize from it. Authorization still comes from a verified token that contains the same `org_id`.
+
+```ts
+import { listAveWorkspaceOrganizations } from "@ave-id/sdk";
+
+const organizations = await listAveWorkspaceOrganizations(
+  { clientId: "YOUR_CLIENT_ID" },
+  tokens.access_token
+);
+
+const selected = organizations[0];
+```
+
+Use the returned `name`, `slug`, and `logoUrl` for the picker UI. Use the returned `id` as `organizationId` when starting the organization-context login.
 
 ## Sign in to a workspace
 
@@ -98,6 +112,7 @@ export async function handleWorkspaceRequest(request: Request) {
   return Response.json({
     identityId: principal.subject,
     aveOrgId: workspace.id,
+    workspaceName: workspace.name,
     role: workspace.role,
     scopes: workspace.scopes,
   });
@@ -159,6 +174,19 @@ This lets an app support extra concepts like project owner, billing admin, or en
 When a member is removed from an Ave organization, refresh stops issuing organization-context tokens for that member. Existing short-lived tokens may remain valid until they expire. For sensitive actions, require a fresh token or an Ave signing flow.
 
 Do not cache workspace membership indefinitely in your app. Cache app metadata keyed by `org_id`, but make access decisions from verified current tokens.
+
+## Server-side sessions
+
+For dashboards that keep tokens out of the browser, use a backend session with an HttpOnly cookie and store Ave refresh tokens server-side.
+
+On each protected workspace request:
+
+1. Load your app session.
+2. Refresh the Ave token if it is near expiry.
+3. If refresh returns `access_denied`, `invalid_grant`, or `enterprise_sso_required`, clear the app session and send the user back through Ave.
+4. Authorize from the freshly verified organization-context token.
+
+Do not let the app cookie outlive Ave organization access by itself. Either cap the app session to the current Ave token expiry, or refresh with Ave before extending the app session. This keeps removed members from retaining long dashboard access through a cached app session.
 
 ## Encryption and SSO
 

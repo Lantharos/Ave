@@ -116,13 +116,19 @@ const tokens = await finishPkceLogin({
 Apps can use Ave Business organizations as workspaces by passing `organizationId` during sign-in. Ave manages membership, roles, SSO policy, and org scopes; your app stores product data keyed by `org_id`.
 
 ```ts
+import { listAveWorkspaceOrganizations } from "@ave-id/sdk";
 import { startPkceLogin } from "@ave-id/sdk/client";
+
+const organizations = await listAveWorkspaceOrganizations(
+  { clientId: "YOUR_CLIENT_ID" },
+  tokens.access_token
+);
 
 await startPkceLogin({
   clientId: "YOUR_CLIENT_ID",
   redirectUri: "https://yourapp.com/callback",
   scope: "openid profile email offline_access",
-  organizationId: "org_...",
+  organizationId: organizations[0]!.id,
 });
 ```
 

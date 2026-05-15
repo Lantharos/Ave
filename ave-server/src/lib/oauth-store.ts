@@ -13,6 +13,7 @@ export type AuthorizationCodeRecord = {
   scope: string;
   expiresAt: number;
   organizationId?: string;
+  organizationName?: string;
   organizationMemberId?: string;
   organizationRole?: string;
   organizationScopes?: string[];
@@ -39,6 +40,7 @@ export type AccessTokenRecord = {
   expiresAt: number;
   redirectUri: string;
   organizationId?: string;
+  organizationName?: string;
   organizationMemberId?: string;
   organizationRole?: string;
   organizationScopes?: string[];

@@ -37,6 +37,7 @@ export {
   getAveWorkspaceContextFromUserInfo,
   hasAveWorkspaceRole,
   hasAveWorkspaceScope,
+  listAveWorkspaceOrganizations,
   requireAveWorkspaceContext,
 } from "./workspace.js";
 export type {
@@ -57,6 +58,7 @@ export type {
   AveWorkspaceContext,
   AveWorkspaceEncryptionMode,
   AveWorkspaceKeyCustody,
+  AveWorkspaceOrganization,
   AveWorkspaceRole,
   AveWorkspaceScope,
 } from "./workspace.js";

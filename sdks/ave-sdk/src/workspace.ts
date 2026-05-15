@@ -1,3 +1,4 @@
+import { getApiBase } from "./api-base.js";
 import type { AveIdTokenClaims, AveJwtClaims, JwtPayload, UserInfo } from "./types.js";
 
 export type AveWorkspaceRole = "owner" | "admin" | "signer" | "member" | "viewer" | (string & {});
@@ -16,6 +17,7 @@ export type AveWorkspaceAuthMethod = "ave_session" | "enterprise_sso" | (string 
 
 export interface AveWorkspaceContext {
   id: string;
+  name?: string;
   memberId?: string;
   role?: AveWorkspaceRole;
   scopes: AveWorkspaceScope[];
@@ -30,6 +32,7 @@ export interface AveWorkspaceContext {
 type WorkspaceClaims = Pick<JwtPayload, "sub"> & {
   auth_context?: unknown;
   org_id?: unknown;
+  org_name?: unknown;
   org_member_id?: unknown;
   org_role?: unknown;
   org_scopes?: unknown;
@@ -68,6 +71,7 @@ export function getAveWorkspaceContext(
 
   return {
     id,
+    name: stringValue(source.org_name),
     memberId: stringValue(source.org_member_id),
     role: stringValue(source.org_role) as AveWorkspaceRole | undefined,
     scopes: scopeValues(source.org_scopes),
@@ -86,6 +90,7 @@ export function getAveWorkspaceContextFromUserInfo(userInfo: UserInfo | null | u
 
   return {
     id: organization.id,
+    name: organization.name,
     memberId: organization.memberId,
     role: organization.role as AveWorkspaceRole | undefined,
     scopes: organization.scopes as AveWorkspaceScope[],
@@ -96,6 +101,48 @@ export function getAveWorkspaceContextFromUserInfo(userInfo: UserInfo | null | u
     ssoConnectionId: organization.ssoConnectionId,
     identityId: userInfo?.sub,
   };
+}
+
+export interface AveWorkspaceOrganization {
+  id: string;
+  name: string;
+  slug?: string;
+  logoUrl?: string | null;
+  role?: AveWorkspaceRole;
+  scopes: AveWorkspaceScope[];
+  signingAuthority: boolean;
+  ssoRequired: boolean;
+  encryptionMode?: AveWorkspaceEncryptionMode;
+  keyCustody?: AveWorkspaceKeyCustody;
+}
+
+export async function listAveWorkspaceOrganizations(
+  config: { issuer?: string; clientId?: string; fetcher?: typeof fetch },
+  accessToken: string
+): Promise<AveWorkspaceOrganization[]> {
+  const fetcher = config.fetcher ?? globalThis.fetch;
+  if (!fetcher) {
+    throw new Error("No fetch implementation available for Ave workspace organization lookup.");
+  }
+
+  const url = new URL(`${getApiBase(config.issuer)}/api/oauth/organizations`);
+  if (config.clientId) {
+    url.searchParams.set("client_id", config.clientId);
+  }
+
+  const response = await fetcher(url.toString(), {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+  });
+
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({})) as { error?: string; error_description?: string };
+    throw new Error(data.error_description || data.error || `Failed to list Ave workspace organizations (${response.status})`);
+  }
+
+  const payload = await response.json() as { organizations?: AveWorkspaceOrganization[] };
+  return payload.organizations || [];
 }
 
 export function requireAveWorkspaceContext(
