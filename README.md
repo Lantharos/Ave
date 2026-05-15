@@ -196,7 +196,7 @@ version: the package version to write and publish
 access: public or restricted
 ```
 
-Run it from a branch, not a tag, so the release commit can be pushed. No npm token is required. The workflow uses GitHub OIDC, so the npm package trusted publisher must point at this repository and workflow file before the first publish.
+Run it from a branch, not a tag, so the release commit can be pushed. No npm token is required. The workflow uses GitHub OIDC, so the npm package trusted publisher must point at this repository and workflow file before the first publish. Each published package must also keep `repository.url` set to `https://github.com/Lantharos/Ave`, because npm validates that value against the GitHub provenance bundle.
 
 ## Docs
 

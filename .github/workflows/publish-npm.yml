@@ -67,11 +67,18 @@ jobs:
 
           const packageDir = process.env.PACKAGE_DIR;
           const requestedVersion = process.env.REQUESTED_VERSION;
+          const expectedRepositoryUrl = `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}`;
           const packageJsonPath = path.join(packageDir, "package.json");
           const manifest = JSON.parse(fs.readFileSync(packageJsonPath, "utf8"));
+          const repositoryUrl = typeof manifest.repository === "string"
+            ? manifest.repository
+            : manifest.repository?.url;
 
           if (!manifest.name) throw new Error("package.json is missing name");
           if (manifest.private === true) throw new Error(`${manifest.name} is private`);
+          if (repositoryUrl !== expectedRepositoryUrl) {
+            throw new Error(`${manifest.name} repository.url is ${JSON.stringify(repositoryUrl ?? "")}, expected ${expectedRepositoryUrl}`);
+          }
           if (!/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/.test(requestedVersion)) {
             throw new Error(`Invalid semver version: ${requestedVersion}`);
           }
