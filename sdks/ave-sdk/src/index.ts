@@ -32,6 +32,13 @@ export {
 export { configureCryptoRuntime, createExpoCryptoRuntime, isJwtVerificationSupported } from "./crypto-runtime.js";
 export type { AveCryptoRuntime } from "./crypto-runtime.js";
 export { fetchJwks, verifyJwt } from "./jwt.js";
+export {
+  getAveWorkspaceContext,
+  getAveWorkspaceContextFromUserInfo,
+  hasAveWorkspaceRole,
+  hasAveWorkspaceScope,
+  requireAveWorkspaceContext,
+} from "./workspace.js";
 export type {
   AveIdTokenClaims,
   AveJwtClaims,
@@ -45,6 +52,14 @@ export type {
   OidcConfiguration,
   VerifyJwtOptions,
 } from "./types.js";
+export type {
+  AveWorkspaceAuthMethod,
+  AveWorkspaceContext,
+  AveWorkspaceEncryptionMode,
+  AveWorkspaceKeyCustody,
+  AveWorkspaceRole,
+  AveWorkspaceScope,
+} from "./workspace.js";
 import { getApiBase } from "./api-base.js";
 import { refreshAccessToken } from "./oauth-token.js";
 import type { AveConfig } from "./types.js";

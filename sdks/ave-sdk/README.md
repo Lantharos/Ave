@@ -111,6 +111,34 @@ const tokens = await finishPkceLogin({
 
 `startPkceLogin()` now generates and stores both `state` and `nonce` by default, and `finishPkceLogin()` validates the callback `state`, exchanges the authorization code, and verifies any returned `id_token` / `access_token_jwt` with Ave's JWKS.
 
+## Business workspaces
+
+Apps can use Ave Business organizations as workspaces by passing `organizationId` during sign-in. Ave manages membership, roles, SSO policy, and org scopes; your app stores product data keyed by `org_id`.
+
+```ts
+import { startPkceLogin } from "@ave-id/sdk/client";
+
+await startPkceLogin({
+  clientId: "YOUR_CLIENT_ID",
+  redirectUri: "https://yourapp.com/callback",
+  scope: "openid profile email offline_access",
+  organizationId: "org_...",
+});
+```
+
+On your server, verify the token and read the workspace context:
+
+```ts
+import { getAveWorkspaceContext, verifyAveIdTokenFromAuthHeader } from "@ave-id/sdk/server";
+
+const principal = await verifyAveIdTokenFromAuthHeader(authorization, {
+  clientId: "YOUR_CLIENT_ID",
+});
+const workspace = getAveWorkspaceContext(principal?.claims);
+```
+
+See `guides/business-workspaces` in the docs repo.
+
 ## Identity keys and wrapped payloads
 
 Encrypt for the invitee’s public key, then pass the blob to Ave on the authorize URL as **`wrapped_key`** (see Mintlify docs: Identity keys & wrapped payloads). After consent, Ave returns plaintext in the redirect fragment as **`unwrapped_secret`** (or `unwrappedSecretB64` in embed). You do not unwrap on your own origin without the user’s Ave master key.

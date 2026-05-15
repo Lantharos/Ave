@@ -10,6 +10,21 @@ export interface ServerConfig {
 
 export { fetchJwks, verifyJwt };
 export type { VerifyJwtOptions };
+export {
+  getAveWorkspaceContext,
+  getAveWorkspaceContextFromUserInfo,
+  hasAveWorkspaceRole,
+  hasAveWorkspaceScope,
+  requireAveWorkspaceContext,
+} from "./workspace.js";
+export type {
+  AveWorkspaceAuthMethod,
+  AveWorkspaceContext,
+  AveWorkspaceEncryptionMode,
+  AveWorkspaceKeyCustody,
+  AveWorkspaceRole,
+  AveWorkspaceScope,
+} from "./workspace.js";
 
 const DEFAULT_ISSUER = "https://aveid.net";
 

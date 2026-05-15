@@ -58,6 +58,7 @@
             "group": "Capabilities",
             "pages": [
               "guides/connector-app-to-app",
+              "guides/business-workspaces",
               "guides/ave-for-businesses",
               "guides/ave-signing",
               "guides/end-to-end-encryption",

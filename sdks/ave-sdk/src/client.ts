@@ -28,6 +28,13 @@ export {
   stripSensitiveFragmentParams,
 } from "./app-key.js";
 export { fetchJwks, verifyJwt } from "./jwt.js";
+export {
+  getAveWorkspaceContext,
+  getAveWorkspaceContextFromUserInfo,
+  hasAveWorkspaceRole,
+  hasAveWorkspaceScope,
+  requireAveWorkspaceContext,
+} from "./workspace.js";
 export type {
   FedCmTokenResponse,
   IdentityKeyEnvelope,
@@ -35,6 +42,14 @@ export type {
   VerifyJwtOptions,
   WrappedIdentityPayload,
 } from "./types.js";
+export type {
+  AveWorkspaceAuthMethod,
+  AveWorkspaceContext,
+  AveWorkspaceEncryptionMode,
+  AveWorkspaceKeyCustody,
+  AveWorkspaceRole,
+  AveWorkspaceScope,
+} from "./workspace.js";
 
 interface FedCmIdentityCredential extends Credential {
   token?: string;
@@ -49,6 +64,10 @@ interface FedCmOptions {
   state?: string;
   nonce?: string;
   mediation?: CredentialMediationRequirement;
+}
+
+interface SignInOptions extends FedCmOptions {
+  organizationId?: string;
 }
 
 function decodeJwtPayload(token: string): Record<string, unknown> | null {
@@ -321,6 +340,7 @@ export async function startPkceLogin(params: {
   issuer?: string;
   state?: string;
   nonce?: string;
+  organizationId?: string;
 }): Promise<void> {
   const verifier = generateCodeVerifier();
   const challenge = await generateCodeChallenge(verifier);
@@ -346,6 +366,7 @@ export async function startPkceLogin(params: {
       nonce,
       codeChallenge: challenge,
       codeChallengeMethod: "S256",
+      organizationId: params.organizationId,
     }
   );
 
@@ -413,8 +434,8 @@ export async function signInWithFedCm(params: FedCmOptions): Promise<FedCmTokenR
   return response;
 }
 
-export async function signIn(params: FedCmOptions & { preferFedCm?: boolean }): Promise<FedCmTokenResponse | null> {
-  if (params.preferFedCm !== false && supportsFedCm()) {
+export async function signIn(params: SignInOptions & { preferFedCm?: boolean }): Promise<FedCmTokenResponse | null> {
+  if (!params.organizationId && params.preferFedCm !== false && supportsFedCm()) {
     return signInWithFedCm(params);
   }
 

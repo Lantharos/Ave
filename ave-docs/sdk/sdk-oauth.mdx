@@ -218,7 +218,7 @@ function fetchUserInfo(config: AveConfig, accessToken: string): Promise<UserInfo
   The opaque `access_token` (not the JWT) from the token response.
 </ParamField>
 
-Returns `UserInfo` with `sub`, `name?`, `preferred_username?`, `email?`, `picture?`.
+Returns `UserInfo` with `sub`, `name?`, `preferred_username?`, `email?`, `picture?`, and `organization?` when the token was issued for an Ave Business workspace.
 
 ---
 
@@ -254,6 +254,8 @@ async function signInWithFedCm(params: {
 
 Ave returns the normal token payload. For E2EE apps, Ave continues in a FedCM dialog so the existing Ave authorization UI can unlock the user's master key and prepare the plaintext `app_key` handoff before resuming automatically.
 
+FedCM does not claim Ave Business organization-context support. Use `signIn()` or `startPkceLogin()` with `organizationId` when signing into a business workspace.
+
 ---
 
 ### `signIn(params)`
@@ -270,6 +272,7 @@ async function signIn(params: {
   issuer?: string;
   state?: string;
   nonce?: string;
+  organizationId?: string;
   mediation?: CredentialMediationRequirement;
   preferFedCm?: boolean;
 }): Promise<FedCmTokenResponse | null>
@@ -279,6 +282,8 @@ Returns:
 
 - `FedCmTokenResponse` when FedCM completes in-page
 - `null` when the helper falls back to `startPkceLogin()` and redirects the browser
+
+When `organizationId` is present, `signIn()` uses the PKCE redirect flow so Ave can verify organization membership and SSO policy before issuing tokens.
 
 ```ts
 import { finishPkceLogin, signIn } from "@ave-id/sdk/client";
@@ -314,10 +319,13 @@ async function startPkceLogin(params: {
   issuer?: string;
   state?: string;   // optional — auto-generated if omitted
   nonce?: string;   // optional — auto-generated if omitted
+  organizationId?: string;
 }): Promise<void>
 ```
 
 Automatically generates a PKCE verifier/challenge, a `nonce` for ID token replay protection, and a `state` value for CSRF protection — unless you supply your own. All three are stored in `sessionStorage` and retrieved automatically by `finishPkceLogin`.
+
+Set `organizationId` to sign into an Ave Business organization as an app workspace. Ave verifies membership before issuing tokens and includes organization claims in the returned JWTs. See [Business workspaces](/guides/business-workspaces).
 
 ---
 

@@ -1,0 +1,178 @@
+---
+title: "Business workspaces"
+description: "Use Ave organizations as app workspaces while Ave manages membership, roles, SSO, and business identity context."
+---
+
+Use Ave Business when your app wants organization workspaces without building its own membership system. Ave owns the organization, member identities, roles, SSO requirement, signing authority, and encryption policy. Your app stores product data under the Ave organization ID.
+
+This is different from making every app maintain a separate workspace membership table. The app still owns app-specific data, but the question "is this identity an active member of this workspace?" comes from an Ave-issued organization-context token.
+
+## The model
+
+Store Ave organization IDs as workspace IDs in your app:
+
+```ts
+type Workspace = {
+  id: string;
+  aveOrgId: string;
+  name: string;
+  plan: "free" | "pro" | "enterprise";
+};
+
+type Project = {
+  id: string;
+  workspaceId: string;
+  name: string;
+};
+```
+
+Ave manages:
+
+| Concern | Source of truth |
+| --- | --- |
+| Organization membership | Ave Business |
+| Member role and org scopes | Ave Business |
+| Domain verification and SSO policy | Ave Business |
+| App billing, projects, settings, feature flags | Your app |
+| App-specific roles narrower than Ave access | Your app |
+
+If you need extra app permissions, layer them after Ave membership. Do not let an app-local role grant access when the Ave token no longer has organization context.
+
+## Choosing a workspace
+
+Your app needs an Ave organization ID before it can request organization context. Common patterns:
+
+- The organization admin links an Ave Business organization during app onboarding.
+- An invite or workspace URL contains the app workspace slug, and your app maps that slug to `aveOrgId`.
+- After a successful organization-context login, your app remembers the `org_id` as a recent workspace choice.
+
+The remembered list is only navigation state. Do not authorize from it. Authorization still comes from a verified token that contains the same `org_id`.
+
+## Sign in to a workspace
+
+When the user chooses a workspace, start the normal PKCE flow with `organizationId`.
+
+```ts
+import { startPkceLogin } from "@ave-id/sdk/client";
+
+await startPkceLogin({
+  clientId: "YOUR_CLIENT_ID",
+  redirectUri: "https://app.example.com/callback",
+  scope: "openid profile email offline_access",
+  organizationId: workspace.aveOrgId,
+});
+```
+
+Ave verifies that the selected identity is an active member of that organization before issuing tokens. If the organization requires enterprise SSO, Ave only issues organization-context tokens from a valid SSO session for that organization.
+
+<Note>
+  If you use `signIn()` and pass `organizationId`, the SDK uses the PKCE redirect flow. FedCM does not claim organization-context support.
+</Note>
+
+## Read workspace context
+
+After the callback, verify the token on your server and extract the workspace context.
+
+```ts
+import {
+  getAveWorkspaceContext,
+  hasAveWorkspaceScope,
+  verifyAveIdTokenFromAuthHeader,
+} from "@ave-id/sdk/server";
+
+export async function handleWorkspaceRequest(request: Request) {
+  const principal = await verifyAveIdTokenFromAuthHeader(
+    request.headers.get("Authorization"),
+    { clientId: process.env.AVE_CLIENT_ID! }
+  );
+
+  if (!principal) return new Response("Unauthorized", { status: 401 });
+
+  const workspace = getAveWorkspaceContext(principal.claims);
+  if (!workspace) return new Response("Workspace context required", { status: 403 });
+
+  if (!hasAveWorkspaceScope(workspace, "read")) {
+    return new Response("Workspace access denied", { status: 403 });
+  }
+
+  return Response.json({
+    identityId: principal.subject,
+    aveOrgId: workspace.id,
+    role: workspace.role,
+    scopes: workspace.scopes,
+  });
+}
+```
+
+You can also call `/userinfo` with the opaque `access_token`. When the token has organization context, the response includes `organization`, and the SDK can convert it:
+
+```ts
+import { fetchUserInfo, getAveWorkspaceContextFromUserInfo } from "@ave-id/sdk";
+
+const userInfo = await fetchUserInfo(config, tokens.access_token);
+const workspace = getAveWorkspaceContextFromUserInfo(userInfo);
+```
+
+## Route authorization
+
+On every workspace request:
+
+1. Verify the `id_token` or access token JWT.
+2. Require `auth_context: "organization"`.
+3. Require `org_id` to match the workspace being accessed.
+4. Check Ave org scopes for the action.
+5. Apply any app-local restrictions after the Ave checks pass.
+
+```ts
+import { hasAveWorkspaceScope, requireAveWorkspaceContext } from "@ave-id/sdk/server";
+
+const workspace = requireAveWorkspaceContext(principal.claims);
+
+if (workspace.id !== routeWorkspace.aveOrgId) {
+  return new Response("Wrong workspace", { status: 403 });
+}
+
+if (!hasAveWorkspaceScope(workspace, "manage_org")) {
+  return new Response("Admin access required", { status: 403 });
+}
+```
+
+Use the Ave `sub` claim as the acting identity ID. Use `org_member_id` for audit records when you want to show which organization membership authorized the action.
+
+## App-local roles
+
+If your app has its own project roles, treat them as narrower permissions inside an Ave workspace:
+
+```ts
+const aveAllowed = hasAveWorkspaceScope(workspace, "read");
+const appAllowed = await canReadProject(workspace.id, principal.subject, projectId);
+
+if (!aveAllowed || !appAllowed) {
+  return new Response("Forbidden", { status: 403 });
+}
+```
+
+This lets an app support extra concepts like project owner, billing admin, or environment deployer without becoming the source of truth for workspace membership.
+
+## Revocation
+
+When a member is removed from an Ave organization, refresh stops issuing organization-context tokens for that member. Existing short-lived tokens may remain valid until they expire. For sensitive actions, require a fresh token or an Ave signing flow.
+
+Do not cache workspace membership indefinitely in your app. Cache app metadata keyed by `org_id`, but make access decisions from verified current tokens.
+
+## Encryption and SSO
+
+SSO proves the business identity is allowed to enter the organization. It is not an encrypted key delivery path.
+
+For standard business encryption, apps can use the organization context normally. For E2EE org mode, encrypted resources require identity-wrapped org key grants. If an SSO-created identity does not have an Ave identity encryption key and grant, it can still authenticate to the organization, but it cannot decrypt E2EE org material.
+
+## Personal and business side by side
+
+Apps can keep personal accounts and Ave Business workspaces at the same time:
+
+- No `organizationId`: issue a normal personal identity session.
+- With `organizationId`: issue an organization-context session for that Ave workspace.
+- Store personal resources by `sub`.
+- Store business resources by `org_id`, with audit entries including `sub` and `org_member_id`.
+
+This keeps membership centralized in Ave without blocking app-specific product structure.

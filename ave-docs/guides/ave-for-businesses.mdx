@@ -5,6 +5,8 @@ description: "Use Ave organizations as identity containers with roles, org conte
 
 Ave organizations let a person act with a specific Ave identity inside a company or team context. There is no company password and no shared company login. A business organization contains identities, roles, scopes, signing authority, key grants, verified domains, and SSO configuration.
 
+If you are building a SaaS workspace integration where Ave manages members for your app, start with [Business workspaces](/guides/business-workspaces). This page covers the underlying business identity and security behavior.
+
 ## Organization context
 
 Apps that support business context send an `organization_id` on the Ave authorize URL. Ave verifies that the selected identity is an active member of that organization before issuing tokens.

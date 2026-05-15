@@ -90,3 +90,5 @@ This keeps compatibility with the current Ave E2EE model, where Ave's authorizat
 3. Finish the fallback on your callback page with `finishPkceLogin()`
 
 This keeps the migration low-risk: you are adding a faster path, not replacing the old one.
+
+For Ave Business workspace sign-in, pass `organizationId` to `signIn()` or `startPkceLogin()`. The SDK uses the PKCE redirect flow for that case because Ave must verify organization membership and SSO policy before issuing organization-context tokens.

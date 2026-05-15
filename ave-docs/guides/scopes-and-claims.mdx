@@ -139,6 +139,27 @@ These require explicit app configuration in the developer portal.
 | `offline_access` | — | — | `refresh_token` |
 | `user_id` | — | `uid` | `user_id` |
 
+## Organization context claims
+
+Organization claims are not enabled by a separate scope. They appear when the authorization request includes a valid `organization_id` and the selected identity is an active member of that Ave Business organization.
+
+```json
+{
+  "auth_context": "organization",
+  "org_id": "org_...",
+  "org_member_id": "orgmem_...",
+  "org_role": "admin",
+  "org_scopes": ["read", "sign", "approve"],
+  "org_signing_authority": true,
+  "org_encryption_mode": "standard",
+  "org_key_custody": "ave_standard",
+  "auth_method": "enterprise_sso",
+  "sso_connection_id": "sso_..."
+}
+```
+
+Apps that use Ave organizations as workspaces should require `auth_context: "organization"` and match `org_id` against the workspace being accessed. See [Business workspaces](/guides/business-workspaces).
+
 ## Connector scopes
 
 Connector flows use resource-defined scopes, not OIDC scopes. The target resource defines what scopes it exposes (for example `resource.read`, `resource.write`). When a user approves the connector, they grant specific scopes from the resource's available list.
