@@ -1,0 +1,99 @@
+name: Publish npm package
+
+on:
+  workflow_dispatch:
+    inputs:
+      package:
+        description: "Package folder"
+        required: true
+        type: choice
+        options:
+          - sdks/ave-sdk
+          - sdks/ave-embed
+      version:
+        description: "Package version to publish, must match package.json"
+        required: true
+        type: string
+      access:
+        description: "npm access"
+        required: true
+        default: "public"
+        type: choice
+        options:
+          - public
+          - restricted
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: "https://registry.npmjs.org"
+
+      - uses: oven-sh/setup-bun@v2
+
+      - name: Validate package and version
+        run: |
+          set -euo pipefail
+
+          package_dir="${{ inputs.package }}"
+          version="${{ inputs.version }}"
+
+          case "$package_dir" in
+            sdks/ave-sdk|sdks/ave-embed) ;;
+            *) echo "Unsupported package path: $package_dir" >&2; exit 1 ;;
+          esac
+
+          node <<'NODE'
+          const fs = require("node:fs");
+          const path = require("node:path");
+
+          const packageDir = process.env.PACKAGE_DIR;
+          const requestedVersion = process.env.REQUESTED_VERSION;
+          const packageJsonPath = path.join(packageDir, "package.json");
+          const manifest = JSON.parse(fs.readFileSync(packageJsonPath, "utf8"));
+
+          if (!manifest.name) throw new Error("package.json is missing name");
+          if (manifest.private === true) throw new Error(`${manifest.name} is private`);
+          if (manifest.version !== requestedVersion) {
+            throw new Error(`${manifest.name} version is ${manifest.version}, expected ${requestedVersion}`);
+          }
+          if (!/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/.test(requestedVersion)) {
+            throw new Error(`Invalid semver version: ${requestedVersion}`);
+          }
+
+          fs.appendFileSync(process.env.GITHUB_ENV, `PACKAGE_NAME=${manifest.name}\n`);
+          NODE
+        env:
+          PACKAGE_DIR: ${{ inputs.package }}
+          REQUESTED_VERSION: ${{ inputs.version }}
+
+      - name: Check npm version availability
+        run: |
+          set -euo pipefail
+
+          if npm view "$PACKAGE_NAME@${{ inputs.version }}" version >/dev/null 2>&1; then
+            echo "$PACKAGE_NAME@${{ inputs.version }} is already published" >&2
+            exit 1
+          fi
+
+      - name: Install dependencies
+        run: bun install
+        working-directory: ${{ inputs.package }}
+
+      - name: Build package
+        run: bun run build
+        working-directory: ${{ inputs.package }}
+
+      - name: Publish package
+        run: npm publish --access "${{ inputs.access }}"
+        working-directory: ${{ inputs.package }}

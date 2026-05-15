@@ -25,82 +25,119 @@
       <p class="m-0 mt-2 max-w-[720px] text-[14px] leading-6 text-[#858585]">A quick read on access, encryption, domains, and recent organization activity.</p>
     </div>
 
-    <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-      <button class="summary-tile" onclick={() => onSelect("identities")}>
-        <span class="summary-label">Identities</span>
-        <span class="summary-value">{activeMembers}</span>
-        <span class="summary-note">active members</span>
-      </button>
-      <button class="summary-tile" onclick={() => onSelect("keys")}>
-        <span class="summary-label">Org keys</span>
-        <span class="summary-value">{detail.keys.length}</span>
-        <span class="summary-note">{activeGrants} active grants</span>
-      </button>
-      <button class="summary-tile" onclick={() => onSelect("encryption")}>
-        <span class="summary-label">Encryption</span>
-        <span class="summary-value">{encryptionLabel}</span>
-        <span class="summary-note">{detail.encryptionPolicy.status}</span>
-      </button>
-      <button class="summary-tile" onclick={() => onSelect("sso")}>
-        <span class="summary-label">Domains</span>
-        <span class="summary-value">{verifiedDomains}</span>
-        <span class="summary-note">{activeSso} active SSO</span>
-      </button>
-      <button class="summary-tile" onclick={() => onSelect("audit")}>
-        <span class="summary-label">Audit</span>
-        <span class="summary-value">{detail.auditEvents.length}</span>
-        <span class="summary-note">signed events</span>
-      </button>
-      <button class="summary-tile" onclick={() => onSelect("sso")}>
-        <span class="summary-label">SSO enforcement</span>
-        <span class="summary-value">{detail.organization.ssoRequired ? "required" : "optional"}</span>
-        <span class="summary-note">{activeSso ? "connection ready" : "no active connection"}</span>
-      </button>
+    <div class="grid gap-4 xl:grid-cols-[1fr_0.82fr]">
+      <div class="overview-list">
+        <button class="overview-row" onclick={() => onSelect("identities")}>
+          <span>
+            <span class="row-title">Identities</span>
+            <span class="row-note">active members</span>
+          </span>
+          <span class="row-value">{activeMembers}</span>
+        </button>
+        <button class="overview-row" onclick={() => onSelect("keys")}>
+          <span>
+            <span class="row-title">Org keys</span>
+            <span class="row-note">{activeGrants} active grants</span>
+          </span>
+          <span class="row-value">{detail.keys.length}</span>
+        </button>
+        <button class="overview-row" onclick={() => onSelect("encryption")}>
+          <span>
+            <span class="row-title">Encryption</span>
+            <span class="row-note">{detail.encryptionPolicy.status}</span>
+          </span>
+          <span class="row-value text-value">{encryptionLabel}</span>
+        </button>
+      </div>
+
+      <div class="overview-list">
+        <button class="overview-row" onclick={() => onSelect("sso")}>
+          <span>
+            <span class="row-title">Domains</span>
+            <span class="row-note">{activeSso} active SSO</span>
+          </span>
+          <span class="row-value">{verifiedDomains}</span>
+        </button>
+        <button class="overview-row" onclick={() => onSelect("sso")}>
+          <span>
+            <span class="row-title">SSO enforcement</span>
+            <span class="row-note">{activeSso ? "connection ready" : "no active connection"}</span>
+          </span>
+          <span class="row-value text-value">{detail.organization.ssoRequired ? "required" : "optional"}</span>
+        </button>
+        <button class="overview-row" onclick={() => onSelect("audit")}>
+          <span>
+            <span class="row-title">Audit</span>
+            <span class="row-note">signed events</span>
+          </span>
+          <span class="row-value">{detail.auditEvents.length}</span>
+        </button>
+      </div>
     </div>
   </div>
 </Panel>
 
 <style>
-  .summary-tile {
+  .overview-list {
+    display: grid;
+    gap: 8px;
+    border-radius: 26px;
+    background: rgba(255, 255, 255, 0.025);
+    padding: 8px;
+  }
+
+  .overview-row {
     display: flex;
-    min-height: 148px;
-    flex-direction: column;
-    align-items: flex-start;
+    min-height: 76px;
+    align-items: center;
     justify-content: space-between;
+    gap: 18px;
     border: 0;
-    border-radius: 24px;
-    background: rgba(255, 255, 255, 0.03);
-    padding: 18px;
+    border-radius: 20px;
+    background: transparent;
+    padding: 15px 16px;
     color: inherit;
     text-align: left;
     transition-property: background-color, scale;
     transition-duration: 300ms;
   }
 
-  .summary-tile:hover {
+  .overview-row:hover {
     background: rgba(255, 255, 255, 0.055);
   }
 
-  .summary-tile:active {
+  .overview-row:active {
     scale: 0.96;
   }
 
-  .summary-label {
-    color: #858585;
-    font-size: 13px;
+  .row-title,
+  .row-note {
+    display: block;
   }
 
-  .summary-value {
-    max-width: 100%;
+  .row-title {
     color: #ffffff;
-    font-size: 28px;
-    font-weight: 800;
-    line-height: 1.05;
-    overflow-wrap: anywhere;
+    font-size: 15px;
+    font-weight: 700;
   }
 
-  .summary-note {
+  .row-note {
+    margin-top: 5px;
     color: #777777;
     font-size: 13px;
+  }
+
+  .row-value {
+    max-width: 46%;
+    color: #ffffff;
+    font-size: 26px;
+    font-weight: 800;
+    line-height: 1;
+    overflow-wrap: anywhere;
+    text-align: right;
+  }
+
+  .text-value {
+    font-size: 18px;
   }
 </style>

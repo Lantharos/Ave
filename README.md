@@ -178,6 +178,24 @@ cd sdks/ave-embed
 bun run build:windows
 ```
 
+### Publishing SDK packages
+
+SDK packages publish through `.github/workflows/publish-npm.yml` with npm trusted publishing. The workflow is manual, only accepts the SDK package folders, and requires a `version` input that must match the committed package version before it will publish.
+
+Before first use, configure each npm package's trusted publisher on npmjs.com for this repository and workflow file:
+
+```txt
+.github/workflows/publish-npm.yml
+```
+
+Then run the workflow with:
+
+```txt
+package: sdks/ave-sdk or sdks/ave-embed
+version: the exact package.json version
+access: public or restricted
+```
+
 ## Docs
 
 The documentation source lives in `ave-docs`. It covers:
