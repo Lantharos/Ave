@@ -55,7 +55,8 @@ async function importNodeCrypto(): Promise<any | null> {
 export function fillRandomValues<T extends Uint8Array>(array: T): T {
   const globalCrypto = getGlobalCrypto();
   if (globalCrypto?.getRandomValues) {
-    return globalCrypto.getRandomValues(array);
+    globalCrypto.getRandomValues(array as any);
+    return array;
   }
 
   if (configuredCryptoRuntime?.getRandomValues) {

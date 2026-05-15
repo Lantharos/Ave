@@ -21,10 +21,12 @@
     "@noble/ed25519": "^3.1.0",
     "@noble/hashes": "^2.2.0",
     "@simplewebauthn/server": "^13.3.0",
+    "@xmldom/xmldom": "0.9.10",
     "drizzle-orm": "^0.45.2",
     "hono": "^4.12.18",
     "postgres": "^3.4.9",
     "web-push": "^3.6.7",
+    "xml-crypto": "6.1.2",
     "zod": "^4.4.3"
   },
   "devDependencies": {

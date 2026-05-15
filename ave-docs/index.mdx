@@ -35,12 +35,13 @@ Ave is a passkey-first identity platform built on OAuth 2.0 and OpenID Connect. 
 
 ## Hosts
 
-Ave uses two hosts. Keep them separate in your integration.
+Ave uses separate hosts for sign-in, API calls, and organization administration. Keep the sign-in and API hosts separate in your integration.
 
 | Host | Use it for |
 | --- | --- |
 | `https://aveid.net` | Sign-in UI, Connector consent, OIDC discovery, JWKS |
 | `https://api.aveid.net` | Token exchange, userinfo, signing, management, API calls |
+| `https://business.aveid.net` | Business organization membership, org key grants, verified domains, and SSO setup |
 
 <Warning>
   Send OAuth token exchanges to `https://api.aveid.net/api/oauth/token`. User-facing authorization pages stay on `https://aveid.net`.

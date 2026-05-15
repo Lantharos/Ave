@@ -13,6 +13,8 @@ export type AuthUser = {
   id: string;
   deviceId: string | null;
   authMethod?: string | null;
+  enterpriseSsoOrganizationId?: string | null;
+  enterpriseSsoConnectionId?: string | null;
   isReadOnly: boolean;
 };
 
@@ -86,6 +88,8 @@ export async function authMiddleware(c: Context, next: Next) {
       id: session.userId,
       deviceId: session.deviceId,
       authMethod: session.authMethod,
+      enterpriseSsoOrganizationId: session.enterpriseSsoOrganizationId,
+      enterpriseSsoConnectionId: session.enterpriseSsoConnectionId,
       isReadOnly: session.authMethod === "demo",
     });
   } catch (error) {

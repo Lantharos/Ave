@@ -288,6 +288,23 @@ export const api = {
   },
   
   login: {
+    discoverSso: (email: string) =>
+      request<{
+        ssoRequired: boolean;
+        loginAvailable: boolean;
+        loginUrl?: string | null;
+        organization?: { id: string; name: string };
+      }>("/api/business/sso/discover", {
+        method: "POST",
+        body: JSON.stringify({ email }),
+      }),
+
+    ssoUrl: (loginUrl: string, returnTo: string) => {
+      const url = new URL(loginUrl, API_BASE);
+      url.searchParams.set("return_to", returnTo);
+      return url.toString();
+    },
+
     start: (handle: string) =>
       request<{
         userId: string;
@@ -767,6 +784,7 @@ export const api = {
       scope: string;
       state?: string;
       identityId: string;
+      organizationId?: string;
       codeChallenge?: string;
       codeChallengeMethod?: "S256" | "plain";
       encryptedAppKey?: string;

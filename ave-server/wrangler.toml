@@ -31,6 +31,7 @@ crons = ["0 3 * * *"]
 DEV_PORTAL_CLIENT_ID = "app_baca6051065b203e594c6dc020c22c7d"
 OIDC_DISCOVERY_BASE = "https://api.aveid.net"
 OIDC_ISSUER = "https://aveid.net"
+BUSINESS_ORIGIN = "https://business.aveid.net"
 OIDC_PUBLIC_KEY_PEM = """-----BEGIN PUBLIC KEY-----
 MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAwxGPnw24+LgRdFflk5/b
 vC4JiY/+wxjuWR/EQeVPh+FYqrIaQc38xHcG6Rh0FiTPuudfcKwzD1xSxzg0TPFU

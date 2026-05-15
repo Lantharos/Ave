@@ -43,16 +43,31 @@
     });
 
     async function handleContinue() {
-        if (!handle.trim()) {
+        const value = handle.trim();
+        if (!value) {
             onError?.("Please enter your handle or ID");
             return;
         }
 
         isLoading = true;
         try {
-            const result = await api.login.start(handle.trim());
+            if (value.includes("@")) {
+                const discovery = await api.login.discoverSso(value.toLowerCase());
+                if (discovery.ssoRequired) {
+                    if (!discovery.loginAvailable || !discovery.loginUrl) {
+                        onError?.("Enterprise SSO is required for this domain but no login is available.");
+                        return;
+                    }
+                    window.location.href = api.login.ssoUrl(discovery.loginUrl, window.location.href);
+                    return;
+                }
+                onError?.("Use your handle to sign in.");
+                return;
+            }
+
+            const result = await api.login.start(value);
             onNext?.({
-                handle: handle.trim(),
+                handle: value,
                 identity: result.identity,
                 hasDevices: result.hasDevices,
                 hasPasskeys: result.hasPasskeys,
@@ -85,7 +100,7 @@
         {/if}
         <h1 class="font-black text-2xl md:text-[36px] text-[#FFFFFF]/80 text-center">CONTINUE TO {appName.toUpperCase()}</h1>
         <h2 class="font-normal text-sm md:text-[18px] text-[#878787] mt-2 md:mt-[10px] mb-1 text-center">
-            Sign in with your handle.
+            Sign in with your handle or work email.
         </h2>
         <p class="text-[#666666] text-xs md:text-[14px] mb-6 md:mb-[40px] text-center">
             Secure sign-in powered by Ave.
@@ -93,7 +108,7 @@
     {:else}
         <h1 class="font-black text-2xl md:text-[36px] text-[#FFFFFF]/80 text-center">WHO'S SIGNING IN</h1>
         <h2 class="font-normal text-sm md:text-[18px] text-[#878787] mt-2 md:mt-[10px] mb-6 md:mb-[40px] text-center">
-            Enter your handle to continue.
+            Enter your handle or work email.
         </h2>
     {/if}
 
@@ -103,7 +118,7 @@
                 <input 
                     class="px-4 md:px-[15px] py-3 md:py-[10px] bg-[#090909]/50 text-[#FFFFFF] text-base md:text-[18px] rounded-full focus:outline-none focus:ring-2 focus:ring-[#B9BBBE] focus:border-[#B9BBBE]" 
                     type="text" 
-                    placeholder="Your Handle or ID"
+                    placeholder="Handle or work email"
                     bind:value={handle}
                     onkeydown={handleKeydown}
                     disabled={isLoading}

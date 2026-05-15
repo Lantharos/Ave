@@ -5,6 +5,15 @@ export function safeGoto(gotoFn: (path: string) => void, path: string) {
   safeGoto.lastNavAt = now;
 
   try {
+    const target = new URL(path, window.location.href);
+    if (target.origin !== window.location.origin) {
+      window.location.assign(target.toString());
+      return;
+    }
+  } catch {
+  }
+
+  try {
     gotoFn(path);
   } catch {
     try {

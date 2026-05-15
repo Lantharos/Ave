@@ -91,8 +91,9 @@
 				redirectUri: searchParams.get("redirect_uri") || "",
 				scope: searchParams.get("scope") || "openid profile email",
 				state: searchParams.get("state") || "",
-				nonce: searchParams.get("nonce") || "",
+                nonce: searchParams.get("nonce") || "",
                 identityId: searchParams.get("identity_id") || "",
+                organizationId: searchParams.get("organization_id") || "",
 				resource: searchParams.get("resource") || "",
 				embed: searchParams.get("embed") === "1",
                 fedcmContinue: searchParams.get("fedcm_continue") === "1",
@@ -273,6 +274,7 @@
                 scope: params.scope,
                 state: params.state,
                 identityId: selectedIdentity.id,
+                organizationId: params.organizationId || undefined,
                 nonce: params.nonce || undefined,
                 interactionMode,
             };
@@ -1013,7 +1015,7 @@
 
                         {#if identityDropdownOpen && $identitiesStore.length > 1}
                             <div class="absolute top-full left-0 mt-2 md:mt-[10px] bg-[#171717] rounded-[16px] overflow-hidden z-50 min-w-full">
-                                {#each $identitiesStore as identity}
+                                {#each $identitiesStore as identity (identity.id)}
                                     <button 
                                         class="w-full flex flex-row gap-2 md:gap-[15px] items-center p-3 md:p-[15px] hover:bg-[#222222] transition-colors {identity.id === selectedIdentity.id ? 'bg-[#222222]' : ''}"
                                         onclick={() => { selectedIdentity = identity; emailDraft = identity.pendingEmail || identity.email || ""; emailCode = ""; identityDropdownOpen = false; }}

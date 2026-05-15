@@ -12,6 +12,15 @@ export type AuthorizationCodeRecord = {
   redirectUri: string;
   scope: string;
   expiresAt: number;
+  organizationId?: string;
+  organizationMemberId?: string;
+  organizationRole?: string;
+  organizationScopes?: string[];
+  organizationSigningAuthority?: boolean;
+  organizationEncryptionMode?: string;
+  organizationKeyCustody?: string;
+  organizationAuthMethod?: string;
+  organizationSsoConnectionId?: string;
   codeChallenge?: string;
   codeChallengeMethod?: string;
   encryptedAppKey?: string;
@@ -29,6 +38,15 @@ export type AccessTokenRecord = {
   scope: string;
   expiresAt: number;
   redirectUri: string;
+  organizationId?: string;
+  organizationMemberId?: string;
+  organizationRole?: string;
+  organizationScopes?: string[];
+  organizationSigningAuthority?: boolean;
+  organizationEncryptionMode?: string;
+  organizationKeyCustody?: string;
+  organizationAuthMethod?: string;
+  organizationSsoConnectionId?: string;
   nonce?: string;
 };
 

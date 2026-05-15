@@ -3,16 +3,17 @@ title: "Base URLs, tokens, and concepts"
 description: "The key concepts you need before integrating: domain split, identity model, token types, and scopes."
 ---
 
-## Two hosts, two purposes
+## Hosts and purposes
 
 <Warning>
-  Ave uses two separate domains. Mixing them up is the #1 integration mistake.
+  Ave separates user-facing pages, API calls, and organization administration. Mixing the sign-in host and API host is the #1 integration mistake.
 </Warning>
 
 | Host | Used for |
 |---|---|
 | `aveid.net` | User-facing pages (sign-in, Connector consent), OIDC discovery, JWKS |
 | `api.aveid.net` | API calls (token exchange, userinfo, signing) |
+| `business.aveid.net` | Business organization membership, wrapped org keys, verified domains, and SSO setup |
 
 ```
 ✅ POST https://api.aveid.net/api/oauth/token

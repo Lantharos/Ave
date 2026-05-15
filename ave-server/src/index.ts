@@ -18,6 +18,8 @@ import mydataRoutes from "./routes/mydata";
 import oauthRoutes, { oidcRoutes } from "./routes/oauth";
 import appsRoutes from "./routes/apps";
 import organizationsRoutes from "./routes/organizations";
+import businessSamlRoutes from "./routes/business-saml";
+import businessRoutes from "./routes/business";
 import pushRoutes from "./routes/push";
 import signingRoutes from "./routes/signing";
 import encryptionRoutes from "./routes/encryption";
@@ -216,6 +218,8 @@ function buildApp() {
   app.route("/api/oauth", oauthRoutes);
   app.route("/api/apps", appsRoutes);
   app.route("/api/organizations", organizationsRoutes);
+  app.route("/api/business", businessSamlRoutes);
+  app.route("/api/business", businessRoutes);
   app.route("/api/push", pushRoutes);
   app.route("/api/signing", signingRoutes);
   app.route("/api/encryption", encryptionRoutes);

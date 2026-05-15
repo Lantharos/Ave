@@ -2,7 +2,7 @@
 
 Ave is an open-source identity platform built around passkeys, OAuth 2.0, and OpenID Connect.
 
-It combines the hosted sign-in experience, the OAuth/OIDC API, a developer portal, public SDKs, and product docs in one repository. The codebase also includes higher-level features layered on top of auth itself: Quick Ave for zero-registration sign-in, delegated app-to-app access, identity-backed signing, and per-app encryption key delivery.
+It combines the hosted sign-in experience, the OAuth/OIDC API, a developer portal, a business organization console, public SDKs, and product docs in one repository. The codebase also includes higher-level features layered on top of auth itself: Quick Ave for zero-registration sign-in, delegated app-to-app access, identity-backed signing, organization identity containers, and per-app encryption key delivery.
 
 ## What lives here
 
@@ -13,6 +13,7 @@ Ave is split into a few separate packages instead of one root workspace:
 | `ave-web` | Main Ave product UI at `aveid.net` | Svelte 5, Vite, Tailwind CSS v4 |
 | `ave-server` | OAuth/OIDC API, auth flows, app management, signing, encryption, uploads | Hono, Cloudflare Workers, Durable Objects, D1, Drizzle |
 | `ave-devs` | Developer portal for app registration, secrets, resources, analytics, and orgs | Svelte 5, Vite, Tailwind CSS v4 |
+| `ave-business` | Business organization console at `business.aveid.net` | Svelte 5, Vite, Tailwind CSS v4 |
 | `ave-docs` | Product and SDK documentation | Mintlify content |
 | `sdks/ave-sdk` | Typed JavaScript/TypeScript SDK for OAuth, OIDC, session, Convex, Expo, Svelte, and Next.js helpers | TypeScript |
 | `sdks/ave-embed` | Lightweight browser embed for iframe, sheet, popup, connector, and signing flows | Plain JS |
@@ -23,6 +24,7 @@ Ave is split into a few separate packages instead of one root workspace:
 - OAuth 2.0 + OpenID Connect provider support
 - Quick Ave for zero-registration auth tied to the caller origin
 - Developer portal for app registration, redirect URIs, scopes, secrets, resources, and organizations
+- Business organizations for identity membership, roles, signed admin actions, org key grants, verified domains, and SSO setup
 - Connector delegation for app-to-app access
 - Identity-backed Ed25519 signing flows
 - Per-app encryption key delivery for end-to-end encrypted integrations
@@ -35,6 +37,7 @@ The repository is organized around the same split used in production:
 - `aveid.net` serves the end-user product UI
 - `api.aveid.net` serves the OAuth/OIDC and product API
 - `devs.aveid.net` serves the developer portal
+- `business.aveid.net` serves the business organization console, including standard org encryption, customer KMS references, and opt-in E2EE org-key grants
 - `docs.aveid.net` serves the documentation
 
 ## Local development
@@ -48,7 +51,7 @@ There is currently no root `package.json` workspace. Install and run each packag
 
 ### 1. Start the API
 
-The API is the center of the stack. `ave-web` and `ave-devs` both talk to it.
+The API is the center of the stack. `ave-web`, `ave-devs`, and `ave-business` all talk to it.
 
 ```bash
 cd ave-server
@@ -131,7 +134,34 @@ bun run check
 bun run build
 ```
 
-### 4. Work on the SDKs
+### 4. Start the business organization console
+
+```bash
+cd ave-business
+bun install
+```
+
+The console calls `http://localhost:3000` on localhost and `https://api.aveid.net` in production. Set `VITE_API_URL` when the Ave API is running somewhere else. Set `VITE_AVE_ORIGIN` only when sign-in should go to a non-default Ave web origin.
+
+```env
+VITE_API_URL="https://api.aveid.net"
+VITE_AVE_ORIGIN="https://aveid.net"
+```
+
+Run it with:
+
+```bash
+bun run dev
+```
+
+Useful business console commands:
+
+```bash
+bun run check
+bun run build
+```
+
+### 5. Work on the SDKs
 
 `sdks/ave-sdk` ships the typed integration surface used throughout the docs and examples:
 
@@ -160,7 +190,7 @@ The documentation source lives in `ave-docs`. It covers:
 - End-to-end encryption
 - Framework integrations including Expo, Next.js, Convex, SQL/Postgres, and Better Auth
 
-If you change behavior in the SDKs, auth flows, or developer portal, the matching docs in `ave-docs` should usually move with it.
+If you change behavior in the SDKs, auth flows, developer portal, or business organization console, the matching docs in `ave-docs` should usually move with it.
 
 ## Where to look first
 
@@ -170,8 +200,10 @@ If you are new to the repo, these files are the quickest way to orient yourself:
 - `ave-server/src/routes/oauth.ts` for OAuth/OIDC, Quick Ave, refresh rotation, and FedCM
 - `ave-server/src/routes/apps.ts` for developer portal app and resource management
 - `ave-server/src/routes/organizations.ts` for multi-workspace developer portal support
+- `ave-server/src/routes/business.ts` for business organization identity containers, roles, org keys, and SSO setup
 - `ave-web/src/App.svelte` for the main product routing surface
 - `ave-devs/src/App.svelte` for the developer portal shell and workspace/app flows
+- `ave-business/src/App.svelte` for the business organization console
 - `ave-docs/index.mdx` and `ave-docs/quickstart.mdx` for the public product story and integration path
 
 ## Database and storage notes

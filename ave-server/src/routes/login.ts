@@ -21,8 +21,20 @@ import { deleteChallenge, getChallenge, setChallenge } from "../lib/challenge-st
 import { serializeIdentityForOwner } from "../lib/identity-serialization";
 import { isDemoHandle, isDemoLoginEnabled, verifyDemoPassword } from "../lib/demo-auth";
 import { enforceRateLimits, ipRateLimit, subjectRateLimit } from "../lib/rate-limit";
+import { getRequiredEnterpriseSsoForEmail } from "../lib/enterprise-sso-policy";
 
 const app = new Hono();
+
+async function rejectRequiredEnterpriseSso(c: any, identity: typeof identities.$inferSelect) {
+  const sso = await getRequiredEnterpriseSsoForEmail(identity.email);
+  if (!sso) return null;
+  return c.json({
+    error: "Enterprise SSO is required for this identity. Sign in with your work email.",
+    ssoRequired: true,
+    loginUrl: sso.loginUrl,
+    organization: sso.organization,
+  }, 403);
+}
 
 async function getUnusedTrustCodes(userId: string) {
   return db
@@ -202,6 +214,9 @@ app.post("/start", zValidator("json", z.object({
   if (!identity) {
     return c.json({ error: "Account not found" }, 404);
   }
+
+  const ssoRequired = await rejectRequiredEnterpriseSso(c, identity);
+  if (ssoRequired) return ssoRequired;
 
   const demoPasswordEnabled = isDemoHandle(normalizedHandle) && isDemoLoginEnabled();
 
@@ -561,6 +576,9 @@ app.post("/request-approval", zValidator("json", z.object({
   if (!identity) {
     return c.json({ error: "Account not found" }, 404);
   }
+
+  const ssoRequired = await rejectRequiredEnterpriseSso(c, identity);
+  if (ssoRequired) return ssoRequired;
   
   // Create login request
   const [request] = await db
@@ -667,6 +685,9 @@ app.get("/request-status/:requestId", async (c) => {
     if (!identity) {
       return c.json({ error: "Account not found" }, 404);
     }
+
+    const ssoRequired = await rejectRequiredEnterpriseSso(c, identity);
+    if (ssoRequired) return ssoRequired;
     
     // Get or create device (reuses existing device if fingerprint matches)
     const deviceRecord = await getOrCreateDevice(identity.userId, {
@@ -775,6 +796,9 @@ app.post("/trust-code", zValidator("json", z.object({
   if (!identity) {
     return c.json({ error: "Account not found" }, 404);
   }
+
+  const ssoRequired = await rejectRequiredEnterpriseSso(c, identity);
+  if (ssoRequired) return ssoRequired;
   
   const { matchedCode, availableCodes } = await findUnusedTrustCode(identity.userId, code);
 
@@ -904,6 +928,9 @@ app.post("/recover-key", zValidator("json", z.object({
   if (!identity) {
     return c.json({ error: "Account not found" }, 404);
   }
+
+  const ssoRequired = await rejectRequiredEnterpriseSso(c, identity);
+  if (ssoRequired) return ssoRequired;
   
   const { matchedCode, availableCodes } = await findUnusedTrustCode(identity.userId, code);
 

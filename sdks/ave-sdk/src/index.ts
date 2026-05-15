@@ -74,6 +74,7 @@ export function buildAuthorizeUrl(config: AveConfig, params: {
   nonce?: string;
   codeChallenge?: string;
   codeChallengeMethod?: "S256" | "plain";
+  organizationId?: string;
   extraParams?: Record<string, string>;
 } = {}): string {
   const issuer = config.issuer || "https://aveid.net";
@@ -83,6 +84,7 @@ export function buildAuthorizeUrl(config: AveConfig, params: {
     scope: (params.scope || ["openid", "profile", "email"]).join(" "),
     state: params.state || "",
     nonce: params.nonce || "",
+    ...(params.organizationId ? { organization_id: params.organizationId } : {}),
     ...params.extraParams,
   });
 

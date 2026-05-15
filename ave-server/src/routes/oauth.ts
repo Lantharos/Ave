@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
-import { db, oauthApps, oauthAuthorizations, oauthRefreshTokens, identities, activityLogs, appAnalyticsEvents, oauthResources, oauthDelegationGrants, oauthDelegationAuditLogs } from "../db";
+import { db, oauthApps, oauthAuthorizations, oauthRefreshTokens, identities, activityLogs, appAnalyticsEvents, oauthResources, oauthDelegationGrants, oauthDelegationAuditLogs, organizationEncryptionPolicies, organizationIdentityMembers, organizations } from "../db";
 import { requireAuth, requireWritable } from "../middleware/auth";
 import { eq, and, isNull, desc, inArray } from "drizzle-orm";
 import { randomUUID, timingSafeEqual } from "crypto";
@@ -11,6 +11,9 @@ import { consumeAuthorizationCode, getAccessToken, getAuthorizationCode, setAcce
 import { hasVerifiedEmail, serializeIdentityForApp, serializeIdentityForOwner } from "../lib/identity-serialization";
 import { isOriginAllowedForApp, isRedirectUriAllowedForApp, normalizeRedirectUri } from "../lib/redirect-uri";
 import { enforceRateLimits, ipRateLimit, subjectRateLimit } from "../lib/rate-limit";
+import { hasEnterpriseSsoSessionForOrganization, scopesForRole, type BusinessRole } from "../lib/business";
+import { serializeEncryptionPolicy } from "../lib/business-encryption";
+import { getRequiredEnterpriseSsoForOrganization } from "../lib/enterprise-sso-policy";
 
 const app = new Hono();
 export const oidcRoutes = new Hono();
@@ -158,6 +161,38 @@ function hasAllScopes(grantedScope: string, requestedScope: string): boolean {
   return parseScopes(requestedScope).every((scope) => granted.has(scope));
 }
 
+function organizationClaims(record: {
+  organizationId?: string;
+  organizationMemberId?: string;
+  organizationRole?: string;
+  organizationScopes?: string[];
+  organizationSigningAuthority?: boolean;
+  organizationEncryptionMode?: string;
+  organizationKeyCustody?: string;
+  organizationAuthMethod?: string;
+  organizationSsoConnectionId?: string;
+}) {
+  if (!record.organizationId) return {};
+  return {
+    org_id: record.organizationId,
+    org_member_id: record.organizationMemberId,
+    org_role: record.organizationRole,
+    org_scopes: record.organizationScopes,
+    org_signing_authority: record.organizationSigningAuthority,
+    org_encryption_mode: record.organizationEncryptionMode,
+    org_key_custody: record.organizationKeyCustody,
+    auth_method: record.organizationAuthMethod,
+    sso_connection_id: record.organizationSsoConnectionId,
+    auth_context: "organization",
+  };
+}
+
+function keyCustodyForEncryptionMode(mode: string | undefined) {
+  if (mode === "e2ee") return "identity_grants";
+  if (mode === "enterprise_managed") return "customer_kms";
+  return "ave_standard";
+}
+
 function ensureFedCmRequest(c: any): Response | null {
   const destination = c.req.header("Sec-Fetch-Dest");
   if (destination !== "webidentity") {
@@ -192,6 +227,15 @@ async function issueAuthorizationCodeForApp(params: {
   scope: string;
   nonce?: string;
   encryptedAppKey?: string;
+  organizationId?: string;
+  organizationMemberId?: string;
+  organizationRole?: string;
+  organizationScopes?: string[];
+  organizationSigningAuthority?: boolean;
+  organizationEncryptionMode?: string;
+  organizationKeyCustody?: string;
+  organizationAuthMethod?: string;
+  organizationSsoConnectionId?: string;
 }) {
   const code = generateAuthCode();
 
@@ -204,6 +248,15 @@ async function issueAuthorizationCodeForApp(params: {
     expiresAt: Date.now() + 10 * 60 * 1000,
     encryptedAppKey: params.encryptedAppKey,
     nonce: params.nonce,
+    organizationId: params.organizationId,
+    organizationMemberId: params.organizationMemberId,
+    organizationRole: params.organizationRole,
+    organizationScopes: params.organizationScopes,
+    organizationSigningAuthority: params.organizationSigningAuthority,
+    organizationEncryptionMode: params.organizationEncryptionMode,
+    organizationKeyCustody: params.organizationKeyCustody,
+    organizationAuthMethod: params.organizationAuthMethod,
+    organizationSsoConnectionId: params.organizationSsoConnectionId,
   });
 
   return code;
@@ -216,6 +269,15 @@ async function buildTokenResponseFromAuthorizationCode(params: {
     scope: string;
     nonce?: string;
     encryptedAppKey?: string;
+    organizationId?: string;
+    organizationMemberId?: string;
+    organizationRole?: string;
+    organizationScopes?: string[];
+    organizationSigningAuthority?: boolean;
+    organizationEncryptionMode?: string;
+    organizationKeyCustody?: string;
+    organizationAuthMethod?: string;
+    organizationSsoConnectionId?: string;
   };
   oauthApp: ReturnType<typeof buildQuickApp> | typeof oauthApps.$inferSelect;
   clientId: string;
@@ -236,6 +298,15 @@ async function buildTokenResponseFromAuthorizationCode(params: {
     scope: authCode.scope,
     expiresAt: Date.now() + accessTokenTtl * 1000,
     redirectUri,
+    organizationId: authCode.organizationId,
+    organizationMemberId: authCode.organizationMemberId,
+    organizationRole: authCode.organizationRole,
+    organizationScopes: authCode.organizationScopes,
+    organizationSigningAuthority: authCode.organizationSigningAuthority,
+    organizationEncryptionMode: authCode.organizationEncryptionMode,
+    organizationKeyCustody: authCode.organizationKeyCustody,
+    organizationAuthMethod: authCode.organizationAuthMethod,
+    organizationSsoConnectionId: authCode.organizationSsoConnectionId,
   });
 
   const [identity] = await db
@@ -266,6 +337,7 @@ async function buildTokenResponseFromAuthorizationCode(params: {
     cid: oauthApp.clientId,
     uid: hasScope(authCode.scope, "user_id") && oauthApp.allowUserIdScope ? authCode.userId : undefined,
     ...(isQuickClient(clientId) ? { quick: true } : {}),
+    ...organizationClaims(authCode),
   });
 
   response.access_token_jwt = jwtAccessToken;
@@ -288,6 +360,7 @@ async function buildTokenResponseFromAuthorizationCode(params: {
       preferred_username: hasScope(authCode.scope, "profile") ? identity?.handle : undefined,
       email: hasScope(authCode.scope, "email") ? identity?.email : undefined,
       picture: hasScope(authCode.scope, "profile") ? identity?.avatarUrl : undefined,
+      ...organizationClaims(authCode),
     });
     response.id_token = idToken;
   }
@@ -301,8 +374,27 @@ async function buildTokenResponseFromAuthorizationCode(params: {
       tokenHash: hashToken(refreshToken),
       scope: authCode.scope,
       expiresAt: new Date(Date.now() + refreshTokenTtl * 1000),
+      organizationId: authCode.organizationId,
+      organizationMemberId: authCode.organizationMemberId,
+      enterpriseSsoOrganizationId: authCode.organizationAuthMethod === "enterprise_sso" ? authCode.organizationId : undefined,
+      enterpriseSsoConnectionId: authCode.organizationSsoConnectionId,
     });
     response.refresh_token = refreshToken;
+  }
+
+  if (authCode.organizationId) {
+    response.organization = {
+      id: authCode.organizationId,
+      memberId: authCode.organizationMemberId,
+      role: authCode.organizationRole,
+      scopes: authCode.organizationScopes || [],
+      signingAuthority: !!authCode.organizationSigningAuthority,
+      encryptionMode: authCode.organizationEncryptionMode,
+      keyCustody: authCode.organizationKeyCustody,
+      authMethod: authCode.organizationAuthMethod,
+      ssoConnectionId: authCode.organizationSsoConnectionId,
+      e2eeKeyDelivery: "ave_identity_grants_only",
+    };
   }
 
   if (includeEncryptedAppKey && authCode.encryptedAppKey) {
@@ -717,6 +809,7 @@ app.post("/authorize", requireAuth, zValidator("json", z.object({
   scope: z.string().optional().default("profile"),
   state: z.string().optional(),
   identityId: z.string().uuid(),
+  organizationId: z.string().uuid().optional(),
   codeChallenge: z.string().optional(), // PKCE
   codeChallengeMethod: z.enum(["S256", "plain"]).optional(),
   encryptedAppKey: z.string().optional(), // E2EE: app key encrypted with user's master key
@@ -734,6 +827,7 @@ app.post("/authorize", requireAuth, zValidator("json", z.object({
     scope,
     state,
     identityId,
+    organizationId,
     codeChallenge,
     codeChallengeMethod,
     encryptedAppKey,
@@ -812,6 +906,60 @@ app.post("/authorize", requireAuth, zValidator("json", z.object({
   
   if (!identity) {
     return c.json({ error: "Invalid identity" }, 400);
+  }
+
+  let organizationContext: {
+    organizationId: string;
+    organizationMemberId: string;
+    organizationRole: string;
+    organizationScopes: string[];
+    organizationSigningAuthority: boolean;
+    organizationEncryptionMode: string;
+    organizationKeyCustody: string;
+    organizationAuthMethod: string;
+    organizationSsoConnectionId?: string;
+  } | null = null;
+
+  if (organizationId) {
+    const [businessContext] = await db
+      .select({ member: organizationIdentityMembers, organization: organizations })
+      .from(organizationIdentityMembers)
+      .innerJoin(organizations, eq(organizations.id, organizationIdentityMembers.organizationId))
+      .where(and(
+        eq(organizationIdentityMembers.organizationId, organizationId),
+        eq(organizationIdentityMembers.identityId, identityId),
+        eq(organizationIdentityMembers.status, "active"),
+      ))
+      .limit(1);
+
+    if (!businessContext) {
+      return c.json({ error: "organization_access_denied" }, 403);
+    }
+    if (businessContext.organization.ssoRequired && !hasEnterpriseSsoSessionForOrganization(user, organizationId)) {
+      const policy = await getRequiredEnterpriseSsoForOrganization(businessContext.organization);
+      return c.json({
+        error: "enterprise_sso_required",
+        error_description: "This organization requires enterprise SSO before issuing organization context.",
+        loginUrl: policy?.loginUrl,
+        organization: { id: businessContext.organization.id, name: businessContext.organization.name },
+      }, 403);
+    }
+    const [policyRow] = await db.select().from(organizationEncryptionPolicies)
+      .where(eq(organizationEncryptionPolicies.organizationId, organizationId))
+      .limit(1);
+    const encryptionPolicy = serializeEncryptionPolicy(policyRow ?? null, organizationId);
+
+    organizationContext = {
+      organizationId,
+      organizationMemberId: businessContext.member.id,
+      organizationRole: businessContext.member.role,
+      organizationScopes: scopesForRole(businessContext.member.role as BusinessRole, businessContext.member.scopes as string[] | null),
+      organizationSigningAuthority: businessContext.member.signingAuthority,
+      organizationEncryptionMode: encryptionPolicy.mode,
+      organizationKeyCustody: keyCustodyForEncryptionMode(encryptionPolicy.mode),
+      organizationAuthMethod: businessContext.organization.ssoRequired ? "enterprise_sso" : user.authMethod || "ave_session",
+      organizationSsoConnectionId: businessContext.organization.ssoRequired ? user.enterpriseSsoConnectionId || undefined : undefined,
+    };
   }
 
   if (requestedScopes.includes("email") && !hasVerifiedEmail(identity)) {
@@ -979,6 +1127,15 @@ app.post("/authorize", requireAuth, zValidator("json", z.object({
     codeChallengeMethod,
     encryptedAppKey: finalEncryptedAppKey,
     nonce: nonce || undefined,
+    organizationId: organizationContext?.organizationId,
+    organizationMemberId: organizationContext?.organizationMemberId,
+    organizationRole: organizationContext?.organizationRole,
+    organizationScopes: organizationContext?.organizationScopes,
+    organizationSigningAuthority: organizationContext?.organizationSigningAuthority,
+    organizationEncryptionMode: organizationContext?.organizationEncryptionMode,
+    organizationKeyCustody: organizationContext?.organizationKeyCustody,
+    organizationAuthMethod: organizationContext?.organizationAuthMethod,
+    organizationSsoConnectionId: organizationContext?.organizationSsoConnectionId,
     requestedResource: connector ? requestedResource : undefined,
     requestedScope: connector ? resolvedRequestedScope || requestedScope : undefined,
     communicationMode: connector ? communicationMode : undefined,
@@ -995,6 +1152,7 @@ app.post("/authorize", requireAuth, zValidator("json", z.object({
       appName: oauthApp.name,
       appId: oauthApp.id,
       identityId,
+      organizationId: organizationContext?.organizationId,
       authMethod: authorizationMethod,
       scope,
     },
@@ -1248,6 +1406,61 @@ app.post("/token", zValidator("json", oauthTokenRequestSchema), async (c) => {
       return c.json({ error: "invalid_grant", error_description: "Refresh token expired" }, 400);
     }
 
+    let refreshOrganizationContext: ReturnType<typeof organizationClaims> & {
+      organizationId?: string;
+      organizationMemberId?: string;
+      organizationRole?: string;
+      organizationScopes?: string[];
+      organizationSigningAuthority?: boolean;
+      organizationEncryptionMode?: string;
+      organizationKeyCustody?: string;
+      organizationAuthMethod?: string;
+      organizationSsoConnectionId?: string;
+    } = {};
+
+    if (storedRefresh.organizationId && storedRefresh.organizationMemberId) {
+      const [businessContext] = await db
+        .select({ member: organizationIdentityMembers, organization: organizations })
+        .from(organizationIdentityMembers)
+        .innerJoin(organizations, eq(organizations.id, organizationIdentityMembers.organizationId))
+        .where(and(
+          eq(organizationIdentityMembers.id, storedRefresh.organizationMemberId),
+          eq(organizationIdentityMembers.organizationId, storedRefresh.organizationId),
+          eq(organizationIdentityMembers.identityId, storedRefresh.identityId),
+          eq(organizationIdentityMembers.status, "active"),
+        ))
+        .limit(1);
+
+      if (!businessContext) {
+        return c.json({ error: "access_denied", error_description: "Organization membership is no longer active" }, 403);
+      }
+      if (businessContext.organization.ssoRequired && storedRefresh.enterpriseSsoOrganizationId !== storedRefresh.organizationId) {
+        const policy = await getRequiredEnterpriseSsoForOrganization(businessContext.organization);
+        return c.json({
+          error: "enterprise_sso_required",
+          error_description: "This organization now requires enterprise SSO before refreshing organization context.",
+          loginUrl: policy?.loginUrl,
+          organization: { id: businessContext.organization.id, name: businessContext.organization.name },
+        }, 403);
+      }
+      const [policyRow] = await db.select().from(organizationEncryptionPolicies)
+        .where(eq(organizationEncryptionPolicies.organizationId, storedRefresh.organizationId))
+        .limit(1);
+      const encryptionPolicy = serializeEncryptionPolicy(policyRow ?? null, storedRefresh.organizationId);
+
+      refreshOrganizationContext = {
+        organizationId: storedRefresh.organizationId,
+        organizationMemberId: storedRefresh.organizationMemberId,
+        organizationRole: businessContext.member.role,
+        organizationScopes: scopesForRole(businessContext.member.role as BusinessRole, businessContext.member.scopes as string[] | null),
+        organizationSigningAuthority: businessContext.member.signingAuthority,
+        organizationEncryptionMode: encryptionPolicy.mode,
+        organizationKeyCustody: keyCustodyForEncryptionMode(encryptionPolicy.mode),
+        organizationAuthMethod: businessContext.organization.ssoRequired ? "enterprise_sso" : "ave_session",
+        organizationSsoConnectionId: businessContext.organization.ssoRequired ? storedRefresh.enterpriseSsoConnectionId || undefined : undefined,
+      };
+    }
+
     const accessTokenTtl = oauthApp.accessTokenTtlSeconds || 3600;
     const refreshTokenTtl = oauthApp.refreshTokenTtlSeconds || 30 * 24 * 60 * 60;
 
@@ -1259,6 +1472,15 @@ app.post("/token", zValidator("json", oauthTokenRequestSchema), async (c) => {
       scope: storedRefresh.scope,
       expiresAt: Date.now() + accessTokenTtl * 1000,
       redirectUri: "",
+      organizationId: refreshOrganizationContext.organizationId,
+      organizationMemberId: refreshOrganizationContext.organizationMemberId,
+      organizationRole: refreshOrganizationContext.organizationRole,
+      organizationScopes: refreshOrganizationContext.organizationScopes,
+      organizationSigningAuthority: refreshOrganizationContext.organizationSigningAuthority,
+      organizationEncryptionMode: refreshOrganizationContext.organizationEncryptionMode,
+      organizationKeyCustody: refreshOrganizationContext.organizationKeyCustody,
+      organizationAuthMethod: refreshOrganizationContext.organizationAuthMethod,
+      organizationSsoConnectionId: refreshOrganizationContext.organizationSsoConnectionId,
     });
 
     const rotatedRefreshToken = generateRefreshToken();
@@ -1274,6 +1496,10 @@ app.post("/token", zValidator("json", oauthTokenRequestSchema), async (c) => {
       scope: storedRefresh.scope,
       expiresAt: new Date(Date.now() + refreshTokenTtl * 1000),
       rotatedFromId: storedRefresh.id,
+      organizationId: refreshOrganizationContext.organizationId,
+      organizationMemberId: refreshOrganizationContext.organizationMemberId,
+      enterpriseSsoOrganizationId: refreshOrganizationContext.organizationAuthMethod === "enterprise_sso" ? refreshOrganizationContext.organizationId : undefined,
+      enterpriseSsoConnectionId: refreshOrganizationContext.organizationSsoConnectionId,
     });
 
     const [identity] = await db
@@ -1297,6 +1523,7 @@ app.post("/token", zValidator("json", oauthTokenRequestSchema), async (c) => {
       preferred_username: hasScope(storedRefresh.scope, "profile") ? identity?.handle : undefined,
       email: hasScope(storedRefresh.scope, "email") ? identity?.email : undefined,
       picture: hasScope(storedRefresh.scope, "profile") ? identity?.avatarUrl : undefined,
+      ...organizationClaims(refreshOrganizationContext),
     });
 
     const jwtAccessToken = await signJwt({
@@ -1308,6 +1535,7 @@ app.post("/token", zValidator("json", oauthTokenRequestSchema), async (c) => {
       scope: storedRefresh.scope,
       cid: oauthApp.clientId,
       uid: hasScope(storedRefresh.scope, "user_id") && oauthApp.allowUserIdScope ? storedRefresh.userId : undefined,
+      ...organizationClaims(refreshOrganizationContext),
     });
 
     const response: Record<string, unknown> = {
@@ -1321,6 +1549,21 @@ app.post("/token", zValidator("json", oauthTokenRequestSchema), async (c) => {
 
     if (hasScope(storedRefresh.scope, "user_id") && oauthApp.allowUserIdScope) {
       response.user_id = storedRefresh.userId;
+    }
+
+    if (refreshOrganizationContext.organizationId) {
+      response.organization = {
+        id: refreshOrganizationContext.organizationId,
+        memberId: refreshOrganizationContext.organizationMemberId,
+        role: refreshOrganizationContext.organizationRole,
+        scopes: refreshOrganizationContext.organizationScopes || [],
+        signingAuthority: !!refreshOrganizationContext.organizationSigningAuthority,
+        encryptionMode: refreshOrganizationContext.organizationEncryptionMode,
+        keyCustody: refreshOrganizationContext.organizationKeyCustody,
+        authMethod: refreshOrganizationContext.organizationAuthMethod,
+        ssoConnectionId: refreshOrganizationContext.organizationSsoConnectionId,
+        e2eeKeyDelivery: "ave_identity_grants_only",
+      };
     }
 
     return c.json(response);
@@ -1519,6 +1762,15 @@ app.get("/userinfo", async (c) => {
       scope: String(jwtPayload.scope || ""),
       expiresAt: (typeof jwtPayload.exp === "number" ? jwtPayload.exp * 1000 : 0),
       redirectUri: "",
+      organizationId: typeof jwtPayload.org_id === "string" ? jwtPayload.org_id : undefined,
+      organizationMemberId: typeof jwtPayload.org_member_id === "string" ? jwtPayload.org_member_id : undefined,
+      organizationRole: typeof jwtPayload.org_role === "string" ? jwtPayload.org_role : undefined,
+      organizationScopes: Array.isArray(jwtPayload.org_scopes) ? jwtPayload.org_scopes.filter((scope): scope is string => typeof scope === "string") : undefined,
+      organizationSigningAuthority: typeof jwtPayload.org_signing_authority === "boolean" ? jwtPayload.org_signing_authority : undefined,
+      organizationEncryptionMode: typeof jwtPayload.org_encryption_mode === "string" ? jwtPayload.org_encryption_mode : undefined,
+      organizationKeyCustody: typeof jwtPayload.org_key_custody === "string" ? jwtPayload.org_key_custody : undefined,
+      organizationAuthMethod: typeof jwtPayload.auth_method === "string" ? jwtPayload.auth_method : undefined,
+      organizationSsoConnectionId: typeof jwtPayload.sso_connection_id === "string" ? jwtPayload.sso_connection_id : undefined,
     };
   }
 
@@ -1555,6 +1807,21 @@ app.get("/userinfo", async (c) => {
     if (oauthApp?.allowUserIdScope && record.userId) {
       response.user_id = record.userId;
     }
+  }
+
+  if (record.organizationId) {
+    response.organization = {
+      id: record.organizationId,
+      memberId: record.organizationMemberId,
+      role: record.organizationRole,
+      scopes: record.organizationScopes || [],
+      signingAuthority: !!record.organizationSigningAuthority,
+      encryptionMode: record.organizationEncryptionMode,
+      keyCustody: record.organizationKeyCustody,
+      authMethod: record.organizationAuthMethod,
+      ssoConnectionId: record.organizationSsoConnectionId,
+      e2eeKeyDelivery: "ave_identity_grants_only",
+    };
   }
 
   response.iss = getIssuer();

@@ -9,222 +9,16 @@ import { verifyJwt, getResourceAudience } from "../lib/oidc";
 import { hashSessionToken } from "../lib/crypto";
 import { enforceRateLimits, ipRateLimit, subjectRateLimit } from "../lib/rate-limit";
 import { timingSafeEqual } from "crypto";
-
+import signingKeyRoutes from "./signing-keys";
 const app = new Hono();
-
+app.route("/", signingKeyRoutes);
 function timingSafeEqualString(a: string, b: string): boolean {
   if (a.length !== b.length) return false;
   return timingSafeEqual(Buffer.from(a), Buffer.from(b));
 }
-
-async function requireWritableSigningSession(c: any, next: any) {
-  const user = c.get("user");
-  if (!user) {
-    return c.json({ error: "Unauthorized" }, 401);
-  }
-
-  return requireWritable(c, next);
-}
-
-// ============================================
-// Authenticated user endpoints (manage keys)
-// ============================================
-
-// Get signing key for an identity (or all identities)
-app.get("/keys", requireAuth, async (c) => {
-  const user = c.get("user")!;
-  
-  // Get all identities for this user with their signing keys
-  const userIdentities = await db
-    .select({
-      identity: identities,
-      signingKey: signingKeys,
-    })
-    .from(identities)
-    .leftJoin(signingKeys, eq(signingKeys.identityId, identities.id))
-    .where(eq(identities.userId, user.id));
-  
-  return c.json({
-    keys: userIdentities.map((row) => ({
-      identityId: row.identity.id,
-      handle: row.identity.handle,
-      displayName: row.identity.displayName,
-      hasSigningKey: !!row.signingKey,
-      publicKey: row.signingKey?.publicKey || null,
-      createdAt: row.signingKey?.createdAt || null,
-    })),
-  });
-});
-
-// Get signing key for a specific identity
-app.get("/keys/:identityId", requireAuth, async (c) => {
-  const user = c.get("user")!;
-  const identityId = c.req.param("identityId") || "";
-  
-  // Verify identity belongs to user
-  const [identity] = await db
-    .select()
-    .from(identities)
-    .where(and(eq(identities.id, identityId), eq(identities.userId, user.id)))
-    .limit(1);
-  
-  if (!identity) {
-    return c.json({ error: "Identity not found" }, 404);
-  }
-  
-  // Get signing key
-  const [key] = await db
-    .select()
-    .from(signingKeys)
-    .where(eq(signingKeys.identityId, identityId))
-    .limit(1);
-  
-  if (!key) {
-    return c.json({ 
-      hasKey: false,
-      publicKey: null,
-      encryptedPrivateKey: null,
-    });
-  }
-  
-  return c.json({
-    hasKey: true,
-    publicKey: key.publicKey,
-    encryptedPrivateKey: key.encryptedPrivateKey,
-    createdAt: key.createdAt,
-  });
-});
-
-// Store signing key for an identity (generated client-side)
-app.post("/keys/:identityId", requireAuth, requireWritableSigningSession, zValidator("json", z.object({
-  publicKey: z.string().min(1),
-  encryptedPrivateKey: z.string().min(1),
-})), async (c) => {
-  const user = c.get("user")!;
-  const identityId = c.req.param("identityId") || "";
-  const { publicKey, encryptedPrivateKey } = c.req.valid("json");
-  
-  // Validate public key format
-  if (!isValidPublicKey(publicKey)) {
-    return c.json({ error: "Invalid public key format" }, 400);
-  }
-  
-  // Verify identity belongs to user
-  const [identity] = await db
-    .select()
-    .from(identities)
-    .where(and(eq(identities.id, identityId), eq(identities.userId, user.id)))
-    .limit(1);
-  
-  if (!identity) {
-    return c.json({ error: "Identity not found" }, 404);
-  }
-  
-  // Check if key already exists
-  const [existingKey] = await db
-    .select()
-    .from(signingKeys)
-    .where(eq(signingKeys.identityId, identityId))
-    .limit(1);
-  
-  if (existingKey) {
-    return c.json({ error: "Signing key already exists for this identity" }, 409);
-  }
-  
-  // Store the key
-  const [newKey] = await db
-    .insert(signingKeys)
-    .values({
-      identityId,
-      publicKey,
-      encryptedPrivateKey,
-    })
-    .returning();
-  
-  // Log activity
-  await db.insert(activityLogs).values({
-    userId: user.id,
-    action: "signing_key_created",
-    details: { identityId, handle: identity.handle },
-    deviceId: user.deviceId,
-    ipAddress: c.req.header("x-forwarded-for") || c.req.header("x-real-ip"),
-    userAgent: c.req.header("user-agent"),
-    severity: "info",
-  });
-  
-  return c.json({
-    success: true,
-    publicKey: newKey.publicKey,
-    createdAt: newKey.createdAt,
-  });
-});
-
-// Rotate signing key (replace with new one)
-app.put("/keys/:identityId", requireAuth, requireWritableSigningSession, zValidator("json", z.object({
-  publicKey: z.string().min(1),
-  encryptedPrivateKey: z.string().min(1),
-})), async (c) => {
-  const user = c.get("user")!;
-  const identityId = c.req.param("identityId") || "";
-  const { publicKey, encryptedPrivateKey } = c.req.valid("json");
-  
-  // Validate public key format
-  if (!isValidPublicKey(publicKey)) {
-    return c.json({ error: "Invalid public key format" }, 400);
-  }
-  
-  // Verify identity belongs to user
-  const [identity] = await db
-    .select()
-    .from(identities)
-    .where(and(eq(identities.id, identityId), eq(identities.userId, user.id)))
-    .limit(1);
-  
-  if (!identity) {
-    return c.json({ error: "Identity not found" }, 404);
-  }
-  
-  // Upsert the key
-  await db
-    .delete(signingKeys)
-    .where(eq(signingKeys.identityId, identityId));
-  
-  const [newKey] = await db
-    .insert(signingKeys)
-    .values({
-      identityId,
-      publicKey,
-      encryptedPrivateKey,
-    })
-    .returning();
-  
-  // Log activity
-  await db.insert(activityLogs).values({
-    userId: user.id,
-    action: "signing_key_rotated",
-    details: { identityId, handle: identity.handle },
-    deviceId: user.deviceId,
-    ipAddress: c.req.header("x-forwarded-for") || c.req.header("x-real-ip"),
-    userAgent: c.req.header("user-agent"),
-    severity: "warning",
-  });
-  
-  return c.json({
-    success: true,
-    publicKey: newKey.publicKey,
-    createdAt: newKey.createdAt,
-  });
-});
-
-// ============================================
-// Signature request endpoints
-// ============================================
-
-// Get pending signature requests for user
 app.get("/requests", requireAuth, async (c) => {
   const user = c.get("user")!;
   
-  // Get user's identities
   const userIdentities = await db
     .select()
     .from(identities)
@@ -236,7 +30,6 @@ app.get("/requests", requireAuth, async (c) => {
     return c.json({ requests: [] });
   }
   
-  // Get pending requests for any of user's identities
   const requests = await db
     .select({
       request: signatureRequests,
@@ -327,7 +120,7 @@ app.get("/requests/:requestId", requireAuth, async (c) => {
       displayName: result.identity.displayName,
       avatarUrl: result.identity.avatarUrl,
     },
-    signingKey: result.signingKey ? {
+    signingKey: result.signingKey && isValidPublicKey(result.signingKey.publicKey) ? {
       publicKey: result.signingKey.publicKey,
       encryptedPrivateKey: result.signingKey.encryptedPrivateKey,
     } : null,
@@ -335,7 +128,7 @@ app.get("/requests/:requestId", requireAuth, async (c) => {
 });
 
 // Sign a request (submit signature from client)
-app.post("/requests/:requestId/sign", requireAuth, requireWritableSigningSession, zValidator("json", z.object({
+app.post("/requests/:requestId/sign", requireAuth, requireWritable, zValidator("json", z.object({
   signature: z.string().min(1),
 })), async (c) => {
   const user = c.get("user")!;
@@ -377,7 +170,7 @@ app.post("/requests/:requestId/sign", requireAuth, requireWritableSigningSession
     return c.json({ error: "Request expired" }, 400);
   }
   
-  if (!result.signingKey) {
+  if (!result.signingKey || !isValidPublicKey(result.signingKey.publicKey)) {
     return c.json({ error: "No signing key for this identity" }, 400);
   }
   
@@ -422,7 +215,7 @@ app.post("/requests/:requestId/sign", requireAuth, requireWritableSigningSession
 });
 
 // Deny a signature request
-app.post("/requests/:requestId/deny", requireAuth, requireWritableSigningSession, async (c) => {
+app.post("/requests/:requestId/deny", requireAuth, requireWritable, async (c) => {
   const user = c.get("user")!;
   const requestId = c.req.param("requestId") || "";
   
@@ -482,35 +275,6 @@ app.post("/requests/:requestId/deny", requireAuth, requireWritableSigningSession
 // Public / App endpoints
 // ============================================
 
-// Get public key for an identity (by handle) - public endpoint
-app.get("/public-key/:handle", async (c) => {
-  const handle = c.req.param("handle");
-  
-  const [result] = await db
-    .select({
-      identity: identities,
-      signingKey: signingKeys,
-    })
-    .from(identities)
-    .leftJoin(signingKeys, eq(signingKeys.identityId, identities.id))
-    .where(eq(identities.handle, handle))
-    .limit(1);
-  
-  if (!result) {
-    return c.json({ error: "Identity not found" }, 404);
-  }
-  
-  if (!result.signingKey) {
-    return c.json({ error: "No signing key for this identity" }, 404);
-  }
-  
-  return c.json({
-    handle: result.identity.handle,
-    publicKey: result.signingKey.publicKey,
-    createdAt: result.signingKey.createdAt,
-  });
-});
-
 // Create a signature request (from an OAuth app)
 app.post("/request", zValidator("json", z.object({
   clientId: z.string().min(1),
@@ -563,7 +327,7 @@ app.post("/request", zValidator("json", z.object({
     .where(eq(signingKeys.identityId, identityId))
     .limit(1);
   
-  if (!signingKey) {
+  if (!signingKey || !isValidPublicKey(signingKey.publicKey)) {
     return c.json({ error: "Identity does not have a signing key" }, 400);
   }
   
@@ -677,7 +441,6 @@ app.post("/demo/request", zValidator("json", z.object({
 })), async (c) => {
   const { payload } = c.req.valid("json");
   
-  // Verify OAuth access token
   const authHeader = c.req.header("Authorization");
   if (!authHeader?.startsWith("Bearer ")) {
     return c.json({ error: "Unauthorized" }, 401);
@@ -695,7 +458,6 @@ app.post("/demo/request", zValidator("json", z.object({
     return c.json({ error: "Invalid token - no identity" }, 401);
   }
   
-  // Get the demo app
   const [demoApp] = await db
     .select()
     .from(oauthApps)
@@ -706,7 +468,6 @@ app.post("/demo/request", zValidator("json", z.object({
     return c.json({ error: "Demo app not configured" }, 500);
   }
   
-  // Verify identity exists
   const [identity] = await db
     .select()
     .from(identities)
@@ -717,7 +478,6 @@ app.post("/demo/request", zValidator("json", z.object({
     return c.json({ error: "Identity not found" }, 404);
   }
   
-  // Create the request (expires in 5 minutes)
   const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
   
   const [request] = await db

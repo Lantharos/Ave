@@ -5,8 +5,8 @@ import { and, eq } from "drizzle-orm";
 import {
   activityLogs,
   db,
+  identityEncryptionKeys,
   identities,
-  signingKeys,
 } from "../db";
 import { validateOpaqueKeyEnvelope, validatePublicKeyBlob } from "../lib/encryption-key-payload";
 import { requireAuth, requireWritableForMutation } from "../middleware/auth";
@@ -27,10 +27,10 @@ app.get("/public-key/:handle", async (c) => {
   const [result] = await db
     .select({
       identity: identities,
-      key: signingKeys,
+      key: identityEncryptionKeys,
     })
     .from(identities)
-    .leftJoin(signingKeys, eq(signingKeys.identityId, identities.id))
+    .leftJoin(identityEncryptionKeys, eq(identityEncryptionKeys.identityId, identities.id))
     .where(eq(identities.handle, handle))
     .limit(1);
 
@@ -69,8 +69,8 @@ app.get("/keys/:identityId", async (c) => {
 
   const [key] = await db
     .select()
-    .from(signingKeys)
-    .where(eq(signingKeys.identityId, identityId))
+    .from(identityEncryptionKeys)
+    .where(eq(identityEncryptionKeys.identityId, identityId))
     .limit(1);
 
   return c.json({
@@ -107,8 +107,8 @@ app.post("/keys/:identityId", zValidator("json", postKeySchema), async (c) => {
 
   const [existing] = await db
     .select()
-    .from(signingKeys)
-    .where(eq(signingKeys.identityId, identityId))
+    .from(identityEncryptionKeys)
+    .where(eq(identityEncryptionKeys.identityId, identityId))
     .limit(1);
 
   if (existing) {
@@ -116,7 +116,7 @@ app.post("/keys/:identityId", zValidator("json", postKeySchema), async (c) => {
   }
 
   const [created] = await db
-    .insert(signingKeys)
+    .insert(identityEncryptionKeys)
     .values({
       identityId,
       publicKey: body.publicKey,
@@ -170,20 +170,20 @@ app.put("/keys/:identityId", zValidator("json", putKeySchema), async (c) => {
 
   const [existing] = await db
     .select()
-    .from(signingKeys)
-    .where(eq(signingKeys.identityId, identityId))
+    .from(identityEncryptionKeys)
+    .where(eq(identityEncryptionKeys.identityId, identityId))
     .limit(1);
 
   if (existing) {
     await db
-      .update(signingKeys)
+      .update(identityEncryptionKeys)
       .set({
         publicKey: body.publicKey,
         encryptedPrivateKey: body.encryptedPrivateKey,
       })
-      .where(eq(signingKeys.id, existing.id));
+      .where(eq(identityEncryptionKeys.id, existing.id));
   } else {
-    await db.insert(signingKeys).values({
+    await db.insert(identityEncryptionKeys).values({
       identityId,
       publicKey: body.publicKey,
       encryptedPrivateKey: body.encryptedPrivateKey,

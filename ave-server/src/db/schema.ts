@@ -21,6 +21,7 @@ export const organizations = sqliteTable("organizations", {
   slug: text("slug").notNull().unique(),
   plan: text("plan").notNull().default("core"),
   verifiedDomains: text("verified_domains", { mode: "json" }).$type<string[]>().$defaultFn(() => []),
+  ssoRequired: integer("sso_required", { mode: "boolean" }).default(false).notNull(),
   appLimit: integer("app_limit").notNull().default(12),
   ownerUserId: text("owner_user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
 }, (table) => [
@@ -43,6 +44,26 @@ export const organizationMembers = sqliteTable("organization_members", {
   index("organization_members_organization_id_idx").on(table.organizationId),
   index("organization_members_user_id_idx").on(table.userId),
   index("organization_members_status_idx").on(table.status),
+]);
+
+export const organizationIdentityMembers = sqliteTable("organization_identity_members", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull().$defaultFn(() => new Date()),
+  updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull().$defaultFn(() => new Date()),
+
+  organizationId: text("organization_id").references(() => organizations.id, { onDelete: "cascade" }).notNull(),
+  identityId: text("identity_id").references(() => identities.id, { onDelete: "cascade" }).notNull(),
+  addedByUserId: text("added_by_user_id").references(() => users.id, { onDelete: "set null" }),
+  addedByIdentityId: text("added_by_identity_id").references(() => identities.id, { onDelete: "set null" }),
+  role: text("role").notNull().default("member"),
+  scopes: text("scopes", { mode: "json" }).$type<string[]>().$defaultFn(() => ["read"]),
+  signingAuthority: integer("signing_authority", { mode: "boolean" }).default(false).notNull(),
+  status: text("status").notNull().default("active"),
+}, (table) => [
+  uniqueIndex("organization_identity_members_org_identity_unique").on(table.organizationId, table.identityId),
+  index("organization_identity_members_organization_id_idx").on(table.organizationId),
+  index("organization_identity_members_identity_id_idx").on(table.identityId),
+  index("organization_identity_members_status_idx").on(table.status),
 ]);
 
 // Identities - users can have multiple identities (up to 5)
@@ -140,9 +161,12 @@ export const sessions = sqliteTable("sessions", {
   ipAddress: text("ip_address"),
   userAgent: text("user_agent"),
   authMethod: text("auth_method"),
+  enterpriseSsoOrganizationId: text("enterprise_sso_organization_id").references(() => organizations.id, { onDelete: "set null" }),
+  enterpriseSsoConnectionId: text("enterprise_sso_connection_id"),
 }, (table) => [
   index("sessions_user_id_idx").on(table.userId),
   index("sessions_token_hash_idx").on(table.tokenHash),
+  index("sessions_enterprise_sso_organization_id_idx").on(table.enterpriseSsoOrganizationId),
 ]);
 
 // Login requests - pending login attempts that need approval
@@ -276,27 +300,28 @@ export const oauthApps = sqliteTable("oauth_apps", {
   index("oauth_apps_organization_id_idx").on(table.organizationId),
 ]);
 
-// OAuth refresh tokens
 export const oauthRefreshTokens = sqliteTable("oauth_refresh_tokens", {
   id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
   createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull().$defaultFn(() => new Date()),
   revokedAt: integer("revoked_at", { mode: "timestamp_ms" }),
   expiresAt: integer("expires_at", { mode: "timestamp_ms" }).notNull(),
-  
-  // Who + app
   userId: text("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
   identityId: text("identity_id").references(() => identities.id, { onDelete: "cascade" }).notNull(),
   appId: text("app_id").references(() => oauthApps.id, { onDelete: "cascade" }).notNull(),
-  
-  // Token info
   tokenHash: text("token_hash").notNull().unique(),
   scope: text("scope").notNull(),
+  organizationId: text("organization_id").references(() => organizations.id, { onDelete: "set null" }),
+  organizationMemberId: text("organization_member_id").references(() => organizationIdentityMembers.id, { onDelete: "set null" }),
+  enterpriseSsoOrganizationId: text("enterprise_sso_organization_id").references(() => organizations.id, { onDelete: "set null" }),
+  enterpriseSsoConnectionId: text("enterprise_sso_connection_id"),
   rotatedFromId: text("rotated_from_id"),
   reuseDetectedAt: integer("reuse_detected_at", { mode: "timestamp_ms" }),
 }, (table) => [
   index("oauth_refresh_tokens_user_id_idx").on(table.userId),
   index("oauth_refresh_tokens_app_id_idx").on(table.appId),
   index("oauth_refresh_tokens_identity_id_idx").on(table.identityId),
+  index("oauth_refresh_tokens_organization_id_idx").on(table.organizationId),
+  index("oauth_refresh_tokens_enterprise_sso_organization_id_idx").on(table.enterpriseSsoOrganizationId),
   index("oauth_refresh_tokens_token_hash_idx").on(table.tokenHash),
 ]);
 
@@ -391,6 +416,17 @@ export const signingKeys = sqliteTable("signing_keys", {
   index("signing_keys_identity_id_idx").on(table.identityId),
 ]);
 
+export const identityEncryptionKeys = sqliteTable("identity_encryption_keys", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  identityId: text("identity_id").references(() => identities.id, { onDelete: "cascade" }).notNull().unique(),
+  createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull().$defaultFn(() => new Date()),
+  updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull().$defaultFn(() => new Date()),
+  publicKey: text("public_key").notNull(),
+  encryptedPrivateKey: text("encrypted_private_key").notNull(),
+}, (table) => [
+  index("identity_encryption_keys_identity_id_idx").on(table.identityId),
+]);
+
 // Signature requests - pending requests from apps for user signatures
 export const signatureRequests = sqliteTable("signature_requests", {
   id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
@@ -434,6 +470,7 @@ export type Organization = typeof organizations.$inferSelect;
 export type NewOrganization = typeof organizations.$inferInsert;
 export type OrganizationMember = typeof organizationMembers.$inferSelect;
 export type NewOrganizationMember = typeof organizationMembers.$inferInsert;
+export type OrganizationIdentityMember = typeof organizationIdentityMembers.$inferSelect;
 export type Identity = typeof identities.$inferSelect;
 export type NewIdentity = typeof identities.$inferInsert;
 export type Passkey = typeof passkeys.$inferSelect;

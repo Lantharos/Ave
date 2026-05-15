@@ -103,6 +103,7 @@ function buildAuthorizeUrl(
     nonce?: string;
     codeChallenge?: string;
     codeChallengeMethod?: "S256" | "plain";
+    organizationId?: string;
     extraParams?: Record<string, string>;
   }
 ): string
@@ -130,6 +131,10 @@ function buildAuthorizeUrl(
 
 <ParamField path="params.codeChallenge" type="string">
   PKCE challenge from `generateCodeChallenge()`. Required for public clients.
+</ParamField>
+
+<ParamField path="params.organizationId" type="string">
+  Optional Ave Business organization ID. When present, Ave verifies that the selected identity belongs to the organization and includes `org_id`, `org_role`, `org_scopes`, `org_signing_authority`, `org_encryption_mode`, `org_key_custody`, and SSO auth metadata in issued tokens. If the organization requires SSO, the current Ave session must come from that organization's active SSO connection.
 </ParamField>
 
 <ParamField path="params.extraParams" type="object">

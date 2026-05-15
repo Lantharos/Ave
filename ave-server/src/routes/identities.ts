@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
-import { db, identities, activityLogs, signingKeys } from "../db";
+import { db, identities, activityLogs, identityEncryptionKeys } from "../db";
 import { requireAuth, requireWritableForMutation } from "../middleware/auth";
 import { eq, and } from "drizzle-orm";
 import {
@@ -119,7 +119,7 @@ app.post("/", zValidator("json", z.object({
   const identityKey = data.identityKey ?? data.encryptionKey;
 
   if (identityKey) {
-    await db.insert(signingKeys).values({
+    await db.insert(identityEncryptionKeys).values({
       identityId: identity.id,
       publicKey: identityKey.publicKey,
       encryptedPrivateKey: identityKey.encryptedPrivateKey,

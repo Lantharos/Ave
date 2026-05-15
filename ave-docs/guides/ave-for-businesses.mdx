@@ -1,0 +1,79 @@
+---
+title: "Ave for Businesses"
+description: "Use Ave organizations as identity containers with roles, org context claims, audit trails, and explicit key boundaries."
+---
+
+Ave organizations let a person act with a specific Ave identity inside a company or team context. There is no company password and no shared company login. A business organization contains identities, roles, scopes, signing authority, key grants, verified domains, and SSO configuration.
+
+## Organization context
+
+Apps that support business context send an `organization_id` on the Ave authorize URL. Ave verifies that the selected identity is an active member of that organization before issuing tokens.
+
+```ts
+import { buildAuthorizeUrl } from "@ave-id/sdk";
+
+const url = buildAuthorizeUrl(
+  { clientId: "YOUR_CLIENT_ID", redirectUri: "https://app.example.com/callback" },
+  {
+    scope: ["openid", "profile", "email", "offline_access"],
+    organizationId: "org_...",
+  }
+);
+```
+
+When organization context is valid, the access token JWT and ID token include:
+
+```json
+{
+  "auth_context": "organization",
+  "org_id": "org_...",
+  "org_member_id": "orgmem_...",
+  "org_role": "admin",
+  "org_scopes": ["read", "sign", "approve"],
+  "org_signing_authority": true,
+  "org_encryption_mode": "enterprise_managed",
+  "org_key_custody": "customer_kms",
+  "auth_method": "enterprise_sso",
+  "sso_connection_id": "sso_..."
+}
+```
+
+Use the normal `sub` claim as the stable Ave identity ID. Use `org_id` and `org_member_id` only for organization authorization decisions. When an organization requires SSO, Ave only issues or refreshes organization-context tokens from a session created by that organization's SSO connection.
+
+## Signed organization actions
+
+Business administration actions require an Ave identity signature from the acting organization identity. The business console signs organization creation, member add/remove/role changes, org key creation, domain verification, SSO setup, and SSO policy changes before sending them to the API.
+
+The server verifies the signature against the canonical audit payload before applying the mutation. Audit events store the payload, verified signature, public key, and signature status.
+
+## Encrypted org keys
+
+Business organizations have an explicit encryption mode:
+
+| Mode | Behavior |
+| --- | --- |
+| Standard | Seamless org encryption tied to Ave access policy. This is not marketed as E2EE. |
+| Enterprise-managed | Stores a customer KMS key reference for AWS KMS, Azure Key Vault, Google Cloud KMS, or an external provider. Ave stores the reference, not a cloud secret. |
+| E2EE | Browser-generated org keys are stored only as per-identity wrapped grants. Members need Ave identity encryption keys before they can receive grants. |
+
+In E2EE mode, org keys are not plaintext server secrets. The business UI generates key material in the browser and stores only per-identity wrapped grants. A member can use an org key only when their Ave identity has a usable identity encryption key and a wrapped grant exists for that identity.
+
+Identity encryption keys are separate from Ed25519 signing keys. Signing proves the acting identity approved an organization action; encryption grants control who can unwrap org key material.
+
+Enterprise SSO does not grant encrypted key access by itself. SSO can authenticate a company user, but encrypted data access still requires Ave identity key grants.
+
+When an enterprise SSO login succeeds for a verified organization domain, Ave links the login to an existing verified Ave identity by email or creates a limited SSO identity for that email. Newly provisioned SSO identities can access normal organization context, but they do not receive encrypted org keys until an Ave identity encryption key exists and a grant is issued.
+
+Removing an identity from an organization revokes its active org-key grants. For hard revocation, rotate the org key: Ave creates a new key epoch and rewraps access only for the remaining active identities. Data already decrypted on a device cannot be erased retroactively.
+
+## SSO setup status
+
+Business organizations can save SAML/OIDC connection configuration and generate SAML service provider metadata. Domain verification uses a DNS TXT record at:
+
+```txt
+_ave-challenge.example.com TXT ave-domain-verification=...
+```
+
+OIDC and SAML connections can be tested from the business console. A successful callback activates the connection, and only active connections can satisfy SSO enforcement.
+
+SAML assertion login validates the posted response signature against the stored IdP certificate, then checks issuer, audience, recipient, expiration, and email domain before creating an enterprise SSO session. The SSO endpoints do not claim E2EE support, and apps should not treat SSO as an encrypted key delivery path.
