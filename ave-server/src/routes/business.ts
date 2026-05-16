@@ -21,7 +21,6 @@ import {
   scopesForRole,
   shouldRequireEnterpriseSsoForBusinessAccess,
   verifySignedBusinessAction,
-  writeBusinessAuditEvent,
   type BusinessRole,
 } from "../lib/business";
 import {
@@ -30,6 +29,7 @@ import {
   userAgent,
 } from "../lib/business-route-utils";
 import { getRequiredEnterpriseSsoForOrganization } from "../lib/enterprise-sso-policy";
+import { recordBusinessAuditEvent } from "../lib/background-events";
 import businessKeyRoutes from "./business-keys";
 import businessSsoRoutes from "./business-sso";
 
@@ -133,7 +133,7 @@ app.post("/organizations", zValidator("json", z.object({
   const created = await createBusinessOrganization(user.id, body.name.trim(), body.ownerIdentityId);
   if (!created) return c.json({ error: "Owner identity not found" }, 404);
 
-  await writeBusinessAuditEvent({
+  recordBusinessAuditEvent(c, {
     organizationId: created.organization.id,
     actorUserId: user.id,
     actorIdentityId: created.identity.id,
@@ -179,7 +179,7 @@ app.get("/organizations/:organizationId", async (c) => {
       actingIdentityId: access.identity.id,
       actingHandle: access.identity.handle,
     },
-    ...(await getOrganizationBundle(organizationId)),
+    ...(await getOrganizationBundle(organizationId, { includeAudit: c.req.query("includeAudit") === "true" })),
   });
 });
 
@@ -223,7 +223,7 @@ app.patch("/organizations/:organizationId", zValidator("json", z.object({
     .where(eq(organizations.id, organizationId))
     .returning();
 
-  await writeBusinessAuditEvent({
+  recordBusinessAuditEvent(c, {
     organizationId,
     actorUserId: user.id,
     actorIdentityId: access.identity.id,
@@ -272,7 +272,7 @@ app.post("/organizations/:organizationId/identities", zValidator("json", z.objec
     status: "active",
   }).returning();
 
-  await writeBusinessAuditEvent({
+  recordBusinessAuditEvent(c, {
     organizationId,
     actorUserId: user.id,
     actorIdentityId: access.identity.id,
@@ -322,7 +322,7 @@ app.patch("/organizations/:organizationId/identities/:memberId", zValidator("jso
     updatedAt: new Date(),
   }).where(eq(organizationIdentityMembers.id, memberId)).returning();
 
-  await writeBusinessAuditEvent({
+  recordBusinessAuditEvent(c, {
     organizationId,
     actorUserId: user.id,
     actorIdentityId: access.identity.id,
@@ -367,7 +367,7 @@ app.delete("/organizations/:organizationId/identities/:memberId", zValidator("js
       eq(organizationKeyGrants.identityId, target.identityId),
       eq(organizationKeyGrants.status, "active"),
     ));
-  await writeBusinessAuditEvent({
+  recordBusinessAuditEvent(c, {
     organizationId,
     actorUserId: user.id,
     actorIdentityId: access.identity.id,

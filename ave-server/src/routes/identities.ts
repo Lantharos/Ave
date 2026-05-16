@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
-import { db, identities, activityLogs, identityEncryptionKeys } from "../db";
+import { db, identities, identityEncryptionKeys } from "../db";
 import { requireAuth, requireWritableForMutation } from "../middleware/auth";
 import { eq, and } from "drizzle-orm";
 import {
@@ -14,6 +14,7 @@ import {
 } from "../lib/email-verification";
 import { serializeIdentityForOwner } from "../lib/identity-serialization";
 import { enforceRateLimits, ipRateLimit, subjectRateLimit } from "../lib/rate-limit";
+import { recordActivityLog } from "../lib/background-events";
 
 const app = new Hono();
 
@@ -127,7 +128,7 @@ app.post("/", zValidator("json", z.object({
   }
   
   // Log activity
-  await db.insert(activityLogs).values({
+  recordActivityLog(c, {
     userId: user.id,
     action: "identity_created",
     details: { identityId: identity.id, handle: identity.handle },
@@ -196,7 +197,7 @@ app.patch("/:identityId", zValidator("json", z.object({
     .returning();
   
   // Log activity
-  await db.insert(activityLogs).values({
+  recordActivityLog(c, {
     userId: user.id,
     action: "identity_updated",
     details: { identityId, changes: Object.keys(data) },
@@ -247,7 +248,7 @@ app.post("/:identityId/email/start", zValidator("json", z.object({
     .where(eq(identities.id, identity.id))
     .limit(1);
 
-  await db.insert(activityLogs).values({
+  recordActivityLog(c, {
     userId: user.id,
     action: "identity_email_verification_started",
     details: { identityId, pendingEmail: normalizeEmail(email) },
@@ -293,7 +294,7 @@ app.post("/:identityId/email/verify", zValidator("json", z.object({
     return c.json({ error: "Invalid or expired verification code" }, 400);
   }
 
-  await db.insert(activityLogs).values({
+  recordActivityLog(c, {
     userId: user.id,
     action: "identity_email_verified",
     details: { identityId, email: updated.email },
@@ -461,7 +462,7 @@ app.delete("/:identityId", async (c) => {
   await db.delete(identities).where(eq(identities.id, identityId));
   
   // Log activity
-  await db.insert(activityLogs).values({
+  recordActivityLog(c, {
     userId: user.id,
     action: "identity_deleted",
     details: { identityId, handle: identity.handle },

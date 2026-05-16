@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
-import { db, oauthApps, oauthAuthorizations, oauthRefreshTokens, identities, activityLogs, appAnalyticsEvents, oauthResources, oauthDelegationGrants, oauthDelegationAuditLogs, organizationEncryptionPolicies, organizationIdentityMembers, organizations } from "../db";
+import { db, oauthApps, oauthAuthorizations, oauthRefreshTokens, identities, oauthResources, oauthDelegationGrants, organizationEncryptionPolicies, organizationIdentityMembers, organizations } from "../db";
 import { requireAuth, requireWritable } from "../middleware/auth";
 import { eq, and, isNull, desc, inArray } from "drizzle-orm";
 import { randomUUID, timingSafeEqual } from "crypto";
@@ -14,6 +14,7 @@ import { enforceRateLimits, ipRateLimit, subjectRateLimit } from "../lib/rate-li
 import { createBusinessOrganization, hasEnterpriseSsoSessionForOrganization, scopesForRole, type BusinessRole } from "../lib/business";
 import { serializeEncryptionPolicy } from "../lib/business-encryption";
 import { getRequiredEnterpriseSsoForOrganization } from "../lib/enterprise-sso-policy";
+import { recordActivityLog, recordAppAnalyticsEvent, recordOAuthDelegationAuditLog } from "../lib/background-events";
 
 const app = new Hono();
 export const oidcRoutes = new Hono();
@@ -44,6 +45,11 @@ oidcRoutes.get("/webfinger", (c) => {
 
 function getDiscoveryBase(): string {
   return process.env.OIDC_DISCOVERY_BASE || "https://api.aveid.net";
+}
+
+function publicCache(c: any, maxAgeSeconds: number): void {
+  c.header("Cache-Control", `public, max-age=${maxAgeSeconds}, stale-while-revalidate=${maxAgeSeconds * 6}`);
+  c.header("CDN-Cache-Control", `public, s-maxage=${maxAgeSeconds}`);
 }
 
 // Generate authorization code
@@ -385,7 +391,7 @@ async function buildTokenResponseFromAuthorizationCode(params: {
   const accessTokenTtl = oauthApp.accessTokenTtlSeconds || 3600;
   const refreshTokenTtl = oauthApp.refreshTokenTtlSeconds || 30 * 24 * 60 * 60;
 
-  await setAccessToken(accessToken, {
+  const accessTokenWrite = setAccessToken(accessToken, {
     userId: authCode.userId,
     identityId: authCode.identityId,
     appId: oauthApp.id,
@@ -404,11 +410,12 @@ async function buildTokenResponseFromAuthorizationCode(params: {
     organizationSsoConnectionId: authCode.organizationSsoConnectionId,
   });
 
-  const [identity] = await db
+  const identityLookup = db
     .select()
     .from(identities)
     .where(eq(identities.id, authCode.identityId))
     .limit(1);
+  const [[identity]] = await Promise.all([identityLookup, accessTokenWrite]);
 
   const subject = authCode.identityId;
   const issuedAt = nowSeconds();
@@ -422,7 +429,7 @@ async function buildTokenResponseFromAuthorizationCode(params: {
     user: identity ? serializeIdentityForApp(identity) : null,
   };
 
-  const jwtAccessToken = await signJwt({
+  const jwtAccessTokenPromise = signJwt({
     iss: getIssuer(),
     sub: subject,
     aud: getResourceAudience(),
@@ -435,14 +442,8 @@ async function buildTokenResponseFromAuthorizationCode(params: {
     ...organizationClaims(authCode),
   });
 
-  response.access_token_jwt = jwtAccessToken;
-
-  if (hasScope(authCode.scope, "user_id") && oauthApp.allowUserIdScope) {
-    response.user_id = authCode.userId;
-  }
-
-  if (hasScope(authCode.scope, "openid")) {
-    const idToken = await signJwt({
+  const idTokenPromise = hasScope(authCode.scope, "openid")
+    ? signJwt({
       iss: getIssuer(),
       sub: subject,
       aud: oauthApp.clientId,
@@ -456,7 +457,17 @@ async function buildTokenResponseFromAuthorizationCode(params: {
       email: hasScope(authCode.scope, "email") ? identity?.email : undefined,
       picture: hasScope(authCode.scope, "profile") ? identity?.avatarUrl : undefined,
       ...organizationClaims(authCode),
-    });
+    })
+    : Promise.resolve(null);
+
+  const [jwtAccessToken, idToken] = await Promise.all([jwtAccessTokenPromise, idTokenPromise]);
+  response.access_token_jwt = jwtAccessToken;
+
+  if (hasScope(authCode.scope, "user_id") && oauthApp.allowUserIdScope) {
+    response.user_id = authCode.userId;
+  }
+
+  if (idToken) {
     response.id_token = idToken;
   }
 
@@ -1181,7 +1192,7 @@ app.post("/authorize", requireAuth, zValidator("json", z.object({
       resolvedRequestedScope = mergedScope;
     }
 
-    await db.insert(oauthDelegationAuditLogs).values({
+    recordOAuthDelegationAuditLog(c, {
       grantId: delegationGrantId,
       userId: user.id,
       sourceAppId: oauthApp.id,
@@ -1231,7 +1242,7 @@ app.post("/authorize", requireAuth, zValidator("json", z.object({
 
   
   // Log activity
-  await db.insert(activityLogs).values({
+  recordActivityLog(c, {
     userId: user.id,
     action: "oauth_authorized",
     appId: isQuick ? null : oauthApp.id,
@@ -1250,7 +1261,7 @@ app.post("/authorize", requireAuth, zValidator("json", z.object({
   });
 
   if (!isQuick && createdAuthorization) {
-    await db.insert(appAnalyticsEvents).values({
+    recordAppAnalyticsEvent(c, {
       appId: oauthApp.id,
       identityId,
       eventType: "authorization_added",
@@ -1422,7 +1433,7 @@ app.post("/token", zValidator("json", oauthTokenRequestSchema), async (c) => {
       actor,
     });
 
-    await db.insert(oauthDelegationAuditLogs).values({
+    recordOAuthDelegationAuditLog(c, {
       grantId: grant.id,
       userId: subject.userId,
       sourceAppId: sourceApp.id,
@@ -1447,12 +1458,22 @@ app.post("/token", zValidator("json", oauthTokenRequestSchema), async (c) => {
 
   if (payload.grantType === "refresh_token") {
     const { refreshToken, clientId, clientSecret } = payload;
+    const tokenHash = hashToken(refreshToken);
 
-    const [oauthApp] = await db
-      .select()
-      .from(oauthApps)
-      .where(eq(oauthApps.clientId, clientId))
-      .limit(1);
+    const [oauthAppRows, storedRefreshRows] = await Promise.all([
+      db
+        .select()
+        .from(oauthApps)
+        .where(eq(oauthApps.clientId, clientId))
+        .limit(1),
+      db
+        .select()
+        .from(oauthRefreshTokens)
+        .where(eq(oauthRefreshTokens.tokenHash, tokenHash))
+        .limit(1),
+    ]);
+    const [oauthApp] = oauthAppRows;
+    const [storedRefresh] = storedRefreshRows;
 
     if (!oauthApp) {
       return c.json({ error: "invalid_client", error_description: "Client not found" }, 400);
@@ -1465,13 +1486,6 @@ app.post("/token", zValidator("json", oauthTokenRequestSchema), async (c) => {
     } else if (!isAllowedPublicClientRequest(c, oauthApp)) {
       return c.json({ error: "invalid_client", error_description: "Request origin is not allowed for this client" }, 400);
     }
-
-    const tokenHash = hashToken(refreshToken);
-    const [storedRefresh] = await db
-      .select()
-      .from(oauthRefreshTokens)
-      .where(eq(oauthRefreshTokens.tokenHash, tokenHash))
-      .limit(1);
 
     if (!storedRefresh) {
       return c.json({ error: "invalid_grant", error_description: "Refresh token not found" }, 400);
@@ -1507,17 +1521,24 @@ app.post("/token", zValidator("json", oauthTokenRequestSchema), async (c) => {
     } = {};
 
     if (storedRefresh.organizationId && storedRefresh.organizationMemberId) {
-      const [businessContext] = await db
-        .select({ member: organizationIdentityMembers, organization: organizations })
-        .from(organizationIdentityMembers)
-        .innerJoin(organizations, eq(organizations.id, organizationIdentityMembers.organizationId))
-        .where(and(
-          eq(organizationIdentityMembers.id, storedRefresh.organizationMemberId),
-          eq(organizationIdentityMembers.organizationId, storedRefresh.organizationId),
-          eq(organizationIdentityMembers.identityId, storedRefresh.identityId),
-          eq(organizationIdentityMembers.status, "active"),
-        ))
-        .limit(1);
+      const [businessContextRows, policyRows] = await Promise.all([
+        db
+          .select({ member: organizationIdentityMembers, organization: organizations })
+          .from(organizationIdentityMembers)
+          .innerJoin(organizations, eq(organizations.id, organizationIdentityMembers.organizationId))
+          .where(and(
+            eq(organizationIdentityMembers.id, storedRefresh.organizationMemberId),
+            eq(organizationIdentityMembers.organizationId, storedRefresh.organizationId),
+            eq(organizationIdentityMembers.identityId, storedRefresh.identityId),
+            eq(organizationIdentityMembers.status, "active"),
+          ))
+          .limit(1),
+        db.select().from(organizationEncryptionPolicies)
+          .where(eq(organizationEncryptionPolicies.organizationId, storedRefresh.organizationId))
+          .limit(1),
+      ]);
+      const [businessContext] = businessContextRows;
+      const [policyRow] = policyRows;
 
       if (!businessContext) {
         return c.json({ error: "access_denied", error_description: "Organization membership is no longer active" }, 403);
@@ -1531,9 +1552,6 @@ app.post("/token", zValidator("json", oauthTokenRequestSchema), async (c) => {
           organization: { id: businessContext.organization.id, name: businessContext.organization.name },
         }, 403);
       }
-      const [policyRow] = await db.select().from(organizationEncryptionPolicies)
-        .where(eq(organizationEncryptionPolicies.organizationId, storedRefresh.organizationId))
-        .limit(1);
       const encryptionPolicy = serializeEncryptionPolicy(policyRow ?? null, storedRefresh.organizationId);
 
       refreshOrganizationContext = {
@@ -1554,7 +1572,7 @@ app.post("/token", zValidator("json", oauthTokenRequestSchema), async (c) => {
     const refreshTokenTtl = oauthApp.refreshTokenTtlSeconds || 30 * 24 * 60 * 60;
 
     const accessToken = generateAccessToken();
-    await setAccessToken(accessToken, {
+    const accessTokenWrite = setAccessToken(accessToken, {
       userId: storedRefresh.userId,
       identityId: storedRefresh.identityId,
       appId: storedRefresh.appId,
@@ -1572,8 +1590,14 @@ app.post("/token", zValidator("json", oauthTokenRequestSchema), async (c) => {
       organizationAuthMethod: refreshOrganizationContext.organizationAuthMethod,
       organizationSsoConnectionId: refreshOrganizationContext.organizationSsoConnectionId,
     });
+    const identityLookup = db
+      .select()
+      .from(identities)
+      .where(eq(identities.id, storedRefresh.identityId))
+      .limit(1);
 
     const rotatedRefreshToken = generateRefreshToken();
+    await accessTokenWrite;
     await db.update(oauthRefreshTokens)
       .set({ revokedAt: new Date() })
       .where(eq(oauthRefreshTokens.id, storedRefresh.id));
@@ -1592,16 +1616,12 @@ app.post("/token", zValidator("json", oauthTokenRequestSchema), async (c) => {
       enterpriseSsoConnectionId: refreshOrganizationContext.organizationSsoConnectionId,
     });
 
-    const [identity] = await db
-      .select()
-      .from(identities)
-      .where(eq(identities.id, storedRefresh.identityId))
-      .limit(1);
+    const [identity] = await identityLookup;
 
     const issuedAt = nowSeconds();
     const expiresAt = issuedAt + accessTokenTtl;
 
-    const idToken = await signJwt({
+    const idTokenPromise = signJwt({
       iss: getIssuer(),
       sub: storedRefresh.identityId,
       aud: oauthApp.clientId,
@@ -1616,7 +1636,7 @@ app.post("/token", zValidator("json", oauthTokenRequestSchema), async (c) => {
       ...organizationClaims(refreshOrganizationContext),
     });
 
-    const jwtAccessToken = await signJwt({
+    const jwtAccessTokenPromise = signJwt({
       iss: getIssuer(),
       sub: storedRefresh.identityId,
       aud: getResourceAudience(),
@@ -1627,6 +1647,7 @@ app.post("/token", zValidator("json", oauthTokenRequestSchema), async (c) => {
       uid: hasScope(storedRefresh.scope, "user_id") && oauthApp.allowUserIdScope ? storedRefresh.userId : undefined,
       ...organizationClaims(refreshOrganizationContext),
     });
+    const [idToken, jwtAccessToken] = await Promise.all([idTokenPromise, jwtAccessTokenPromise]);
 
     const response: Record<string, unknown> = {
       access_token: accessToken,
@@ -1789,6 +1810,7 @@ app.post("/token", zValidator("json", oauthTokenRequestSchema), async (c) => {
 oidcRoutes.get("/openid-configuration", (c) => {
   const issuer = getIssuer();
   const discoveryBase = getDiscoveryBase();
+  publicCache(c, 3600);
   return c.json({
     issuer,
     authorization_endpoint: `${issuer}/signin`,
@@ -1806,6 +1828,7 @@ oidcRoutes.get("/openid-configuration", (c) => {
 
 oidcRoutes.get("/jwks.json", async (c) => {
   try {
+    publicCache(c, 300);
     return c.json({ keys: [await getJwtPublicJwk()] });
   } catch (error) {
     return c.json({ error: "JWKS not configured" }, 500);
@@ -1982,7 +2005,7 @@ app.post("/workspaces", zValidator("json", createWorkspaceSchema), async (c) => 
   const encryptionPolicy = serializeEncryptionPolicy(null, created.organization.id);
   const organization = workspaceOrganizationResponse(created.organization, created.member, encryptionPolicy);
 
-  await db.insert(activityLogs).values({
+  recordActivityLog(c, {
     userId: identity.userId,
     action: "oauth_workspace_created",
     appId: oauthApp?.id,
@@ -2242,8 +2265,7 @@ app.delete("/authorizations/:authId", requireAuth, requireWritable, async (c) =>
     .where(eq(oauthApps.id, auth.appId))
     .limit(1);
   
-  // Log activity
-  await db.insert(activityLogs).values({
+  recordActivityLog(c, {
     userId: user.id,
     action: "oauth_revoked",
     appId: auth.appId,
@@ -2258,7 +2280,7 @@ app.delete("/authorizations/:authId", requireAuth, requireWritable, async (c) =>
     severity: "warning",
   });
 
-  await db.insert(appAnalyticsEvents).values({
+  recordAppAnalyticsEvent(c, {
     appId: auth.appId,
     identityId: auth.identityId,
     eventType: "authorization_revoked",
@@ -2316,7 +2338,7 @@ app.delete("/delegations/:delegationId", requireAuth, requireWritable, async (c)
     .set({ revokedAt: new Date(), updatedAt: new Date() })
     .where(eq(oauthDelegationGrants.id, delegationId));
 
-  await db.insert(oauthDelegationAuditLogs).values({
+  recordOAuthDelegationAuditLog(c, {
     grantId: grant.id,
     userId: grant.userId,
     sourceAppId: grant.sourceAppId,

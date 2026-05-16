@@ -29,10 +29,10 @@
     { value: "admin", label: "admin" },
     { value: "viewer", label: "viewer" },
   ];
-  let identities = $state<BusinessIdentity[]>([]);
-  let organizations = $state<BusinessOrganizationSummary[]>([]);
+  let identities = $state.raw<BusinessIdentity[]>([]);
+  let organizations = $state.raw<BusinessOrganizationSummary[]>([]);
   let selectedOrganizationId = $state<string | null>(null);
-  let detail = $state<BusinessOrganizationDetail | null>(null);
+  let detail = $state.raw<BusinessOrganizationDetail | null>(null);
   let loading = $state(true);
   let busy = $state(false);
   let authenticated = $state(true);
@@ -42,6 +42,7 @@
   let addHandle = $state("");
   let addRole = $state<BusinessRole>("member");
   let activeSection = $state<SectionId>("overview");
+  let auditLoadedOrganizationId = $state<string | null>(null);
   const activeMembers = $derived(detail?.members.filter((member) => member.status === "active") || []);
   const canManageIdentities = $derived(Boolean(detail?.organization.scopes.includes("manage_identities")));
   const canManageKeys = $derived(Boolean(detail?.organization.scopes.includes("manage_keys")));
@@ -68,7 +69,7 @@
       organizations = data.organizations;
       ownerIdentityId = ownerIdentityId || identities.find((identity) => identity.isPrimary)?.id || identities[0]?.id || "";
       selectedOrganizationId = selectedOrganizationId || organizations[0]?.id || null;
-      if (selectedOrganizationId) await loadOrganization(selectedOrganizationId);
+      if (selectedOrganizationId) await loadOrganization(selectedOrganizationId, { includeAudit: false });
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) authenticated = false;
       else error = err instanceof Error ? err.message : "Failed to load business organizations";
@@ -76,21 +77,31 @@
       loading = false;
     }
   }
-  async function loadOrganization(organizationId: string) {
+  async function loadOrganization(organizationId: string, options: { includeAudit?: boolean } = {}) {
     selectedOrganizationId = organizationId;
     error = "";
     try {
-      detail = await api.getOrganization(organizationId);
+      const includeAudit = options.includeAudit ?? activeSection === "audit";
+      detail = await api.getOrganization(organizationId, { includeAudit });
+      auditLoadedOrganizationId = includeAudit ? organizationId : null;
     } catch (err) {
       error = err instanceof Error ? err.message : "Failed to load organization";
     }
   }
   async function selectOrganization(organizationId: string) {
+    auditLoadedOrganizationId = null;
     activeSection = "overview";
-    await loadOrganization(organizationId);
+    await loadOrganization(organizationId, { includeAudit: false });
+  }
+  async function selectSection(section: SectionId) {
+    activeSection = section;
+    if (section === "audit" && detail && auditLoadedOrganizationId !== detail.organization.id) {
+      await loadOrganization(detail.organization.id, { includeAudit: true });
+    }
   }
   async function reloadDetail() {
-    if (detail) await loadOrganization(detail.organization.id);
+    if (!detail) return;
+    await loadOrganization(detail.organization.id, { includeAudit: activeSection === "audit" || auditLoadedOrganizationId === detail.organization.id });
   }
   async function createOrganization() {
     if (!createName.trim() || !ownerIdentityId || busy) return;
@@ -103,7 +114,8 @@
       createName = "";
       await loadBootstrap();
       activeSection = "overview";
-      await loadOrganization(result.organization.id);
+      auditLoadedOrganizationId = null;
+      await loadOrganization(result.organization.id, { includeAudit: false });
     } catch (err) {
       error = err instanceof Error ? err.message : "Failed to create organization";
     } finally {
@@ -247,7 +259,7 @@
                 {#each navItems as item (item.id)}
                   <button
                     class="flex min-h-11 items-center justify-between gap-3 rounded-full px-4 text-left transition-[background-color,color,scale] duration-300 active:scale-[0.96] {activeSection === item.id ? 'bg-[#B9BBBE] text-[#090909]' : 'bg-transparent text-[#8c8c8c] hover:bg-white/[0.04] hover:text-white'}"
-                    onclick={() => (activeSection = item.id)}
+                    onclick={() => void selectSection(item.id)}
                   >
                     <span class="flex min-w-0 items-center gap-3">
                       {#if item.id === "overview"}
@@ -307,7 +319,7 @@
             </Panel>
 
             {#if activeSection === "overview"}
-              <OrganizationOverview {detail} activeMembers={activeMembers.length} onSelect={(section) => (activeSection = section)} />
+              <OrganizationOverview {detail} activeMembers={activeMembers.length} onSelect={(section) => void selectSection(section)} />
             {:else if activeSection === "identities"}
               <IdentitiesPanel
                 members={activeMembers}
@@ -348,7 +360,7 @@
                 setError={(message) => (error = message)}
                 {hasActiveSsoConnection}
                 onToggleSsoRequired={toggleSsoRequired}
-                reload={() => (detail ? loadOrganization(detail.organization.id) : Promise.resolve())}
+                reload={reloadDetail}
               />
             {:else}
               <AuditPanel events={detail.auditEvents} />

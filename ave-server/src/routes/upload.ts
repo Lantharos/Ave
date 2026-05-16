@@ -1,8 +1,9 @@
 import { Hono } from "hono";
-import { db, identities, activityLogs, organizations, organizationMembers } from "../db";
+import { db, identities, organizations, organizationMembers } from "../db";
 import { requireAuth, requireWritable } from "../middleware/auth";
 import { eq, and } from "drizzle-orm";
 import { S3Client, PutObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
+import { recordActivityLog } from "../lib/background-events";
 
 const app = new Hono();
 
@@ -249,8 +250,7 @@ app.post("/avatar", async (c) => {
     .set({ avatarUrl, updatedAt: new Date() })
     .where(eq(identities.id, identityId));
 
-  // Log activity
-  await db.insert(activityLogs).values({
+  recordActivityLog(c, {
     userId: user.id,
     action: "avatar_updated",
     details: { identityId },
@@ -323,7 +323,7 @@ app.post("/workspace-logo", async (c) => {
     .set({ logoUrl, updatedAt: new Date() })
     .where(eq(organizations.id, organizationId));
 
-  await db.insert(activityLogs).values({
+  recordActivityLog(c, {
     userId: user.id,
     action: "workspace_logo_updated",
     details: { organizationId },
@@ -387,8 +387,7 @@ app.post("/banner", async (c) => {
     .set({ bannerUrl, updatedAt: new Date() })
     .where(eq(identities.id, identityId));
 
-  // Log activity
-  await db.insert(activityLogs).values({
+  recordActivityLog(c, {
     userId: user.id,
     action: "banner_updated",
     details: { identityId },

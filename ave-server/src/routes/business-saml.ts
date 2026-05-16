@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { and, eq } from "drizzle-orm";
 import { db, organizations, organizationSsoConnections } from "../db";
-import { hasBusinessScope, requireBusinessAccess, shouldRequireEnterpriseSsoForBusinessAccess, writeBusinessAuditEvent } from "../lib/business";
+import { hasBusinessScope, requireBusinessAccess, shouldRequireEnterpriseSsoForBusinessAccess } from "../lib/business";
 import { buildSamlRedirectUrl, validateSamlResponse } from "../lib/business-saml";
 import { completeEnterpriseSsoLogin, recordSsoConnectionTest } from "../lib/business-sso-login";
 import { clientIp, userAgent } from "../lib/business-route-utils";
@@ -10,6 +10,7 @@ import { randomBase64Url } from "../lib/business-oidc";
 import { buildSamlServiceProviderMetadata } from "../lib/sso-metadata";
 import { businessOrigin, enterpriseSsoReturnTo } from "../lib/enterprise-sso-return";
 import { getRequiredEnterpriseSsoForOrganization } from "../lib/enterprise-sso-policy";
+import { recordBusinessAuditEvent } from "../lib/background-events";
 
 const app = new Hono();
 
@@ -45,7 +46,8 @@ app.get("/sso/saml/:connectionId/metadata.xml", async (c) => {
 
   if (!connection) return c.text("Not found", 404);
   c.header("Content-Type", "application/samlmetadata+xml; charset=utf-8");
-  c.header("Cache-Control", "public, max-age=300");
+  c.header("Cache-Control", "public, max-age=300, stale-while-revalidate=1800");
+  c.header("CDN-Cache-Control", "public, s-maxage=300");
   return c.body(buildSamlServiceProviderMetadata(connection));
 });
 
@@ -96,7 +98,7 @@ app.post("/sso/saml/:connectionId/acs", async (c) => {
   try {
     assertion = validateSamlResponse({ encodedResponse, connection: row.connection, expectedRequestId: stored?.requestId });
   } catch (err) {
-    await writeBusinessAuditEvent({
+    recordBusinessAuditEvent(c, {
       organizationId: row.organization.id,
       action: "sso.login_failed",
       details: { connectionId, reason: err instanceof Error ? err.message : "SAML validation failed" },

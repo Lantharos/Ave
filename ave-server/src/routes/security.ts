@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
-import { db, passkeys, trustCodes, activityLogs } from "../db";
+import { db, passkeys, trustCodes } from "../db";
 import { requireAuth, requireWritableForMutation } from "../middleware/auth";
 import { 
   generateTrustCode, 
@@ -18,6 +18,7 @@ import { isAllowedWebauthnOrigin } from "../lib/webauthn-origin";
 import { deleteChallenge, getChallenge, setChallenge } from "../lib/challenge-store";
 import { resolvePasskeyName } from "../lib/passkey-names";
 import { enforceRateLimits, ipRateLimit, subjectRateLimit } from "../lib/rate-limit";
+import { recordActivityLog } from "../lib/background-events";
 
 const app = new Hono();
 const RECOVERY_CODE_COUNT = 5;
@@ -216,7 +217,7 @@ app.post("/passkeys/complete", zValidator("json", z.object({
       .returning();
     
     // Log activity
-    await db.insert(activityLogs).values({
+    recordActivityLog(c, {
       userId: user.id,
       action: "passkey_added",
       details: { passkeyId: passkey.id, name: passkey.name },
@@ -445,7 +446,7 @@ app.delete("/passkeys/:passkeyId", async (c) => {
   await db.delete(passkeys).where(eq(passkeys.id, passkeyId));
   
   // Log activity
-  await db.insert(activityLogs).values({
+  recordActivityLog(c, {
     userId: user.id,
     action: "passkey_removed",
     details: { passkeyId, name: passkey.name },
@@ -473,7 +474,7 @@ app.post("/trust-codes/issue", async (c) => {
 
   const codes = await createTrustCodes(user.id);
 
-  await db.insert(activityLogs).values({
+  recordActivityLog(c, {
     userId: user.id,
     action: "trust_codes_created",
     details: { count: codes.length },
@@ -503,7 +504,7 @@ app.post("/trust-codes/regenerate", async (c) => {
   const codes = await createTrustCodes(user.id);
 
   // Log activity
-  await db.insert(activityLogs).values({
+  recordActivityLog(c, {
     userId: user.id,
     action: "trust_codes_regenerated",
     details: { count: codes.length },

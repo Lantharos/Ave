@@ -26,14 +26,17 @@ import encryptionRoutes from "./routes/encryption";
 
 import { getCookieValue, SESSION_COOKIE_NAME } from "./lib/session-cookie";
 import { initDb, runWithDb } from "./db";
-import { initChallengeStorage } from "./lib/challenge-store";
-import { runWithOAuthStorage } from "./lib/oauth-store";
-import { initRateLimitStorage } from "./lib/rate-limit";
+import { cleanupExpiredChallenges } from "./lib/challenge-store";
+import { cleanupExpiredOAuthStorage } from "./lib/oauth-store";
+import { processBackgroundEventBatch, type BackgroundEvent } from "./lib/background-events";
 
 import uploadRoutes from "./routes/upload";
 
 type Bindings = {
   API_APP: DurableObjectNamespace;
+  RATE_LIMITER: DurableObjectNamespace;
+  BACKGROUND_EVENTS?: Queue<BackgroundEvent>;
+  API_ANALYTICS?: AnalyticsEngineDataset;
   DB: D1Database;
   INTERNAL_API_TOKEN?: string;
 };
@@ -90,6 +93,62 @@ function resolveCorsOrigin(origin: string | undefined, requestHost?: string | nu
 }
 
 const D1_BOOKMARK_HEADER = "x-d1-bookmark";
+
+function normalizeMetricPath(path: string): string {
+  return path
+    .replace(/[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/gi, ":uuid")
+    .replace(/app_[a-z0-9]+/gi, "app_:id")
+    .replace(/org_[a-z0-9]+/gi, "org_:id")
+    .replace(/\/[A-Za-z0-9_-]{24,}(?=\/|$)/g, "/:id");
+}
+
+function appendServerTimingHeader(response: Response, durationMs: number): Response {
+  const headers = new Headers(response.headers);
+  headers.append("Server-Timing", `app;dur=${durationMs.toFixed(1)}`);
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
+}
+
+function recordRequestMetric(env: Bindings, request: Request, response: Response, durationMs: number): void {
+  const analytics = env.API_ANALYTICS;
+  if (!analytics) return;
+
+  const url = new URL(request.url);
+  const cf = (request as unknown as { cf?: { colo?: string; country?: string } }).cf;
+  analytics.writeDataPoint({
+    blobs: [
+      request.method,
+      normalizeMetricPath(url.pathname),
+      String(response.status),
+      cf?.colo || "unknown",
+      cf?.country || "unknown",
+    ],
+    doubles: [durationMs],
+    indexes: [url.hostname],
+  });
+}
+
+async function finalizeMeasuredResponse(
+  env: Bindings,
+  request: Request,
+  startedAt: number,
+  response: Response,
+  requestDatabase?: D1DatabaseSession,
+): Promise<Response> {
+  if (isWebSocketUpgrade(request) || response.status === 101) {
+    recordRequestMetric(env, request, response, performance.now() - startedAt);
+    return response;
+  }
+
+  const withBookmark = requestDatabase ? appendBookmarkHeader(response, requestDatabase) : response;
+  const durationMs = performance.now() - startedAt;
+  const finalResponse = appendServerTimingHeader(withBookmark, durationMs);
+  recordRequestMetric(env, request, finalResponse, durationMs);
+  return finalResponse;
+}
 
 function isPublicOAuthCorsPath(path: string): boolean {
   return path === "/api/oauth/token"
@@ -320,13 +379,11 @@ function createWebSocketResponse(request: Request, requestDatabase: D1Database |
   });
 
   server.addEventListener("close", () => {
-    try {
-      runWithDb(requestDatabase, () =>
-        handleWebSocketClose(server as unknown as WebSocket)
-      );
-    } catch (error) {
+    void runWithDb(requestDatabase, async () => {
+      await handleWebSocketClose(server as unknown as WebSocket);
+    }).catch((error) => {
       console.error("WebSocket close handler failed:", error);
-    }
+    });
   });
 
   server.addEventListener("error", (event) => {
@@ -341,80 +398,108 @@ function createWebSocketResponse(request: Request, requestDatabase: D1Database |
 
 export class ApiAppDurableObject {
   constructor(
-    // Stored as an instance property so fetch() can access state.storage for OAuth storage binding.
-    private readonly state: DurableObjectState,
+    _state: DurableObjectState,
     private readonly env: Bindings
-  ) {
-    initChallengeStorage(this.state.storage);
-    initRateLimitStorage(this.state.storage);
-  }
+  ) {}
 
   async fetch(request: Request): Promise<Response> {
     initDb(this.env.DB);
+    const startedAt = performance.now();
     const requestDatabase = createRequestDatabase(request, this.env.DB);
 
-    return runWithOAuthStorage(this.state.storage, () =>
-      runWithDb(requestDatabase, async () => {
-        const url = new URL(request.url);
+    return runWithDb(requestDatabase, async () => {
+      const url = new URL(request.url);
 
-        if (url.pathname === "/ws" && isWebSocketUpgrade(request)) {
-          return createWebSocketResponse(request, requestDatabase);
+      if (url.pathname === "/ws" && isWebSocketUpgrade(request)) {
+        return createWebSocketResponse(request, requestDatabase);
+      }
+
+      if (url.pathname === "/__internal/cleanup" && request.method === "POST") {
+        const expectedToken = this.env.INTERNAL_API_TOKEN;
+        const providedToken = request.headers.get("x-internal-token");
+        if (expectedToken && expectedToken !== providedToken) {
+          return new Response("Forbidden", { status: 403 });
         }
 
-        if (url.pathname === "/__internal/cleanup" && request.method === "POST") {
-          const expectedToken = this.env.INTERNAL_API_TOKEN;
-          const providedToken = request.headers.get("x-internal-token");
-          if (expectedToken && expectedToken !== providedToken) {
-            return new Response("Forbidden", { status: 403 });
-          }
+        const [deviceCleanup, activityCleanup, challengeCleanup, oauthStorageCleanup] = await Promise.all([
+          cleanupStaleDevices(),
+          cleanupExpiredActivityLogs(),
+          cleanupExpiredChallenges(),
+          cleanupExpiredOAuthStorage(),
+        ]);
+        return finalizeMeasuredResponse(this.env, request, startedAt, Response.json({
+          success: true,
+          ...deviceCleanup,
+          activityRetentionDays: activityCleanup.retentionDays,
+          ...challengeCleanup,
+          ...oauthStorageCleanup,
+        }), requestDatabase);
+      }
 
-          const [deviceCleanup, activityCleanup] = await Promise.all([
-            cleanupStaleDevices(),
-            cleanupExpiredActivityLogs(),
-          ]);
-          return Response.json({ success: true, ...deviceCleanup, activityRetentionDays: activityCleanup.retentionDays });
-        }
-
-        const response = await app.fetch(request, this.env);
-        return appendBookmarkHeader(response, requestDatabase);
-      })
-    );
+      const response = await app.fetch(request, this.env);
+      return finalizeMeasuredResponse(this.env, request, startedAt, response, requestDatabase);
+    });
   }
 }
 
+export { RateLimitDurableObject } from "./lib/rate-limit";
+
+function needsApiDurableObject(request: Request): boolean {
+  const url = new URL(request.url);
+  if (url.pathname === "/ws" && isWebSocketUpgrade(request)) {
+    return true;
+  }
+
+  return url.pathname === "/api/login/request-approval"
+    || url.pathname === "/api/devices/approve-request"
+    || url.pathname === "/api/devices/deny-request";
+}
+
 export default {
-  async fetch(request: Request, env: Bindings): Promise<Response> {
+  async fetch(request: Request, env: Bindings, ctx: ExecutionContext): Promise<Response> {
     initDb(env.DB);
+    const startedAt = performance.now();
 
     const url = new URL(request.url);
     if (url.pathname.startsWith("/__internal/")) {
-      return new Response("Not Found", { status: 404 });
+      return finalizeMeasuredResponse(env, request, startedAt, new Response("Not Found", { status: 404 }));
     }
 
-    const id = env.API_APP.idFromName("primary");
-    const stub = env.API_APP.get(id);
-
-    // WebSocket upgrades must be forwarded as-is.
-    if (isWebSocketUpgrade(request)) {
-      return stub.fetch(request);
+    if (needsApiDurableObject(request)) {
+      const id = env.API_APP.idFromName("primary");
+      const stub = env.API_APP.get(id);
+      const response = await stub.fetch(request);
+      return finalizeMeasuredResponse(env, request, startedAt, response);
     }
 
-    // Forward the original request directly to preserve streaming body integrity.
-    return stub.fetch(request);
+    const requestDatabase = createRequestDatabase(request, env.DB);
+    return runWithDb(requestDatabase, async () => {
+      const response = await app.fetch(request, env, ctx as any);
+      return finalizeMeasuredResponse(env, request, startedAt, response, requestDatabase);
+    });
+  },
+
+  async queue(batch: MessageBatch<BackgroundEvent>, env: Bindings): Promise<void> {
+    initDb(env.DB);
+    await runWithDb(env.DB.withSession("first-primary"), () => processBackgroundEventBatch(batch));
   },
 
   async scheduled(_: ScheduledController, env: Bindings, ctx: ExecutionContext): Promise<void> {
-    const id = env.API_APP.idFromName("primary");
-    const stub = env.API_APP.get(id);
-    const headers = new Headers();
-    if (env.INTERNAL_API_TOKEN) {
-      headers.set("x-internal-token", env.INTERNAL_API_TOKEN);
-    }
-
     ctx.waitUntil(
-      stub.fetch("https://internal/__internal/cleanup", {
-        method: "POST",
-        headers,
+      runWithDb(env.DB.withSession("first-primary"), async () => {
+        initDb(env.DB);
+        const [deviceCleanup, activityCleanup, challengeCleanup, oauthStorageCleanup] = await Promise.all([
+          cleanupStaleDevices(),
+          cleanupExpiredActivityLogs(),
+          cleanupExpiredChallenges(),
+          cleanupExpiredOAuthStorage(),
+        ]);
+        return {
+          ...deviceCleanup,
+          activityRetentionDays: activityCleanup.retentionDays,
+          ...challengeCleanup,
+          ...oauthStorageCleanup,
+        };
       }).catch((err) => {
         console.error("[Cron] Device cleanup failed:", err);
       })

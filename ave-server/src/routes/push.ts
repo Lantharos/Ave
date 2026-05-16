@@ -11,6 +11,8 @@ const app = new Hono();
 // Public endpoint to get VAPID public key
 app.get("/vapid-key", (c) => {
   const publicKey = getVapidPublicKey();
+  c.header("Cache-Control", "public, max-age=86400, stale-while-revalidate=604800");
+  c.header("CDN-Cache-Control", "public, s-maxage=86400");
   
   if (!publicKey) {
     return c.json({ 

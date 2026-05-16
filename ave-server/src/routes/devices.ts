@@ -5,6 +5,7 @@ import { db, devices, identities, loginRequests, activityLogs } from "../db";
 import { requireAuth, requireWritableForMutation } from "../middleware/auth";
 import { eq, and, desc, gt, inArray, lt } from "drizzle-orm";
 import { notifyLoginRequestStatus } from "../lib/websocket";
+import { recordActivityLog } from "../lib/background-events";
 
 const app = new Hono();
 
@@ -129,7 +130,7 @@ app.post("/approve-request", zValidator("json", z.object({
 
   
   // Log activity
-  await db.insert(activityLogs).values({
+  recordActivityLog(c, {
     userId: user.id,
     action: "login_approved",
     details: { 
@@ -190,7 +191,7 @@ app.post("/deny-request", zValidator("json", z.object({
     .where(eq(loginRequests.id, requestId));
   
   // Log activity
-  await db.insert(activityLogs).values({
+  recordActivityLog(c, {
     userId: user.id,
     action: "login_denied",
     details: { 
@@ -261,7 +262,7 @@ app.delete("/:deviceId", async (c) => {
   await db.delete(devices).where(eq(devices.id, deviceId));
   
   // Log activity
-  await db.insert(activityLogs).values({
+  recordActivityLog(c, {
     userId: user.id,
     action: "device_removed",
     details: {

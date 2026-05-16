@@ -48,7 +48,7 @@ export async function verifyDnsTxt(domain: string, token: string) {
   return hasTxtToken(await response.json(), token);
 }
 
-export async function getOrganizationBundle(organizationId: string) {
+export async function getOrganizationBundle(organizationId: string, options: { includeAudit?: boolean } = {}) {
   const [memberRows, keys, grants, encryptionPolicies, ssoConnections, domains, auditEvents] = await Promise.all([
     db
       .select({ member: organizationIdentityMembers, identity: identities, key: identityEncryptionKeys })
@@ -62,12 +62,14 @@ export async function getOrganizationBundle(organizationId: string) {
     db.select().from(organizationEncryptionPolicies).where(eq(organizationEncryptionPolicies.organizationId, organizationId)).limit(1),
     db.select().from(organizationSsoConnections).where(eq(organizationSsoConnections.organizationId, organizationId)),
     db.select().from(organizationDomainVerifications).where(eq(organizationDomainVerifications.organizationId, organizationId)),
-    db
-      .select()
-      .from(organizationAuditEvents)
-      .where(eq(organizationAuditEvents.organizationId, organizationId))
-      .orderBy(desc(organizationAuditEvents.createdAt))
-      .limit(50),
+    options.includeAudit
+      ? db
+          .select()
+          .from(organizationAuditEvents)
+          .where(eq(organizationAuditEvents.organizationId, organizationId))
+          .orderBy(desc(organizationAuditEvents.createdAt))
+          .limit(50)
+      : Promise.resolve([]),
   ]);
 
   const grantsByKey = new Map<string, typeof grants>();

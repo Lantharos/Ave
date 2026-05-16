@@ -1,6 +1,5 @@
 import { and, eq } from "drizzle-orm";
 import {
-  activityLogs,
   db,
   devices,
   identities,
@@ -12,7 +11,7 @@ import {
   type OrganizationSsoConnection,
 } from "../db";
 import { clientIp, userAgent } from "./business-route-utils";
-import { writeBusinessAuditEvent } from "./business";
+import { recordActivityLog, recordBusinessAuditEvent } from "./background-events";
 import { generateSessionToken, hashSessionToken } from "./crypto";
 import { setSessionCookie } from "./session-cookie";
 
@@ -112,7 +111,7 @@ export async function completeEnterpriseSsoLogin(input: {
   });
   setSessionCookie(c, sessionToken, expiresAt);
 
-  await db.insert(activityLogs).values({
+  recordActivityLog(c, {
     userId: identity.userId,
     action: created ? "account_created" : "login",
     details: { method: "enterprise_sso", organizationId: organization.id, connectionId: connection.id },
@@ -121,7 +120,7 @@ export async function completeEnterpriseSsoLogin(input: {
     userAgent: userAgent(c),
     severity: "info",
   });
-  await writeBusinessAuditEvent({
+  recordBusinessAuditEvent(c, {
     organizationId: organization.id,
     actorUserId: identity.userId,
     actorIdentityId: identity.id,
@@ -142,7 +141,7 @@ export async function recordSsoConnectionTest(input: {
   type: "saml" | "oidc";
 }) {
   await db.update(organizationSsoConnections).set({ status: "active", updatedAt: new Date() }).where(eq(organizationSsoConnections.id, input.connectionId));
-  await writeBusinessAuditEvent({
+  recordBusinessAuditEvent(input.c, {
     organizationId: input.organizationId,
     actorUserId: input.actorUserId,
     actorIdentityId: input.actorIdentityId,

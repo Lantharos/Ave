@@ -1,4 +1,8 @@
 import { createHash } from "crypto";
+const encoder = new TextEncoder();
+
+let privateKeyCache: { pem: string; key: CryptoKey } | null = null;
+let publicKeyCache: { pem: string; key: CryptoKey; jwk: Record<string, string>; kid: string } | null = null;
 
 function getJwtKid(): string {
   return process.env.OIDC_KID || "ave-oidc-v1";
@@ -20,6 +24,68 @@ function base64UrlEncode(input: Uint8Array): string {
   return Buffer.from(input).toString("base64url");
 }
 
+function pemBody(pem: string, label: "PRIVATE" | "PUBLIC"): ArrayBuffer {
+  const bytes = Buffer.from(
+    pem.replace(new RegExp(`-----\\w+ ${label} KEY-----`, "g"), "").replace(/\s+/g, ""),
+    "base64",
+  );
+  return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
+}
+
+async function getPrivateKey(): Promise<CryptoKey> {
+  const privateKeyPem = getJwtPrivateKeyPem();
+  if (!privateKeyPem) {
+    throw new Error("OIDC_PRIVATE_KEY_PEM is not configured");
+  }
+
+  if (privateKeyCache?.pem === privateKeyPem) {
+    return privateKeyCache.key;
+  }
+
+  const key = await crypto.subtle.importKey(
+    "pkcs8",
+    pemBody(privateKeyPem, "PRIVATE"),
+    { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  privateKeyCache = { pem: privateKeyPem, key };
+  return key;
+}
+
+async function getPublicKeyAndJwk(): Promise<{ key: CryptoKey; jwk: Record<string, string> }> {
+  const publicKeyPem = getJwtPublicKeyPem();
+  if (!publicKeyPem) {
+    throw new Error("OIDC_PUBLIC_KEY_PEM is not configured");
+  }
+
+  const kid = getJwtKid();
+  if (publicKeyCache?.pem === publicKeyPem && publicKeyCache.kid === kid) {
+    return publicKeyCache;
+  }
+
+  const key = await crypto.subtle.importKey(
+    "spki",
+    pemBody(publicKeyPem, "PUBLIC"),
+    { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
+    true,
+    ["verify"],
+  );
+
+  const exported = await crypto.subtle.exportKey("jwk", key);
+  const jwk = {
+    kty: exported.kty || "RSA",
+    use: "sig",
+    alg: "RS256",
+    kid,
+    n: exported.n || "",
+    e: exported.e || "AQAB",
+  };
+
+  publicKeyCache = { pem: publicKeyPem, key, jwk, kid };
+  return { key, jwk };
+}
+
 export function getIssuer(): string {
   return process.env.OIDC_ISSUER || "https://api.aveid.net";
 }
@@ -29,12 +95,6 @@ export function getResourceAudience(): string {
 }
 
 export async function signJwt(payload: Record<string, unknown>): Promise<string> {
-  const privateKeyPem = getJwtPrivateKeyPem();
-  if (!privateKeyPem) {
-    throw new Error("OIDC_PRIVATE_KEY_PEM is not configured");
-  }
-
-  const encoder = new TextEncoder();
   const header = {
     alg: "RS256",
     typ: "JWT",
@@ -44,19 +104,7 @@ export async function signJwt(payload: Record<string, unknown>): Promise<string>
   const headerSegment = base64UrlEncode(encoder.encode(JSON.stringify(header)));
   const payloadSegment = base64UrlEncode(encoder.encode(JSON.stringify(payload)));
   const data = `${headerSegment}.${payloadSegment}`;
-
-  const keyData = Buffer.from(
-    privateKeyPem.replace(/-----\w+ PRIVATE KEY-----/g, "").replace(/\s+/g, ""),
-    "base64"
-  );
-
-  const key = await crypto.subtle.importKey(
-    "pkcs8",
-    keyData,
-    { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
-    false,
-    ["sign"]
-  );
+  const key = await getPrivateKey();
 
   const signature = await crypto.subtle.sign(
     "RSASSA-PKCS1-v1_5",
@@ -64,43 +112,15 @@ export async function signJwt(payload: Record<string, unknown>): Promise<string>
     encoder.encode(data)
   );
 
-  return `${data}.${Buffer.from(signature).toString("base64url")}`;
+  return `${data}.${base64UrlEncode(new Uint8Array(signature))}`;
 }
 
 export async function getJwtPublicJwk(): Promise<Record<string, string>> {
-  const publicKeyPem = getJwtPublicKeyPem();
-  if (!publicKeyPem) {
-    throw new Error("OIDC_PUBLIC_KEY_PEM is not configured");
-  }
-
-  const keyData = Buffer.from(
-    publicKeyPem.replace(/-----\w+ PUBLIC KEY-----/g, "").replace(/\s+/g, ""),
-    "base64"
-  );
-
-  const key = await crypto.subtle.importKey(
-    "spki",
-    keyData,
-    { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
-    true,
-    ["verify"]
-  );
-
-  const jwk = await crypto.subtle.exportKey("jwk", key);
-
-  return {
-    kty: jwk.kty || "RSA",
-    use: "sig",
-    alg: "RS256",
-    kid: getJwtKid(),
-    n: jwk.n || "",
-    e: jwk.e || "AQAB",
-  };
+  return (await getPublicKeyAndJwk()).jwk;
 }
 
 async function readVerifiedJwtPayloadWithoutAudience(token: string): Promise<Record<string, unknown> | null> {
-  const publicKeyPem = getJwtPublicKeyPem();
-  if (!publicKeyPem) {
+  if (!getJwtPublicKeyPem()) {
     return null;
   }
 
@@ -116,26 +136,14 @@ async function readVerifiedJwtPayloadWithoutAudience(token: string): Promise<Rec
 
   const payload = JSON.parse(Buffer.from(payloadSegment, "base64url").toString("utf8"));
   const data = `${headerSegment}.${payloadSegment}`;
-
-  const keyData = Buffer.from(
-    publicKeyPem.replace(/-----\w+ PUBLIC KEY-----/g, "").replace(/\s+/g, ""),
-    "base64"
-  );
-
-  const key = await crypto.subtle.importKey(
-    "spki",
-    keyData,
-    { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
-    false,
-    ["verify"]
-  );
+  const { key } = await getPublicKeyAndJwk();
 
   const signature = base64UrlDecode(signatureSegment);
   const valid = await crypto.subtle.verify(
     "RSASSA-PKCS1-v1_5",
     key,
     new Uint8Array(signature),
-    new TextEncoder().encode(data)
+    encoder.encode(data)
   );
 
   if (!valid) {

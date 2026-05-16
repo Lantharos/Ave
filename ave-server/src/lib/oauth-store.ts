@@ -1,4 +1,5 @@
-import { AsyncLocalStorage } from "node:async_hooks";
+import { eq, lt } from "drizzle-orm";
+import { db, oauthAccessTokens, oauthAuthorizationCodes } from "../db";
 
 type StoredOAuthRecord<T> = {
   value: T;
@@ -52,85 +53,37 @@ export type AccessTokenRecord = {
   nonce?: string;
 };
 
-/**
- * Mirror the request-scoped DB pattern so OAuth storage is bound to the
- * current Durable Object request rather than shared at module scope.
- */
-const oauthStorage = new AsyncLocalStorage<DurableObjectStorage>();
-
-function key(namespace: "auth-code" | "access-token", id: string): string {
-  return `oauth:${namespace}:${id}`;
-}
-
-function getStorage(): DurableObjectStorage {
-  const storage = oauthStorage.getStore();
-  if (!storage) {
-    throw new Error("OAuth storage not initialized. This function must be called within runWithOAuthStorage().");
-  }
-  return storage;
-}
-
-export async function runWithOAuthStorage<T>(
-  storage: DurableObjectStorage,
-  callback: () => Promise<T>,
-): Promise<T> {
-  return oauthStorage.run(storage, callback);
-}
-
-async function setRecord<T>(
-  namespace: "auth-code" | "access-token",
-  id: string,
-  value: T,
-  expiresAt: number,
-): Promise<void> {
-  await getStorage().put(
-    key(namespace, id),
-    {
-      value,
-      expiresAt,
-    } satisfies StoredOAuthRecord<T>,
-    {
-      expiration: Math.floor(expiresAt / 1000),
-    },
-  );
-}
-
-async function getRecord<T>(
-  namespace: "auth-code" | "access-token",
-  id: string,
-): Promise<StoredOAuthRecord<T> | null> {
-  return (await getStorage().get<StoredOAuthRecord<T>>(key(namespace, id))) ?? null;
-}
-
-async function deleteRecord(namespace: "auth-code" | "access-token", id: string): Promise<void> {
-  await getStorage().delete(key(namespace, id));
-}
-
-async function takeRecord<T>(
-  namespace: "auth-code" | "access-token",
-  id: string,
-): Promise<StoredOAuthRecord<T> | null> {
-  const storageKey = key(namespace, id);
-  return getStorage().transaction(async (txn) => {
-    const record = (await txn.get<StoredOAuthRecord<T>>(storageKey)) ?? null;
-    if (!record) {
-      return null;
-    }
-
-    await txn.delete(storageKey);
-    return record;
-  });
-}
-
 export async function setAuthorizationCode(id: string, value: AuthorizationCodeRecord): Promise<void> {
-  await setRecord("auth-code", id, value, value.expiresAt);
+  await db.insert(oauthAuthorizationCodes)
+    .values({
+      id,
+      value: value as unknown as Record<string, unknown>,
+      expiresAt: new Date(value.expiresAt),
+    })
+    .onConflictDoUpdate({
+      target: oauthAuthorizationCodes.id,
+      set: {
+        value: value as unknown as Record<string, unknown>,
+        expiresAt: new Date(value.expiresAt),
+      },
+    });
 }
 
 export async function getAuthorizationCode(id: string): Promise<{
   value: AuthorizationCodeRecord | null;
   expired: boolean;
 }> {
-  const record = await getRecord<AuthorizationCodeRecord>("auth-code", id);
+  const [row] = await db
+    .select()
+    .from(oauthAuthorizationCodes)
+    .where(eq(oauthAuthorizationCodes.id, id))
+    .limit(1);
+  const record = row
+    ? {
+        value: row.value as unknown as AuthorizationCodeRecord,
+        expiresAt: new Date(row.expiresAt).getTime(),
+      } satisfies StoredOAuthRecord<AuthorizationCodeRecord>
+    : null;
   if (!record) {
     return { value: null, expired: false };
   }
@@ -145,7 +98,16 @@ export async function consumeAuthorizationCode(id: string): Promise<{
   value: AuthorizationCodeRecord | null;
   expired: boolean;
 }> {
-  const record = await takeRecord<AuthorizationCodeRecord>("auth-code", id);
+  const [row] = await db
+    .delete(oauthAuthorizationCodes)
+    .where(eq(oauthAuthorizationCodes.id, id))
+    .returning();
+  const record = row
+    ? {
+        value: row.value as unknown as AuthorizationCodeRecord,
+        expiresAt: new Date(row.expiresAt).getTime(),
+      } satisfies StoredOAuthRecord<AuthorizationCodeRecord>
+    : null;
   if (!record) {
     return { value: null, expired: false };
   }
@@ -156,15 +118,37 @@ export async function consumeAuthorizationCode(id: string): Promise<{
 }
 
 export async function deleteAuthorizationCode(id: string): Promise<void> {
-  await deleteRecord("auth-code", id);
+  await db.delete(oauthAuthorizationCodes).where(eq(oauthAuthorizationCodes.id, id));
 }
 
 export async function setAccessToken(id: string, value: AccessTokenRecord): Promise<void> {
-  await setRecord("access-token", id, value, value.expiresAt);
+  await db.insert(oauthAccessTokens)
+    .values({
+      id,
+      value: value as unknown as Record<string, unknown>,
+      expiresAt: new Date(value.expiresAt),
+    })
+    .onConflictDoUpdate({
+      target: oauthAccessTokens.id,
+      set: {
+        value: value as unknown as Record<string, unknown>,
+        expiresAt: new Date(value.expiresAt),
+      },
+    });
 }
 
 export async function getAccessToken(id: string): Promise<AccessTokenRecord | null> {
-  const record = await getRecord<AccessTokenRecord>("access-token", id);
+  const [row] = await db
+    .select()
+    .from(oauthAccessTokens)
+    .where(eq(oauthAccessTokens.id, id))
+    .limit(1);
+  const record = row
+    ? {
+        value: row.value as unknown as AccessTokenRecord,
+        expiresAt: new Date(row.expiresAt).getTime(),
+      } satisfies StoredOAuthRecord<AccessTokenRecord>
+    : null;
   if (!record) return null;
   if (Date.now() > record.expiresAt) {
     await deleteAccessToken(id);
@@ -174,5 +158,14 @@ export async function getAccessToken(id: string): Promise<AccessTokenRecord | nu
 }
 
 export async function deleteAccessToken(id: string): Promise<void> {
-  await deleteRecord("access-token", id);
+  await db.delete(oauthAccessTokens).where(eq(oauthAccessTokens.id, id));
+}
+
+export async function cleanupExpiredOAuthStorage(): Promise<{ expiredOAuthRecordsRemoved: number | null }> {
+  const now = new Date();
+  await Promise.all([
+    db.delete(oauthAuthorizationCodes).where(lt(oauthAuthorizationCodes.expiresAt, now)),
+    db.delete(oauthAccessTokens).where(lt(oauthAccessTokens.expiresAt, now)),
+  ]);
+  return { expiredOAuthRecordsRemoved: null };
 }

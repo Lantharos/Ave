@@ -19,6 +19,7 @@ export const organizationKeyrings = sqliteTable("organization_keyrings", {
   index("organization_keyrings_organization_id_idx").on(table.organizationId),
   index("organization_keyrings_status_idx").on(table.status),
   index("organization_keyrings_rotated_from_idx").on(table.rotatedFromKeyringId),
+  index("organization_keyrings_org_status_idx").on(table.organizationId, table.status),
 ]);
 
 export const organizationKeyGrants = sqliteTable("organization_key_grants", {
@@ -39,6 +40,7 @@ export const organizationKeyGrants = sqliteTable("organization_key_grants", {
   index("organization_key_grants_organization_id_idx").on(table.organizationId),
   index("organization_key_grants_keyring_id_idx").on(table.keyringId),
   index("organization_key_grants_identity_id_idx").on(table.identityId),
+  index("organization_key_grants_org_status_identity_idx").on(table.organizationId, table.status, table.identityId),
 ]);
 
 export const organizationEncryptionPolicies = sqliteTable("organization_encryption_policies", {
@@ -84,6 +86,7 @@ export const organizationSsoConnections = sqliteTable("organization_sso_connecti
   index("organization_sso_connections_organization_id_idx").on(table.organizationId),
   index("organization_sso_connections_status_idx").on(table.status),
   index("organization_sso_connections_domain_idx").on(table.domain),
+  index("organization_sso_connections_org_status_idx").on(table.organizationId, table.status),
 ]);
 
 export const organizationDomainVerifications = sqliteTable("organization_domain_verifications", {
@@ -99,6 +102,7 @@ export const organizationDomainVerifications = sqliteTable("organization_domain_
   uniqueIndex("organization_domain_verifications_org_domain_unique").on(table.organizationId, table.domain),
   index("organization_domain_verifications_domain_idx").on(table.domain),
   index("organization_domain_verifications_status_idx").on(table.status),
+  index("organization_domain_verifications_org_status_idx").on(table.organizationId, table.status),
 ]);
 
 export const organizationAuditEvents = sqliteTable("organization_audit_events", {
@@ -121,6 +125,7 @@ export const organizationAuditEvents = sqliteTable("organization_audit_events", 
   index("organization_audit_events_organization_id_idx").on(table.organizationId),
   index("organization_audit_events_actor_identity_id_idx").on(table.actorIdentityId),
   index("organization_audit_events_created_at_idx").on(table.createdAt),
+  index("organization_audit_events_org_created_at_idx").on(table.organizationId, table.createdAt),
 ]);
 
 export type OrganizationKeyring = typeof organizationKeyrings.$inferSelect;

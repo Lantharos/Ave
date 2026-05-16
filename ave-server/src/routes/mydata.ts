@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { db, users, identities, passkeys, devices, sessions, trustCodes, activityLogs, oauthAuthorizations } from "../db";
 import { requireAuth, requireWritableForMutation } from "../middleware/auth";
 import { eq } from "drizzle-orm";
+import { recordActivityLog } from "../lib/background-events";
 
 const app = new Hono();
 
@@ -128,7 +129,7 @@ app.get("/export", async (c) => {
   };
   
   // Log activity
-  await db.insert(activityLogs).values({
+  recordActivityLog(c, {
     userId: user.id,
     action: "data_exported",
     details: {},
@@ -150,7 +151,7 @@ app.delete("/", async (c) => {
   const user = c.get("user")!;
   
   // Log the deletion attempt first (will be deleted with user)
-  await db.insert(activityLogs).values({
+  recordActivityLog(c, {
     userId: user.id,
     action: "account_deleted",
     details: {},

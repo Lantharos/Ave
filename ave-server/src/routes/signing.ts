@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
-import { db, signingKeys, signatureRequests, identities, oauthApps, activityLogs } from "../db";
+import { db, signingKeys, signatureRequests, identities, oauthApps } from "../db";
 import { requireAuth, requireWritable } from "../middleware/auth";
 import { eq, and, desc, gt, inArray } from "drizzle-orm";
 import { verifySignature, isValidPublicKey, isValidSignature } from "../lib/signing";
@@ -10,6 +10,7 @@ import { hashSessionToken } from "../lib/crypto";
 import { enforceRateLimits, ipRateLimit, subjectRateLimit } from "../lib/rate-limit";
 import { timingSafeEqual } from "crypto";
 import signingKeyRoutes from "./signing-keys";
+import { recordActivityLog } from "../lib/background-events";
 const app = new Hono();
 app.route("/", signingKeyRoutes);
 function timingSafeEqualString(a: string, b: string): boolean {
@@ -197,7 +198,7 @@ app.post("/requests/:requestId/sign", requireAuth, requireWritable, zValidator("
     .where(eq(signatureRequests.id, requestId));
   
   // Log activity
-  await db.insert(activityLogs).values({
+  recordActivityLog(c, {
     userId: user.id,
     action: "signature_created",
     details: { 
@@ -254,7 +255,7 @@ app.post("/requests/:requestId/deny", requireAuth, requireWritable, async (c) =>
     .where(eq(signatureRequests.id, requestId));
   
   // Log activity
-  await db.insert(activityLogs).values({
+  recordActivityLog(c, {
     userId: user.id,
     action: "signature_denied",
     details: { 

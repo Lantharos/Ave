@@ -6,7 +6,7 @@ import {
   verifyRegistrationResponse,
   type VerifiedRegistrationResponse,
 } from "@simplewebauthn/server";
-import { db, users, identities, passkeys, devices, sessions, activityLogs, identityEncryptionKeys } from "../db";
+import { db, users, identities, passkeys, devices, sessions, identityEncryptionKeys } from "../db";
 import { 
   generateSessionToken, 
   hashSessionToken,
@@ -19,6 +19,7 @@ import { resolvePasskeyName } from "../lib/passkey-names";
 import { normalizeEmail } from "../lib/email-verification";
 import { serializeIdentityForOwner } from "../lib/identity-serialization";
 import { enforceRateLimits, ipRateLimit, subjectRateLimit } from "../lib/rate-limit";
+import { recordActivityLog } from "../lib/background-events";
 
 const app = new Hono();
 
@@ -247,7 +248,7 @@ app.post("/complete", zValidator("json", completeRegistrationSchema), async (c) 
         .returning();
 
     // Log activity
-    await db.insert(activityLogs).values({
+    recordActivityLog(c, {
       userId: user.id,
       action: "account_created",
       details: { handle: data.identity.handle },

@@ -3,6 +3,9 @@ main = "src/index.ts"
 compatibility_date = "2026-02-08"
 compatibility_flags = ["nodejs_compat"]
 
+[placement]
+mode = "smart"
+
 [observability]
 
 [observability.logs]
@@ -13,6 +16,26 @@ invocation_logs = true
 name = "API_APP"
 class_name = "ApiAppDurableObject"
 
+[[durable_objects.bindings]]
+name = "RATE_LIMITER"
+class_name = "RateLimitDurableObject"
+
+[[queues.producers]]
+binding = "BACKGROUND_EVENTS"
+queue = "ave-background-events"
+
+[[queues.consumers]]
+queue = "ave-background-events"
+max_batch_size = 25
+max_batch_timeout = 5
+max_retries = 10
+dead_letter_queue = "ave-background-events-dlq"
+retry_delay = 60
+
+[[analytics_engine_datasets]]
+binding = "API_ANALYTICS"
+dataset = "ave_api_requests"
+
 [[d1_databases]]
 binding = "DB"
 database_name = "ave"
@@ -22,6 +45,10 @@ migrations_dir = "drizzle"
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["ApiAppDurableObject"]
+
+[[migrations]]
+tag = "v2"
+new_sqlite_classes = ["RateLimitDurableObject"]
 
 [triggers]
 crons = ["0 3 * * *"]

@@ -15,7 +15,6 @@ import {
   requireBusinessAccess,
   shouldRequireEnterpriseSsoForBusinessAccess,
   verifySignedBusinessAction,
-  writeBusinessAuditEvent,
 } from "../lib/business";
 import {
   kmsProviders,
@@ -28,6 +27,7 @@ import {
 import { clientIp, userAgent } from "../lib/business-route-utils";
 import { validateOpaqueKeyEnvelope, validatePublicKeyBlob } from "../lib/encryption-key-payload";
 import { getRequiredEnterpriseSsoForOrganization } from "../lib/enterprise-sso-policy";
+import { recordBusinessAuditEvent } from "../lib/background-events";
 import { requireAuth, requireWritableForMutation } from "../middleware/auth";
 
 const app = new Hono();
@@ -172,7 +172,7 @@ app.patch("/organizations/:organizationId/encryption-policy", zValidator("json",
     },
   }).returning();
 
-  await writeBusinessAuditEvent({
+  recordBusinessAuditEvent(c, {
     organizationId,
     actorUserId: user.id,
     actorIdentityId: access.identity.id,
@@ -237,7 +237,7 @@ app.post("/organizations/:organizationId/keys", zValidator("json", z.object({
     })));
   }
 
-  await writeBusinessAuditEvent({
+  recordBusinessAuditEvent(c, {
     organizationId,
     actorUserId: user.id,
     actorIdentityId: access.identity.id,
@@ -310,7 +310,7 @@ app.post("/organizations/:organizationId/keys/:keyringId/rotate", zValidator("js
     })));
   }
 
-  await writeBusinessAuditEvent({
+  recordBusinessAuditEvent(c, {
     organizationId,
     actorUserId: user.id,
     actorIdentityId: access.identity.id,

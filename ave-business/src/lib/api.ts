@@ -82,8 +82,10 @@ export const api = {
       body: JSON.stringify({ name, ownerIdentityId, signedAction }),
     }),
 
-  getOrganization: (organizationId: string) =>
-    request<BusinessOrganizationDetail>(`/api/business/organizations/${organizationId}`),
+  getOrganization: (organizationId: string, options: { includeAudit?: boolean } = {}) => {
+    const search = options.includeAudit ? "?includeAudit=true" : "";
+    return request<BusinessOrganizationDetail>(`/api/business/organizations/${organizationId}${search}`);
+  },
 
   updateOrganization: (organizationId: string, data: { name?: string; ssoRequired?: boolean } & SignedAction) =>
     request<{ organization: BusinessOrganizationSummary }>(`/api/business/organizations/${organizationId}`, {

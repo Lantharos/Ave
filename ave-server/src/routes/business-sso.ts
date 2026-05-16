@@ -16,7 +16,6 @@ import {
   requireBusinessAccess,
   shouldRequireEnterpriseSsoForBusinessAccess,
   verifySignedBusinessAction,
-  writeBusinessAuditEvent,
 } from "../lib/business";
 import {
   decryptSsoClientSecret,
@@ -36,6 +35,7 @@ import { clientIp, userAgent, verificationToken, verifyDnsTxt } from "../lib/bus
 import { deleteChallenge, getChallenge, setChallenge } from "../lib/challenge-store";
 import { businessOrigin, enterpriseSsoReturnTo } from "../lib/enterprise-sso-return";
 import { getRequiredEnterpriseSsoForEmail, getRequiredEnterpriseSsoForOrganization } from "../lib/enterprise-sso-policy";
+import { recordBusinessAuditEvent } from "../lib/background-events";
 
 const app = new Hono();
 
@@ -242,7 +242,7 @@ app.post("/organizations/:organizationId/domains", zValidator("json", z.object({
     set: { token, status: "pending", updatedAt: new Date(), verifiedAt: null },
   }).returning();
 
-  await writeBusinessAuditEvent({
+  recordBusinessAuditEvent(c, {
     organizationId,
     actorUserId: user.id,
     actorIdentityId: access.identity.id,
@@ -281,7 +281,7 @@ app.post("/organizations/:organizationId/domains/:domainId/verify", zValidator("
   await db.update(organizationDomainVerifications).set({ status: "verified", verifiedAt: new Date(), updatedAt: new Date() }).where(eq(organizationDomainVerifications.id, domain.id));
   const verifiedDomains = Array.from(new Set([...(access.organization.verifiedDomains || []), domain.domain]));
   await db.update(organizations).set({ verifiedDomains, updatedAt: new Date() }).where(eq(organizations.id, organizationId));
-  await writeBusinessAuditEvent({
+  recordBusinessAuditEvent(c, {
     organizationId,
     actorUserId: user.id,
     actorIdentityId: access.identity.id,
@@ -356,7 +356,7 @@ app.post("/organizations/:organizationId/sso-connections", zValidator("json", z.
     keyAccessMode: "ave_identity_keys",
   }).returning();
 
-  await writeBusinessAuditEvent({
+  recordBusinessAuditEvent(c, {
     organizationId,
     actorUserId: user.id,
     actorIdentityId: access.identity.id,
@@ -438,7 +438,7 @@ app.patch("/organizations/:organizationId/sso-connections/:connectionId", zValid
     updatedAt: new Date(),
   }).where(eq(organizationSsoConnections.id, connectionId)).returning();
 
-  await writeBusinessAuditEvent({
+  recordBusinessAuditEvent(c, {
     organizationId,
     actorUserId: user.id,
     actorIdentityId: access.identity.id,
@@ -449,7 +449,7 @@ app.patch("/organizations/:organizationId/sso-connections/:connectionId", zValid
     userAgent: userAgent(c),
   });
   if (auditDetails.certificateChanged) {
-    await writeBusinessAuditEvent({
+    recordBusinessAuditEvent(c, {
       organizationId,
       actorUserId: user.id,
       actorIdentityId: access.identity.id,

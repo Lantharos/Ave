@@ -6,7 +6,7 @@ import {
   verifyAuthenticationResponse,
   type AuthenticatorTransportFuture,
 } from "@simplewebauthn/server";
-import { db, users, identities, passkeys, devices, sessions, loginRequests, trustCodes, activityLogs } from "../db";
+import { db, users, identities, passkeys, devices, sessions, loginRequests, trustCodes } from "../db";
 import { 
   generateSessionToken, 
   hashSessionToken,
@@ -22,6 +22,7 @@ import { serializeIdentityForOwner } from "../lib/identity-serialization";
 import { isDemoHandle, isDemoLoginEnabled, verifyDemoPassword } from "../lib/demo-auth";
 import { enforceRateLimits, ipRateLimit, subjectRateLimit } from "../lib/rate-limit";
 import { getRequiredEnterpriseSsoForEmail } from "../lib/enterprise-sso-policy";
+import { recordActivityLog } from "../lib/background-events";
 
 const app = new Hono();
 
@@ -347,7 +348,7 @@ app.post("/demo", zValidator("json", z.object({
   setSessionCookie(c, sessionToken, expiresAt);
   c.header("Set-Login", "logged-in");
 
-  await db.insert(activityLogs).values({
+  recordActivityLog(c, {
     userId: identity.userId,
     action: "login",
     details: { method: "demo", deviceName: deviceRecord.name, isNewDevice: deviceRecord.isNew },
@@ -497,7 +498,7 @@ app.post("/passkey", zValidator("json", z.object({
     c.header("Set-Login", "logged-in");
     
     // Log activity
-    await db.insert(activityLogs).values({
+    recordActivityLog(c, {
       userId: storedChallenge.userId,
       action: "login",
       details: { method: "passkey", deviceName: deviceRecord.name, isNewDevice: deviceRecord.isNew },
@@ -714,7 +715,7 @@ app.get("/request-status/:requestId", async (c) => {
     c.header("Set-Login", "logged-in");
     
     // Log activity
-    await db.insert(activityLogs).values({
+    recordActivityLog(c, {
       userId: identity.userId,
       action: "login",
       details: { method: "device_approval", deviceName: deviceRecord.name, isNewDevice: deviceRecord.isNew },
@@ -809,7 +810,7 @@ app.post("/trust-code", zValidator("json", z.object({
   }
 
   if (!matchedCode) {
-    await db.insert(activityLogs).values({
+    recordActivityLog(c, {
       userId: identity.userId,
       action: "trust_code_failed",
       details: { reason: "invalid_code", trustCodesCount: availableCodes },
@@ -849,7 +850,7 @@ app.post("/trust-code", zValidator("json", z.object({
   c.header("Set-Login", "logged-in");
   
   // Log activity
-  await db.insert(activityLogs).values({
+  recordActivityLog(c, {
     userId: identity.userId,
     action: "login",
     details: { method: "trust_code", deviceName: deviceRecord.name, isNewDevice: deviceRecord.isNew },
@@ -877,7 +878,7 @@ app.post("/trust-code", zValidator("json", z.object({
 
   const remainingCodes = await markTrustCodeUsed(identity.userId, matchedCode.id);
 
-  await db.insert(activityLogs).values({
+  recordActivityLog(c, {
     userId: identity.userId,
     action: "trust_code_used",
     details: { remainingCodes },
@@ -941,7 +942,7 @@ app.post("/recover-key", zValidator("json", z.object({
   }
 
   if (!matchedCode) {
-    await db.insert(activityLogs).values({
+    recordActivityLog(c, {
       userId: identity.userId,
       action: "key_recovery_failed",
       details: { reason: "invalid_code", trustCodesCount: availableCodes },
@@ -965,7 +966,7 @@ app.post("/recover-key", zValidator("json", z.object({
   }
   
   // Log successful key recovery
-  await db.insert(activityLogs).values({
+  recordActivityLog(c, {
     userId: identity.userId,
     action: "key_recovery",
     details: { method: "trust_code" },
@@ -976,7 +977,7 @@ app.post("/recover-key", zValidator("json", z.object({
 
   const remainingCodes = await markTrustCodeUsed(identity.userId, matchedCode.id);
 
-  await db.insert(activityLogs).values({
+  recordActivityLog(c, {
     userId: identity.userId,
     action: "trust_code_used",
     details: { remainingCodes, context: "key_recovery" },

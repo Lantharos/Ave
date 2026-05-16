@@ -1,17 +1,13 @@
+import { eq, lt } from "drizzle-orm";
+import { db, ephemeralChallenges } from "../db";
+
 type StoredChallenge<T> = {
   value: T;
   expiresAt: number;
 };
 
-let durableStorage: DurableObjectStorage | null = null;
-const memoryFallback = new Map<string, StoredChallenge<unknown>>();
-
 function key(namespace: string, id: string): string {
   return `challenge:${namespace}:${id}`;
-}
-
-export function initChallengeStorage(storage: DurableObjectStorage): void {
-  durableStorage = storage;
 }
 
 export async function setChallenge<T>(
@@ -26,23 +22,40 @@ export async function setChallenge<T>(
   };
 
   const storageKey = key(namespace, id);
-  if (durableStorage) {
-    await durableStorage.put(storageKey, record);
-    return;
-  }
-
-  memoryFallback.set(storageKey, record as StoredChallenge<unknown>);
+  await db.insert(ephemeralChallenges)
+    .values({
+      id: storageKey,
+      namespace,
+      challengeKey: id,
+      value,
+      expiresAt: new Date(record.expiresAt),
+    })
+    .onConflictDoUpdate({
+      target: ephemeralChallenges.id,
+      set: {
+        value,
+        expiresAt: new Date(record.expiresAt),
+      },
+    });
 }
 
 export async function getChallenge<T>(namespace: string, id: string): Promise<T | null> {
   const storageKey = key(namespace, id);
-  let record: StoredChallenge<T> | null = null;
+  const [row] = await db
+    .select({
+      value: ephemeralChallenges.value,
+      expiresAt: ephemeralChallenges.expiresAt,
+    })
+    .from(ephemeralChallenges)
+    .where(eq(ephemeralChallenges.id, storageKey))
+    .limit(1);
 
-  if (durableStorage) {
-    record = (await durableStorage.get<StoredChallenge<T>>(storageKey)) ?? null;
-  } else {
-    record = (memoryFallback.get(storageKey) as StoredChallenge<T> | undefined) ?? null;
-  }
+  const record = row
+    ? {
+        value: row.value,
+        expiresAt: new Date(row.expiresAt).getTime(),
+      } as StoredChallenge<T>
+    : null;
 
   if (!record) return null;
 
@@ -56,10 +69,10 @@ export async function getChallenge<T>(namespace: string, id: string): Promise<T 
 
 export async function deleteChallenge(namespace: string, id: string): Promise<void> {
   const storageKey = key(namespace, id);
-  if (durableStorage) {
-    await durableStorage.delete(storageKey);
-    return;
-  }
+  await db.delete(ephemeralChallenges).where(eq(ephemeralChallenges.id, storageKey));
+}
 
-  memoryFallback.delete(storageKey);
+export async function cleanupExpiredChallenges(): Promise<{ expiredChallengesRemoved: number | null }> {
+  await db.delete(ephemeralChallenges).where(lt(ephemeralChallenges.expiresAt, new Date()));
+  return { expiredChallengesRemoved: null };
 }

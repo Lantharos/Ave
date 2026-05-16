@@ -64,6 +64,8 @@ export const organizationIdentityMembers = sqliteTable("organization_identity_me
   index("organization_identity_members_organization_id_idx").on(table.organizationId),
   index("organization_identity_members_identity_id_idx").on(table.identityId),
   index("organization_identity_members_status_idx").on(table.status),
+  index("organization_identity_members_org_status_identity_idx").on(table.organizationId, table.status, table.identityId),
+  index("organization_identity_members_identity_status_idx").on(table.identityId, table.status),
 ]);
 
 // Identities - users can have multiple identities (up to 5)
@@ -246,6 +248,7 @@ export const activityLogs = sqliteTable("activity_logs", {
   index("activity_logs_user_id_idx").on(table.userId),
   index("activity_logs_created_at_idx").on(table.createdAt),
   index("activity_logs_app_id_idx").on(table.appId),
+  index("activity_logs_user_created_at_idx").on(table.userId, table.createdAt),
 ]);
 
 export const appAnalyticsEvents = sqliteTable("app_analytics_events", {
@@ -262,6 +265,7 @@ export const appAnalyticsEvents = sqliteTable("app_analytics_events", {
   index("app_analytics_events_created_at_idx").on(table.createdAt),
   index("app_analytics_events_identity_id_idx").on(table.identityId),
   index("app_analytics_events_event_type_idx").on(table.eventType),
+  index("app_analytics_events_app_created_at_idx").on(table.appId, table.createdAt),
 ]);
 
 // OAuth applications (third-party apps using Ave for auth)
@@ -323,6 +327,34 @@ export const oauthRefreshTokens = sqliteTable("oauth_refresh_tokens", {
   index("oauth_refresh_tokens_organization_id_idx").on(table.organizationId),
   index("oauth_refresh_tokens_enterprise_sso_organization_id_idx").on(table.enterpriseSsoOrganizationId),
   index("oauth_refresh_tokens_token_hash_idx").on(table.tokenHash),
+  index("oauth_refresh_tokens_rotated_from_id_idx").on(table.rotatedFromId),
+]);
+
+export const ephemeralChallenges = sqliteTable("ephemeral_challenges", {
+  id: text("id").primaryKey(),
+  namespace: text("namespace").notNull(),
+  challengeKey: text("challenge_key").notNull(),
+  value: text("value", { mode: "json" }).$type<unknown>().notNull(),
+  expiresAt: integer("expires_at", { mode: "timestamp_ms" }).notNull(),
+}, (table) => [
+  uniqueIndex("ephemeral_challenges_namespace_key_unique").on(table.namespace, table.challengeKey),
+  index("ephemeral_challenges_expires_at_idx").on(table.expiresAt),
+]);
+
+export const oauthAuthorizationCodes = sqliteTable("oauth_authorization_codes", {
+  id: text("id").primaryKey(),
+  value: text("value", { mode: "json" }).$type<Record<string, unknown>>().notNull(),
+  expiresAt: integer("expires_at", { mode: "timestamp_ms" }).notNull(),
+}, (table) => [
+  index("oauth_authorization_codes_expires_at_idx").on(table.expiresAt),
+]);
+
+export const oauthAccessTokens = sqliteTable("oauth_access_tokens", {
+  id: text("id").primaryKey(),
+  value: text("value", { mode: "json" }).$type<Record<string, unknown>>().notNull(),
+  expiresAt: integer("expires_at", { mode: "timestamp_ms" }).notNull(),
+}, (table) => [
+  index("oauth_access_tokens_expires_at_idx").on(table.expiresAt),
 ]);
 
 // OAuth authorizations - which apps a user has authorized
@@ -343,6 +375,8 @@ export const oauthAuthorizations = sqliteTable("oauth_authorizations", {
   index("oauth_authorizations_user_id_idx").on(table.userId),
   index("oauth_authorizations_app_id_idx").on(table.appId),
   index("oauth_authorizations_identity_id_idx").on(table.identityId),
+  index("oauth_authorizations_user_app_idx").on(table.userId, table.appId),
+  index("oauth_authorizations_user_app_identity_idx").on(table.userId, table.appId, table.identityId),
 ]);
 
 // OAuth resources - capabilities exposed by an app to other apps via connector flow
@@ -381,6 +415,7 @@ export const oauthDelegationGrants = sqliteTable("oauth_delegation_grants", {
   index("oauth_delegation_grants_source_app_id_idx").on(table.sourceAppId),
   index("oauth_delegation_grants_target_resource_id_idx").on(table.targetResourceId),
   index("oauth_delegation_grants_revoked_at_idx").on(table.revokedAt),
+  index("oauth_delegation_grants_active_lookup_idx").on(table.userId, table.identityId, table.sourceAppId, table.targetResourceId, table.revokedAt),
 ]);
 
 // Delegation audit logs - immutable event log for connector actions

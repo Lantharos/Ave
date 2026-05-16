@@ -2,9 +2,10 @@ import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import { and, eq } from "drizzle-orm";
-import { activityLogs, db, identities, signingKeys } from "../db";
+import { db, identities, signingKeys } from "../db";
 import { requireAuth, requireWritable } from "../middleware/auth";
 import { isValidPublicKey } from "../lib/signing";
+import { recordActivityLog } from "../lib/background-events";
 
 const app = new Hono();
 
@@ -87,7 +88,7 @@ app.post("/keys/:identityId", requireAuth, requireWritableSigningSession, zValid
     ? await db.update(signingKeys).set({ publicKey, encryptedPrivateKey }).where(eq(signingKeys.id, existingKey.id)).returning()
     : await db.insert(signingKeys).values({ identityId, publicKey, encryptedPrivateKey }).returning();
 
-  await db.insert(activityLogs).values({
+  recordActivityLog(c, {
     userId: user.id,
     action: "signing_key_created",
     details: { identityId, handle: identity.handle },
@@ -115,7 +116,7 @@ app.put("/keys/:identityId", requireAuth, requireWritableSigningSession, zValida
 
   await db.delete(signingKeys).where(eq(signingKeys.identityId, identityId));
   const [newKey] = await db.insert(signingKeys).values({ identityId, publicKey, encryptedPrivateKey }).returning();
-  await db.insert(activityLogs).values({
+  recordActivityLog(c, {
     userId: user.id,
     action: "signing_key_rotated",
     details: { identityId, handle: identity.handle },

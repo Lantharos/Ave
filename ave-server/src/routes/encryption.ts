@@ -3,13 +3,13 @@ import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import { and, eq } from "drizzle-orm";
 import {
-  activityLogs,
   db,
   identityEncryptionKeys,
   identities,
 } from "../db";
 import { validateOpaqueKeyEnvelope, validatePublicKeyBlob } from "../lib/encryption-key-payload";
 import { requireAuth, requireWritableForMutation } from "../middleware/auth";
+import { recordActivityLog } from "../lib/background-events";
 
 const app = new Hono();
 
@@ -124,7 +124,7 @@ app.post("/keys/:identityId", zValidator("json", postKeySchema), async (c) => {
     })
     .returning();
 
-  await db.insert(activityLogs).values({
+  recordActivityLog(c, {
     userId: user.id,
     action: "identity_key_created",
     details: { identityId, handle: identity.handle },
@@ -190,7 +190,7 @@ app.put("/keys/:identityId", zValidator("json", putKeySchema), async (c) => {
     });
   }
 
-  await db.insert(activityLogs).values({
+  recordActivityLog(c, {
     userId: user.id,
     action: existing ? "identity_key_rotated" : "identity_key_created",
     details: { identityId, handle: identity.handle },

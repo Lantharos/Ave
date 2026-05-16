@@ -83,6 +83,18 @@ bun run db:generate
 bun run db:migrate:remote
 ```
 
+The API Worker also uses Durable Objects for realtime login approval fanout and sharded rate-limit counters, Cloudflare Queues for background audit and analytics writes, Workers Analytics Engine for request timing metrics, and Smart Placement. Create the background queues once per Cloudflare account before the first deploy that references them:
+
+```bash
+cd ave-server
+bunx wrangler queues create ave-background-events
+bunx wrangler queues create ave-background-events-dlq
+bunx wrangler d1 migrations apply ave --remote
+bunx wrangler deploy
+```
+
+Workers Analytics Engine datasets are created on first write after the binding is deployed. D1 read replication should stay enabled; Ave clients send D1 bookmarks on follow-up requests so reads can remain fast without losing read-your-writes behavior.
+
 The API defaults to `http://localhost:3000` in local development.
 
 ### 2. Start the main Ave web app

@@ -52,6 +52,33 @@ interface ExecutionContext {
   passThroughOnException?(): void;
 }
 
+interface Queue<T = unknown> {
+  send(message: T, options?: { delaySeconds?: number }): Promise<void>;
+  sendBatch(messages: Array<{ body: T; delaySeconds?: number }>): Promise<void>;
+}
+
+interface QueueMessage<T = unknown> {
+  readonly body: T;
+  readonly attempts: number;
+  ack(): void;
+  retry(options?: { delaySeconds?: number }): void;
+}
+
+interface MessageBatch<T = unknown> {
+  readonly queue: string;
+  readonly messages: QueueMessage<T>[];
+  ackAll(): void;
+  retryAll(options?: { delaySeconds?: number }): void;
+}
+
+interface AnalyticsEngineDataset {
+  writeDataPoint(data: {
+    blobs?: string[];
+    doubles?: number[];
+    indexes?: string[];
+  }): void;
+}
+
 declare class WebSocketPair {
   0: WebSocket;
   1: WebSocket;

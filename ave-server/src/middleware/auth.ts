@@ -4,6 +4,7 @@ import { eq, and, gt, lt } from "drizzle-orm";
 import { hashSessionToken } from "../lib/crypto";
 import { getCookieValue, SESSION_COOKIE_NAME, setSessionCookie } from "../lib/session-cookie";
 import type { AccessTokenRecord } from "../lib/oauth-store";
+import { runInBackground } from "../lib/background";
 
 const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 const SESSION_REFRESH_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
@@ -78,10 +79,14 @@ export async function authMiddleware(c: Context, next: Next) {
     // Update device last seen if we have a device
     if (session.deviceId) {
       const staleBefore = new Date(Date.now() - DEVICE_LAST_SEEN_UPDATE_INTERVAL_MS);
-      await db
-        .update(devices)
-        .set({ lastSeenAt: new Date() })
-        .where(and(eq(devices.id, session.deviceId), lt(devices.lastSeenAt, staleBefore)));
+      runInBackground(
+        c,
+        db
+          .update(devices)
+          .set({ lastSeenAt: new Date() })
+          .where(and(eq(devices.id, session.deviceId), lt(devices.lastSeenAt, staleBefore))),
+        "Device last-seen update",
+      );
     }
     
     c.set("user", {
