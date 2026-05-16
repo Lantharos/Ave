@@ -1,5 +1,4 @@
 <script lang="ts">
-    import Text from "../../../../components/Text.svelte";
     import type { Device as DeviceType } from "../../../../lib/api";
 
     interface Props {
@@ -21,40 +20,46 @@
         if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`;
         return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
     }
+
+    function iconForDevice(type?: string): { src: string; alt: string } {
+        if (type === "phone") return { src: "/icons/devices/phone-75.svg", alt: "Phone" };
+        if (type === "tablet") return { src: "/icons/devices/tablet-75.svg", alt: "Tablet" };
+        return { src: "/icons/devices/laptop-75.svg", alt: "Computer" };
+    }
+
+    const deviceIcon = $derived(iconForDevice(device.type));
+    const deviceDetails = $derived(device.browser && device.os ? `${device.browser} on ${device.os}` : device.os || device.type || "Trusted device");
 </script>
 
-<div class="flex flex-col gap-[3px] h-full">
-    <div class="flex flex-col bg-[#171717] rounded-[20px] md:rounded-[24px] p-4 md:p-[20px] gap-2 md:gap-[10px] items-center justify-center">
-        <div class="w-[40px] md:w-[50px] aspect-square">
-            {#if device.type === 'phone'}
-                <img src="/icons/devices/phone-75.svg" alt="phone icon" class="mb-2 md:mb-[10px]" />
-            {:else if device.type === 'computer'}
-                <img src="/icons/devices/laptop-75.svg" alt="computer icon" class="mb-2 md:mb-[10px]" />
-            {:else if device.type === 'tablet'}
-                <img src="/icons/devices/tablet-75.svg" alt="tablet icon" class="mb-2 md:mb-[10px]" />
-            {:else}
-                <img src="/icons/devices/laptop-75.svg" alt="device icon" class="mb-2 md:mb-[10px]" />
-            {/if}
-        </div>
-        <Text type="h" size={20} mobileSize={16} weight="bold" color="#FFFFFF" cclass="text-center">{device.name}</Text>
-        {#if device.browser && device.os}
-            <Text type="p" size={16} mobileSize={13} color="#B9BBBE" cclass="text-center">{device.browser} on {device.os}</Text>
-        {:else if device.os}
-            <Text type="p" size={16} mobileSize={13} color="#B9BBBE" cclass="text-center">{device.os}</Text>
-        {/if}
-        <Text type="p" size={14} mobileSize={11} color="#666666" cclass="text-center">Last seen: {formatLastSeen(device.lastSeenAt)}</Text>
+<div class="grid h-[268px] grid-rows-[1fr_54px] overflow-hidden rounded-[24px] bg-[#171717] shadow-[0_24px_60px_rgba(0,0,0,0.18)] md:h-[290px] md:rounded-[26px]">
+    <div class="flex min-h-0 flex-col items-center justify-center px-5 py-6 text-center md:px-6 md:py-7">
+        <img src={deviceIcon.src} alt={deviceIcon.alt} class="h-11 w-11 shrink-0 md:h-[52px] md:w-[52px]" />
+
+        <h2 class="m-0 mt-5 line-clamp-2 min-h-[44px] max-w-full text-balance text-[20px] font-extrabold leading-[1.1] text-white md:min-h-[52px] md:text-[24px]">
+            {device.name}
+        </h2>
+
+        <p class="m-0 mt-3 max-w-full truncate text-[14px] leading-5 text-[#B9BBBE] md:text-[16px]">
+            {deviceDetails}
+        </p>
+
+        <p class="m-0 mt-2 max-w-full truncate text-[13px] leading-5 text-[#666666] tabular-nums md:text-[14px]">
+            Last seen: {formatLastSeen(device.lastSeenAt)}
+        </p>
     </div>
+
     <button 
-        class="w-full max-h-full rounded-full bg-[#171717] hover:bg-[#202020] transition-colors duration-300 cursor-pointer flex items-center justify-center px-4 md:px-[20px] py-2 md:py-[10px] disabled:opacity-50 disabled:cursor-not-allowed"
+        class="flex min-h-[54px] w-full items-center justify-center bg-[#1d1d1d] px-4 text-[13px] font-black text-[#FF5454] transition-[background-color,opacity,scale] duration-300 active:scale-[0.96] disabled:cursor-not-allowed disabled:opacity-100 md:text-[15px] {device.isCurrent ? 'text-[#32A94C]' : 'hover:bg-[#232323]'}"
         onclick={() => onRevoke?.(device.id)}
         disabled={device.isCurrent || revoking}
+        aria-label={device.isCurrent ? "Current device" : `Remove ${device.name}`}
     >
         {#if device.isCurrent}
-            <Text type="hd" size={16} mobileSize={12} color="#32A94C" cclass="my-2 md:my-[10px]">THIS DEVICE</Text>
+            This device
         {:else if revoking}
-            <div class="w-[20px] h-[20px] border-2 border-[#FFFFFF] border-t-transparent rounded-full animate-spin my-2 md:my-[10px]"></div>
+            <div class="h-5 w-5 rounded-full border-2 border-white border-t-transparent animate-spin"></div>
         {:else}
-            <img src="/icons/devices/x-41.svg" alt="remove device" />
+            <img src="/icons/devices/x-41.svg" alt="" class="h-7 w-7" />
         {/if}
     </button>
 </div>
