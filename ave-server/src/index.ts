@@ -150,12 +150,17 @@ async function finalizeMeasuredResponse(
   return finalResponse;
 }
 
-function isPublicOAuthCorsPath(path: string): boolean {
-  return path === "/api/oauth/token"
-    || path === "/api/oauth/userinfo"
-    || path === "/api/oauth/session/check"
-    || path.startsWith("/api/oauth/app/")
-    || path.startsWith("/api/oauth/resource/");
+function isCredentialedOAuthCorsPath(path: string): boolean {
+  return path.startsWith("/api/oauth/authorize")
+    || path === "/api/oauth/session/bootstrap"
+    || path === "/api/oauth/authorizations"
+    || path.startsWith("/api/oauth/authorization/")
+    || path.startsWith("/api/oauth/authorizations/")
+    || path === "/api/oauth/delegations"
+    || path.startsWith("/api/oauth/delegations/")
+    || path === "/api/oauth/fedcm/accounts"
+    || path === "/api/oauth/fedcm/assertion"
+    || path === "/api/oauth/fedcm/finalize";
 }
 
 function buildApp() {
@@ -181,7 +186,7 @@ function buildApp() {
   const publicOAuthCorsMiddleware = cors({
     origin: "*",
     credentials: false,
-    allowMethods: ["GET", "POST", "OPTIONS"],
+    allowMethods: ["GET", "POST", "DELETE", "OPTIONS"],
     allowHeaders: ["Content-Type", "Authorization", D1_BOOKMARK_HEADER],
     exposeHeaders: [D1_BOOKMARK_HEADER],
   });
@@ -195,16 +200,16 @@ function buildApp() {
       return resolveCorsOrigin(origin, c.req.header("host"));
     },
     credentials: true,
-    allowMethods: ["GET", "POST", "OPTIONS"],
+    allowMethods: ["GET", "POST", "DELETE", "OPTIONS"],
     allowHeaders: ["Content-Type", "Authorization", D1_BOOKMARK_HEADER],
     exposeHeaders: [D1_BOOKMARK_HEADER],
   });
 
   app.use("/api/oauth/*", async (c, next) => {
-    if (isPublicOAuthCorsPath(c.req.path)) {
-      return publicOAuthCorsMiddleware(c, next);
+    if (isCredentialedOAuthCorsPath(c.req.path)) {
+      return oauthCorsMiddleware(c, next);
     }
-    return oauthCorsMiddleware(c, next);
+    return publicOAuthCorsMiddleware(c, next);
   });
 
   app.use("/.well-known/*", cors({
