@@ -73,7 +73,7 @@
 
     <ActionCard 
         action="DOWNLOAD MY DATA" 
-        description="This package includes account, identity, device, security, session, activity, and connected-app metadata stored by Ave. App-level data must be exported from those apps directly."
+        description="Exports your account, identities, devices, sessions, and app metadata."
         buttons={[
             { 
                 Icon: ChevronRight,
@@ -87,7 +87,7 @@
     <ActionCard 
         color="#E14747" 
         action="DELETE MY DATA" 
-        description="Deletes your Ave account records and breaks connected-app access. It cannot remove data already copied by connected apps or cached public image copies."
+        description="Deletes your account and breaks connected-app access."
         buttons={[
             { 
                 Icon: ChevronRight,

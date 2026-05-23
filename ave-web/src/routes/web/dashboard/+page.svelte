@@ -42,7 +42,10 @@
             return;
         }
 
-        if (identities.length > 0) {
+        const requestedPage = initialDashboardPage();
+        if (requestedPage) {
+            selectedPage = requestedPage;
+        } else if (identities.length > 0) {
             selectedPage = identities[0].displayName;
         }
 
@@ -69,6 +72,16 @@
         }
 
         passkeySetupPrompt = prompt;
+    }
+
+    function initialDashboardPage() {
+        const params = new URLSearchParams(window.location.search);
+        const section = params.get("section");
+        if (section === "login-requests" || params.has("requestId")) return "Login Requests";
+        if (section === "activity") return "Activity Log";
+        if (section === "security") return "Security";
+        if (section === "devices") return "Devices";
+        return null;
     }
 
     async function handleLogout() {

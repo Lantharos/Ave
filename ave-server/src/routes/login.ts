@@ -174,7 +174,7 @@ async function notifyAccountLoginEvent(
         title: "New Login",
         body: `${event.deviceName} signed in to your Ave account`,
         event: "login",
-        url: "/dashboard/activity",
+        url: "/dashboard?section=activity",
         details: {
           method: event.method,
           deviceType: event.deviceType,

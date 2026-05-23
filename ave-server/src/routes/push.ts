@@ -36,8 +36,8 @@ app.post("/subscribe", zValidator("json", z.object({
   subscription: z.object({
     endpoint: z.string().url(),
     keys: z.object({
-      p256dh: z.string(),
-      auth: z.string(),
+      p256dh: z.string().min(1),
+      auth: z.string().min(1),
     }),
   }),
 })), async (c) => {
@@ -47,16 +47,22 @@ app.post("/subscribe", zValidator("json", z.object({
   if (!isPushConfigured()) {
     return c.json({ error: "Push notifications not configured" }, 503);
   }
-  
-  // Update device with push subscription
-  if (user.deviceId) {
-    await db
-      .update(devices)
-      .set({ pushSubscription: subscription })
-      .where(eq(devices.id, user.deviceId));
-    
-    console.log(`[Push] Subscription saved for device ${user.deviceId}`);
+
+  if (!user.deviceId) {
+    return c.json({ error: "No trusted device is attached to this session" }, 400);
   }
+  
+  const [updated] = await db
+    .update(devices)
+    .set({ pushSubscription: subscription })
+    .where(eq(devices.id, user.deviceId))
+    .returning({ id: devices.id });
+
+  if (!updated) {
+    return c.json({ error: "Trusted device not found" }, 404);
+  }
+  
+  console.log(`[Push] Subscription saved for device ${user.deviceId}`);
   
   return c.json({ success: true });
 });

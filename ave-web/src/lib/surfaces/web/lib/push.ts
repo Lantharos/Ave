@@ -4,6 +4,22 @@
 
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:3000";
 
+function getStoredSessionToken(): string | null {
+  try {
+    return localStorage.getItem("ave_session_token");
+  } catch {
+    return null;
+  }
+}
+
+function authenticatedHeaders(includeContentType = true): Record<string, string> {
+  const token = getStoredSessionToken();
+  return {
+    ...(includeContentType ? { "Content-Type": "application/json" } : {}),
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  };
+}
+
 /**
  * Check if push notifications are supported in this browser
  */
@@ -101,6 +117,108 @@ function urlBase64ToUint8Array(base64String: string): Uint8Array {
   return outputArray;
 }
 
+type ByteSource = ArrayBufferLike | ArrayBufferView;
+
+function bytesFromBufferSource(source: ByteSource): Uint8Array {
+  if (!ArrayBuffer.isView(source)) return new Uint8Array(source);
+  return new Uint8Array(source.buffer, source.byteOffset, source.byteLength);
+}
+
+function bufferSourcesEqual(left: ByteSource, right: ByteSource): boolean {
+  const leftBytes = bytesFromBufferSource(left);
+  const rightBytes = bytesFromBufferSource(right);
+  if (leftBytes.byteLength !== rightBytes.byteLength) return false;
+
+  for (let index = 0; index < leftBytes.length; index += 1) {
+    if (leftBytes[index] !== rightBytes[index]) return false;
+  }
+
+  return true;
+}
+
+function subscriptionUsesCurrentKey(subscription: PushSubscription, vapidPublicKey: string): boolean {
+  const subscriptionKey = subscription.options.applicationServerKey;
+  if (!subscriptionKey) return true;
+
+  return bufferSourcesEqual(subscriptionKey, urlBase64ToUint8Array(vapidPublicKey));
+}
+
+async function getServiceWorkerRegistration(create: boolean): Promise<ServiceWorkerRegistration | null> {
+  const existing = await navigator.serviceWorker.getRegistration();
+  if (existing) return existing;
+  if (!create) return null;
+
+  const registered = await navigator.serviceWorker.register("/sw.js");
+  console.log("[Push] Service worker registered");
+  return registered;
+}
+
+async function saveSubscriptionToServer(subscription: PushSubscription): Promise<boolean> {
+  const response = await fetch(`${API_BASE}/api/push/subscribe`, {
+    method: "POST",
+    credentials: "include",
+    headers: authenticatedHeaders(),
+    body: JSON.stringify({
+      subscription: subscription.toJSON(),
+    }),
+  });
+
+  if (!response.ok) {
+    console.error("[Push] Failed to save subscription to server");
+    return false;
+  }
+
+  console.log("[Push] Push subscription saved to server");
+  return true;
+}
+
+async function getServerPushStatus(): Promise<{ enabled: boolean; subscribed: boolean }> {
+  try {
+    const response = await fetch(`${API_BASE}/api/push/status`, {
+      credentials: "include",
+      headers: authenticatedHeaders(false),
+    });
+
+    if (!response.ok) {
+      return { enabled: false, subscribed: false };
+    }
+
+    const status = await response.json() as { enabled?: boolean; subscribed?: boolean };
+    return {
+      enabled: !!status.enabled,
+      subscribed: !!status.subscribed,
+    };
+  } catch {
+    return { enabled: false, subscribed: false };
+  }
+}
+
+async function getSyncedPushSubscription(vapidPublicKey: string, create: boolean): Promise<PushSubscription | null> {
+  const registration = await getServiceWorkerRegistration(create);
+  if (!registration) return null;
+  if (create) await navigator.serviceWorker.ready;
+
+  let subscription = await registration.pushManager.getSubscription();
+  const hadSubscription = !!subscription;
+  if (subscription && !subscriptionUsesCurrentKey(subscription, vapidPublicKey)) {
+    await subscription.unsubscribe();
+    subscription = null;
+  }
+
+  if (!subscription && (create || hadSubscription)) {
+    const applicationServerKey = urlBase64ToUint8Array(vapidPublicKey) as unknown as BufferSource;
+    subscription = await registration.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey,
+    });
+    console.log("[Push] Push subscription created");
+  }
+
+  if (!subscription) return null;
+
+  return await saveSubscriptionToServer(subscription) ? subscription : null;
+}
+
 /**
  * Register service worker and subscribe to push notifications
  */
@@ -117,7 +235,6 @@ export async function subscribeToPushNotifications(): Promise<boolean> {
     return false;
   }
   
-  // Get VAPID public key
   const vapidPublicKey = await getVapidPublicKey();
   if (!vapidPublicKey) {
     console.log("[Push] No VAPID key available");
@@ -125,48 +242,7 @@ export async function subscribeToPushNotifications(): Promise<boolean> {
   }
   
   try {
-    // Register service worker
-    const registration = await navigator.serviceWorker.register("/sw.js");
-    console.log("[Push] Service worker registered");
-    
-    // Wait for service worker to be ready
-    await navigator.serviceWorker.ready;
-    
-    // Subscribe to push notifications
-    const applicationServerKey = urlBase64ToUint8Array(vapidPublicKey) as unknown as BufferSource;
-    const subscription = await registration.pushManager.subscribe({
-      userVisibleOnly: true,
-      applicationServerKey,
-    });
-    
-    console.log("[Push] Push subscription created");
-    
-    // Send subscription to server
-    let token: string | null = null;
-    try {
-      token = localStorage.getItem("ave_session_token");
-    } catch {
-      token = null;
-    }
-    const response = await fetch(`${API_BASE}/api/push/subscribe`, {
-      method: "POST",
-      credentials: "include",
-      headers: {
-        "Content-Type": "application/json",
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
-      body: JSON.stringify({
-        subscription: subscription.toJSON(),
-      }),
-    });
-    
-    if (!response.ok) {
-      console.error("[Push] Failed to save subscription to server");
-      return false;
-    }
-    
-    console.log("[Push] Push subscription saved to server");
-    return true;
+    return !!await getSyncedPushSubscription(vapidPublicKey, true);
   } catch (e) {
     console.error("[Push] Failed to subscribe:", e);
     return false;
@@ -191,20 +267,10 @@ export async function unsubscribeFromPushNotifications(): Promise<boolean> {
       console.log("[Push] Unsubscribed from push notifications");
     }
     
-    // Notify server
-    let token: string | null = null;
-    try {
-      token = localStorage.getItem("ave_session_token");
-    } catch {
-      token = null;
-    }
     await fetch(`${API_BASE}/api/push/unsubscribe`, {
       method: "POST",
       credentials: "include",
-      headers: {
-        "Content-Type": "application/json",
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
+      headers: authenticatedHeaders(),
     });
     
     return true;
@@ -242,7 +308,34 @@ export async function getPushStatus(): Promise<{
 }> {
   const supported = getPushSupportDetails().supported;
   const permission = supported ? Notification.permission : "denied";
-  const subscribed = supported ? await isPushSubscribed() : false;
+  if (!supported || permission !== "granted") {
+    return {
+      supported,
+      permission,
+      subscribed: false,
+    };
+  }
+
+  const vapidPublicKey = await getVapidPublicKey();
+  if (!vapidPublicKey) {
+    return {
+      supported,
+      permission,
+      subscribed: false,
+    };
+  }
+
+  let subscribed = false;
+  try {
+    subscribed = !!await getSyncedPushSubscription(vapidPublicKey, false);
+  } catch (error) {
+    console.error("[Push] Failed to sync push status:", error);
+    const [localSubscribed, serverStatus] = await Promise.all([
+      isPushSubscribed(),
+      getServerPushStatus(),
+    ]);
+    subscribed = localSubscribed && serverStatus.enabled && serverStatus.subscribed;
+  }
   
   return {
     supported,

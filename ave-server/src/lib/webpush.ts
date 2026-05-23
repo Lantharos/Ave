@@ -129,14 +129,14 @@ export async function sendLoginRequestNotification(
   return sendPushNotification(subscription, {
     title: "Login Request",
     body: `${data.deviceName} is trying to sign in to your Ave account`,
-    icon: "/icons/ave-icon-192.png",
-    badge: "/icons/ave-badge-72.png",
+    icon: "/icon.png",
+    badge: "/icon.png",
     tag: `login-request-${data.requestId}`,
     requireInteraction: true,
     data: {
       type: "login_request",
       requestId: data.requestId,
-      url: `/dashboard/approve?requestId=${data.requestId}`,
+      url: `/dashboard?section=login-requests&requestId=${data.requestId}`,
     },
     actions: [
       {
@@ -164,13 +164,13 @@ export async function sendAccountEventNotification(
   return sendPushNotification(subscription, {
     title: data.title,
     body: data.body,
-    icon: "/icons/ave-icon-192.png",
-    badge: "/icons/ave-badge-72.png",
+    icon: "/icon.png",
+    badge: "/icon.png",
     tag: `account-event-${data.event}`,
     data: {
       type: "account_event",
       event: data.event,
-      url: data.url || "/dashboard/activity",
+      url: data.url || "/dashboard?section=activity",
       ...(data.details || {}),
     },
   });

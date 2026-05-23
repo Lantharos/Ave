@@ -51,16 +51,16 @@ self.addEventListener("notificationclick", (event) => {
   event.notification.close();
   
   const data = event.notification.data || {};
-  let targetUrl = "/dashboard";
+  let targetUrl = data.url || "/dashboard";
   
   // Handle different notification types
   if (data.type === "login_request") {
-    targetUrl = data.url || `/dashboard/approve?requestId=${data.requestId}`;
+    targetUrl = data.url || `/dashboard?section=login-requests&requestId=${data.requestId}`;
   }
   
   // Handle action buttons
   if (event.action === "approve" || event.action === "deny") {
-    targetUrl = `/dashboard/approve?requestId=${data.requestId}&action=${event.action}`;
+    targetUrl = `/dashboard?section=login-requests&requestId=${data.requestId}&action=${event.action}`;
   }
   
   event.waitUntil(
