@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { Building2, ChevronDown, Fingerprint, KeyRound, LockKeyhole, Network, Plus, ScrollText } from "lucide-svelte";
+  import { Building2, ChevronDown, Fingerprint, KeyRound, LockKeyhole, Network, Plus, ScrollText, Upload } from "lucide-svelte";
   import AuroraBackdrop from "$lib/surfaces/business/components/AuroraBackdrop.svelte";
   import Button from "$lib/surfaces/business/components/Button.svelte";
   import AuditPanel from "$lib/surfaces/business/components/AuditPanel.svelte";
@@ -46,7 +46,10 @@
   let organizationOpen = $state(false);
   let createPanelOpen = $state(false);
   let menuRoot = $state<HTMLElement | null>(null);
+  let logoInput = $state<HTMLInputElement | null>(null);
+  let uploadingLogo = $state(false);
   const activeMembers = $derived(detail?.members.filter((member) => member.status === "active") || []);
+  const canManageOrganization = $derived(Boolean(detail?.organization.scopes.includes("manage_org")));
   const canManageIdentities = $derived(Boolean(detail?.organization.scopes.includes("manage_identities")));
   const canManageKeys = $derived(Boolean(detail?.organization.scopes.includes("manage_keys")));
   const canManageSso = $derived(Boolean(detail?.organization.scopes.includes("manage_sso")));
@@ -136,6 +139,26 @@
   async function reloadDetail() {
     if (!detail) return;
     await loadOrganization(detail.organization.id, { includeAudit: activeSection === "audit" || auditLoadedOrganizationId === detail.organization.id });
+  }
+  async function uploadOrganizationLogo(file: File) {
+    if (!detail || uploadingLogo || !canManageOrganization) return;
+    const organizationId = detail.organization.id;
+    uploadingLogo = true;
+    error = "";
+    try {
+      const result = await api.uploadOrganizationLogo(organizationId, file);
+      organizations = organizations.map((organization) => (organization.id === organizationId ? { ...organization, logoUrl: result.logoUrl } : organization));
+      if (detail?.organization.id === organizationId) {
+        detail = {
+          ...detail,
+          organization: { ...detail.organization, logoUrl: result.logoUrl },
+        };
+      }
+    } catch (err) {
+      error = err instanceof Error ? err.message : "Failed to upload organization logo";
+    } finally {
+      uploadingLogo = false;
+    }
   }
   async function createOrganization() {
     if (!createName.trim() || !ownerIdentityId || busy) return;
@@ -238,26 +261,61 @@
 {#if !authenticated}
   <SignInPanel onclick={signIn} />
 {:else if detail}
-  <main class="min-h-screen bg-[#090909] px-3 py-4 text-white md:px-6 md:py-6">
-    <div class="mx-auto flex w-full max-w-[1440px] flex-col gap-5">
+  <main class="relative min-h-screen overflow-x-hidden bg-[#090909] px-3 py-4 text-white md:px-6 md:py-6">
+    <AuroraBackdrop preset="business-tr" cclass="opacity-70" mobileHeight={320} />
+    <AuroraBackdrop preset="business-bl" cclass="opacity-80" mobileHeight={360} />
+
+    <div class="relative z-10 mx-auto flex w-full max-w-[1440px] flex-col gap-5">
       <header bind:this={menuRoot} class="relative z-30">
-        <button
-          class="flex max-w-full items-center gap-3 rounded-[26px] bg-[#101010] px-3 py-2.5 text-left text-white shadow-[0_18px_50px_rgba(0,0,0,0.26)] transition-[background-color,scale] duration-300 hover:bg-[#151515] active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#B9BBBE]/35 md:max-w-[420px] md:px-4 md:py-3"
-          onclick={() => (organizationOpen = !organizationOpen)}
-        >
-          <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-[16px] bg-[#181818] text-[13px] font-semibold text-[#d4d4d4]">
-            {#if detail.organization.logoUrl || selectedOrganization?.logoUrl}
-              <img src={detail.organization.logoUrl || selectedOrganization?.logoUrl || ""} alt="" class="h-full w-full rounded-[16px] object-cover" />
-            {:else}
-              {initials(organizationName)}
-            {/if}
-          </span>
-          <span class="flex min-w-0 flex-col leading-none">
-            <span class="truncate text-[14px] font-semibold md:text-[15px]">{organizationName}</span>
-            <span class="truncate pt-1 text-[12px] text-[#7d7d7d]">{organizationMeta}</span>
-          </span>
-          <ChevronDown size={16} class="shrink-0 text-[#7d7d7d]" />
-        </button>
+        <input
+          bind:this={logoInput}
+          type="file"
+          accept="image/png,image/jpeg,image/webp,image/gif"
+          class="hidden"
+          onchange={async (event) => {
+            const input = event.currentTarget as HTMLInputElement;
+            const file = input.files?.[0];
+            if (!file) return;
+            await uploadOrganizationLogo(file);
+            input.value = "";
+          }}
+        />
+
+        <div class="flex w-full max-w-[480px] items-center gap-2">
+          <button
+            type="button"
+            aria-haspopup="menu"
+            aria-expanded={organizationOpen}
+            class="flex min-w-0 flex-1 items-center gap-3 rounded-[26px] bg-[#101010]/92 px-3 py-2.5 text-left text-white shadow-[0_18px_50px_rgba(0,0,0,0.26)] backdrop-blur-[18px] transition-[background-color,scale] duration-300 hover:bg-[#151515]/95 active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#B9BBBE]/35 md:px-4 md:py-3"
+            onclick={() => (organizationOpen = !organizationOpen)}
+          >
+            <span class="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-[16px] bg-[#181818] text-[13px] font-semibold text-[#d4d4d4] shadow-[inset_0_1px_0_rgba(255,255,255,0.045)]">
+              {#if detail.organization.logoUrl || selectedOrganization?.logoUrl}
+                <img src={detail.organization.logoUrl || selectedOrganization?.logoUrl || ""} alt="" class="h-full w-full object-cover outline outline-1 outline-white/10" />
+              {:else}
+                {initials(organizationName)}
+              {/if}
+            </span>
+            <span class="flex min-w-0 flex-col leading-none">
+              <span class="truncate text-[14px] font-semibold md:text-[15px]">{organizationName}</span>
+              <span class="truncate pt-1 text-[12px] text-[#7d7d7d]">{organizationMeta}</span>
+            </span>
+            <ChevronDown size={16} class="shrink-0 text-[#7d7d7d]" />
+          </button>
+
+          {#if canManageOrganization}
+            <button
+              type="button"
+              aria-label="Upload organization logo"
+              title={uploadingLogo ? "Uploading logo" : "Upload logo"}
+              class="flex h-[52px] w-[52px] shrink-0 items-center justify-center rounded-[18px] bg-[#101010]/92 text-[#b9bbbe] shadow-[0_18px_50px_rgba(0,0,0,0.22)] backdrop-blur-[18px] transition-[background-color,color,scale] duration-300 hover:bg-[#151515]/95 hover:text-white active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#B9BBBE]/35 disabled:cursor-not-allowed disabled:opacity-45"
+              disabled={uploadingLogo}
+              onclick={() => logoInput?.click()}
+            >
+              <Upload size={17} class={uploadingLogo ? "animate-pulse" : ""} />
+            </button>
+          {/if}
+        </div>
 
         {#if organizationOpen}
           <div class="absolute left-0 top-[calc(100%+12px)] z-40 w-full max-w-[560px] rounded-[28px] bg-[#101010] p-3 shadow-[0_30px_120px_rgba(0,0,0,0.55)] md:p-4">
@@ -355,28 +413,6 @@
       </nav>
 
       <section class="flex flex-col gap-5">
-        <section class="grid gap-4 rounded-[22px] bg-[#101010] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.035),0_18px_50px_rgba(0,0,0,0.2)] md:grid-cols-[minmax(0,1fr)_auto] md:p-5">
-          <div class="min-w-0">
-            <p class="m-0 text-[13px] text-[#858585]">@{detail.organization.actingHandle} acting in</p>
-            <h2 class="m-0 mt-1 truncate text-[28px] font-semibold leading-tight text-white md:text-[38px]">{detail.organization.name}</h2>
-            <p class="m-0 mt-2 max-w-[680px] text-[14px] leading-6 text-[#858585]">Dedicated identities keep organization access, keys, and SSO policy separate.</p>
-          </div>
-          <div class="grid grid-cols-3 gap-2 md:min-w-[360px]">
-            <div class="rounded-[14px] bg-[#151515] px-3 py-3">
-              <span class="block text-[12px] text-[#777]">members</span>
-              <span class="mt-1 block tabular-nums text-[20px] font-semibold text-white">{activeMembers.length}</span>
-            </div>
-            <div class="rounded-[14px] bg-[#151515] px-3 py-3">
-              <span class="block text-[12px] text-[#777]">keys</span>
-              <span class="mt-1 block tabular-nums text-[20px] font-semibold text-white">{detail.keys.length}</span>
-            </div>
-            <div class="rounded-[14px] bg-[#151515] px-3 py-3">
-              <span class="block text-[12px] text-[#777]">domains</span>
-              <span class="mt-1 block tabular-nums text-[20px] font-semibold text-white">{detail.domains.length}</span>
-            </div>
-          </div>
-        </section>
-
         {#if activeSection === "overview"}
           <OrganizationOverview {detail} activeMembers={activeMembers.length} onSelect={(section) => void selectSection(section)} />
         {:else if activeSection === "identities"}
