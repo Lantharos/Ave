@@ -4,10 +4,41 @@ import { z } from "zod";
 import { db, devices, identities, loginRequests, activityLogs } from "../db";
 import { requireAuth, requireWritableForMutation } from "../middleware/auth";
 import { eq, and, desc, gt, inArray, lt } from "drizzle-orm";
-import { notifyLoginRequestStatus } from "../lib/websocket";
 import { recordActivityLog } from "../lib/background-events";
 
-const app = new Hono();
+type Bindings = {
+  API_APP: DurableObjectNamespace;
+  INTERNAL_API_TOKEN?: string;
+};
+
+const app = new Hono<{ Bindings: Bindings }>();
+
+async function notifyLoginRequestStatusInApiApp(
+  c: { env: Bindings },
+  requestId: string,
+  status: "approved" | "denied",
+  data?: {
+    encryptedMasterKey?: string;
+    approverPublicKey?: string;
+  },
+) {
+  const id = c.env.API_APP.idFromName("primary");
+  const stub = c.env.API_APP.get(id);
+  const headers = new Headers({ "Content-Type": "application/json" });
+  if (c.env.INTERNAL_API_TOKEN) {
+    headers.set("x-internal-token", c.env.INTERNAL_API_TOKEN);
+  }
+
+  const response = await stub.fetch("https://internal.aveid.net/__internal/login-request-status", {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ requestId, status, data }),
+  });
+
+  if (!response.ok) {
+    console.warn("Login request status notification failed:", response.status, await response.text());
+  }
+}
 
 // All routes require authentication
 app.use("*", requireAuth);
@@ -144,8 +175,7 @@ app.post("/approve-request", zValidator("json", z.object({
     severity: "info",
   });
   
-  // Notify the requesting device via WebSocket
-  notifyLoginRequestStatus(requestId, "approved", {
+  await notifyLoginRequestStatusInApiApp(c, requestId, "approved", {
     encryptedMasterKey,
     approverPublicKey,
   });
@@ -205,8 +235,7 @@ app.post("/deny-request", zValidator("json", z.object({
     severity: "warning",
   });
   
-  // Notify the requesting device via WebSocket
-  notifyLoginRequestStatus(requestId, "denied");
+  await notifyLoginRequestStatusInApiApp(c, requestId, "denied");
   
   return c.json({ success: true });
 });

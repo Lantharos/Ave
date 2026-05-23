@@ -4,7 +4,8 @@ import { authMiddleware } from "./middleware/auth";
 import { 
   handleWebSocketOpen, 
   handleWebSocketClose, 
-  handleWebSocketMessage 
+  handleWebSocketMessage,
+  notifyLoginRequestStatus,
 } from "./lib/websocket";
 
 // Routes
@@ -423,6 +424,30 @@ export class ApiAppDurableObject {
         return createWebSocketResponse(request, requestDatabase);
       }
 
+      if (url.pathname === "/__internal/login-request-status" && request.method === "POST") {
+        const expectedToken = this.env.INTERNAL_API_TOKEN;
+        const providedToken = request.headers.get("x-internal-token");
+        if (expectedToken && expectedToken !== providedToken) {
+          return new Response("Forbidden", { status: 403 });
+        }
+
+        const payload = await request.json() as {
+          requestId?: string;
+          status?: "approved" | "denied";
+          data?: {
+            encryptedMasterKey?: string;
+            approverPublicKey?: string;
+          };
+        };
+
+        if (!payload.requestId || (payload.status !== "approved" && payload.status !== "denied")) {
+          return Response.json({ error: "Invalid login request status payload" }, { status: 400 });
+        }
+
+        notifyLoginRequestStatus(payload.requestId, payload.status, payload.data);
+        return Response.json({ success: true });
+      }
+
       if (url.pathname === "/__internal/cleanup" && request.method === "POST") {
         const expectedToken = this.env.INTERNAL_API_TOKEN;
         const providedToken = request.headers.get("x-internal-token");
@@ -459,9 +484,7 @@ function needsApiDurableObject(request: Request): boolean {
     return true;
   }
 
-  return url.pathname === "/api/login/request-approval"
-    || url.pathname === "/api/devices/approve-request"
-    || url.pathname === "/api/devices/deny-request";
+  return url.pathname === "/api/login/request-approval";
 }
 
 export default {
