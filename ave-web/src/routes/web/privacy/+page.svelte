@@ -64,7 +64,7 @@
             Developer app records, workspace records, OAuth authorizations, refresh-token hashes, connector grants, and delegation audit logs are kept while they are needed to operate the service, until the relevant account, workspace, app, authorization, or grant is deleted or revoked, unless we need to keep limited records for security or legal reasons.
         </LegalSec>
         <LegalSec title="Service Providers">
-            Ave uses infrastructure and service providers to operate the service. This includes Cloudflare for hosting, Workers, D1, Durable Objects, R2 object storage, caching, and network security, and Resend for email verification messages. Browser push notifications also pass through the push service used by your browser or operating system.
+            Ave uses infrastructure and service providers to operate the service. This includes Cloudflare for hosting, Workers, D1, Durable Objects, R2 object storage, email verification messages, caching, and network security. Browser push notifications also pass through the push service used by your browser or operating system.
             <br><br>
             These providers process data for Ave so the service can run. We do not share Ave data with data brokers or advertising networks.
         </LegalSec>

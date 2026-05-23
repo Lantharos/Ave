@@ -26,6 +26,7 @@ import encryptionRoutes from "./routes/encryption";
 
 import { getCookieValue, SESSION_COOKIE_NAME } from "./lib/session-cookie";
 import { initDb, runWithDb } from "./db";
+import { initMail } from "./lib/mail";
 import { cleanupExpiredChallenges } from "./lib/challenge-store";
 import { cleanupExpiredOAuthStorage } from "./lib/oauth-store";
 import { processBackgroundEventBatch, type BackgroundEvent } from "./lib/background-events";
@@ -38,6 +39,7 @@ type Bindings = {
   BACKGROUND_EVENTS?: Queue<BackgroundEvent>;
   API_ANALYTICS?: AnalyticsEngineDataset;
   DB: D1Database;
+  EMAIL: SendEmail;
   UPLOADS: R2Bucket;
   INTERNAL_API_TOKEN?: string;
 };
@@ -410,6 +412,7 @@ export class ApiAppDurableObject {
 
   async fetch(request: Request): Promise<Response> {
     initDb(this.env.DB);
+    initMail(this.env.EMAIL);
     const startedAt = performance.now();
     const requestDatabase = createRequestDatabase(request, this.env.DB);
 
@@ -464,6 +467,7 @@ function needsApiDurableObject(request: Request): boolean {
 export default {
   async fetch(request: Request, env: Bindings, ctx: ExecutionContext): Promise<Response> {
     initDb(env.DB);
+    initMail(env.EMAIL);
     const startedAt = performance.now();
 
     const url = new URL(request.url);
@@ -487,6 +491,7 @@ export default {
 
   async queue(batch: MessageBatch<BackgroundEvent>, env: Bindings): Promise<void> {
     initDb(env.DB);
+    initMail(env.EMAIL);
     await runWithDb(env.DB.withSession("first-primary"), () => processBackgroundEventBatch(batch));
   },
 
@@ -494,6 +499,7 @@ export default {
     ctx.waitUntil(
       runWithDb(env.DB.withSession("first-primary"), async () => {
         initDb(env.DB);
+        initMail(env.EMAIL);
         const [deviceCleanup, activityCleanup, challengeCleanup, oauthStorageCleanup] = await Promise.all([
           cleanupStaleDevices(),
           cleanupExpiredActivityLogs(),

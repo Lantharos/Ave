@@ -46,6 +46,10 @@ migrations_dir = "drizzle"
 binding = "UPLOADS"
 bucket_name = "ave-avatars"
 
+[[send_email]]
+name = "EMAIL"
+allowed_sender_addresses = ["no-reply@aveid.net"]
+
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["ApiAppDurableObject"]
@@ -80,13 +84,12 @@ RP_NAME = "Ave"
 RP_ORIGIN = "https://aveid.net"
 VAPID_PUBLIC_KEY = "BHG45kIltRlb8J3fIIPnTFyAGkMIEvb94XT1kHt5pmvyEJxTen32RQx1Q3XHXGeu34S1NOa-5nk8A3oTx-ldJ3M"
 VAPID_SUBJECT = "mailto:hello@lantharos.com"
-RESEND_FROM_EMAIL="no-reply@aveid.net"
-RESEND_FROM_NAME="Ave"
+EMAIL_FROM_ADDRESS = "no-reply@aveid.net"
+EMAIL_FROM_NAME = "Ave"
 DEMO_HANDLE="demo"
 DEMO_PASSWORD="CTP8stZyDF-ou@*gpcpV"
 
 # Keep these as Cloudflare secrets (do NOT commit to wrangler.toml):
 # OIDC_PRIVATE_KEY_PEM
-# RESEND_API_KEY
 # SESSION_SECRET
 # VAPID_PRIVATE_KEY

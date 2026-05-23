@@ -7,7 +7,7 @@ import { sendMail } from "./mail";
 const EMAIL_CODE_LENGTH = 6;
 const EMAIL_CODE_TTL_MINUTES = 15;
 const EMAIL_CODE_TTL_MS = EMAIL_CODE_TTL_MINUTES * 60 * 1000;
-const EMAIL_RESEND_COOLDOWN_MS = 60 * 1000;
+const EMAIL_VERIFICATION_RESEND_COOLDOWN_MS = 60 * 1000;
 
 export function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
@@ -28,7 +28,7 @@ export function canResendEmailVerification(identity: Pick<Identity, "emailVerifi
     return true;
   }
 
-  return Date.now() - identity.emailVerificationSentAt.getTime() >= EMAIL_RESEND_COOLDOWN_MS;
+  return Date.now() - identity.emailVerificationSentAt.getTime() >= EMAIL_VERIFICATION_RESEND_COOLDOWN_MS;
 }
 
 export function getEmailVerificationCooldownSeconds(identity: Pick<Identity, "emailVerificationSentAt">): number {
@@ -36,7 +36,7 @@ export function getEmailVerificationCooldownSeconds(identity: Pick<Identity, "em
     return 0;
   }
 
-  const remaining = EMAIL_RESEND_COOLDOWN_MS - (Date.now() - identity.emailVerificationSentAt.getTime());
+  const remaining = EMAIL_VERIFICATION_RESEND_COOLDOWN_MS - (Date.now() - identity.emailVerificationSentAt.getTime());
   return remaining > 0 ? Math.ceil(remaining / 1000) : 0;
 }
 

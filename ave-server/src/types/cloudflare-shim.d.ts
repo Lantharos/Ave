@@ -79,6 +79,37 @@ interface AnalyticsEngineDataset {
   }): void;
 }
 
+type EmailAddress = string | { email: string; name: string };
+
+interface EmailAttachment {
+  content: string | ArrayBuffer;
+  filename: string;
+  type: string;
+  disposition: "attachment" | "inline";
+  contentId?: string;
+}
+
+interface EmailMessageBuilder {
+  to: string | string[];
+  from: EmailAddress;
+  subject: string;
+  html?: string;
+  text?: string;
+  cc?: string | string[];
+  bcc?: string | string[];
+  replyTo?: EmailAddress;
+  attachments?: EmailAttachment[];
+  headers?: Record<string, string>;
+}
+
+interface EmailSendResult {
+  messageId: string;
+}
+
+interface SendEmail {
+  send(message: EmailMessageBuilder): Promise<EmailSendResult>;
+}
+
 interface R2Bucket {
   put(
     key: string,
