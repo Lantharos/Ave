@@ -17,7 +17,7 @@ export const reroute: Reroute = ({ url }) => {
 
   if (host === "devs.aveid.net") return surfacePath("devs", url.pathname);
   if (host === "business.aveid.net") return surfacePath("business", url.pathname);
-  if (host === "aveid.net" || host === "www.aveid.net") return surfacePath("web", url.pathname);
+  if (host === "aveid.net") return surfacePath("web", url.pathname);
 
   if (host === "localhost" || host === "127.0.0.1" || host === "[::1]") {
     return hasSurfacePrefix(url.pathname) ? url.pathname : surfacePath("web", url.pathname);

@@ -16,10 +16,6 @@
 			"custom_domain": true
 		},
 		{
-			"pattern": "www.aveid.net",
-			"custom_domain": true
-		},
-		{
 			"pattern": "devs.aveid.net",
 			"custom_domain": true
 		},

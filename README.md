@@ -10,7 +10,7 @@ Ave is split into a few separate packages instead of one root workspace:
 
 | Path | Purpose | Stack |
 | --- | --- | --- |
-| `ave-frontend` | Unified frontend Worker for `aveid.net`, `www.aveid.net`, `devs.aveid.net`, and `business.aveid.net` | SvelteKit, Cloudflare Workers, Tailwind CSS v4 |
+| `ave-frontend` | Unified frontend Worker for `aveid.net`, `devs.aveid.net`, and `business.aveid.net` | SvelteKit, Cloudflare Workers, Tailwind CSS v4 |
 | `ave-server` | OAuth/OIDC API, auth flows, app management, signing, encryption, uploads | Hono, Cloudflare Workers, Durable Objects, D1, Drizzle |
 | `ave-docs` | Product and SDK documentation | Mintlify content |
 | `sdks/ave-sdk` | Typed JavaScript/TypeScript SDK for OAuth, OIDC, session, Convex, Expo, Svelte, and Next.js helpers | TypeScript |
@@ -32,7 +32,7 @@ Ave is split into a few separate packages instead of one root workspace:
 
 The repository is organized around the same split used in production:
 
-- `ave-frontend` serves the end-user product UI on `aveid.net` and `www.aveid.net`
+- `ave-frontend` serves the end-user product UI on `aveid.net`
 - `ave-frontend` serves the developer portal on `devs.aveid.net`
 - `ave-frontend` serves the business organization console on `business.aveid.net`, including standard org encryption, customer KMS references, and opt-in E2EE org-key grants
 - `api.aveid.net` serves the OAuth/OIDC and product API

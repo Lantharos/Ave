@@ -6,7 +6,7 @@ Unified SvelteKit frontend for the Ave product, developer, and business surfaces
 
 One Cloudflare Worker serves the frontend domains:
 
-- `aveid.net` and `www.aveid.net` render the main Ave product UI
+- `aveid.net` renders the main Ave product UI
 - `devs.aveid.net` renders the developer portal
 - `business.aveid.net` renders the business organization console
 
