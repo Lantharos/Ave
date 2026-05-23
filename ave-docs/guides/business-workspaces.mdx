@@ -152,11 +152,13 @@ const workspace = getAveWorkspaceContextFromUserInfo(userInfo);
 
 On every workspace request:
 
-1. Verify the `id_token` or access token JWT.
+1. Verify the `id_token` for your `clientId`, or verify your own app session created from it.
 2. Require `auth_context: "organization"`.
 3. Require `org_id` to match the workspace being accessed.
 4. Check Ave org scopes for the action.
 5. Apply any app-local restrictions after the Ave checks pass.
+
+Do not accept `access_token_jwt` as a generic app route token. Its audience is Ave's resource audience, so it is for Ave APIs and Connector token exchange.
 
 ```ts
 import { hasAveWorkspaceScope, requireAveWorkspaceContext } from "@ave-id/sdk/server";

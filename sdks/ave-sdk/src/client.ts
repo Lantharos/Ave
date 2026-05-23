@@ -583,11 +583,12 @@ export interface QuickIdentity {
   email?: string;
   avatarUrl?: string;
   /**
-   * JWT access token (`access_token_jwt`).
-   * Suitable for prototypes and low-risk internal tooling — pass it as a Bearer
-   * token to your own API. For production or security-sensitive deployments,
-   * always verify server-side: check `iss`, `aud`, `exp`, and the JWT signature
-   * against the JWKS endpoint (`https://aveid.net/.well-known/jwks.json`).
+   * JWT access token (`access_token_jwt`) for Ave APIs.
+   * Its audience is Ave's resource audience, not your app. Use `idToken` or
+   * your own session for app API authentication.
+   * Always verify server-side: check `iss`, `aud`, `exp`, and the JWT signature
+   * against the JWKS endpoint (`https://aveid.net/.well-known/jwks.json`)
+   * before trusting claims.
    * Upgrade to the standard OIDC flow for confidential or high-security use cases.
    */
   token: string;

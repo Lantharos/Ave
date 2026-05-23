@@ -177,12 +177,12 @@ startAveAuth({
     }
     ```
 
-    Ave returns two access tokens with different purposes:
+    Ave returns tokens with different purposes:
 
     | Token | Format | `aud` claim | Use for |
     |---|---|---|---|
     | `access_token` | Opaque string | — | Calling Ave's `/api/oauth/userinfo` |
-    | `access_token_jwt` | Signed JWT | `https://aveid.net` | Your own API, Connector delegation |
+    | `access_token_jwt` | Signed JWT | `https://aveid.net` | Ave APIs that accept JWTs, Connector delegation |
     | `id_token` | Signed OIDC JWT | **Your client ID** | User session, Convex auth |
     | `refresh_token` | Opaque string | — | Getting new tokens without re-login |
 

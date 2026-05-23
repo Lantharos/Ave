@@ -3,7 +3,7 @@ title: "Upgrading from Quick Ave to standard OIDC"
 description: "Swap Quick Ave for a registered app and unlock refresh tokens, app branding, Connector delegation, E2EE, and confidential clients — with minimal code changes."
 ---
 
-Quick Ave and the standard OIDC flow use the **exact same token format, JWKS endpoint, and OIDC discovery URL**. Upgrading is mostly a matter of swapping a few function calls and registering an app in the developer portal. Your backend doesn't need to change.
+Quick Ave and the standard OIDC flow use the **same token families, JWKS endpoint, and OIDC discovery URL**. Upgrading is mostly a matter of swapping a few function calls and registering an app in the developer portal.
 
 ## What you gain
 
@@ -20,11 +20,11 @@ Quick Ave and the standard OIDC flow use the **exact same token format, JWKS end
 
 ## What stays the same
 
-- Token format — `id_token`, `access_token_jwt`, `access_token` have the same structure
+- Token families — `id_token`, `access_token_jwt`, and `access_token` keep the same roles
 - OIDC discovery: `https://aveid.net/.well-known/openid-configuration`
 - JWKS endpoint: `https://aveid.net/.well-known/jwks.json`
-- Claims (`sub`, `iss`, `aud`, `name`, `email`, etc.) — same in both flows
-- All backend JWT validation code — no changes needed
+- Claims (`sub`, `iss`, `aud`, `name`, `email`, etc.) — same meaning in both flows
+- Backend JWT validation shape — update the expected `id_token` audience from `origin:https://yourapp.com` to your registered `clientId`
 - Convex `domain` config — stays `https://aveid.net`
 
 ## Upgrade steps
@@ -153,7 +153,7 @@ Everything else — the `fetchAccessToken` implementation, Convex function auth,
 | `getQuickIdentity()` | Your own session store | Use the `user` field from `TokenResponse` |
 | `clearQuickIdentity()` | Clear your session + optionally redirect | No SDK call needed |
 | `startQuickSessionMonitor()` | Periodic refresh token check | Use `refreshToken()` on a timer |
-| `user.token` | `tokens.access_token_jwt` | Same JWT format, same claims |
+| `user.token` | `tokens.access_token_jwt` | Ave API access JWT; not your app login token |
 | `user.idToken` | `tokens.id_token` | Same OIDC token, `aud` changes to your clientId |
 
 ## If you still get logged out with `offline_access`

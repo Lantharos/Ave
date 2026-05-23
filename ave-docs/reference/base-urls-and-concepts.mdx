@@ -46,8 +46,8 @@ A successful token exchange returns up to four tokens, each with a different pur
     access_token: "ave_at_..."
     ```
   </Accordion>
-  <Accordion title="access_token_jwt — signed JWT for your backend">
-    A signed JWT with `aud: https://aveid.net`. Use this when calling Ave API endpoints that accept JWTs, or when your own backend wants to verify the token locally.
+  <Accordion title="access_token_jwt — signed JWT for Ave APIs">
+    A signed JWT with `aud: https://aveid.net`. Use this when calling Ave API endpoints that accept JWTs, or as the subject token for Connector token exchange. Do not use it as the login token for your app API; use `id_token` or your own app session for that.
 
     ```
     access_token_jwt: "eyJ..."

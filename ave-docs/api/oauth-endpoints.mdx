@@ -117,7 +117,7 @@ Returns tokens and user profile payload.
 	Opaque bearer token accepted by Ave APIs.
 </ResponseField>
 <ResponseField name="access_token_jwt" type="string">
-	JWT representation containing scope and audience claims.
+	Signed JWT for Ave API authorization. Its audience is Ave's resource audience.
 </ResponseField>
 <ResponseField name="id_token" type="string">
 	Returned when `openid` scope is granted.

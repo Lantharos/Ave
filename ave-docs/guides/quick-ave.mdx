@@ -129,7 +129,7 @@ if (user) {
   console.log(user.displayName); // display name
   console.log(user.email);       // email (if granted)
   console.log(user.avatarUrl);   // avatar URL (if set)
-  console.log(user.token);       // JWT access token — use as Bearer token for your own API (contains quick: true)
+  console.log(user.token);       // JWT access token for Ave APIs (contains quick: true)
   console.log(user.idToken);     // OIDC id_token — use with Convex and other OIDC-aware services
 }
 ```
@@ -138,33 +138,24 @@ if (user) {
 
 ## Calling your own API
 
-The `token` field on `QuickIdentity` is a signed JWT (`access_token_jwt`) with audience `https://aveid.net`. Pass it as a Bearer token to your backend and verify it there:
+Use `idToken` when your own API needs to know who signed in. It is the OIDC identity token and its audience is your Quick Ave client ID (`origin:https://yourapp.com`).
 
 ```ts
 const user = getQuickIdentity();
 
 const res = await fetch("/api/me", {
-  headers: { Authorization: `Bearer ${user!.token}` },
+  headers: { Authorization: `Bearer ${user!.idToken}` },
 });
 ```
 
 On your server, verify the JWT:
 - `iss`: `https://aveid.net`
-- `aud`: `https://aveid.net`
+- `aud`: `origin:https://yourapp.com`
 - `sub`: the user's Ave identity UUID
-- `quick`: `true` — always present in Quick Ave tokens, absent in Standard tokens
 - JWKS endpoint: `https://aveid.net/.well-known/jwks.json`
 
 <Note>
-  The `quick: true` claim lets your API middleware distinguish Quick tokens from Standard tokens. If you have endpoints that require a fully registered app (e.g. app-specific data, Connector delegation, or higher-assurance flows), reject requests where `quick === true`:
-
-  ```ts
-  if (payload.quick) {
-    return res.status(403).json({ error: "Standard Ave token required" });
-  }
-  ```
-
-  For prototype endpoints that are happy to accept Quick tokens, no extra check is needed.
+  `user.token` is the Ave API access JWT (`access_token_jwt`) with `aud: "https://aveid.net"`. Do not accept it as a generic login token for your API. Use `user.idToken`, or create your own app session after verifying it.
 </Note>
 
 ---
