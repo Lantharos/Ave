@@ -168,6 +168,12 @@ function isCredentialedOAuthCorsPath(path: string): boolean {
     || path === "/api/oauth/fedcm/finalize";
 }
 
+function isPublicApiCorsPath(path: string): boolean {
+  return path.startsWith("/api/signing/public-key/")
+    || path.startsWith("/api/encryption/public-key/")
+    || path === "/api/signing/verify";
+}
+
 function buildApp() {
   const app = new Hono<{ Bindings: Bindings }>();
 
@@ -217,6 +223,14 @@ function buildApp() {
     return publicOAuthCorsMiddleware(c, next);
   });
 
+  const publicApiCorsMiddleware = cors({
+    origin: "*",
+    credentials: false,
+    allowMethods: ["GET", "POST", "OPTIONS"],
+    allowHeaders: ["Content-Type", D1_BOOKMARK_HEADER],
+    exposeHeaders: [D1_BOOKMARK_HEADER],
+  });
+
   app.use("/.well-known/*", cors({
     origin: "*",
     credentials: false,
@@ -228,6 +242,10 @@ function buildApp() {
   app.use("*", async (c, next) => {
     if (c.req.path.startsWith("/api/oauth/") || c.req.path.startsWith("/.well-known/")) {
       return next();
+    }
+
+    if (isPublicApiCorsPath(c.req.path)) {
+      return publicApiCorsMiddleware(c, next);
     }
 
     const corsMiddleware = cors({
