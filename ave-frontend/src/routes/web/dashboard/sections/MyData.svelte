@@ -1,0 +1,142 @@
+<script lang="ts">
+    import Text from "$lib/surfaces/web/components/Text.svelte";
+    import ActionCard from "$lib/surfaces/web/components/ActionCard.svelte";
+    import { api } from "$lib/surfaces/web/lib/api";
+    import { goto } from "$app/navigation";
+    import { resolve } from "$app/paths";
+    import { auth } from "$lib/surfaces/web/stores/auth";
+
+    let exporting = $state(false);
+    let deleting = $state(false);
+    let error = $state<string | null>(null);
+    let showDeleteConfirm = $state(false);
+    let deleteConfirmText = $state("");
+
+    async function handleExport() {
+        try {
+            exporting = true;
+            error = null;
+            
+            const blob = await api.mydata.export();
+            
+            // Create download link
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = `ave-data-export-${new Date().toISOString().split("T")[0]}.json`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        } catch (err) {
+            error = err instanceof Error ? err.message : "Failed to export data";
+        } finally {
+            exporting = false;
+        }
+    }
+
+    async function handleDelete() {
+        if (deleteConfirmText !== "DELETE MY ACCOUNT") {
+            error = "Please type 'DELETE MY ACCOUNT' to confirm";
+            return;
+        }
+
+        try {
+            deleting = true;
+            error = null;
+            
+            await api.mydata.delete();
+            
+            // Clear local auth state
+            auth.logout();
+            
+            // Redirect to home
+            goto(resolve("/" as any));
+        } catch (err) {
+            error = err instanceof Error ? err.message : "Failed to delete account";
+            deleting = false;
+        }
+    }
+</script>
+
+<div class="flex flex-col gap-4 md:gap-[40px] w-full z-10 px-3 md:px-[60px] py-4 md:py-[40px] bg-[#111111]/60 rounded-[24px] md:rounded-[64px] backdrop-blur-[20px]">
+    <div class="flex flex-col gap-1 md:gap-[10px]">
+        <Text type="h" size={48} mobileSize={28} weight="bold">My Data</Text>
+    </div>
+
+    {#if error}
+        <div class="bg-[#E14747]/20 border border-[#E14747] rounded-[16px] px-4 md:px-[20px] py-3 md:py-[15px]">
+            <Text type="p" size={16} color="#E14747">{error}</Text>
+        </div>
+    {/if}
+
+    <ActionCard 
+        action="DOWNLOAD MY DATA" 
+        description="This package includes account, identity, device, security, session, activity, and connected-app metadata stored by Ave. App-level data must be exported from those apps directly."
+        buttons={[
+            { 
+                icon: "/icons/chevron-right-68.svg", 
+                color: "#FFFFFF", 
+                onClick: handleExport,
+                loading: exporting 
+            },
+        ]}
+    />
+
+    <ActionCard 
+        color="#E14747" 
+        action="DELETE MY DATA" 
+        description="Deletes your Ave account records and breaks connected-app access. It cannot remove data already copied by connected apps or cached public image copies."
+        buttons={[
+            { 
+                icon: "/icons/chevron-right-68.svg", 
+                color: "#E14747", 
+                onClick: () => { showDeleteConfirm = true; } 
+            },
+        ]}
+    />
+
+    <Text type="p" size={16} color="#878787" cclass="self-center">Ave encrypts key material we do not need to read. Profile details and security metadata are stored so the service can work.</Text>
+</div>
+
+{#if showDeleteConfirm}
+    <div class="fixed inset-0 bg-black/80 flex items-center justify-center z-50 backdrop-blur-sm p-4">
+        <div class="bg-[#171717] rounded-[24px] md:rounded-[36px] p-6 md:p-[40px] max-w-[500px] w-full">
+            <Text type="h" size={24} weight="bold" color="#E14747">Delete Account</Text>
+            <p class="text-[#878787] text-sm md:text-[16px] mt-2 md:mt-[10px]">
+                This deletes your Ave account records, active sessions, identities, passkeys, recovery-code records, and Ave authorization records. It cannot remove data already copied by connected apps, and public image caches may expire later.
+            </p>
+            <p class="text-[#FFFFFF] text-sm md:text-[16px] mt-4 md:mt-[20px]">
+                Type <span class="font-bold text-[#E14747]">DELETE MY ACCOUNT</span> to confirm:
+            </p>
+            
+            <input 
+                type="text" 
+                class="w-full mt-2 md:mt-[10px] px-4 md:px-[20px] py-3 md:py-[15px] bg-[#111111] rounded-[16px] text-[#FFFFFF] text-sm md:text-[16px] focus:outline-none focus:ring-2 focus:ring-[#E14747]"
+                placeholder="DELETE MY ACCOUNT"
+                bind:value={deleteConfirmText}
+            />
+
+            <div class="flex flex-row gap-2 md:gap-[10px] mt-6 md:mt-[30px]">
+                <button 
+                    class="flex-1 py-3 md:py-[15px] bg-[#222222] text-[#FFFFFF] font-semibold rounded-[16px] hover:bg-[#333333] transition-colors"
+                    onclick={() => { showDeleteConfirm = false; deleteConfirmText = ""; error = null; }}
+                    disabled={deleting}
+                >
+                    Cancel
+                </button>
+                <button 
+                    class="flex-1 py-3 md:py-[15px] bg-[#E14747] text-[#FFFFFF] font-semibold rounded-[16px] hover:bg-[#C33C3C] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    onclick={handleDelete}
+                    disabled={deleting || deleteConfirmText !== "DELETE MY ACCOUNT"}
+                >
+                    {#if deleting}
+                        <div class="w-[20px] h-[20px] border-2 border-[#FFFFFF] border-t-transparent rounded-full animate-spin mx-auto"></div>
+                    {:else}
+                        Delete Permanently
+                    {/if}
+                </button>
+            </div>
+        </div>
+    </div>
+{/if}

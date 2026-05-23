@@ -10,10 +10,8 @@ Ave is split into a few separate packages instead of one root workspace:
 
 | Path | Purpose | Stack |
 | --- | --- | --- |
-| `ave-web` | Main Ave product UI at `aveid.net` | Svelte 5, Vite, Tailwind CSS v4 |
+| `ave-frontend` | Unified frontend Worker for `aveid.net`, `www.aveid.net`, `devs.aveid.net`, and `business.aveid.net` | SvelteKit, Cloudflare Workers, Tailwind CSS v4 |
 | `ave-server` | OAuth/OIDC API, auth flows, app management, signing, encryption, uploads | Hono, Cloudflare Workers, Durable Objects, D1, Drizzle |
-| `ave-devs` | Developer portal for app registration, secrets, resources, analytics, and orgs | Svelte 5, Vite, Tailwind CSS v4 |
-| `ave-business` | Business organization console at `business.aveid.net` | Svelte 5, Vite, Tailwind CSS v4 |
 | `ave-docs` | Product and SDK documentation | Mintlify content |
 | `sdks/ave-sdk` | Typed JavaScript/TypeScript SDK for OAuth, OIDC, session, Convex, Expo, Svelte, and Next.js helpers | TypeScript |
 | `sdks/ave-embed` | Lightweight browser embed for iframe, sheet, popup, connector, and signing flows | Plain JS |
@@ -34,10 +32,10 @@ Ave is split into a few separate packages instead of one root workspace:
 
 The repository is organized around the same split used in production:
 
-- `aveid.net` serves the end-user product UI
+- `ave-frontend` serves the end-user product UI on `aveid.net` and `www.aveid.net`
+- `ave-frontend` serves the developer portal on `devs.aveid.net`
+- `ave-frontend` serves the business organization console on `business.aveid.net`, including standard org encryption, customer KMS references, and opt-in E2EE org-key grants
 - `api.aveid.net` serves the OAuth/OIDC and product API
-- `devs.aveid.net` serves the developer portal
-- `business.aveid.net` serves the business organization console, including standard org encryption, customer KMS references, and opt-in E2EE org-key grants
 - `docs.aveid.net` serves the documentation
 
 ## Local development
@@ -51,7 +49,7 @@ There is currently no root `package.json` workspace. Install and run each packag
 
 ### 1. Start the API
 
-The API is the center of the stack. `ave-web`, `ave-devs`, and `ave-business` all talk to it.
+The API is the center of the stack. `ave-frontend` talks to it for the product, developer, and business surfaces.
 
 ```bash
 cd ave-server
@@ -97,10 +95,10 @@ Workers Analytics Engine datasets are created on first write after the binding i
 
 The API defaults to `http://localhost:3000` in local development.
 
-### 2. Start the main Ave web app
+### 2. Start the unified frontend
 
 ```bash
-cd ave-web
+cd ave-frontend
 bun install
 ```
 
@@ -109,6 +107,7 @@ Set local frontend env values if you want the app to talk to your local API inst
 ```env
 VITE_API_URL="http://localhost:3000"
 VITE_WS_URL="ws://localhost:3000/ws"
+VITE_AVE_ORIGIN="http://localhost:5173"
 ```
 
 Run the app:
@@ -117,63 +116,21 @@ Run the app:
 bun run dev
 ```
 
-Useful web commands:
+The local frontend serves all surfaces from one SvelteKit app:
+
+- `http://localhost:5173` for the main Ave UI
+- `http://localhost:5173/devs` for the developer portal surface
+- `http://localhost:5173/business` for the business organization console
+
+Useful frontend commands:
 
 ```bash
 bun run check
 bun run build
+bun run preview
 ```
 
-### 3. Start the developer portal
-
-```bash
-cd ave-devs
-bun install
-```
-
-The portal supports a local API override through `VITE_API_URL`. It also reads `VITE_DEV_PORTAL_CLIENT_ID` for its own Ave app configuration.
-
-Run it with:
-
-```bash
-bun run dev
-```
-
-Useful portal commands:
-
-```bash
-bun run check
-bun run build
-```
-
-### 4. Start the business organization console
-
-```bash
-cd ave-business
-bun install
-```
-
-The console calls `http://localhost:3000` on localhost and `https://api.aveid.net` in production. Set `VITE_API_URL` when the Ave API is running somewhere else. Set `VITE_AVE_ORIGIN` only when sign-in should go to a non-default Ave web origin.
-
-```env
-VITE_API_URL="https://api.aveid.net"
-VITE_AVE_ORIGIN="https://aveid.net"
-```
-
-Run it with:
-
-```bash
-bun run dev
-```
-
-Useful business console commands:
-
-```bash
-bun run check
-bun run build
-```
-
-### 5. Work on the SDKs
+### 3. Work on the SDKs
 
 `sdks/ave-sdk` ships the typed integration surface used throughout the docs and examples:
 
@@ -233,9 +190,10 @@ If you are new to the repo, these files are the quickest way to orient yourself:
 - `ave-server/src/routes/apps.ts` for developer portal app and resource management
 - `ave-server/src/routes/organizations.ts` for multi-workspace developer portal support
 - `ave-server/src/routes/business.ts` for business organization identity containers, roles, org keys, and SSO setup
-- `ave-web/src/App.svelte` for the main product routing surface
-- `ave-devs/src/App.svelte` for the developer portal shell and workspace/app flows
-- `ave-business/src/App.svelte` for the business organization console
+- `ave-frontend/src/hooks.ts` for host-based frontend routing across Ave domains
+- `ave-frontend/src/routes/web` for the main product UI
+- `ave-frontend/src/routes/devs` for the developer portal
+- `ave-frontend/src/routes/business` for the business organization console
 - `ave-docs/index.mdx` and `ave-docs/quickstart.mdx` for the public product story and integration path
 
 ## Database and storage notes

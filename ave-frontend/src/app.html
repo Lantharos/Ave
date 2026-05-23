@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en" style="background:#090909;">
+	<head>
+		<meta charset="utf-8" />
+		<link rel="icon" type="image/png" href="/icon.png" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<meta name="theme-color" content="#090909" />
+		<meta name="color-scheme" content="dark" />
+		<meta name="referrer" content="no-referrer" />
+		<meta name="description" content="Ave identity, developer, and business consoles." />
+		<link rel="preconnect" href="https://api.aveid.net" crossorigin />
+		<link rel="dns-prefetch" href="https://api.aveid.net" />
+		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+		<title>Ave</title>
+		%sveltekit.head%
+	</head>
+	<body data-sveltekit-preload-data="hover" style="margin:0;background:#090909;color:#ffffff;overscroll-behavior:none;">
+		<div id="boot-bg" aria-hidden="true"></div>
+		<div id="app">%sveltekit.body%</div>
+		<script>
+			function setVh() {
+				const zoom = parseFloat(getComputedStyle(document.documentElement).zoom) || 1;
+				const vh = (window.innerHeight / zoom) * 0.01;
+				document.documentElement.style.setProperty("--vh", `${vh}px`);
+			}
+
+			if (document.readyState === "loading") {
+				document.addEventListener("DOMContentLoaded", setVh);
+			} else {
+				setVh();
+			}
+
+			window.addEventListener("load", setVh);
+			window.addEventListener("resize", setVh);
+		</script>
+	</body>
+</html>

@@ -1,0 +1,33 @@
+{
+	"$schema": "./node_modules/wrangler/config-schema.json",
+	"name": "ave-frontend",
+	"compatibility_date": "2026-05-23",
+	"compatibility_flags": [
+		"nodejs_als"
+	],
+	"main": ".svelte-kit/cloudflare/_worker.js",
+	"assets": {
+		"binding": "ASSETS",
+		"directory": ".svelte-kit/cloudflare"
+	},
+	"routes": [
+		{
+			"pattern": "aveid.net",
+			"custom_domain": true
+		},
+		{
+			"pattern": "www.aveid.net",
+			"custom_domain": true
+		},
+		{
+			"pattern": "devs.aveid.net",
+			"custom_domain": true
+		},
+		{
+			"pattern": "business.aveid.net",
+			"custom_domain": true
+		}
+	],
+	"workers_dev": true,
+	"preview_urls": true
+}
