@@ -1,9 +1,10 @@
 import { Hono } from "hono";
-import { db, identities, organizations, organizationMembers } from "../db";
+import { db, identities, organizations } from "../db";
 import { requireAuth, requireWritable } from "../middleware/auth";
 import { eq, and } from "drizzle-orm";
 import { S3Client, PutObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
 import { recordActivityLog } from "../lib/background-events";
+import { requireBusinessAccess } from "../lib/business";
 
 const app = new Hono();
 
@@ -280,19 +281,6 @@ app.post("/workspace-logo", async (c) => {
     return c.json({ error: "Organization ID required" }, 400);
   }
 
-  const [membership] = await db
-    .select({
-      role: organizationMembers.role,
-      status: organizationMembers.status,
-    })
-    .from(organizationMembers)
-    .where(and(eq(organizationMembers.organizationId, organizationId), eq(organizationMembers.userId, user.id)))
-    .limit(1);
-
-  if (!membership || membership.status !== "active" || (membership.role !== "owner" && membership.role !== "admin")) {
-    return c.json({ error: "Organization not found" }, 404);
-  }
-
   const [organization] = await db
     .select()
     .from(organizations)
@@ -300,6 +288,11 @@ app.post("/workspace-logo", async (c) => {
     .limit(1);
 
   if (!organization) {
+    return c.json({ error: "Organization not found" }, 404);
+  }
+
+  const access = await requireBusinessAccess(user.id, organizationId, "admin");
+  if (!access) {
     return c.json({ error: "Organization not found" }, 404);
   }
 

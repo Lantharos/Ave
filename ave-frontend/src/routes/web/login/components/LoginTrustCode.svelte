@@ -5,6 +5,7 @@
     import { recoverMasterKeyFromBackup, storeMasterKey, encryptMasterKeyWithPrf } from "$lib/surfaces/web/lib/crypto";
     import { getDeviceInfo, authenticateWithPasskey } from "$lib/surfaces/web/lib/webauthn";
     import { auth } from "$lib/surfaces/web/stores/auth";
+    import { ChevronRight } from "@lucide/svelte";
 
     let { handle, pendingPasskeyLogin, onSuccess, onError, onBack } = $props<{
         handle: string;
@@ -183,7 +184,7 @@
     <div class="flex flex-col w-full gap-3">
         <Button 
             text={isLoading ? "VERIFYING..." : (isRecoveryMode ? "RECOVER KEY" : "SIGN IN")}
-            icon="/icons/chevronbk-right-38.svg"
+            Icon={ChevronRight}
             onclick={handleSubmit}
             disabled={!code.trim() || isLoading}
         />

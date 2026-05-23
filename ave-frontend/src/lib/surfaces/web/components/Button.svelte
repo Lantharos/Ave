@@ -1,9 +1,12 @@
 <script lang="ts">
-    let { onclick, text, icon, disabled = false } = $props<{
+    import type { Component } from "svelte";
+
+    let { onclick, text, Icon, disabled = false, iconStrokeWidth = 5 } = $props<{
         onclick: () => void;
         text: string;
-        icon: string;
+        Icon: Component<any>;
         disabled?: boolean;
+        iconStrokeWidth?: number;
     }>();
 </script>
 
@@ -12,7 +15,7 @@
     onclick={onclick}
     {disabled}
 >
-    <img src={icon} alt="icon" class="w-5 md:w-[38px]" />
+    <Icon class="h-5 w-5 shrink-0 md:h-[38px] md:w-[38px]" size={38} strokeWidth={iconStrokeWidth} />
     {text}
     <span class="flex flex-col w-5 md:w-[38px]"></span>
 </button>

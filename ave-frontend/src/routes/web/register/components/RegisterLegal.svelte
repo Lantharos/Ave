@@ -3,6 +3,7 @@
     import Text from "$lib/surfaces/web/components/Text.svelte";
     import Button from "$lib/surfaces/web/components/Button.svelte";
     import IdentityCard from "$lib/surfaces/web/components/IdentityCard.svelte";
+    import { CircleCheckBig } from "@lucide/svelte";
 
     let { onNext, disabled = false } = $props<{ onNext?: () => void; disabled?: boolean }>();
     function goNext() {
@@ -40,6 +41,6 @@
            </p>
        </div>
 
-       <Button text={disabled ? "PROCESSING..." : "I AGREE"} onclick={() => onNext?.()} icon="/icons/checkbk-32.svg" {disabled} />
+       <Button text={disabled ? "PROCESSING..." : "I AGREE"} onclick={() => onNext?.()} Icon={CircleCheckBig} iconStrokeWidth={2.7} {disabled} />
    </div>
 </div>

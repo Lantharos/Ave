@@ -1,6 +1,7 @@
 <script lang="ts">
     import Text from "$lib/surfaces/web/components/Text.svelte";
     import Button from "$lib/surfaces/web/components/Button.svelte";
+    import { ChevronRight } from "@lucide/svelte";
 
     let { onNext, appName = null, appIconUrl = null } = $props<{ onNext?: () => void; appName?: string | null; appIconUrl?: string | null }>();
     function goNext() {
@@ -80,7 +81,7 @@
 
         <Button
                 text={appName ? "CONTINUE" : "LET'S GO!"}
-                icon="/icons/chevronbk-right-38.svg"
+                Icon={ChevronRight}
                 onclick={goNext}
         />
     </div>

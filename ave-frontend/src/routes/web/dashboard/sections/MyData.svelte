@@ -5,6 +5,7 @@
     import { goto } from "$app/navigation";
     import { resolve } from "$app/paths";
     import { auth } from "$lib/surfaces/web/stores/auth";
+    import { ChevronRight } from "@lucide/svelte";
 
     let exporting = $state(false);
     let deleting = $state(false);
@@ -75,7 +76,7 @@
         description="This package includes account, identity, device, security, session, activity, and connected-app metadata stored by Ave. App-level data must be exported from those apps directly."
         buttons={[
             { 
-                icon: "/icons/chevron-right-68.svg", 
+                Icon: ChevronRight,
                 color: "#FFFFFF", 
                 onClick: handleExport,
                 loading: exporting 
@@ -89,7 +90,7 @@
         description="Deletes your Ave account records and breaks connected-app access. It cannot remove data already copied by connected apps or cached public image copies."
         buttons={[
             { 
-                icon: "/icons/chevron-right-68.svg", 
+                Icon: ChevronRight,
                 color: "#E14747", 
                 onClick: () => { showDeleteConfirm = true; } 
             },

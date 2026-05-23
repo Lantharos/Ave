@@ -8,6 +8,7 @@
     import { createMasterKeyBackup, loadMasterKey } from "$lib/surfaces/web/lib/crypto";
     import { PasskeySetupUnavailableError, setUpPasskeyForCurrentDevice } from "$lib/surfaces/web/lib/passkey-setup";
     import { getPushStatus, subscribeToPushNotifications, unsubscribeFromPushNotifications, getPushSupportDetails } from "$lib/surfaces/web/lib/push";
+    import { ChevronRight, RefreshCw } from "@lucide/svelte";
 
     const securityQuery = createSecurityQuery();
     const deletePasskeyMutation = createDeletePasskeyMutation();
@@ -270,7 +271,7 @@
             description="Add a passkey to this device." 
             buttons={[
                 { 
-                    icon: "/icons/chevron-right-68.svg", 
+                    Icon: ChevronRight,
                     color: "#FFFFFF", 
                     onClick: handleAddPasskey,
                     loading: addingPasskey 
@@ -288,10 +289,12 @@
                 description={recoveryDescription()} 
                 buttons={[
                     { 
-                        icon: "/icons/refresh-56.svg", 
+                        Icon: RefreshCw,
                         color: "#FFFFFF", 
                         onClick: handleRegenerateCodes,
-                        loading: regeneratingCodes 
+                        loading: regeneratingCodes,
+                        size: 56,
+                        strokeWidth: 2.6 
                     },
                 ]} 
             />
@@ -301,7 +304,7 @@
                 description={recoveryDescription()} 
                 buttons={[
                     { 
-                        icon: "/icons/chevron-right-68.svg", 
+                        Icon: ChevronRight,
                         color: "#FFFFFF", 
                         onClick: handleIssueCodes,
                         loading: issuingCodes 
@@ -325,7 +328,7 @@
             description={pushDescription()}
             buttons={[
                 {
-                    icon: "/icons/chevron-right-68.svg",
+                    Icon: ChevronRight,
                     color: "#FFFFFF",
                     onClick: handlePushAction,
                     loading: pushBusy,

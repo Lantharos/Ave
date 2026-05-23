@@ -3,6 +3,7 @@
     import { queryKeys, type SecuritySnapshot } from "$lib/surfaces/web/lib/queries";
     import { clearPendingPasskeySetupPrompt, type PendingPasskeySetupPrompt } from "$lib/surfaces/web/lib/passkey-setup-prompt";
     import { PasskeySetupUnavailableError, setUpPasskeyForCurrentDevice } from "$lib/surfaces/web/lib/passkey-setup";
+    import { Fingerprint } from "@lucide/svelte";
 
     let { prompt, onClose } = $props<{
         prompt: PendingPasskeySetupPrompt;
@@ -61,7 +62,7 @@
             <div class="flex flex-col gap-6">
                 <div class="flex items-center gap-4">
                     <div class="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-white">
-                        <img src="/icons/passkey-32-bk.svg" alt="" class="h-7 w-7" />
+                        <Fingerprint class="h-7 w-7 text-[#090909]" size={28} strokeWidth={2.5} />
                     </div>
                     <div class="min-w-0">
                         <h2 class="m-0 text-[24px] font-black text-white md:text-[30px]">Passkey added</h2>
@@ -82,7 +83,7 @@
             <div class="flex flex-col gap-6">
                 <div class="flex items-start gap-4">
                     <div class="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-white">
-                        <img src="/icons/passkey-32-bk.svg" alt="" class="h-7 w-7" />
+                        <Fingerprint class="h-7 w-7 text-[#090909]" size={28} strokeWidth={2.5} />
                     </div>
                     <div class="min-w-0">
                         <h2 class="m-0 text-[24px] font-black text-white md:text-[30px]">Set up a passkey here</h2>

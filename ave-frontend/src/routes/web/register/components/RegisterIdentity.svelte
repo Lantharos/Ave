@@ -3,6 +3,7 @@
     import Button from "$lib/surfaces/web/components/Button.svelte";
     import IdentityCard from "$lib/surfaces/web/components/IdentityCard.svelte";
     import { api } from "$lib/surfaces/web/lib/api";
+    import { ChevronRight } from "@lucide/svelte";
 
     interface IdentityData {
         displayName: string;
@@ -199,7 +200,7 @@
        <Button 
            text={isLoading ? "CHECKING..." : "CONTINUE"} 
            onclick={() => goNext()} 
-           icon="/icons/chevronbk-right-38.svg"
+           Icon={ChevronRight}
            disabled={!isValid || isLoading}
        />
    </div>

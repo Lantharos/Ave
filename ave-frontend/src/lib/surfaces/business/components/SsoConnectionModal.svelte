@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { X } from "lucide-svelte";
+  import { X } from "@lucide/svelte";
   import { api } from "../lib/api";
   import { signBusinessAction } from "../lib/business-actions";
   import type { BusinessOrganizationDetail } from "../lib/types";

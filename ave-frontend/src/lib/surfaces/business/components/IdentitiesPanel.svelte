@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Trash2 } from "lucide-svelte";
+  import { Trash2 } from "@lucide/svelte";
   import type { BusinessMember, BusinessRole } from "../lib/types";
   import { initials } from "../lib/format";
   import Button from "./Button.svelte";

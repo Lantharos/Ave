@@ -1,5 +1,6 @@
 <script lang="ts">
     import Button from "$lib/surfaces/web/components/Button.svelte";
+    import { ChevronRight } from "@lucide/svelte";
 
     let { onNext, trustCodes = [] } = $props<{
         onNext?: () => void;
@@ -94,7 +95,7 @@
             <Button
                 text="CONTINUE"
                 onclick={() => onNext?.()}
-                icon="/icons/chevronbk-right-38.svg"
+                Icon={ChevronRight}
                 disabled={!confirmed}
             />
         </div>

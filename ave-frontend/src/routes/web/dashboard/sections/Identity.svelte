@@ -5,6 +5,7 @@
     import { api, type Identity as IdentityType } from "$lib/surfaces/web/lib/api";
     import { createStoredIdentityEncryptionKeyPair, loadMasterKey } from "$lib/surfaces/web/lib/crypto";
     import { auth } from "$lib/surfaces/web/stores/auth";
+    import { Save } from "@lucide/svelte";
 
     let { newIdentity = false, identity = null } = $props<{
         newIdentity?: boolean;
@@ -415,7 +416,8 @@
         <Button 
             text={isSaving ? "SAVING..." : "CREATE IDENTITY"} 
             onclick={createIdentity} 
-            icon="/icons/savebk-38.svg"
+            Icon={Save}
+            iconStrokeWidth={2.5}
             disabled={isSaving || !displayName.trim() || !handle.trim()}
         />
     {:else if identity}

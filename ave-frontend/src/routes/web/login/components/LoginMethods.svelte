@@ -11,6 +11,7 @@
     } from "$lib/surfaces/web/lib/crypto";
     import { authenticateWithPasskey, getDeviceInfo } from "$lib/surfaces/web/lib/webauthn";
     import { auth } from "$lib/surfaces/web/stores/auth";
+    import { ChevronRight } from "@lucide/svelte";
 
     let { 
         identity,
@@ -255,7 +256,7 @@
                 action="USE PASSKEY" 
                 description="Verify with your fingerprint, face, or security key." 
                 buttons={[
-                    { icon: "/icons/chevron-right-68.svg", color: "#FFFFFF", onClick: handlePasskeyLogin, loading: loadingMethod === "passkey" },
+                    { Icon: ChevronRight, color: "#FFFFFF", onClick: handlePasskeyLogin, loading: loadingMethod === "passkey" },
                 ]} 
             />
         {/if}
@@ -265,7 +266,7 @@
                 action="CONFIRM ON A TRUSTED DEVICE" 
                 description="Approve this login on one of your other devices." 
                 buttons={[
-                    { icon: "/icons/chevron-right-68.svg", color: "#FFFFFF", onClick: handleDeviceApproval, loading: loadingMethod === "device" },
+                    { Icon: ChevronRight, color: "#FFFFFF", onClick: handleDeviceApproval, loading: loadingMethod === "device" },
                 ]} 
             />
         {/if}
@@ -274,7 +275,7 @@
             action="USE RECOVERY CODE" 
             description="Use a one-time recovery code if you can't use your passkeys." 
             buttons={[
-                { icon: "/icons/chevron-right-68.svg", color: "#FFFFFF", onClick: handleTrustCode },
+                { Icon: ChevronRight, color: "#FFFFFF", onClick: handleTrustCode },
             ]} 
         />
     </div>

@@ -20,6 +20,7 @@
     import { queryClient } from "$lib/surfaces/web/lib/query-client";
     import { clearPendingPasskeySetupPrompt, readPendingPasskeySetupPrompt, type PendingPasskeySetupPrompt } from "$lib/surfaces/web/lib/passkey-setup-prompt";
     import { isPlatformAuthenticatorAvailable } from "$lib/surfaces/web/lib/webauthn";
+    import { Plus } from "@lucide/svelte";
 
     let selectedPage = $state<string>("");
     let pendingApprovals = $state(0);
@@ -133,7 +134,7 @@
                         text="New Identity" 
                         bind:currentlySelected={selectedPage} 
                         onclick={handleNewIdentity} 
-                        image="/icons/plus.svg" 
+                        Icon={Plus}
                     />
                 {/if}
                 
@@ -182,11 +183,11 @@
             {/each}
             {#if identities.length < 5}
                 <SidebarButton 
-                    text="New Identity" 
-                    bind:currentlySelected={selectedPage} 
-                    onclick={handleNewIdentity} 
-                    image="/icons/plus.svg" 
-                />
+                        text="New Identity" 
+                        bind:currentlySelected={selectedPage} 
+                        onclick={handleNewIdentity} 
+                        Icon={Plus}
+                    />
             {/if}
         </div>
         <div class="h-[1px] bg-[#878787]/20 w-full"></div>

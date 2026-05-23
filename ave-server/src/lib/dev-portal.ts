@@ -1,5 +1,6 @@
 import { and, eq, inArray, isNull } from "drizzle-orm";
-import { db, identities, oauthApps, organizationMembers, organizations } from "../db";
+import { db, identities, oauthApps, organizationIdentityMembers, organizations } from "../db";
+import { scopesForRole, type BusinessRole } from "./business";
 
 export type OrganizationRole = "owner" | "admin" | "viewer";
 
@@ -8,6 +9,22 @@ const roleRank: Record<OrganizationRole, number> = {
   admin: 2,
   viewer: 1,
 };
+
+export function mapBusinessRoleToOrganizationRole(role: string): OrganizationRole {
+  if (role === "owner") return "owner";
+  if (role === "admin") return "admin";
+  return "viewer";
+}
+
+export function businessRoleForOrganizationRole(role: OrganizationRole): BusinessRole {
+  if (role === "owner") return "owner";
+  if (role === "admin") return "admin";
+  return "viewer";
+}
+
+export function signingAuthorityForOrganizationRole(role: OrganizationRole): boolean {
+  return role === "owner" || role === "admin";
+}
 
 function slugify(value: string): string {
   return value
@@ -36,32 +53,87 @@ async function createUniqueSlug(baseValue: string): Promise<string> {
   }
 }
 
-export async function ensurePersonalOrganization(userId: string) {
-  const [existingMembership] = await db
-    .select({
-      organizationId: organizationMembers.organizationId,
-    })
-    .from(organizationMembers)
-    .where(and(eq(organizationMembers.userId, userId), eq(organizationMembers.status, "active")))
-    .limit(1);
+async function getUserIdentities(userId: string) {
+  return db
+    .select()
+    .from(identities)
+    .where(eq(identities.userId, userId));
+}
 
-  if (existingMembership) {
-    const [organization] = await db
-      .select()
-      .from(organizations)
-      .where(eq(organizations.id, existingMembership.organizationId))
-      .limit(1);
-
-    if (organization) return organization;
-  }
-
-  const [primaryIdentity] = await db
-    .select({
-      displayName: identities.displayName,
-    })
+async function getPrimaryIdentity(userId: string) {
+  const [identity] = await db
+    .select()
     .from(identities)
     .where(and(eq(identities.userId, userId), eq(identities.isPrimary, true)))
     .limit(1);
+
+  if (identity) return identity;
+
+  const [fallback] = await db
+    .select()
+    .from(identities)
+    .where(eq(identities.userId, userId))
+    .limit(1);
+
+  return fallback ?? null;
+}
+
+function selectHighestMembership<T extends { role: OrganizationRole }>(memberships: T[]) {
+  return memberships
+    .sort((a, b) => roleRank[b.role] - roleRank[a.role])[0] ?? null;
+}
+
+async function getBusinessOrganizationMemberships(userId: string) {
+  const userIdentities = await getUserIdentities(userId);
+  const identityIds = userIdentities.map((identity) => identity.id);
+  if (!identityIds.length) return [];
+
+  const rows = await db
+    .select({
+      member: organizationIdentityMembers,
+      identity: identities,
+      organization: organizations,
+    })
+    .from(organizationIdentityMembers)
+    .innerJoin(identities, eq(identities.id, organizationIdentityMembers.identityId))
+    .innerJoin(organizations, eq(organizations.id, organizationIdentityMembers.organizationId))
+    .where(and(inArray(organizationIdentityMembers.identityId, identityIds), eq(organizationIdentityMembers.status, "active")));
+
+  const byOrganization = new Map<string, {
+    memberId: string;
+    role: OrganizationRole;
+    status: string;
+    invitedEmail: null;
+    organization: typeof organizations.$inferSelect;
+    identity: typeof identities.$inferSelect;
+  }>();
+
+  for (const row of rows) {
+    const membership = {
+      memberId: row.member.id,
+      role: mapBusinessRoleToOrganizationRole(row.member.role),
+      status: row.member.status,
+      invitedEmail: null,
+      organization: row.organization,
+      identity: row.identity,
+    };
+    const existing = byOrganization.get(row.organization.id);
+    if (!existing || roleRank[membership.role] > roleRank[existing.role]) {
+      byOrganization.set(row.organization.id, membership);
+    }
+  }
+
+  return [...byOrganization.values()];
+}
+
+export async function ensurePersonalOrganization(userId: string) {
+  const existingMembership = selectHighestMembership(await getBusinessOrganizationMemberships(userId));
+  if (existingMembership) return existingMembership.organization;
+
+  const primaryIdentity = await getPrimaryIdentity(userId);
+  if (!primaryIdentity) {
+    throw new Error("A primary identity is required before creating an organization");
+  }
 
   const workspaceName = primaryIdentity?.displayName
     ? `${primaryIdentity.displayName.split(" ")[0]}'s workspace`
@@ -77,22 +149,30 @@ export async function ensurePersonalOrganization(userId: string) {
       ownerUserId: userId,
       verifiedDomains: [],
       appLimit: 12,
-      plan: "core",
+      plan: "business",
     })
     .returning();
 
-  await db.insert(organizationMembers).values({
+  await db.insert(organizationIdentityMembers).values({
     organizationId: organization.id,
-    userId,
+    identityId: primaryIdentity.id,
+    addedByUserId: userId,
+    addedByIdentityId: primaryIdentity.id,
     role: "owner",
+    scopes: scopesForRole("owner"),
+    signingAuthority: true,
     status: "active",
-    invitedByUserId: userId,
   });
 
   return organization;
 }
 
 export async function createOrganization(userId: string, name: string) {
+  const primaryIdentity = await getPrimaryIdentity(userId);
+  if (!primaryIdentity) {
+    throw new Error("A primary identity is required before creating an organization");
+  }
+
   const slug = await createUniqueSlug(name);
 
   const [organization] = await db
@@ -103,16 +183,19 @@ export async function createOrganization(userId: string, name: string) {
       ownerUserId: userId,
       verifiedDomains: [],
       appLimit: 12,
-      plan: "core",
+      plan: "business",
     })
     .returning();
 
-  await db.insert(organizationMembers).values({
+  await db.insert(organizationIdentityMembers).values({
     organizationId: organization.id,
-    userId,
+    identityId: primaryIdentity.id,
+    addedByUserId: userId,
+    addedByIdentityId: primaryIdentity.id,
     role: "owner",
+    scopes: scopesForRole("owner"),
+    signingAuthority: true,
     status: "active",
-    invitedByUserId: userId,
   });
 
   return organization;
@@ -120,26 +203,7 @@ export async function createOrganization(userId: string, name: string) {
 
 export async function getOrganizationMemberships(userId: string) {
   await ensurePersonalOrganization(userId);
-
-  const memberships = await db
-    .select({
-      memberId: organizationMembers.id,
-      role: organizationMembers.role,
-      status: organizationMembers.status,
-      invitedEmail: organizationMembers.invitedEmail,
-      organization: organizations,
-    })
-    .from(organizationMembers)
-    .innerJoin(organizations, eq(organizations.id, organizationMembers.organizationId))
-    .where(and(eq(organizationMembers.userId, userId), eq(organizationMembers.status, "active")));
-
-  return memberships.map((entry) => ({
-    memberId: entry.memberId,
-    role: entry.role as OrganizationRole,
-    status: entry.status,
-    invitedEmail: entry.invitedEmail,
-    organization: entry.organization,
-  }));
+  return getBusinessOrganizationMemberships(userId);
 }
 
 export async function backfillOwnedAppsOrganization(userId: string) {
@@ -153,27 +217,38 @@ export async function backfillOwnedAppsOrganization(userId: string) {
 }
 
 export async function requireOrganizationAccess(userId: string, organizationId: string, minimumRole: OrganizationRole = "viewer") {
-  const [membership] = await db
+  const userIdentities = await getUserIdentities(userId);
+  const identityIds = userIdentities.map((identity) => identity.id);
+  if (!identityIds.length) return null;
+
+  const memberships = await db
     .select({
-      memberId: organizationMembers.id,
-      role: organizationMembers.role,
-      status: organizationMembers.status,
-      invitedEmail: organizationMembers.invitedEmail,
+      member: organizationIdentityMembers,
+      identity: identities,
       organization: organizations,
     })
-    .from(organizationMembers)
-    .innerJoin(organizations, eq(organizations.id, organizationMembers.organizationId))
+    .from(organizationIdentityMembers)
+    .innerJoin(identities, eq(identities.id, organizationIdentityMembers.identityId))
+    .innerJoin(organizations, eq(organizations.id, organizationIdentityMembers.organizationId))
     .where(
       and(
-        eq(organizationMembers.userId, userId),
-        eq(organizationMembers.organizationId, organizationId),
-        eq(organizationMembers.status, "active"),
+        eq(organizationIdentityMembers.organizationId, organizationId),
+        eq(organizationIdentityMembers.status, "active"),
+        inArray(organizationIdentityMembers.identityId, identityIds),
       ),
-    )
-    .limit(1);
+    );
 
+  const membership = selectHighestMembership(memberships.map((entry) => ({
+    memberId: entry.member.id,
+    role: mapBusinessRoleToOrganizationRole(entry.member.role),
+    status: entry.member.status,
+    invitedEmail: null,
+    organization: entry.organization,
+    identity: entry.identity,
+    member: entry.member,
+  })));
   if (!membership) return null;
-  if (roleRank[membership.role as OrganizationRole] < roleRank[minimumRole]) return null;
+  if (roleRank[membership.role] < roleRank[minimumRole]) return null;
 
   return membership;
 }

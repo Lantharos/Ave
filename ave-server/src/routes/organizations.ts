@@ -1,15 +1,19 @@
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
-import { and, eq, inArray } from "drizzle-orm";
-import { db, identities, oauthApps, oauthAuthorizations, organizationMembers, organizations } from "../db";
+import { and, eq, inArray, or } from "drizzle-orm";
+import { db, identities, oauthApps, oauthAuthorizations, organizationIdentityMembers, organizations } from "../db";
 import { requireAuth, requireWritableForMutation } from "../middleware/auth";
 import {
+  businessRoleForOrganizationRole,
   createOrganization,
   getOrganizationMemberships,
+  mapBusinessRoleToOrganizationRole,
   requireOrganizationAccess,
+  signingAuthorityForOrganizationRole,
   type OrganizationRole,
 } from "../lib/dev-portal";
+import { scopesForRole } from "../lib/business";
 import { listAppResources, serializeApp } from "./apps";
 
 const app = new Hono();
@@ -38,23 +42,20 @@ function mapOrganizationSummary(
   };
 }
 
-function mapWorkspaceMembers(
-  members: Array<typeof organizationMembers.$inferSelect>,
-  identityByUserId: Map<string, { userId: string; displayName: string; email: string | null; avatarUrl: string | null }>,
-) {
-  return members.map((member) => {
-    const identity = member.userId ? identityByUserId.get(member.userId) : null;
-    return {
-      id: member.id,
-      userId: member.userId,
-      name: identity?.displayName || member.invitedEmail?.split("@")[0] || "Pending member",
-      email: identity?.email || member.invitedEmail,
-      avatarUrl: identity?.avatarUrl,
-      role: member.role,
-      status: member.status,
-      joinedAt: member.createdAt,
-    };
-  });
+function mapWorkspaceMembers(members: Array<{
+  member: typeof organizationIdentityMembers.$inferSelect;
+  identity: typeof identities.$inferSelect;
+}>) {
+  return members.map(({ member, identity }) => ({
+    id: member.id,
+    userId: identity.userId,
+    name: identity.displayName || identity.handle,
+    email: identity.email,
+    avatarUrl: identity.avatarUrl,
+    role: mapBusinessRoleToOrganizationRole(member.role),
+    status: "active" as const,
+    joinedAt: member.createdAt,
+  }));
 }
 
 app.get("/", async (c) => {
@@ -82,16 +83,12 @@ app.get("/", async (c) => {
   const memberRows = organizationIds.length
     ? await db
         .select({
-          organizationId: organizationMembers.organizationId,
-          memberId: organizationMembers.id,
-          userId: organizationMembers.userId,
-          invitedEmail: organizationMembers.invitedEmail,
-          role: organizationMembers.role,
-          status: organizationMembers.status,
-          createdAt: organizationMembers.createdAt,
+          organizationId: organizationIdentityMembers.organizationId,
+          memberId: organizationIdentityMembers.id,
+          status: organizationIdentityMembers.status,
         })
-        .from(organizationMembers)
-        .where(inArray(organizationMembers.organizationId, organizationIds))
+        .from(organizationIdentityMembers)
+        .where(inArray(organizationIdentityMembers.organizationId, organizationIds))
     : [];
 
   const memberCountByOrganizationId = new Map<string, number>();
@@ -127,16 +124,12 @@ app.get("/bootstrap", async (c) => {
     organizationIds.length
       ? db
           .select({
-            organizationId: organizationMembers.organizationId,
-            memberId: organizationMembers.id,
-            userId: organizationMembers.userId,
-            invitedEmail: organizationMembers.invitedEmail,
-            role: organizationMembers.role,
-            status: organizationMembers.status,
-            createdAt: organizationMembers.createdAt,
+            organizationId: organizationIdentityMembers.organizationId,
+            memberId: organizationIdentityMembers.id,
+            status: organizationIdentityMembers.status,
           })
-          .from(organizationMembers)
-          .where(inArray(organizationMembers.organizationId, organizationIds))
+          .from(organizationIdentityMembers)
+          .where(inArray(organizationIdentityMembers.organizationId, organizationIds))
       : [],
   ]);
 
@@ -179,28 +172,17 @@ app.get("/bootstrap", async (c) => {
 
   const [members, apps] = await Promise.all([
     db
-      .select()
-      .from(organizationMembers)
-      .where(eq(organizationMembers.organizationId, currentOrganizationId)),
+      .select({ member: organizationIdentityMembers, identity: identities })
+      .from(organizationIdentityMembers)
+      .innerJoin(identities, eq(identities.id, organizationIdentityMembers.identityId))
+      .where(and(eq(organizationIdentityMembers.organizationId, currentOrganizationId), eq(organizationIdentityMembers.status, "active"))),
     db
       .select()
       .from(oauthApps)
       .where(eq(oauthApps.organizationId, currentOrganizationId)),
   ]);
 
-  const userIds = members.map((member) => member.userId).filter((value): value is string => !!value);
-  const [identityRows, resources, authorizations] = await Promise.all([
-    userIds.length
-      ? db
-          .select({
-            userId: identities.userId,
-            displayName: identities.displayName,
-            email: identities.email,
-            avatarUrl: identities.avatarUrl,
-          })
-          .from(identities)
-          .where(inArray(identities.userId, userIds))
-      : [],
+  const [resources, authorizations] = await Promise.all([
     listAppResources(apps.map((app) => app.id)),
     apps.length
       ? db
@@ -212,13 +194,6 @@ app.get("/bootstrap", async (c) => {
           .where(inArray(oauthAuthorizations.appId, apps.map((app) => app.id)))
       : [],
   ]);
-
-  const identityByUserId = new Map<string, (typeof identityRows)[number]>();
-  for (const identity of identityRows) {
-    if (!identityByUserId.has(identity.userId)) {
-      identityByUserId.set(identity.userId, identity);
-    }
-  }
 
   const resourcesByAppId = new Map<string, typeof resources>();
   for (const resource of resources) {
@@ -246,7 +221,7 @@ app.get("/bootstrap", async (c) => {
       verifiedDomains: (membership.organization.verifiedDomains as string[] | null) || [],
       appLimit: membership.organization.appLimit,
       role: membership.role,
-      members: mapWorkspaceMembers(members, identityByUserId),
+      members: mapWorkspaceMembers(members),
       appCount: apps.length,
     },
     apps: apps.map((appRow) =>
@@ -293,29 +268,10 @@ app.get("/:organizationId", async (c) => {
   }
 
   const members = await db
-    .select()
-    .from(organizationMembers)
-    .where(eq(organizationMembers.organizationId, organizationId));
-
-  const userIds = members.map((member) => member.userId).filter((value): value is string => !!value);
-  const identityRows = userIds.length
-    ? await db
-        .select({
-          userId: identities.userId,
-          displayName: identities.displayName,
-          email: identities.email,
-          avatarUrl: identities.avatarUrl,
-        })
-        .from(identities)
-        .where(inArray(identities.userId, userIds))
-    : [];
-
-  const identityByUserId = new Map<string, (typeof identityRows)[number]>();
-  for (const identity of identityRows) {
-    if (!identityByUserId.has(identity.userId)) {
-      identityByUserId.set(identity.userId, identity);
-    }
-  }
+    .select({ member: organizationIdentityMembers, identity: identities })
+    .from(organizationIdentityMembers)
+    .innerJoin(identities, eq(identities.id, organizationIdentityMembers.identityId))
+    .where(and(eq(organizationIdentityMembers.organizationId, organizationId), eq(organizationIdentityMembers.status, "active")));
 
   const apps = await db
     .select({
@@ -334,7 +290,7 @@ app.get("/:organizationId", async (c) => {
       verifiedDomains: (membership.organization.verifiedDomains as string[] | null) || [],
       appLimit: membership.organization.appLimit,
       role: membership.role,
-      members: mapWorkspaceMembers(members, identityByUserId),
+      members: mapWorkspaceMembers(members),
       appCount: apps.length,
     },
   });
@@ -395,34 +351,64 @@ app.post("/:organizationId/invites", zValidator("json", z.object({
     return c.json({ error: "Workspace owner cannot be reassigned" }, 400);
   }
 
-  const [existingInvite] = await db
-    .select({ id: organizationMembers.id })
-    .from(organizationMembers)
-    .where(and(eq(organizationMembers.organizationId, organizationId), eq(organizationMembers.invitedEmail, payload.email.toLowerCase())))
+  const lookup = payload.email.trim();
+  const handleLookup = lookup.replace(/^@/, "").toLowerCase();
+  const [targetIdentity] = await db
+    .select()
+    .from(identities)
+    .where(or(eq(identities.handle, handleLookup), eq(identities.email, lookup.toLowerCase())))
     .limit(1);
 
-  if (existingInvite) {
-    return c.json({ error: "Invite already exists" }, 409);
+  if (!targetIdentity) {
+    return c.json({ error: "Identity not found" }, 404);
   }
 
-  const [created] = await db
-    .insert(organizationMembers)
+  const [existingMember] = await db
+    .select()
+    .from(organizationIdentityMembers)
+    .where(and(eq(organizationIdentityMembers.organizationId, organizationId), eq(organizationIdentityMembers.identityId, targetIdentity.id)))
+    .limit(1);
+
+  if (existingMember?.status === "active") {
+    return c.json({ error: "Member already exists" }, 409);
+  }
+
+  const role = businessRoleForOrganizationRole(payload.role);
+  const [created] = existingMember
+    ? await db
+      .update(organizationIdentityMembers)
+      .set({
+        role,
+        scopes: scopesForRole(role),
+        signingAuthority: signingAuthorityForOrganizationRole(payload.role),
+        status: "active",
+        updatedAt: new Date(),
+      })
+      .where(eq(organizationIdentityMembers.id, existingMember.id))
+      .returning()
+    : await db
+      .insert(organizationIdentityMembers)
     .values({
       organizationId,
-      invitedEmail: payload.email.toLowerCase(),
-      role: payload.role,
-      status: "invited",
-      invitedByUserId: user.id,
+      identityId: targetIdentity.id,
+      addedByUserId: user.id,
+      addedByIdentityId: membership.identity.id,
+      role,
+      scopes: scopesForRole(role),
+      signingAuthority: signingAuthorityForOrganizationRole(payload.role),
+      status: "active",
     })
-    .returning();
+      .returning();
 
   return c.json({
     member: {
       id: created.id,
-      name: payload.email.split("@")[0],
-      email: created.invitedEmail,
-      role: created.role,
-      status: created.status,
+      userId: targetIdentity.userId,
+      name: targetIdentity.displayName || targetIdentity.handle,
+      email: targetIdentity.email,
+      avatarUrl: targetIdentity.avatarUrl,
+      role: mapBusinessRoleToOrganizationRole(created.role),
+      status: "active",
       joinedAt: created.createdAt,
     },
   }, 201);
@@ -441,40 +427,44 @@ app.patch("/:organizationId/members/:memberId", zValidator("json", z.object({
   }
 
   const [target] = await db
-    .select()
-    .from(organizationMembers)
-    .where(and(eq(organizationMembers.id, memberId), eq(organizationMembers.organizationId, organizationId)))
+    .select({ member: organizationIdentityMembers, identity: identities })
+    .from(organizationIdentityMembers)
+    .innerJoin(identities, eq(identities.id, organizationIdentityMembers.identityId))
+    .where(and(eq(organizationIdentityMembers.id, memberId), eq(organizationIdentityMembers.organizationId, organizationId)))
     .limit(1);
 
   if (!target) {
     return c.json({ error: "Member not found" }, 404);
   }
 
-  if (target.status !== "active") {
-    return c.json({ error: "Cannot change role for a pending invite" }, 400);
+  if (target.member.status !== "active") {
+    return c.json({ error: "Cannot change role for an inactive member" }, 400);
   }
 
-  if (target.userId === membership.organization.ownerUserId && payload.role !== "owner") {
+  if (target.identity.userId === membership.organization.ownerUserId && payload.role !== "owner") {
     return c.json({ error: "Cannot demote the workspace owner" }, 400);
   }
 
-  if (payload.role === "owner" && target.userId !== membership.organization.ownerUserId) {
+  if (payload.role === "owner" && target.identity.userId !== membership.organization.ownerUserId) {
     return c.json({ error: "Workspace owner cannot be reassigned" }, 400);
   }
 
+  const role = businessRoleForOrganizationRole(payload.role);
   const [updated] = await db
-    .update(organizationMembers)
+    .update(organizationIdentityMembers)
     .set({
-      role: payload.role as OrganizationRole,
+      role,
+      scopes: scopesForRole(role),
+      signingAuthority: signingAuthorityForOrganizationRole(payload.role),
       updatedAt: new Date(),
     })
-    .where(eq(organizationMembers.id, memberId))
+    .where(eq(organizationIdentityMembers.id, memberId))
     .returning();
 
   return c.json({
     member: {
       id: updated.id,
-      role: updated.role,
+      role: mapBusinessRoleToOrganizationRole(updated.role),
       status: updated.status,
     },
   });

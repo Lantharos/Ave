@@ -26,11 +26,11 @@
 		"wrangler": "^4.81.0"
 	},
 	"dependencies": {
+		"@lucide/svelte": "^1.16.0",
 		"@noble/ed25519": "^3.1.0",
 		"@noble/hashes": "^2.2.0",
 		"@simplewebauthn/browser": "^13.3.0",
 		"@tanstack/svelte-query": "^6.1.32",
-		"lucide-svelte": "^1.0.1",
 		"ogl": "^1.0.11"
 	}
 }

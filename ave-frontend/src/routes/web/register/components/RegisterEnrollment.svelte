@@ -1,6 +1,7 @@
 <script lang="ts">
     import ActionCard from "$lib/surfaces/web/components/ActionCard.svelte";
     import Text from "$lib/surfaces/web/components/Text.svelte";
+    import { ChevronRight } from "@lucide/svelte";
 
     let { onComplete, onSetupRecovery, settingUpRecovery = false } = $props<{ 
         onComplete?: () => void;
@@ -23,7 +24,7 @@
                 action="SET UP RECOVERY" 
                 description="Create one-time recovery codes for emergency access." 
                 buttons={[
-                    { icon: "/icons/chevron-right-68.svg", color: "#FFFFFF", onClick: () => onSetupRecovery?.(), loading: settingUpRecovery },
+                    { Icon: ChevronRight, color: "#FFFFFF", onClick: () => onSetupRecovery?.(), loading: settingUpRecovery },
                 ]} 
             />
 
@@ -31,7 +32,7 @@
                 action="DO THIS LATER" 
                 description="You can finish setup in Security from any signed-in device." 
                 buttons={[
-                    { icon: "/icons/chevron-right-68.svg", color: "#FFFFFF", onClick: () => onComplete?.() },
+                    { Icon: ChevronRight, color: "#FFFFFF", onClick: () => onComplete?.() },
                 ]} 
             />
         </div>

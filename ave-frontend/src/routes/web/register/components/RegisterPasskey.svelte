@@ -1,6 +1,7 @@
 <script lang="ts">
     import Text from "$lib/surfaces/web/components/Text.svelte";
     import Button from "$lib/surfaces/web/components/Button.svelte";
+    import { Fingerprint } from "@lucide/svelte";
 
     let { onNext, appName = null } = $props<{ onNext?: () => void | Promise<void>; appName?: string | null }>();
     
@@ -60,7 +61,8 @@
         <Button 
             text={isLoading ? "SETTING UP..." : (appName ? "CONTINUE" : "SET UP PASSKEY")} 
             onclick={handleSetupPasskey} 
-            icon="/icons/passkey-32-bk.svg"
+            Icon={Fingerprint}
+            iconStrokeWidth={2.5}
             disabled={isLoading}
         />
     </div>

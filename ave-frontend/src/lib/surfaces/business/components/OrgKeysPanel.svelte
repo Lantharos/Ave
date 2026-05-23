@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { RefreshCw } from "lucide-svelte";
+  import { RefreshCw } from "@lucide/svelte";
   import { api } from "../lib/api";
   import { signBusinessAction } from "../lib/business-actions";
   import { generateOrgKeyMaterial, wrapOrgKeyForIdentity } from "../lib/crypto";

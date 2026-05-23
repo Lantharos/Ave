@@ -4,6 +4,7 @@
     import Device from "./components/Device.svelte";
     import { createDevicesQuery, createRevokeDeviceMutation, queryKeys } from "$lib/surfaces/web/lib/queries";
     import { queryClient } from "$lib/surfaces/web/lib/query-client";
+    import { ChevronRight } from "@lucide/svelte";
 
     const devicesQuery = createDevicesQuery();
 
@@ -85,7 +86,7 @@
             description="This will invalidate keys on all enrolled devices, except this one, you will need to re-add every device again." 
             buttons={[
                 { 
-                    icon: "/icons/chevron-right-68.svg", 
+                    Icon: ChevronRight,
                     color: "#FFB400", 
                     onClick: handleRevokeAllDevices,
                     loading: revokingAll 

@@ -1,6 +1,6 @@
 <script lang="ts">
   import Card from "$lib/surfaces/devs/components/Card.svelte";
-  import { Lock } from "lucide-svelte";
+  import { Lock } from "@lucide/svelte";
   import type { DevApp } from "$lib/surfaces/devs/lib/api";
   interface Props {
     apps: DevApp[];

@@ -4,6 +4,7 @@
     import { api, type Identity } from "$lib/surfaces/web/lib/api";
     import { goto } from "$app/navigation";
     import { resolve } from "$app/paths";
+    import { ChevronRight } from "@lucide/svelte";
 
     let { onNext, onError, appName = null, appIconUrl = null } = $props<{ 
         onNext?: (data: {
@@ -128,7 +129,7 @@
 
             <Button 
                 text={isLoading ? "CHECKING..." : (appName ? "SIGN IN" : "CONTINUE")} 
-                icon="/icons/chevronbk-right-38.svg" 
+                Icon={ChevronRight}
                 onclick={handleContinue}
                 disabled={!handle.trim() || isLoading}
             />

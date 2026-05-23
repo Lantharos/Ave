@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { Building2, ChevronDown, Fingerprint, KeyRound, LockKeyhole, Network, Plus, ScrollText, Upload } from "lucide-svelte";
+  import { Building2, ChevronDown, Fingerprint, KeyRound, LockKeyhole, Network, Plus, ScrollText, Upload } from "@lucide/svelte";
   import AuroraBackdrop from "$lib/surfaces/business/components/AuroraBackdrop.svelte";
   import Button from "$lib/surfaces/business/components/Button.svelte";
   import AuditPanel from "$lib/surfaces/business/components/AuditPanel.svelte";
@@ -296,11 +296,11 @@
                 {initials(organizationName)}
               {/if}
             </span>
-            <span class="flex min-w-0 flex-col leading-none">
+            <span class="flex min-w-0 flex-1 flex-col leading-none">
               <span class="truncate text-[14px] font-semibold md:text-[15px]">{organizationName}</span>
               <span class="truncate pt-1 text-[12px] text-[#7d7d7d]">{organizationMeta}</span>
             </span>
-            <ChevronDown size={16} class="shrink-0 text-[#7d7d7d]" />
+            <ChevronDown size={16} class="ml-auto shrink-0 text-[#7d7d7d]" />
           </button>
 
           {#if canManageOrganization}

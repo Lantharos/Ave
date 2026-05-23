@@ -28,8 +28,8 @@ self.addEventListener("push", (event) => {
     
     const options = {
       body: data.body || "You have a new notification",
-      icon: data.icon || "/icons/ave-icon-192.png",
-      badge: data.badge || "/icons/ave-badge-72.png",
+      icon: data.icon || "/icon.png",
+      badge: data.badge || "/icon.png",
       tag: data.tag || "ave-notification",
       requireInteraction: data.requireInteraction || false,
       data: data.data || {},
