@@ -19,7 +19,7 @@ export const organizations = sqliteTable("organizations", {
   name: text("name").notNull(),
   logoUrl: text("logo_url"),
   slug: text("slug").notNull().unique(),
-  plan: text("plan").notNull().default("core"),
+  plan: text("plan").notNull().default("business"),
   verifiedDomains: text("verified_domains", { mode: "json" }).$type<string[]>().$defaultFn(() => []),
   ssoRequired: integer("sso_required", { mode: "boolean" }).default(false).notNull(),
   appLimit: integer("app_limit").notNull().default(12),
@@ -27,23 +27,6 @@ export const organizations = sqliteTable("organizations", {
 }, (table) => [
   index("organizations_owner_user_id_idx").on(table.ownerUserId),
   index("organizations_slug_idx").on(table.slug),
-]);
-
-export const organizationMembers = sqliteTable("organization_members", {
-  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
-  createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull().$defaultFn(() => new Date()),
-  updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull().$defaultFn(() => new Date()),
-
-  organizationId: text("organization_id").references(() => organizations.id, { onDelete: "cascade" }).notNull(),
-  userId: text("user_id").references(() => users.id, { onDelete: "cascade" }),
-  invitedEmail: text("invited_email"),
-  role: text("role").notNull().default("admin"),
-  status: text("status").notNull().default("active"),
-  invitedByUserId: text("invited_by_user_id").references(() => users.id, { onDelete: "set null" }),
-}, (table) => [
-  index("organization_members_organization_id_idx").on(table.organizationId),
-  index("organization_members_user_id_idx").on(table.userId),
-  index("organization_members_status_idx").on(table.status),
 ]);
 
 export const organizationIdentityMembers = sqliteTable("organization_identity_members", {
@@ -503,8 +486,6 @@ export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
 export type Organization = typeof organizations.$inferSelect;
 export type NewOrganization = typeof organizations.$inferInsert;
-export type OrganizationMember = typeof organizationMembers.$inferSelect;
-export type NewOrganizationMember = typeof organizationMembers.$inferInsert;
 export type OrganizationIdentityMember = typeof organizationIdentityMembers.$inferSelect;
 export type Identity = typeof identities.$inferSelect;
 export type NewIdentity = typeof identities.$inferInsert;

@@ -16,7 +16,6 @@
     "db:import:data:remote": "wrangler d1 execute ave --remote --file ./tmp/neon-data.sql"
   },
   "dependencies": {
-    "@aws-sdk/client-s3": "^3.1045.0",
     "@hono/zod-validator": "^0.7.6",
     "@noble/ed25519": "^3.1.0",
     "@noble/hashes": "^2.2.0",

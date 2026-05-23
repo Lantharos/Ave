@@ -6,7 +6,7 @@ Ave is split into several packages rather than one root workspace, so the quicke
 
 ## Repository layout
 
-- `ave-frontend` contains the unified SvelteKit frontend Worker for the product, developer portal, and business console
+- `ave-web` contains the unified SvelteKit frontend Worker for the product, developer portal, and business console
 - `ave-server` contains the OAuth/OIDC API, auth flows, signing, encryption, uploads, and developer portal backend routes
 - `ave-docs` contains the public documentation
 - `sdks/ave-sdk` contains the typed SDK
@@ -32,7 +32,7 @@ bun run dev
 ```
 
 ```bash
-cd ave-frontend
+cd ave-web
 bun install
 bun run dev
 ```
@@ -40,7 +40,7 @@ bun run dev
 Common verification commands:
 
 - `ave-server`: `bun run check`
-- `ave-frontend`: `bun run check`, `bun run build`
+- `ave-web`: `bun run check`, `bun run build`
 - `sdks/ave-sdk`: `bun run build`
 - `sdks/ave-embed`: `bun run build:windows`
 

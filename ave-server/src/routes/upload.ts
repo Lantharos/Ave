@@ -2,54 +2,30 @@ import { Hono } from "hono";
 import { db, identities, organizations } from "../db";
 import { requireAuth, requireWritable } from "../middleware/auth";
 import { eq, and } from "drizzle-orm";
-import { S3Client, PutObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
 import { recordActivityLog } from "../lib/background-events";
 import { requireBusinessAccess } from "../lib/business";
 
-const app = new Hono();
-
-type R2Config = {
-  accountId: string;
-  accessKeyId: string;
-  secretAccessKey: string;
-  bucketName: string;
-  publicUrl: string;
+type Bindings = {
+  UPLOADS: R2Bucket;
+  R2_PUBLIC_URL: string;
 };
 
-let r2Client: S3Client | null = null;
-let r2ClientCacheKey = "";
+const app = new Hono<{ Bindings: Bindings }>();
 
-function getR2Config(): R2Config {
-  const accountId = process.env.R2_ACCOUNT_ID;
-  const accessKeyId = process.env.R2_ACCESS_KEY_ID;
-  const secretAccessKey = process.env.R2_SECRET_ACCESS_KEY;
-  const bucketName = process.env.R2_BUCKET_NAME || "ave-uploads";
-  const publicUrl = process.env.R2_PUBLIC_URL;
-
-  if (!accountId || !accessKeyId || !secretAccessKey || !publicUrl) {
-    throw new Error("R2 configuration is incomplete");
+function getUploadsBucket(c: { env: Partial<Bindings> }): R2Bucket {
+  if (!c.env.UPLOADS) {
+    throw new Error("R2 bucket binding UPLOADS is not configured");
   }
 
-  return { accountId, accessKeyId, secretAccessKey, bucketName, publicUrl };
+  return c.env.UPLOADS;
 }
 
-function getR2Client(): { client: S3Client; config: R2Config } {
-  const config = getR2Config();
-  const cacheKey = `${config.accountId}:${config.accessKeyId}:${config.bucketName}`;
-
-  if (!r2Client || r2ClientCacheKey !== cacheKey) {
-    r2Client = new S3Client({
-      region: "auto",
-      endpoint: `https://${config.accountId}.r2.cloudflarestorage.com`,
-      credentials: {
-        accessKeyId: config.accessKeyId,
-        secretAccessKey: config.secretAccessKey,
-      },
-    });
-    r2ClientCacheKey = cacheKey;
+function getUploadsPublicUrl(c: { env: Partial<Bindings> }): string {
+  if (!c.env.R2_PUBLIC_URL) {
+    throw new Error("R2_PUBLIC_URL is not configured");
   }
 
-  return { client: r2Client, config };
+  return c.env.R2_PUBLIC_URL.replace(/\/+$/, "");
 }
 
 type ImageType = {
@@ -136,34 +112,25 @@ app.use("*", requireWritable);
 
 // Upload to R2
 async function uploadToR2(
+  c: { env: Partial<Bindings> },
   buffer: Buffer,
   key: string,
   contentType: string
 ): Promise<string> {
-  const { client, config } = getR2Client();
-  await client.send(
-    new PutObjectCommand({
-      Bucket: config.bucketName,
-      Key: key,
-      Body: buffer,
-      ContentType: contentType,
-      CacheControl: "public, max-age=31536000", // 1 year cache
-    })
-  );
+  await getUploadsBucket(c).put(key, buffer, {
+    httpMetadata: {
+      contentType,
+      cacheControl: "public, max-age=31536000",
+    },
+  });
 
-  return `${config.publicUrl}/${key}`;
+  return `${getUploadsPublicUrl(c)}/${key}`;
 }
 
 // Delete from R2
-async function deleteFromR2(key: string): Promise<void> {
+async function deleteFromR2(c: { env: Partial<Bindings> }, key: string): Promise<void> {
   try {
-    const { client, config } = getR2Client();
-    await client.send(
-      new DeleteObjectCommand({
-        Bucket: config.bucketName,
-        Key: key,
-      })
-    );
+    await getUploadsBucket(c).delete(key);
   } catch (error) {
     console.error("Failed to delete from R2:", error);
     // Don't throw - deletion failure shouldn't break the flow
@@ -171,8 +138,8 @@ async function deleteFromR2(key: string): Promise<void> {
 }
 
 // Extract key from URL
-function getKeyFromUrl(url: string): string | null {
-  const { publicUrl } = getR2Config();
+function getKeyFromUrl(c: { env: Partial<Bindings> }, url: string): string | null {
+  const publicUrl = getUploadsPublicUrl(c);
   let parsedUrl: URL;
   let parsedPublicUrl: URL;
   try {
@@ -235,13 +202,13 @@ app.post("/avatar", async (c) => {
   }
 
   const key = `avatars/${upload.filename}`;
-  const avatarUrl = await uploadToR2(upload.buffer, key, upload.contentType);
+  const avatarUrl = await uploadToR2(c, upload.buffer, key, upload.contentType);
 
   // Delete old avatar if exists
   if (identity.avatarUrl) {
-    const oldKey = getKeyFromUrl(identity.avatarUrl);
+    const oldKey = getKeyFromUrl(c, identity.avatarUrl);
     if (oldKey) {
-      await deleteFromR2(oldKey);
+      await deleteFromR2(c, oldKey);
     }
   }
 
@@ -302,12 +269,12 @@ app.post("/workspace-logo", async (c) => {
   }
 
   const key = `workspace-logos/${upload.filename}`;
-  const logoUrl = await uploadToR2(upload.buffer, key, upload.contentType);
+  const logoUrl = await uploadToR2(c, upload.buffer, key, upload.contentType);
 
   if (organization.logoUrl) {
-    const oldKey = getKeyFromUrl(organization.logoUrl);
+    const oldKey = getKeyFromUrl(c, organization.logoUrl);
     if (oldKey) {
-      await deleteFromR2(oldKey);
+      await deleteFromR2(c, oldKey);
     }
   }
 
@@ -364,13 +331,13 @@ app.post("/banner", async (c) => {
   }
 
   const key = `banners/${upload.filename}`;
-  const bannerUrl = await uploadToR2(upload.buffer, key, upload.contentType);
+  const bannerUrl = await uploadToR2(c, upload.buffer, key, upload.contentType);
 
   // Delete old banner if exists (only if it's an R2 URL, not a color)
   if (identity.bannerUrl && !identity.bannerUrl.startsWith("#")) {
-    const oldKey = getKeyFromUrl(identity.bannerUrl);
+    const oldKey = getKeyFromUrl(c, identity.bannerUrl);
     if (oldKey) {
-      await deleteFromR2(oldKey);
+      await deleteFromR2(c, oldKey);
     }
   }
 
@@ -411,9 +378,9 @@ app.delete("/avatar/:identityId", async (c) => {
 
   // Delete from R2 if exists
   if (identity.avatarUrl) {
-    const key = getKeyFromUrl(identity.avatarUrl);
+    const key = getKeyFromUrl(c, identity.avatarUrl);
     if (key) {
-      await deleteFromR2(key);
+      await deleteFromR2(c, key);
     }
   }
 
@@ -444,9 +411,9 @@ app.delete("/banner/:identityId", async (c) => {
 
   // Delete from R2 if exists (only if it's an R2 URL, not a color)
   if (identity.bannerUrl && !identity.bannerUrl.startsWith("#")) {
-    const key = getKeyFromUrl(identity.bannerUrl);
+    const key = getKeyFromUrl(c, identity.bannerUrl);
     if (key) {
-      await deleteFromR2(key);
+      await deleteFromR2(c, key);
     }
   }
 

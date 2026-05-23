@@ -19,7 +19,7 @@ Instead, email the details to:
 Include as much of the following as you can:
 
 - A clear description of the issue and why it is security-sensitive
-- The affected package or surface, such as `ave-server`, `ave-frontend`, `sdks/ave-sdk`, or `sdks/ave-embed`
+- The affected package or surface, such as `ave-server`, `ave-web`, `sdks/ave-sdk`, or `sdks/ave-embed`
 - Reproduction steps, proof of concept, or a minimal test case
 - Any environment or configuration details needed to reproduce the issue
 - Your assessment of impact, affected users, or likely attack scenarios

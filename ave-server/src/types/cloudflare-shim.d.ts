@@ -79,6 +79,20 @@ interface AnalyticsEngineDataset {
   }): void;
 }
 
+interface R2Bucket {
+  put(
+    key: string,
+    value: ArrayBuffer | ArrayBufferView | Blob | ReadableStream | string,
+    options?: {
+      httpMetadata?: {
+        contentType?: string;
+        cacheControl?: string;
+      };
+    },
+  ): Promise<unknown>;
+  delete(keys: string | string[]): Promise<void>;
+}
+
 declare class WebSocketPair {
   0: WebSocket;
   1: WebSocket;

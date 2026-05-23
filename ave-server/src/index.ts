@@ -38,6 +38,7 @@ type Bindings = {
   BACKGROUND_EVENTS?: Queue<BackgroundEvent>;
   API_ANALYTICS?: AnalyticsEngineDataset;
   DB: D1Database;
+  UPLOADS: R2Bucket;
   INTERNAL_API_TOKEN?: string;
 };
 

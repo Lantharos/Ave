@@ -10,7 +10,7 @@ Ave is split into a few separate packages instead of one root workspace:
 
 | Path | Purpose | Stack |
 | --- | --- | --- |
-| `ave-frontend` | Unified frontend Worker for `aveid.net`, `devs.aveid.net`, and `business.aveid.net` | SvelteKit, Cloudflare Workers, Tailwind CSS v4 |
+| `ave-web` | Unified frontend Worker for `aveid.net`, `devs.aveid.net`, and `business.aveid.net` | SvelteKit, Cloudflare Workers, Tailwind CSS v4 |
 | `ave-server` | OAuth/OIDC API, auth flows, app management, signing, encryption, uploads | Hono, Cloudflare Workers, Durable Objects, D1, Drizzle |
 | `ave-docs` | Product and SDK documentation | Mintlify content |
 | `sdks/ave-sdk` | Typed JavaScript/TypeScript SDK for OAuth, OIDC, session, Convex, Expo, Svelte, and Next.js helpers | TypeScript |
@@ -32,9 +32,9 @@ Ave is split into a few separate packages instead of one root workspace:
 
 The repository is organized around the same split used in production:
 
-- `ave-frontend` serves the end-user product UI on `aveid.net`
-- `ave-frontend` serves the developer portal on `devs.aveid.net`
-- `ave-frontend` serves the business organization console on `business.aveid.net`, including standard org encryption, customer KMS references, and opt-in E2EE org-key grants
+- `ave-web` serves the end-user product UI on `aveid.net`
+- `ave-web` serves the developer portal on `devs.aveid.net`
+- `ave-web` serves the business organization console on `business.aveid.net`, including standard org encryption, customer KMS references, and opt-in E2EE org-key grants
 - `api.aveid.net` serves the OAuth/OIDC and product API
 - `docs.aveid.net` serves the documentation
 
@@ -49,7 +49,7 @@ There is currently no root `package.json` workspace. Install and run each packag
 
 ### 1. Start the API
 
-The API is the center of the stack. `ave-frontend` talks to it for the product, developer, and business surfaces.
+The API is the center of the stack. `ave-web` talks to it for the product, developer, and business surfaces.
 
 ```bash
 cd ave-server
@@ -98,7 +98,7 @@ The API defaults to `http://localhost:3000` in local development.
 ### 2. Start the unified frontend
 
 ```bash
-cd ave-frontend
+cd ave-web
 bun install
 ```
 
@@ -190,10 +190,10 @@ If you are new to the repo, these files are the quickest way to orient yourself:
 - `ave-server/src/routes/apps.ts` for developer portal app and resource management
 - `ave-server/src/routes/organizations.ts` for multi-workspace developer portal support
 - `ave-server/src/routes/business.ts` for business organization identity containers, roles, org keys, and SSO setup
-- `ave-frontend/src/hooks.ts` for host-based frontend routing across Ave domains
-- `ave-frontend/src/routes/web` for the main product UI
-- `ave-frontend/src/routes/devs` for the developer portal
-- `ave-frontend/src/routes/business` for the business organization console
+- `ave-web/src/hooks.ts` for host-based frontend routing across Ave domains
+- `ave-web/src/routes/web` for the main product UI
+- `ave-web/src/routes/devs` for the developer portal
+- `ave-web/src/routes/business` for the business organization console
 - `ave-docs/index.mdx` and `ave-docs/quickstart.mdx` for the public product story and integration path
 
 ## Database and storage notes
