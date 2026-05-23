@@ -5,6 +5,7 @@ import {
   handleWebSocketOpen, 
   handleWebSocketClose, 
   handleWebSocketMessage,
+  notifyLoginRequest,
   notifyLoginRequestStatus,
 } from "./lib/websocket";
 
@@ -448,6 +449,33 @@ export class ApiAppDurableObject {
         return Response.json({ success: true });
       }
 
+      if (url.pathname === "/__internal/login-request" && request.method === "POST") {
+        const expectedToken = this.env.INTERNAL_API_TOKEN;
+        const providedToken = request.headers.get("x-internal-token");
+        if (expectedToken && expectedToken !== providedToken) {
+          return new Response("Forbidden", { status: 403 });
+        }
+
+        const payload = await request.json() as {
+          handle?: string;
+          request?: {
+            id: string;
+            deviceName: string | null;
+            deviceType: string | null;
+            browser: string | null;
+            os: string | null;
+            ipAddress: string | null;
+          };
+        };
+
+        if (!payload.handle || !payload.request?.id) {
+          return Response.json({ error: "Invalid login request payload" }, { status: 400 });
+        }
+
+        await notifyLoginRequest(payload.handle, payload.request);
+        return Response.json({ success: true });
+      }
+
       if (url.pathname === "/__internal/cleanup" && request.method === "POST") {
         const expectedToken = this.env.INTERNAL_API_TOKEN;
         const providedToken = request.headers.get("x-internal-token");
@@ -480,11 +508,7 @@ export { RateLimitDurableObject } from "./lib/rate-limit";
 
 function needsApiDurableObject(request: Request): boolean {
   const url = new URL(request.url);
-  if (url.pathname === "/ws" && isWebSocketUpgrade(request)) {
-    return true;
-  }
-
-  return url.pathname === "/api/login/request-approval";
+  return url.pathname === "/ws" && isWebSocketUpgrade(request);
 }
 
 export default {

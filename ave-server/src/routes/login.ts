@@ -15,7 +15,6 @@ import {
 } from "../lib/crypto";
 import { clearSessionCookie, setSessionCookie, SESSION_COOKIE_NAME } from "../lib/session-cookie";
 import { eq, and, gt, desc, isNull } from "drizzle-orm";
-import { notifyLoginRequest } from "../lib/websocket";
 import { sendLoginRequestNotification, sendAccountEventNotification, type PushSubscription } from "../lib/webpush";
 import { deleteChallenge, getChallenge, setChallenge } from "../lib/challenge-store";
 import { serializeIdentityForOwner } from "../lib/identity-serialization";
@@ -24,7 +23,42 @@ import { enforceRateLimits, ipRateLimit, subjectRateLimit } from "../lib/rate-li
 import { getRequiredEnterpriseSsoForEmail } from "../lib/enterprise-sso-policy";
 import { recordActivityLog } from "../lib/background-events";
 
-const app = new Hono();
+type Bindings = {
+  API_APP: DurableObjectNamespace;
+  INTERNAL_API_TOKEN?: string;
+};
+
+const app = new Hono<{ Bindings: Bindings }>();
+
+async function notifyLoginRequestInApiApp(
+  c: { env: Bindings },
+  handle: string,
+  request: {
+    id: string;
+    deviceName: string | null;
+    deviceType: string | null;
+    browser: string | null;
+    os: string | null;
+    ipAddress: string | null;
+  },
+) {
+  const id = c.env.API_APP.idFromName("primary");
+  const stub = c.env.API_APP.get(id);
+  const headers = new Headers({ "Content-Type": "application/json" });
+  if (c.env.INTERNAL_API_TOKEN) {
+    headers.set("x-internal-token", c.env.INTERNAL_API_TOKEN);
+  }
+
+  const response = await stub.fetch("https://internal.aveid.net/__internal/login-request", {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ handle, request }),
+  });
+
+  if (!response.ok) {
+    console.warn("Login request notification failed:", response.status, await response.text());
+  }
+}
 
 async function rejectRequiredEnterpriseSso(c: any, identity: typeof identities.$inferSelect) {
   const sso = await getRequiredEnterpriseSsoForEmail(identity.email);
@@ -598,7 +632,7 @@ app.post("/request-approval", zValidator("json", z.object({
     .returning();
   
   // Notify user's connected devices via WebSocket
-  notifyLoginRequest(normalizedHandle, {
+  await notifyLoginRequestInApiApp(c, normalizedHandle, {
     id: request.id,
     deviceName: request.deviceName,
     deviceType: request.deviceType,
