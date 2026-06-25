@@ -171,6 +171,7 @@ function isCredentialedOAuthCorsPath(path: string): boolean {
 function isPublicApiCorsPath(path: string): boolean {
   return path.startsWith("/api/signing/public-key/")
     || path.startsWith("/api/encryption/public-key/")
+    || path === "/api/encryption/app-lookup"
     || path === "/api/signing/verify";
 }
 

@@ -191,8 +191,9 @@
             </div>
           </div>
           <div class="rounded-[22px] bg-white/[0.03] px-5 py-4">
-            <p class="m-0 text-[13px] text-[#666]">Encryption</p>
+            <p class="m-0 text-[13px] text-[#666]">Legacy E2EE flag</p>
             <p class="m-0 mt-2 text-[20px] font-semibold text-white">{app.supportsE2ee ? "Enabled" : "Disabled"}</p>
+            <p class="m-0 mt-2 text-[13px] text-[#7d7d7d]">New apps request `e2ee:*` scopes at sign-in. This flag only applies to older apps.</p>
           </div>
           <div class="rounded-[22px] bg-white/[0.03] px-5 py-4">
             <p class="m-0 text-[13px] text-[#666]">Identity coverage</p>

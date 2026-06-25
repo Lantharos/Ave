@@ -10,6 +10,12 @@ export interface AveSessionSnapshot {
   refresh_token?: string;
   /** E2EE app key (base64) from `#app_key` or token response */
   appKeyBase64?: string;
+  appKeyBase64Old?: string;
+  appPublicKeyBase64?: string;
+  appPublicKeyBase64Old?: string;
+  appPrivateKeyBase64?: string;
+  appPrivateKeyBase64Old?: string;
+  appEncryptionWasReset?: boolean;
   expiresAtMs: number;
   scope?: string;
 }
@@ -73,13 +79,21 @@ export function snapshotFromTokenResponse(
   if (!refresh && previous?.refresh_token) {
     refresh = previous.refresh_token;
   }
-  const appKey = tr.app_key ?? previous?.appKeyBase64;
+  const appKey = tr.app_key ?? (tr.app_key_reset ? undefined : previous?.appKeyBase64);
+  const appPublicKey = tr.app_public_key ?? (tr.app_key_reset ? undefined : previous?.appPublicKeyBase64);
+  const appPrivateKey = tr.app_private_key ?? (tr.app_key_reset ? undefined : previous?.appPrivateKeyBase64);
   return {
     access_token: tr.access_token,
     access_token_jwt: tr.access_token_jwt,
     id_token: tr.id_token,
     refresh_token: refresh,
     appKeyBase64: appKey,
+    appKeyBase64Old: tr.app_key_old,
+    appPublicKeyBase64: appPublicKey,
+    appPublicKeyBase64Old: tr.app_public_key_old,
+    appPrivateKeyBase64: appPrivateKey,
+    appPrivateKeyBase64Old: tr.app_private_key_old,
+    appEncryptionWasReset: tr.app_key_reset ?? false,
     expiresAtMs: snapshotExpiresAtFromResponse(tr),
     scope: tr.scope,
   };
@@ -259,6 +273,14 @@ export class AveSession {
     this.snapshot = next;
     this.bc?.postMessage({ type: "session_updated" });
     this.emit();
+  }
+
+  getAppPublicKeyBase64(): string | undefined {
+    return this.snapshot?.appPublicKeyBase64;
+  }
+
+  getAppPrivateKeyBase64(): string | undefined {
+    return this.snapshot?.appPrivateKeyBase64;
   }
 
   /**

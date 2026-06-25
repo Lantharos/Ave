@@ -1,101 +1,101 @@
 ---
-title: "@ave-id/sdk Identity keys"
-description: "Pass encrypted invites on the Ave authorize URL and receive plaintext after redirect or embed completion."
+title: "@ave-id/sdk App encryption"
+description: "Per-app symmetric keys and asymmetric keypairs for multi-user E2EE without OAuth handshakes."
 ---
 
 ```bash
 bun add @ave-id/sdk
 ```
 
-## What you implement
+## Encryption scopes
 
-1. **Encrypt** the secret for the invitee’s identity using `encryptPayloadForHandle` (or `encryptPayloadForIdentity` with their public key).
-2. **Encode** the result with `encodeWrappedPayloadParam` from `@ave-id/sdk/client`.
-3. **Add it to the Ave sign-in / authorize URL** as the query parameter **`wrapped_key`** (see below).
-4. **Read the plaintext** after redirect: fragment **`unwrapped_secret`** (base64url of the decrypted bytes), or **`unwrappedSecretB64`** on the embed success payload — not `decryptWrappedPayload` in your own app.
+Enable encryption by requesting an `e2ee:*` scope at sign-in. No developer-portal configuration is required.
 
-Ave runs unwrap in the browser after the user consents and unlocks their key. Your server never receives the Ave master key; you only store the **wrapped** ciphertext until you send the user to Ave.
+| Scope | Mode | Fragment parameters |
+| --- | --- | --- |
+| `e2ee:symmetric` | AES-256 app key | `#app_key=` |
+| `e2ee:asymmetric` | ECDH P-256 keypair | `#app_public_key=` and `#app_private_key=` |
 
----
-
-## Where to put `wrapped_key`
-
-Use **`buildAuthorizeUrl`** (or any link to `https://aveid.net/signin` / `/authorize` with the same query shape) and pass the encoded blob via **`extraParams`**:
+Request exactly one E2EE mode scope per sign-in. Re-sign-in reuses existing per-app keys unless you also request `e2ee:reset`:
 
 ```ts
-import { buildAuthorizeUrl, getIdentityPublicKey } from "@ave-id/sdk";
-import {
-  encryptPayloadForHandle,
-  encodeWrappedPayloadParam,
-} from "@ave-id/sdk/client";
-
-const wrapped = await encryptPayloadForHandle(
-  new TextEncoder().encode(JSON.stringify({ workspaceKey: "…" })),
-  { issuer: "https://aveid.net", handle: "alice" }
-);
-
-const wrappedKey = encodeWrappedPayloadParam(wrapped);
+import { buildAuthorizeUrl } from "@ave-id/sdk";
 
 const url = buildAuthorizeUrl(
-  {
-    clientId: "YOUR_CLIENT_ID",
-    redirectUri: "https://yourapp.com/callback",
-  },
-  {
-    codeChallenge: challenge,
-    codeChallengeMethod: "S256",
-    extraParams: { wrapped_key: wrappedKey },
-  }
+  { clientId, redirectUri, issuer: "https://aveid.net" },
+  { scope: ["openid", "profile", "email", "e2ee:asymmetric"] },
 );
 
-window.location.href = url;
+// Dangerous: rotate keys (also shows a warning on the Ave consent screen)
+const rotateUrl = buildAuthorizeUrl(
+  { clientId, redirectUri, issuer: "https://aveid.net" },
+  { scope: ["openid", "profile", "email", "e2ee:asymmetric", "e2ee:reset"] },
+);
 ```
 
-| Query param | Value |
-| --- | --- |
-| **`wrapped_key`** | Output of **`encodeWrappedPayloadParam(wrapped)`** — URL-safe base64 over JSON `{"encryptedPayload","senderPublicKey"}`. Max length 65536 characters. |
+After consent, parse the fragment with `mergeAppEncryptionFromUrl` (PKCE) or `completeOAuthCallback` (session helper). Store the **private key locally** in your app; persist the **public key** on your user record.
 
-Do **not** send the raw JSON in the query string; always use `encodeWrappedPayloadParam`.
+On key rotation (`e2ee:reset`), the fragment also includes previous keys (`#app_key_old`, `#app_public_key_old`, `#app_private_key_old`) and `#app_key_reset=true` so your app can migrate ciphertext before discarding the old material.
 
----
+## Multi-user encryption (asymmetric)
 
-## What you get back
+Look up another user's app public key, encrypt for them, and they decrypt with the private key you already stored locally.
 
-After successful authorization:
+```ts
+import {
+  encryptForAppHandle,
+  decryptFromAppSender,
+  lookupAppUserByPublicKey,
+} from "@ave-id/sdk";
 
-| Channel | Plaintext |
-| --- | --- |
-| **Full-page redirect** | URL fragment includes **`unwrapped_secret=<base64url>`** (same encoding style as `encodeWrappedPayloadParam` input: base64url over raw decrypted bytes). If the secret is too long for a safe fragment (~1800 chars), authorization fails unless **`embed=1`**. |
-| **`embed=1`** | `postMessage` success payload includes **`unwrappedSecretB64`** (same bytes, base64url string). |
+const wrapped = await encryptForAppHandle("room secret", {
+  clientId,
+  issuer: "https://aveid.net",
+  handle: "alice",
+});
 
-If the app is E2EE-capable, **`app_key`** may appear in the same fragment; parse both keys from the hash.
+const alice = await lookupAppUserByPublicKey(
+  { clientId, issuer: "https://aveid.net" },
+  storedPublicKey,
+);
 
----
+const plain = await decryptFromAppSender(
+  wrapped,
+  session.getAppPrivateKeyBase64()!,
+);
+```
 
-## API reference (keys only)
+### Lookup API
 
-- `GET /api/signing/public-key/:handle` — public key for wrapping.
-- `GET /api/signing/keys/:identityId` — envelope (session); used by Ave during unwrap, not for your invite encryption step.
+Public endpoint (no user token). Returns **404** if the handle is unknown, the user has never signed in to your app, or they have not provisioned an app encryption key — your app should show messaging like “this person hasn’t used your app yet” instead of generating keys server-side.
 
-[Signing API](/api/signing-endpoints)
+- `GET /api/encryption/app-lookup?client_id=…&handle=…` → public key + user metadata
+- `GET /api/encryption/app-lookup?client_id=…&public_key=…` → user metadata for that key
 
----
+```ts
+import {
+  lookupAppPublicKeyByHandle,
+  AppEncryptionLookupError,
+} from "@ave-id/sdk";
 
-## `decryptWrappedPayload` in the SDK
+try {
+  const recipient = await lookupAppPublicKeyByHandle(
+    { clientId, issuer: "https://aveid.net" },
+    "alice",
+  );
+} catch (error) {
+  if (error instanceof AppEncryptionLookupError && error.status === 404) {
+    // e.g. "Alice hasn't signed in to this app yet"
+  }
+}
+```
 
-That helper is for **local testing** or **non-Ave** environments. **Production flows** should use **`wrapped_key` → Ave → `unwrapped_secret`**, not client-side unwrap on your origin without the master key.
+## Symmetric mode (legacy-compatible)
 
----
+Older apps with `supportsE2ee` still default to symmetric when no `e2ee:*` scope is requested. The flow is unchanged: `#app_key=` in the redirect fragment.
 
-## Model (short)
+## Removed: identity wrapped OAuth payloads
 
-| | |
-| --- | --- |
-| **Wrapped blob** | Stored in **your** database until the user visits Ave with `wrapped_key`. |
-| **E2EE `app_key`** | Separate mechanism — [End-to-end encryption](/guides/end-to-end-encryption). |
+The old `wrapped_key` / `unwrapped_secret` authorize flow is removed. It required per-identity encryption keys and sent users back through Ave for every invite. Use app keypairs and the lookup API instead.
 
----
-
-## FedCM
-
-`wrapped_key` is **not** supported on FedCM finalize yet; use the normal redirect flow.
+[Ave Signing](/sdk/sdk-signing) (Ed25519) is unchanged and separate from app encryption.

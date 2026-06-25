@@ -1,4 +1,4 @@
-import { mergeAppKeyFromUrl, stripSensitiveFragmentParams } from "./app-key.js";
+import { mergeAppEncryptionFromUrl, stripSensitiveFragmentParams } from "./app-key.js";
 import {
   buildAuthorizeUrl,
   buildConnectorUrl,
@@ -8,7 +8,6 @@ import {
   generateCodeVerifier,
   generateNonce,
   getApiBase,
-  getIdentityPublicKey,
 } from "./index.js";
 import { isJwtVerificationSupported } from "./crypto-runtime.js";
 import { verifyJwt } from "./jwt.js";
@@ -18,12 +17,14 @@ import type {
   AveJwtClaims,
   FedCmTokenResponse,
   TokenResponse,
-  WrappedIdentityPayload,
 } from "./types.js";
 
 export {
   extractAppKeyFromUrl,
+  extractAppPublicKeyFromUrl,
+  extractAppPrivateKeyFromUrl,
   mergeAppKeyFromUrl,
+  mergeAppEncryptionFromUrl,
   normalizeAppKeyBase64,
   stripSensitiveFragmentParams,
 } from "./app-key.js";
@@ -42,7 +43,6 @@ export type {
   IdentityKeyEnvelope,
   IdentityPublicKeyRecord,
   VerifyJwtOptions,
-  WrappedIdentityPayload,
 } from "./types.js";
 export type {
   AveWorkspaceAuthMethod,
@@ -83,150 +83,6 @@ function decodeJwtPayload(token: string): Record<string, unknown> | null {
   } catch {
     return null;
   }
-}
-
-function encodeBase64(bytes: Uint8Array): string {
-  let binary = "";
-  for (const byte of bytes) binary += String.fromCharCode(byte);
-  return btoa(binary);
-}
-
-function decodeBase64(value: string): Uint8Array {
-  return Uint8Array.from(atob(value), (char) => char.charCodeAt(0));
-}
-
-function toPlainArrayBuffer(view: Uint8Array): ArrayBuffer {
-  return view.buffer.slice(view.byteOffset, view.byteOffset + view.byteLength) as ArrayBuffer;
-}
-
-function toArrayBuffer(data: string | Uint8Array | ArrayBuffer): ArrayBuffer {
-  if (typeof data === "string") {
-    return toPlainArrayBuffer(new TextEncoder().encode(data));
-  }
-
-  if (data instanceof Uint8Array) {
-    return toPlainArrayBuffer(data);
-  }
-
-  return data;
-}
-
-function toBase64Url(base64: string): string {
-  return base64.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
-}
-
-function fromBase64Url(base64Url: string): string {
-  const normalized = base64Url.replace(/-/g, "+").replace(/_/g, "/");
-  const padded = normalized + "=".repeat((4 - (normalized.length % 4)) % 4);
-  return padded;
-}
-
-async function importIdentityPublicKey(publicKeyB64: string): Promise<CryptoKey> {
-  return crypto.subtle.importKey(
-    "spki",
-    toPlainArrayBuffer(decodeBase64(publicKeyB64)),
-    { name: "ECDH", namedCurve: "P-256" },
-    false,
-    []
-  );
-}
-
-async function deriveIdentitySharedKey(privateKey: CryptoKey, peerPublicKeyB64: string): Promise<CryptoKey> {
-  const publicKey = await importIdentityPublicKey(peerPublicKeyB64);
-  return crypto.subtle.deriveKey(
-    { name: "ECDH", public: publicKey },
-    privateKey,
-    { name: "AES-GCM", length: 256 },
-    false,
-    ["encrypt", "decrypt"]
-  );
-}
-
-async function generateEphemeralKeyPair(): Promise<{
-  publicKey: string;
-  privateKey: CryptoKey;
-}> {
-  const keyPair = await crypto.subtle.generateKey(
-    { name: "ECDH", namedCurve: "P-256" },
-    true,
-    ["deriveKey"]
-  );
-
-  const publicKey = await crypto.subtle.exportKey("spki", keyPair.publicKey);
-  return {
-    publicKey: encodeBase64(new Uint8Array(publicKey)),
-    privateKey: keyPair.privateKey,
-  };
-}
-
-export async function exportIdentityPrivateKey(privateKey: CryptoKey): Promise<string> {
-  const exported = await crypto.subtle.exportKey("pkcs8", privateKey);
-  return encodeBase64(new Uint8Array(exported));
-}
-
-export async function importIdentityPrivateKey(privateKeyB64: string): Promise<CryptoKey> {
-  return crypto.subtle.importKey(
-    "pkcs8",
-    toPlainArrayBuffer(decodeBase64(privateKeyB64)),
-    { name: "ECDH", namedCurve: "P-256" },
-    false,
-    ["deriveKey"]
-  );
-}
-
-export async function encryptPayloadForIdentity(
-  payload: string | Uint8Array | ArrayBuffer,
-  recipientPublicKey: string
-): Promise<WrappedIdentityPayload> {
-  const sender = await generateEphemeralKeyPair();
-  const sharedKey = await deriveIdentitySharedKey(sender.privateKey, recipientPublicKey);
-  const iv = crypto.getRandomValues(new Uint8Array(12));
-  const encrypted = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, sharedKey, toArrayBuffer(payload));
-  const packed = new Uint8Array(iv.byteLength + encrypted.byteLength);
-  packed.set(iv, 0);
-  packed.set(new Uint8Array(encrypted), iv.byteLength);
-
-  return {
-    encryptedPayload: encodeBase64(packed),
-    senderPublicKey: sender.publicKey,
-  };
-}
-
-export async function encryptPayloadForHandle(
-  payload: string | Uint8Array | ArrayBuffer,
-  params: { handle: string; issuer?: string }
-): Promise<WrappedIdentityPayload> {
-  const recipient = await getIdentityPublicKey({ issuer: params.issuer }, params.handle);
-  return encryptPayloadForIdentity(payload, recipient.publicKey);
-}
-
-export async function decryptWrappedPayload(
-  wrapped: WrappedIdentityPayload,
-  recipientPrivateKey: CryptoKey
-): Promise<ArrayBuffer> {
-  const sharedKey = await deriveIdentitySharedKey(recipientPrivateKey, wrapped.senderPublicKey);
-  const packed = decodeBase64(wrapped.encryptedPayload);
-  const iv = packed.slice(0, 12);
-  const ciphertext = packed.slice(12);
-  return crypto.subtle.decrypt({ name: "AES-GCM", iv }, sharedKey, ciphertext);
-}
-
-export function encodeWrappedPayloadParam(wrapped: WrappedIdentityPayload): string {
-  const json = JSON.stringify(wrapped);
-  const bytes = new TextEncoder().encode(json);
-  return toBase64Url(encodeBase64(bytes));
-}
-
-export function decodeWrappedPayloadParam(value: string): WrappedIdentityPayload {
-  const json = atob(fromBase64Url(value));
-  const parsed = JSON.parse(json) as Partial<WrappedIdentityPayload>;
-  if (!parsed.encryptedPayload || !parsed.senderPublicKey) {
-    throw new Error("Invalid wrapped payload param");
-  }
-  return {
-    encryptedPayload: parsed.encryptedPayload,
-    senderPublicKey: parsed.senderPublicKey,
-  };
 }
 
 // PKCE_STORAGE_KEY is the new canonical SDK storage entry.
@@ -430,11 +286,30 @@ export async function signInWithFedCm(params: FedCmOptions): Promise<FedCmTokenR
     { assertion },
   );
 
+  const merged = { ...response } as FedCmTokenResponse;
   if (typeof assertionPayload?.app_key === "string") {
-    response.app_key = assertionPayload.app_key;
+    merged.app_key = assertionPayload.app_key;
+  }
+  if (typeof assertionPayload?.app_key_old === "string") {
+    merged.app_key_old = assertionPayload.app_key_old;
+  }
+  if (typeof assertionPayload?.app_public_key === "string") {
+    merged.app_public_key = assertionPayload.app_public_key;
+  }
+  if (typeof assertionPayload?.app_public_key_old === "string") {
+    merged.app_public_key_old = assertionPayload.app_public_key_old;
+  }
+  if (typeof assertionPayload?.app_private_key === "string") {
+    merged.app_private_key = assertionPayload.app_private_key;
+  }
+  if (typeof assertionPayload?.app_private_key_old === "string") {
+    merged.app_private_key_old = assertionPayload.app_private_key_old;
+  }
+  if (assertionPayload?.app_key_reset === true) {
+    merged.app_key_reset = true;
   }
 
-  return response;
+  return merged;
 }
 
 export async function signIn(params: SignInOptions & { preferFedCm?: boolean }): Promise<FedCmTokenResponse | null> {
@@ -485,7 +360,7 @@ export async function finishPkceLogin(options: {
     },
   );
 
-  token = mergeAppKeyFromUrl(callbackUrl, token);
+  token = mergeAppEncryptionFromUrl(callbackUrl, token);
 
   clearPkceState();
 

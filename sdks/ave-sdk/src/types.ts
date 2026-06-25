@@ -1,4 +1,14 @@
-export type Scope = "openid" | "profile" | "email" | "offline_access" | "user_id";
+export type Scope =
+  | "openid"
+  | "profile"
+  | "email"
+  | "offline_access"
+  | "user_id"
+  | "e2ee:symmetric"
+  | "e2ee:asymmetric"
+  | "e2ee:reset"
+  | "e2ee:pqc:kyber"
+  | "e2ee:pqc:dilithium";
 
 /** OAuth client config for PKCE and token calls */
 export interface AveConfig {
@@ -101,6 +111,13 @@ export interface TokenResponse {
   refresh_token?: string;
   /** Plaintext app encryption key (e.g. FedCM) or after merging `#app_key` from redirect fragment */
   app_key?: string;
+  app_key_old?: string;
+  app_public_key?: string;
+  app_public_key_old?: string;
+  app_private_key?: string;
+  app_private_key_old?: string;
+  /** True when the app requested `e2ee:reset` and keys were rotated */
+  app_key_reset?: boolean;
   expires_in: number;
   scope: string;
   user?: {
@@ -199,6 +216,20 @@ export interface DelegationGrant {
   targetAudience: string;
 }
 
+export interface AppEncryptionUserRecord {
+  clientId: string;
+  identityId: string;
+  handle: string;
+  displayName: string;
+  publicKey: string;
+  encryptionMode: string;
+}
+
+export interface AppEncryptedPayload {
+  encryptedPayload: string;
+  senderPublicKey: string;
+}
+
 export interface IdentityPublicKeyRecord {
   handle: string;
   publicKey: string;
@@ -216,3 +247,6 @@ export interface WrappedIdentityPayload {
   encryptedPayload: string;
   senderPublicKey: string;
 }
+
+/** @deprecated Identity wrapped OAuth payloads are removed. Use app encryption keypairs instead. */
+export type DeprecatedWrappedIdentityPayload = WrappedIdentityPayload;

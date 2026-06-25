@@ -264,7 +264,6 @@
       </div>
 
       <div class="flex flex-col gap-4">
-        <Toggle bind:checked={draft.supportsE2ee} label="Enable end-to-end encryption" />
         <Toggle bind:checked={draft.allowUserIdScope} label="Allow user_id scope" />
       </div>
 

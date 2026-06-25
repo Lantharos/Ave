@@ -18,7 +18,6 @@
     iconUrl: string;
     redirectUris: string;
     developmentMode: boolean;
-    supportsE2ee: boolean;
     allowUserIdScope: boolean;
     accessTokenTtlSeconds: number;
     refreshTokenTtlSeconds: number;
@@ -34,7 +33,6 @@
     iconUrl: "",
     redirectUris: "",
     developmentMode: false,
-    supportsE2ee: false,
     allowUserIdScope: false,
     accessTokenTtlSeconds: 3600,
     refreshTokenTtlSeconds: 30 * 24 * 60 * 60,
@@ -103,7 +101,6 @@
     </div>
 
     <div class="flex flex-col gap-5 pt-2">
-      <Toggle bind:checked={form.supportsE2ee} label="Enable end-to-end encryption" />
       <div class="flex flex-col gap-2">
         <Toggle bind:checked={form.allowUserIdScope} label="Allow user_id scope (discouraged)" />
         <p class="m-0 text-[13px] md:text-[14px] text-[#878787]/60">

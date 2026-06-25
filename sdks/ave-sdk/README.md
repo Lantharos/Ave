@@ -159,30 +159,24 @@ const workspace = getAveWorkspaceContext(principal?.claims);
 
 See `guides/business-workspaces` in the docs repo.
 
-## Identity keys and wrapped payloads
+## App encryption
 
-Encrypt for the invitee’s public key, then pass the blob to Ave on the authorize URL as **`wrapped_key`** (see Mintlify docs: Identity keys & wrapped payloads). After consent, Ave returns plaintext in the redirect fragment as **`unwrapped_secret`** (or `unwrappedSecretB64` in embed). You do not unwrap on your own origin without the user’s Ave master key.
+Enable `e2ee:symmetric` or `e2ee:asymmetric` in your authorize URL scope list. See [App encryption](/sdk/sdk-identity-keys).
 
 ```ts
-import { buildAuthorizeUrl } from "@ave-id/sdk";
-import { encryptPayloadForHandle, encodeWrappedPayloadParam } from "@ave-id/sdk/client";
-
-const wrapped = await encryptPayloadForHandle(
-  new TextEncoder().encode(JSON.stringify({ secret: "…" })),
-  { issuer: "https://aveid.net", handle: "alice" }
-);
+import { buildAuthorizeUrl, encryptForAppHandle } from "@ave-id/sdk";
 
 const url = buildAuthorizeUrl(
   { clientId: "YOUR_CLIENT_ID", redirectUri: "https://yourapp.com/callback" },
-  {
-    codeChallenge,
-    codeChallengeMethod: "S256",
-    extraParams: { wrapped_key: encodeWrappedPayloadParam(wrapped) },
-  }
+  { scope: ["openid", "profile", "email", "e2ee:asymmetric"] },
 );
-```
 
-`decryptWrappedPayload` exists for local testing only; production flows use `wrapped_key` → Ave → `unwrapped_secret`.
+const wrapped = await encryptForAppHandle("secret", {
+  clientId: "YOUR_CLIENT_ID",
+  issuer: "https://aveid.net",
+  handle: "alice",
+});
+```
 
 ## Server helpers
 

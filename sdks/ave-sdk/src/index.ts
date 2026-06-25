@@ -1,4 +1,14 @@
-export type Scope = "openid" | "profile" | "email" | "offline_access" | "user_id";
+export type Scope =
+  | "openid"
+  | "profile"
+  | "email"
+  | "offline_access"
+  | "user_id"
+  | "e2ee:symmetric"
+  | "e2ee:asymmetric"
+  | "e2ee:reset"
+  | "e2ee:pqc:kyber"
+  | "e2ee:pqc:dilithium";
 
 export type { AveConfig } from "./types.js";
 export { getApiBase } from "./api-base.js";
@@ -22,12 +32,32 @@ export type { AsyncSecureStoreLike } from "./session-storage.js";
 
 export {
   extractAppKeyFromUrl,
+  extractAppKeyOldFromUrl,
+  extractAppPublicKeyFromUrl,
+  extractAppPublicKeyOldFromUrl,
+  extractAppPrivateKeyFromUrl,
+  extractAppPrivateKeyOldFromUrl,
+  extractAppKeyResetFromUrl,
   mergeAppKeyFromUrl,
+  mergeAppEncryptionFromUrl,
   normalizeAppKeyBase64,
   stripOAuthQueryParamsFromUrlString,
   stripSensitiveFragmentParams,
   stripSensitiveHashFromUrlString,
 } from "./app-key.js";
+
+export {
+  E2EE_SCOPES,
+  E2EE_RESET_SCOPE,
+  decryptFromAppSender,
+  encryptForAppHandle,
+  encryptForAppUser,
+  importAppPrivateKey,
+  lookupAppPublicKeyByHandle,
+  lookupAppUserByPublicKey,
+} from "./app-encryption.js";
+export type { AppEncryptedPayload, AppEncryptionUserRecord } from "./app-encryption.js";
+export { AppEncryptionLookupError } from "./app-encryption.js";
 
 export { configureCryptoRuntime, createExpoCryptoRuntime, isJwtVerificationSupported } from "./crypto-runtime.js";
 export type { AveCryptoRuntime } from "./crypto-runtime.js";

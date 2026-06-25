@@ -15,6 +15,13 @@ import { createBusinessOrganization, hasEnterpriseSsoSessionForOrganization, sco
 import { serializeEncryptionPolicy } from "../lib/business-encryption";
 import { getRequiredEnterpriseSsoForOrganization } from "../lib/enterprise-sso-policy";
 import { recordActivityLog, recordAppAnalyticsEvent, recordOAuthDelegationAuditLog } from "../lib/background-events";
+import {
+  appEffectiveSupportsE2ee,
+  isImplementedE2eeMode,
+  isScopeAllowedForApp,
+  resolveRequestedE2eeModeConflict,
+} from "../lib/e2ee-scopes";
+import { buildE2eeAuthUpdate, validateE2eeAuthPayload } from "../lib/app-e2ee-auth";
 
 const app = new Hono();
 export const oidcRoutes = new Hono();
@@ -324,6 +331,9 @@ async function issueAuthorizationCodeForApp(params: {
   scope: string;
   nonce?: string;
   encryptedAppKey?: string;
+  appPublicKey?: string;
+  encryptedAppPrivateKey?: string;
+  appEncryptionMode?: string;
   organizationId?: string;
   organizationName?: string;
   organizationMemberId?: string;
@@ -345,6 +355,9 @@ async function issueAuthorizationCodeForApp(params: {
     scope: params.scope,
     expiresAt: Date.now() + 10 * 60 * 1000,
     encryptedAppKey: params.encryptedAppKey,
+    appPublicKey: params.appPublicKey,
+    encryptedAppPrivateKey: params.encryptedAppPrivateKey,
+    appEncryptionMode: params.appEncryptionMode,
     nonce: params.nonce,
     organizationId: params.organizationId,
     organizationName: params.organizationName,
@@ -778,7 +791,7 @@ app.post("/fedcm/assertion", async (c) => {
     ))
     .limit(1);
 
-  if ((scope.split(" ").map((value) => value.trim()).filter(Boolean).includes("email") && !identity.email) || oauthApp.supportsE2ee || !existingAuth) {
+  if ((scope.split(" ").map((value) => value.trim()).filter(Boolean).includes("email") && !identity.email) || appEffectiveSupportsE2ee(oauthApp) || !existingAuth) {
     const continueUrl = new URL(`${getWebBase()}/authorize`);
     continueUrl.searchParams.set("client_id", clientId);
     continueUrl.searchParams.set("redirect_uri", redirectUri);
@@ -850,6 +863,7 @@ app.get("/authorize/bootstrap/:clientId", requireAuth, async (c) => {
       iconUrl: oauthApps.iconUrl,
       websiteUrl: oauthApps.websiteUrl,
       supportsE2ee: oauthApps.supportsE2ee,
+      allowedScopes: oauthApps.allowedScopes,
     })
     .from(oauthApps)
     .where(eq(oauthApps.clientId, clientId))
@@ -884,13 +898,19 @@ app.get("/authorize/bootstrap/:clientId", requireAuth, async (c) => {
   ]);
 
   return c.json({
-    app: oauthApp,
+    app: {
+      ...oauthApp,
+      supportsE2ee: appEffectiveSupportsE2ee(oauthApp),
+    },
     resources,
     authorization: authorization
       ? {
           id: authorization.id,
           identityId: authorization.identityId,
           encryptedAppKey: authorization.encryptedAppKey,
+          appPublicKey: authorization.appPublicKey,
+          encryptedAppPrivateKey: authorization.encryptedAppPrivateKey,
+          appEncryptionMode: authorization.appEncryptionMode,
           createdAt: authorization.createdAt,
         }
       : null,
@@ -907,7 +927,9 @@ app.post("/authorize", requireAuth, zValidator("json", z.object({
   organizationId: z.string().uuid().optional(),
   codeChallenge: z.string().optional(), // PKCE
   codeChallengeMethod: z.enum(["S256", "plain"]).optional(),
-  encryptedAppKey: z.string().optional(), // E2EE: app key encrypted with user's master key
+  encryptedAppKey: z.string().optional(),
+  appPublicKey: z.string().optional(),
+  encryptedAppPrivateKey: z.string().optional(),
   nonce: z.string().optional(),
   connector: z.boolean().optional().default(false),
   requestedResource: z.string().optional(),
@@ -926,6 +948,8 @@ app.post("/authorize", requireAuth, zValidator("json", z.object({
     codeChallenge,
     codeChallengeMethod,
     encryptedAppKey,
+    appPublicKey,
+    encryptedAppPrivateKey,
     nonce,
     connector,
     requestedResource,
@@ -986,7 +1010,9 @@ app.post("/authorize", requireAuth, zValidator("json", z.object({
 
   const requestedScopes = parseScopes(scope);
   const allowedScopes = (oauthApp.allowedScopes || []) as string[];
-  const invalidScopes = requestedScopes.filter((s) => !allowedScopes.includes(s));
+  const invalidScopes = requestedScopes.filter(
+    (s) => !isScopeAllowedForApp(s, allowedScopes, { allowUserIdScope: oauthApp.allowUserIdScope }),
+  );
   if (invalidScopes.length > 0) {
     return c.json({ error: "invalid_scope", error_description: `Invalid scopes: ${invalidScopes.join(", ")}` }, 400);
   }
@@ -1090,13 +1116,54 @@ app.post("/authorize", requireAuth, zValidator("json", z.object({
       .limit(1);
     existingAuth = found;
 
-    // For E2EE apps, require encrypted app key only if there's no existing authorization with a key
-    if (oauthApp.supportsE2ee && !encryptedAppKey && !existingAuth?.encryptedAppKey) {
-      return c.json({ error: "E2EE app requires encryptedAppKey" }, 400);
+    const { mode: requestedE2eeMode, conflict: e2eeModeConflict, reset: e2eeReset } =
+      resolveRequestedE2eeModeConflict(
+      requestedScopes,
+      oauthApp,
+      existingAuth,
+    );
+    if (e2eeModeConflict) {
+      return c.json({
+        error: "invalid_scope",
+        error_description: "Request only one E2EE encryption mode per authorization",
+      }, 400);
+    }
+    if (e2eeReset && !requestedE2eeMode) {
+      return c.json({
+        error: "invalid_scope",
+        error_description: "e2ee:reset requires an encryption mode or an existing app encryption setup",
+      }, 400);
+    }
+    if (requestedE2eeMode && !isImplementedE2eeMode(requestedE2eeMode)) {
+      return c.json({
+        error: "unsupported_encryption_mode",
+        error_description: `Encryption mode "${requestedE2eeMode}" is not available yet`,
+      }, 400);
     }
 
+    const e2eePayload = {
+      encryptedAppKey,
+      appPublicKey,
+      encryptedAppPrivateKey,
+    };
+
+    if (requestedE2eeMode) {
+      const validationError = validateE2eeAuthPayload(
+        requestedE2eeMode,
+        e2eePayload,
+        existingAuth,
+        { reset: e2eeReset },
+      );
+      if (validationError) {
+        return c.json({ error: validationError }, 400);
+      }
+    }
+
+    const e2eeUpdate = requestedE2eeMode
+      ? buildE2eeAuthUpdate(requestedE2eeMode, e2eePayload, existingAuth, { reset: e2eeReset })
+      : {};
+
     if (!existingAuth) {
-      // Create new authorization with encrypted app key
       await db.insert(oauthAuthorizations).values({
         userId: user.id,
         appId: oauthApp.id,
@@ -1104,22 +1171,16 @@ app.post("/authorize", requireAuth, zValidator("json", z.object({
         lastAuthorizedAt: new Date(),
         authorizationCount: 1,
         lastAuthMethod: authorizationMethod,
-        encryptedAppKey: encryptedAppKey || null,
+        encryptedAppKey: e2eeUpdate.encryptedAppKey ?? null,
+        appPublicKey: e2eeUpdate.appPublicKey ?? null,
+        encryptedAppPrivateKey: e2eeUpdate.encryptedAppPrivateKey ?? null,
+        appEncryptionMode: e2eeUpdate.appEncryptionMode ?? null,
       });
       createdAuthorization = true;
-    } else if (oauthApp.supportsE2ee && !existingAuth.encryptedAppKey && encryptedAppKey) {
-      // If existing auth doesn't have an app key but we're providing one now, update it
-      await db.update(oauthAuthorizations)
-        .set({
-          encryptedAppKey,
-          lastAuthorizedAt: new Date(),
-          authorizationCount: existingAuth.authorizationCount + 1,
-          lastAuthMethod: authorizationMethod,
-        })
-        .where(eq(oauthAuthorizations.id, existingAuth.id));
     } else {
       await db.update(oauthAuthorizations)
         .set({
+          ...e2eeUpdate,
           lastAuthorizedAt: new Date(),
           authorizationCount: existingAuth.authorizationCount + 1,
           lastAuthMethod: authorizationMethod,
@@ -1212,6 +1273,10 @@ app.post("/authorize", requireAuth, zValidator("json", z.object({
   // Get the encrypted app key to include in the auth code
   // Either from the new authorization or from an existing one
   const finalEncryptedAppKey = encryptedAppKey || existingAuth?.encryptedAppKey || undefined;
+  const finalAppPublicKey = appPublicKey || existingAuth?.appPublicKey || undefined;
+  const finalEncryptedAppPrivateKey =
+    encryptedAppPrivateKey || existingAuth?.encryptedAppPrivateKey || undefined;
+  const finalAppEncryptionMode = existingAuth?.appEncryptionMode || undefined;
   
   await setAuthorizationCode(code, {
     userId: user.id,
@@ -1219,10 +1284,13 @@ app.post("/authorize", requireAuth, zValidator("json", z.object({
     identityId,
     redirectUri,
     scope,
-    expiresAt: Date.now() + 10 * 60 * 1000, // 10 minutes
+    expiresAt: Date.now() + 10 * 60 * 1000,
     codeChallenge,
     codeChallengeMethod,
     encryptedAppKey: finalEncryptedAppKey,
+    appPublicKey: finalAppPublicKey,
+    encryptedAppPrivateKey: finalEncryptedAppPrivateKey,
+    appEncryptionMode: finalAppEncryptionMode,
     nonce: nonce || undefined,
     organizationId: organizationContext?.organizationId,
     organizationName: organizationContext?.organizationName,
@@ -1785,7 +1853,9 @@ app.post("/token", zValidator("json", oauthTokenRequestSchema), async (c) => {
     ? [...new Set([...baseScopes, "user_id"])]
     : baseScopes;
   const requestedScopes = parseScopes(authCode.scope);
-  const invalidScopes = requestedScopes.filter((s) => !allowedScopes.includes(s));
+  const invalidScopes = requestedScopes.filter(
+    (s) => !isScopeAllowedForApp(s, allowedScopes, { allowUserIdScope: oauthApp.allowUserIdScope }),
+  );
   if (invalidScopes.length > 0) {
     return c.json({ error: "invalid_scope", error_description: `Invalid scopes: ${invalidScopes.join(", ")}` }, 400);
   }
@@ -2059,9 +2129,26 @@ app.post("/fedcm/finalize", requireAuth, zValidator("json", z.object({
   clientId: z.string(),
   state: z.string().optional(),
   appKey: z.string().optional(),
+  appPublicKey: z.string().optional(),
+  appPrivateKey: z.string().optional(),
+  appKeyOld: z.string().optional(),
+  appPublicKeyOld: z.string().optional(),
+  appPrivateKeyOld: z.string().optional(),
+  appKeyReset: z.boolean().optional(),
 })), async (c) => {
   const user = c.get("user")!;
-  const { code, clientId, state, appKey } = c.req.valid("json");
+  const {
+    code,
+    clientId,
+    state,
+    appKey,
+    appPublicKey,
+    appPrivateKey,
+    appKeyOld,
+    appPublicKeyOld,
+    appPrivateKeyOld,
+    appKeyReset,
+  } = c.req.valid("json");
   const rateLimitResponse = await enforceRateLimits(c, [
     ipRateLimit(c, "oauth:fedcm-finalize:ip", 120, 60 * 1000),
     subjectRateLimit("oauth:fedcm-finalize:user", user.id, 120, 60 * 1000),
@@ -2090,6 +2177,12 @@ app.post("/fedcm/finalize", requireAuth, zValidator("json", z.object({
     typ: "ave_fedcm",
     code,
     app_key: appKey || undefined,
+    app_public_key: appPublicKey || undefined,
+    app_private_key: appPrivateKey || undefined,
+    app_key_old: appKeyOld || undefined,
+    app_public_key_old: appPublicKeyOld || undefined,
+    app_private_key_old: appPrivateKeyOld || undefined,
+    app_key_reset: appKeyReset ? true : undefined,
     client_id: clientId,
     redirect_uri: authCode.redirectUri,
     state: state || undefined,
@@ -2236,6 +2329,9 @@ app.get("/authorization/:clientId", requireAuth, async (c) => {
       id: authorization.id,
       identityId: authorization.identityId,
       encryptedAppKey: authorization.encryptedAppKey,
+      appPublicKey: authorization.appPublicKey,
+      encryptedAppPrivateKey: authorization.encryptedAppPrivateKey,
+      appEncryptionMode: authorization.appEncryptionMode,
       createdAt: authorization.createdAt,
     }
   });

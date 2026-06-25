@@ -129,6 +129,30 @@ These require explicit app configuration in the developer portal.
   Only request this when your app has a genuine need for cross-identity user linking. It increases the user consent surface and requires portal configuration.
 </ParamField>
 
+## Encryption scopes
+
+Requested dynamically at sign-in — not configured in the developer portal. Request exactly one per authorization.
+
+<ParamField path="e2ee:symmetric" type="scope">
+  Provisions a per-user AES-256 app key. Delivered after consent in the redirect fragment as `#app_key=`. Legacy apps with `supportsE2ee` behave like this scope when no `e2ee:*` scope is listed.
+</ParamField>
+
+<ParamField path="e2ee:asymmetric" type="scope">
+  Provisions a stable ECDH P-256 keypair per user. Public and private keys are returned in the fragment (`#app_public_key=`, `#app_private_key=`). Store the private key in your app; persist the public key in your database. Other users' public keys are available via `/api/encryption/app-lookup`.
+</ParamField>
+
+<ParamField path="e2ee:reset" type="scope">
+  **Dangerous — key rotation.** Combine with `e2ee:symmetric` or `e2ee:asymmetric` (or rely on the stored mode on re-sign-in). Regenerates per-app encryption keys instead of reusing existing ones. The redirect fragment includes new keys, previous keys as `#app_key_old` / `#app_public_key_old` / `#app_private_key_old`, and `#app_key_reset=true`. Re-sign-in **without** this scope never rotates keys.
+</ParamField>
+
+<ParamField path="e2ee:pqc:kyber" type="scope">
+  Reserved for post-quantum key exchange. Not yet available.
+</ParamField>
+
+<ParamField path="e2ee:pqc:dilithium" type="scope">
+  Reserved for post-quantum signatures. Not yet available.
+</ParamField>
+
 ## Scope-to-token mapping
 
 | Scope | id_token claims added | access_token_jwt claims added | token response fields |

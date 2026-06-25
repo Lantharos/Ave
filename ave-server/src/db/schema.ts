@@ -354,12 +354,16 @@ export const oauthAuthorizations = sqliteTable("oauth_authorizations", {
   // E2EE: encrypted keys for this app (encrypted with user's master key)
   // Each app gets its own encryption key that the user controls
   encryptedAppKey: text("encrypted_app_key"),
+  appPublicKey: text("app_public_key"),
+  encryptedAppPrivateKey: text("encrypted_app_private_key"),
+  appEncryptionMode: text("app_encryption_mode"),
 }, (table) => [
   index("oauth_authorizations_user_id_idx").on(table.userId),
   index("oauth_authorizations_app_id_idx").on(table.appId),
   index("oauth_authorizations_identity_id_idx").on(table.identityId),
   index("oauth_authorizations_user_app_idx").on(table.userId, table.appId),
   index("oauth_authorizations_user_app_identity_idx").on(table.userId, table.appId, table.identityId),
+  index("oauth_authorizations_app_public_key_idx").on(table.appId, table.appPublicKey),
 ]);
 
 // OAuth resources - capabilities exposed by an app to other apps via connector flow

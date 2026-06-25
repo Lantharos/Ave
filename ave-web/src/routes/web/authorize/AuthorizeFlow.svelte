@@ -10,11 +10,19 @@
         decryptAppKey,
         hasMasterKey,
         clearMasterKey,
-        decodeWrappedPayloadParam,
-        base64UrlEncodeBytes,
-        decryptSecretFromIdentity,
-        loadIdentityEncryptionPrivateKey,
+        generateAppKeyPair,
+        encryptAppPrivateKey,
+        exportAppPrivateKeyB64,
+        decryptAppPrivateKey,
     } from "$lib/surfaces/web/lib/crypto";
+    import {
+        appEffectiveSupportsE2ee,
+        authorizationHasE2eeMaterial,
+        e2eeModeLabel,
+        hasE2eeResetScope,
+        resolveE2eeAuthorization,
+        resolveRequestedE2eeMode,
+    } from "$lib/surfaces/web/lib/e2ee-scopes";
 	import { auth, isAuthenticated, isLoading, identities as identitiesStore, currentIdentity } from "$lib/surfaces/web/stores/auth";
 	import { setReturnUrl } from "$lib/surfaces/web/util/return-url";
 	import { goto } from "$app/navigation";
@@ -99,13 +107,9 @@
                 fedcmContinue: searchParams.get("fedcm_continue") === "1",
 				codeChallenge: codeChallenge || undefined,
 				codeChallengeMethod: (codeChallengeMethod === "S256" || codeChallengeMethod === "plain") ? codeChallengeMethod : undefined,
-                wrappedKey: searchParams.get("wrapped_key") || "",
 			};
 
     });
-
-    const MAX_WRAPPED_KEY_PARAM_CHARS = 65536;
-    const MAX_UNWRAPPED_FRAGMENT_CHARS = 1800;
 
 	function postToEmbedHost(payload: unknown) {
 		const target = (window.opener && (window.opener as any).parent)
@@ -129,12 +133,16 @@
         iconUrl?: string;
         websiteUrl?: string;
         supportsE2ee: boolean;
+        allowedScopes?: string[];
     } | null>(null);
     
     let existingAuth = $state<{
         id: string;
         identityId: string;
         encryptedAppKey?: string;
+        appPublicKey?: string;
+        encryptedAppPrivateKey?: string;
+        appEncryptionMode?: string;
         createdAt: string;
     } | null>(null);
     
@@ -223,7 +231,7 @@
             launchedExternalApp = false;
             loadedAuthorizeBootstrapClientId = clientId;
 
-            if (bootstrap.app.supportsE2ee && !hasMasterKey()) {
+            if (appEffectiveSupportsE2ee(bootstrap.app) && !hasMasterKey()) {
                 needsMasterKey = true;
             }
 
@@ -238,7 +246,7 @@
             selectedIdentity = preferredIdentity || existingIdentity || authState.currentIdentity || authState.identities[0] || null;
             emailDraft = selectedIdentity?.pendingEmail || selectedIdentity?.email || "";
 
-            const shouldAutoAuthorize = !!existingAuth && !!existingIdentity && (!bootstrap.app.supportsE2ee || hasMasterKey());
+            const shouldAutoAuthorize = !!existingAuth && !!existingIdentity && (!appEffectiveSupportsE2ee(bootstrap.app) || hasMasterKey());
 
             if (shouldAutoAuthorize && !(requiresEmailScope && !selectedIdentity?.email)) {
                 // Keep UI in loading state while we redirect.
@@ -287,90 +295,132 @@
                 authData.codeChallengeMethod = params.codeChallengeMethod;
             }
 
-            if (params.wrappedKey.length > MAX_WRAPPED_KEY_PARAM_CHARS) {
-                error = "Invite payload is too large.";
-                authorizing = false;
-                return;
-            }
+            const requestedScopes = params.scope.split(" ").map((value) => value.trim()).filter(Boolean);
+            const wantsE2eeReset = hasE2eeResetScope(requestedScopes);
+            const e2eeAuth = appInfo
+                ? resolveE2eeAuthorization(requestedScopes, appInfo, existingAuth)
+                : { mode: null, reset: false };
+            let requestedE2eeMode = e2eeAuth.mode;
 
-            if (params.wrappedKey.trim() && !appInfo.supportsE2ee) {
-                const mkWrap = await loadMasterKey();
-                if (!mkWrap) {
-                    needsMasterKey = true;
-                    masterKeyError = null;
-                    authorizing = false;
-                    sliderPosition = 0;
-                    return;
-                }
-            }
-            
-            // For E2EE apps, handle app-specific encryption key
             let rawAppKey: string | null = null;
-            
-			if (appInfo.supportsE2ee) {
-				const masterKey = await loadMasterKey();
-				if (!masterKey) {
+            let rawAppKeyOld: string | null = null;
+            let rawAppPublicKey: string | null = null;
+            let rawAppPublicKeyOld: string | null = null;
+            let rawAppPrivateKey: string | null = null;
+            let rawAppPrivateKeyOld: string | null = null;
+
+			if (requestedE2eeMode) {
+				const masterKeyOrNull = await loadMasterKey();
+				if (!masterKeyOrNull) {
 					needsMasterKey = true;
 					masterKeyError = null;
 					authorizing = false;
 					sliderPosition = 0;
 					return;
 				}
-                
-                // Check if we have an existing authorization with an encrypted app key
-                // AND it's for the same identity we're authorizing with
-                const hasExistingKeyForIdentity = existingAuth?.encryptedAppKey && 
-                    existingAuth.identityId === selectedIdentity.id;
-                
-                if (hasExistingKeyForIdentity && existingAuth) {
+				const masterKey: CryptoKey = masterKeyOrNull;
+
+                const sameIdentity = existingAuth?.identityId === selectedIdentity.id;
+                const hasStoredMaterial =
+                    sameIdentity &&
+                    authorizationHasE2eeMaterial(existingAuth, requestedE2eeMode);
+
+                async function loadStoredSymmetricKeys(): Promise<boolean> {
+                    if (!existingAuth?.encryptedAppKey) return false;
                     try {
-                        // Reuse existing key when decryptable with current master key.
-                        const appKey = await decryptAppKey(existingAuth.encryptedAppKey!, masterKey);
+                        const appKey = await decryptAppKey(existingAuth.encryptedAppKey, masterKey);
                         rawAppKey = await exportAppKey(appKey);
+                        return true;
                     } catch (keyError) {
-                        // Existing app key could not be decrypted with the local master key.
-                        // Do not rotate silently; user may lose access to existing app data.
                         console.warn("[Authorize] Existing encrypted app key could not be decrypted.", keyError);
                         clearMasterKey();
                         needsMasterKey = true;
                         masterKeyError = "Your local encryption key doesn't match this account. Recover your key with passkey unlock or a recovery code.";
                         authorizing = false;
                         sliderPosition = 0;
-                        return;
+                        return false;
                     }
-                } else {
-                    // Generate a new app key for first-time authorization or new identity
+                }
+
+                async function loadStoredAsymmetricKeys(): Promise<boolean> {
+                    if (
+                        !existingAuth?.appPublicKey ||
+                        !existingAuth?.encryptedAppPrivateKey
+                    ) {
+                        return false;
+                    }
+                    try {
+                        const privateKey = await decryptAppPrivateKey(
+                            existingAuth.encryptedAppPrivateKey,
+                            masterKey,
+                        );
+                        rawAppPublicKey = existingAuth.appPublicKey;
+                        rawAppPrivateKey = await exportAppPrivateKeyB64(privateKey);
+                        return true;
+                    } catch (keyError) {
+                        console.warn("[Authorize] Existing app keypair could not be decrypted.", keyError);
+                        clearMasterKey();
+                        needsMasterKey = true;
+                        masterKeyError = "Your local encryption key doesn't match this account. Recover your key with passkey unlock or a recovery code.";
+                        authorizing = false;
+                        sliderPosition = 0;
+                        return false;
+                    }
+                }
+
+                if (wantsE2eeReset) {
+                    if (hasStoredMaterial) {
+                        if (requestedE2eeMode === "symmetric") {
+                            if (!(await loadStoredSymmetricKeys())) return;
+                            rawAppKeyOld = rawAppKey;
+                        } else if (requestedE2eeMode === "asymmetric") {
+                            if (!(await loadStoredAsymmetricKeys())) return;
+                            rawAppPublicKeyOld = rawAppPublicKey;
+                            rawAppPrivateKeyOld = rawAppPrivateKey;
+                        }
+                    }
+
+                    rawAppKey = null;
+                    rawAppPublicKey = null;
+                    rawAppPrivateKey = null;
+
+                    if (requestedE2eeMode === "symmetric") {
+                        const appKey = await generateAppKey();
+                        authData.encryptedAppKey = await encryptAppKey(appKey, masterKey);
+                        rawAppKey = await exportAppKey(appKey);
+                    } else if (requestedE2eeMode === "asymmetric") {
+                        const keyPair = await generateAppKeyPair();
+                        authData.appPublicKey = keyPair.publicKey;
+                        authData.encryptedAppPrivateKey = await encryptAppPrivateKey(keyPair.privateKey, masterKey);
+                        rawAppPublicKey = keyPair.publicKey;
+                        rawAppPrivateKey = await exportAppPrivateKeyB64(keyPair.privateKey);
+                    } else {
+                        throw new Error(`Encryption mode "${requestedE2eeMode}" is not available yet.`);
+                    }
+                } else if (hasStoredMaterial) {
+                    if (requestedE2eeMode === "symmetric") {
+                        if (!(await loadStoredSymmetricKeys())) return;
+                    } else if (requestedE2eeMode === "asymmetric") {
+                        if (!(await loadStoredAsymmetricKeys())) return;
+                    } else {
+                        throw new Error(`Encryption mode "${requestedE2eeMode}" is not available yet.`);
+                    }
+                } else if (requestedE2eeMode === "symmetric") {
                     const appKey = await generateAppKey();
-                    
-                    // Encrypt it with the user's master key
-                    const encryptedAppKey = await encryptAppKey(appKey, masterKey);
-                    authData.encryptedAppKey = encryptedAppKey;
-                    // Export the raw app key to pass to the app
+                    authData.encryptedAppKey = await encryptAppKey(appKey, masterKey);
                     rawAppKey = await exportAppKey(appKey);
+                } else if (requestedE2eeMode === "asymmetric") {
+                    const keyPair = await generateAppKeyPair();
+                    authData.appPublicKey = keyPair.publicKey;
+                    authData.encryptedAppPrivateKey = await encryptAppPrivateKey(keyPair.privateKey, masterKey);
+                    rawAppPublicKey = keyPair.publicKey;
+                    rawAppPrivateKey = await exportAppPrivateKeyB64(keyPair.privateKey);
+                } else {
+                    throw new Error(`Encryption mode "${requestedE2eeMode}" is not available yet.`);
                 }
             }
             
             const result = await api.oauth.authorize(authData);
-
-            let unwrappedSecretB64: string | null = null;
-            if (params.wrappedKey.trim()) {
-                const mkUnwrap = await loadMasterKey();
-                if (!mkUnwrap) {
-                    throw new Error("Your key is required to open this invite.");
-                }
-                const encState = await api.encryption.getKey(selectedIdentity.id);
-                if (!encState.hasKey || !encState.encryptedPrivateKey) {
-                    throw new Error("This identity does not have an encryption key yet.");
-                }
-                const priv = await loadIdentityEncryptionPrivateKey(encState.encryptedPrivateKey, mkUnwrap);
-                const wrapped = decodeWrappedPayloadParam(params.wrappedKey.trim());
-                const plain = await decryptSecretFromIdentity(
-                    wrapped.encryptedPayload,
-                    wrapped.senderPublicKey,
-                    priv
-                );
-                unwrappedSecretB64 = base64UrlEncodeBytes(new Uint8Array(plain));
-            }
 
             if (params.fedcmContinue && typeof window !== "undefined" && "IdentityProvider" in window) {
                 const code = new URL(result.redirectUrl).searchParams.get("code");
@@ -378,15 +428,17 @@
                     throw new Error("FedCM authorization did not return a code");
                 }
 
-                if (unwrappedSecretB64) {
-                    throw new Error("FedCM sign-in does not support wrapped_key yet. Use the standard redirect flow.");
-                }
-
                 const finalized = await api.oauth.fedcmFinalize({
                     code,
                     clientId: params.clientId,
                     state: params.state || undefined,
                     appKey: rawAppKey || undefined,
+                    appPublicKey: rawAppPublicKey || undefined,
+                    appPrivateKey: rawAppPrivateKey || undefined,
+                    appKeyOld: rawAppKeyOld || undefined,
+                    appPublicKeyOld: rawAppPublicKeyOld || undefined,
+                    appPrivateKeyOld: rawAppPrivateKeyOld || undefined,
+                    appKeyReset: wantsE2eeReset || undefined,
                 });
 
                 (window as any).IdentityProvider.resolve(finalized.assertion);
@@ -396,28 +448,23 @@
             }
             
             let redirectUrl = result.redirectUrl;
-            if (unwrappedSecretB64 && !params.embed && unwrappedSecretB64.length > MAX_UNWRAPPED_FRAGMENT_CHARS) {
-                throw new Error("Unwrapped secret is too large for a redirect URL. Use embed mode.");
-            }
-            if (unwrappedSecretB64) {
+            const hashParams = new URLSearchParams();
+            if (rawAppKey) hashParams.set("app_key", rawAppKey);
+            if (rawAppKeyOld) hashParams.set("app_key_old", rawAppKeyOld);
+            if (rawAppPublicKey) hashParams.set("app_public_key", rawAppPublicKey);
+            if (rawAppPublicKeyOld) hashParams.set("app_public_key_old", rawAppPublicKeyOld);
+            if (rawAppPrivateKey) hashParams.set("app_private_key", rawAppPrivateKey);
+            if (rawAppPrivateKeyOld) hashParams.set("app_private_key_old", rawAppPrivateKeyOld);
+            if (wantsE2eeReset) hashParams.set("app_key_reset", "true");
+            if (hashParams.toString()) {
                 const url = new URL(redirectUrl);
-                const hp = new URLSearchParams();
-                if (appInfo.supportsE2ee && rawAppKey) {
-                    hp.set("app_key", rawAppKey);
-                }
-                hp.set("unwrapped_secret", unwrappedSecretB64);
-                url.hash = hp.toString();
-                redirectUrl = url.toString();
-            } else if (appInfo.supportsE2ee && rawAppKey) {
-                const url = new URL(redirectUrl);
-                url.hash = `app_key=${rawAppKey}`;
+                url.hash = hashParams.toString();
                 redirectUrl = url.toString();
             }
-            // Redirect back to the app
             if (params.embed) {
                 postToEmbedHost({
                     type: "ave:success",
-                    payload: { redirectUrl, unwrappedSecretB64 },
+                    payload: { redirectUrl },
                 });
                 completed = true;
                 authorizing = false;
@@ -904,7 +951,10 @@
                 </p>
             {/if}
 
-            {#if appInfo?.supportsE2ee}
+            {#if appInfo && appEffectiveSupportsE2ee(appInfo)}
+                {@const requestedScopes = params.scope.split(" ").map((value) => value.trim()).filter(Boolean)}
+                {@const activeE2eeMode = resolveRequestedE2eeMode(requestedScopes, appInfo, existingAuth)}
+                {@const wantsE2eeReset = hasE2eeResetScope(requestedScopes)}
                 <div class="p-4 md:p-[30px] bg-[#0d1f12]/60 flex flex-col gap-2 md:gap-[10px] border border-[#32A94C]/20 rounded-[20px] md:rounded-[32px]">
                     <h3 class="font-poppins flex flex-row gap-2 md:gap-[10px] text-sm md:text-[20px] text-[#32A94C] items-center">
                         <svg class="w-4 h-4 md:w-6 md:h-6 shrink-0" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -913,7 +963,13 @@
                         End-to-End Encrypted
                     </h3>
                     <p class="font-poppins text-xs md:text-[18px] text-[#666666]">
-                        This app requests encryption keys from Ave each time you sign in, keeping your data end-to-end encrypted at all times.
+                        {#if wantsE2eeReset && activeE2eeMode}
+                            This app requested encryption key rotation. Once you authorize, your previous {e2eeModeLabel(activeE2eeMode)} for this app will be replaced. If the app did not store your current key, encrypted data may be unrecoverable.
+                        {:else if activeE2eeMode}
+                            This app will receive your existing {e2eeModeLabel(activeE2eeMode)} for this account. Keys are not regenerated on re-sign-in unless the app requests `e2ee:reset`.
+                        {:else}
+                            This app supports end-to-end encryption. Request an `e2ee:*` scope during sign-in to receive encryption keys.
+                        {/if}
                     </p>
                 </div>
             {/if}

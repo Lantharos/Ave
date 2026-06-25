@@ -708,7 +708,18 @@ export const api = {
         timeoutMs,
       }),
 
-    fedcmFinalize: (data: { code: string; clientId: string; state?: string; appKey?: string }) =>
+    fedcmFinalize: (data: {
+      code: string;
+      clientId: string;
+      state?: string;
+      appKey?: string;
+      appPublicKey?: string;
+      appPrivateKey?: string;
+      appKeyOld?: string;
+      appPublicKeyOld?: string;
+      appPrivateKeyOld?: string;
+      appKeyReset?: boolean;
+    }) =>
       request<{ assertion: string }>("/api/oauth/fedcm/finalize", {
         method: "POST",
         body: JSON.stringify(data),
@@ -724,7 +735,8 @@ export const api = {
           iconUrl?: string;
           websiteUrl?: string;
           supportsE2ee: boolean;
-        };
+        allowedScopes?: string[];
+      };
         resources?: {
           resourceKey: string;
           displayName: string;
@@ -744,7 +756,8 @@ export const api = {
           iconUrl?: string;
           websiteUrl?: string;
           supportsE2ee: boolean;
-        };
+        allowedScopes?: string[];
+      };
         resources?: {
           resourceKey: string;
           displayName: string;
@@ -757,6 +770,9 @@ export const api = {
           id: string;
           identityId: string;
           encryptedAppKey?: string;
+          appPublicKey?: string;
+          encryptedAppPrivateKey?: string;
+          appEncryptionMode?: string;
           createdAt: string;
         } | null;
       }>(`/api/oauth/authorize/bootstrap/${encodeURIComponent(clientId)}`),
@@ -788,6 +804,8 @@ export const api = {
       codeChallenge?: string;
       codeChallengeMethod?: "S256" | "plain";
       encryptedAppKey?: string;
+      appPublicKey?: string;
+      encryptedAppPrivateKey?: string;
       nonce?: string;
       connector?: boolean;
       requestedResource?: string;
@@ -807,6 +825,9 @@ export const api = {
           id: string;
           identityId: string;
           encryptedAppKey?: string;
+          appPublicKey?: string;
+          encryptedAppPrivateKey?: string;
+          appEncryptionMode?: string;
           createdAt: string;
         } | null;
       }>(`/api/oauth/authorization/${encodeURIComponent(clientId)}`),

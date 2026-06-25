@@ -346,7 +346,6 @@
     iconUrl: string;
     redirectUris: string;
     developmentMode: boolean;
-    supportsE2ee: boolean;
     allowUserIdScope: boolean;
     accessTokenTtlSeconds: number;
     refreshTokenTtlSeconds: number;
@@ -371,7 +370,6 @@
         iconUrl: form.iconUrl || undefined,
         redirectUris,
         developmentMode: form.developmentMode,
-        supportsE2ee: form.supportsE2ee,
         allowUserIdScope: form.allowUserIdScope,
         accessTokenTtlSeconds: form.accessTokenTtlSeconds,
         refreshTokenTtlSeconds: form.refreshTokenTtlSeconds,
@@ -437,7 +435,6 @@
           .map((uri) => uri.trim())
           .filter(Boolean),
         developmentMode: app.developmentMode,
-        supportsE2ee: app.supportsE2ee,
         allowedScopes: app.allowedScopes,
         accessTokenTtlSeconds: app.accessTokenTtlSeconds,
         refreshTokenTtlSeconds: app.refreshTokenTtlSeconds,

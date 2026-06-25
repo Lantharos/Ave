@@ -1,6 +1,6 @@
 {
   "name": "@ave-id/sdk",
-  "version": "0.9.2",
+  "version": "0.10.0",
   "type": "module",
   "main": "dist/index.js",
   "module": "dist/index.js",
@@ -20,6 +20,10 @@
     "./app-key": {
       "types": "./dist/app-key.d.ts",
       "default": "./dist/app-key.js"
+    },
+    "./app-encryption": {
+      "types": "./dist/app-encryption.d.ts",
+      "default": "./dist/app-encryption.js"
     },
     "./server": {
       "types": "./dist/server.d.ts",

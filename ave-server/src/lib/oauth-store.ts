@@ -26,6 +26,9 @@ export type AuthorizationCodeRecord = {
   codeChallenge?: string;
   codeChallengeMethod?: string;
   encryptedAppKey?: string;
+  appPublicKey?: string;
+  encryptedAppPrivateKey?: string;
+  appEncryptionMode?: string;
   nonce?: string;
   requestedResource?: string;
   requestedScope?: string;

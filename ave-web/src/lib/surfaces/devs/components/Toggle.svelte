@@ -2,12 +2,21 @@
   interface Props {
     checked?: boolean;
     label?: string;
+    disabled?: boolean;
+    onCheckedChange?: (checked: boolean) => void;
   }
 
-  let { checked = $bindable(false), label = "" }: Props = $props();
+  let {
+    checked = $bindable(false),
+    label = "",
+    disabled = false,
+    onCheckedChange,
+  }: Props = $props();
 
   function toggle() {
+    if (disabled) return;
     checked = !checked;
+    onCheckedChange?.(checked);
   }
 
   function handleKeydown(event: KeyboardEvent) {
@@ -21,7 +30,9 @@
   type="button"
   role="switch"
   aria-checked={checked}
-  class="inline-flex items-center gap-3 border-0 bg-transparent p-0 cursor-pointer text-left text-[#878787] text-[16px] md:text-[18px] select-none group"
+  aria-disabled={disabled}
+  disabled={disabled}
+  class="inline-flex items-center gap-3 border-0 bg-transparent p-0 cursor-pointer text-left text-[#878787] text-[16px] md:text-[18px] select-none group disabled:opacity-50 disabled:cursor-not-allowed"
   onclick={toggle}
   onkeydown={handleKeydown}
 >

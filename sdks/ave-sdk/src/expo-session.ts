@@ -1,5 +1,5 @@
 import { configureCryptoRuntime, createExpoCryptoRuntime, exchangeCode } from "./index.js";
-import { mergeAppKeyFromUrl, stripOAuthQueryParamsFromUrlString, stripSensitiveHashFromUrlString } from "./app-key.js";
+import { mergeAppEncryptionFromUrl, stripOAuthQueryParamsFromUrlString, stripSensitiveHashFromUrlString } from "./app-key.js";
 import { createSecureStoreAdapter } from "./session-storage.js";
 import type { AveSession } from "./session.js";
 import type { AveConfig, TokenResponse } from "./types.js";
@@ -130,7 +130,7 @@ export async function completeExpoOAuthCallback(
   });
 
   if (mergeSource) {
-    tr = mergeAppKeyFromUrl(mergeSource, tr);
+    tr = mergeAppEncryptionFromUrl(mergeSource, tr);
   }
 
   await session.setTokensFromResponse(tr);

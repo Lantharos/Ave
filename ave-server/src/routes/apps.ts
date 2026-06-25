@@ -16,6 +16,13 @@ import {
 import { generateRandomId, hashSessionToken } from "../lib/crypto";
 import { verifyJwt, getResourceAudience } from "../lib/oidc";
 import {
+  isE2eeScope,
+  isScopeAllowedForApp,
+  PORTAL_APP_SCOPES,
+  stripE2eeScopes,
+  syncSupportsE2eeFlag,
+} from "../lib/e2ee-scopes";
+import {
   backfillOwnedAppsOrganization,
   ensurePersonalOrganization,
   getAccessibleApp,
@@ -32,7 +39,7 @@ declare module "hono" {
 
 const app = new Hono();
 
-const allowedScopes = ["openid", "profile", "email", "offline_access", "user_id"] as const;
+const allowedScopes = PORTAL_APP_SCOPES;
 
 const baseAppSchema = z.object({
   name: z.string().min(2).max(64),
@@ -41,7 +48,7 @@ const baseAppSchema = z.object({
   iconUrl: z.string().url().nullable().optional(),
   redirectUris: z.array(z.string().url()).min(1),
   developmentMode: z.boolean().default(false),
-  supportsE2ee: z.boolean().default(false),
+  supportsE2ee: z.boolean().default(false).optional(),
   allowedScopes: z.array(z.enum(allowedScopes)).default(["openid", "profile", "email", "offline_access"]),
   accessTokenTtlSeconds: z.number().int().min(300).max(86400).optional(),
   refreshTokenTtlSeconds: z.number().int().min(3600).max(60 * 60 * 24 * 365).optional(),
@@ -90,7 +97,7 @@ export function serializeApp(
     redirectUris: appRow.redirectUris as string[],
     developmentMode: !!appRow.developmentMode,
     supportsE2ee: !!appRow.supportsE2ee,
-    allowedScopes: appRow.allowedScopes as string[],
+    allowedScopes: stripE2eeScopes(appRow.allowedScopes as string[]),
     accessTokenTtlSeconds: appRow.accessTokenTtlSeconds,
     refreshTokenTtlSeconds: appRow.refreshTokenTtlSeconds,
     allowUserIdScope: !!appRow.allowUserIdScope,
@@ -428,8 +435,8 @@ app.post("/", requireWritableDevUser, zValidator("json", baseAppSchema), async (
       iconUrl: data.iconUrl || null,
       redirectUris: data.redirectUris,
       developmentMode: data.developmentMode,
-      supportsE2ee: data.supportsE2ee,
-      allowedScopes: data.allowedScopes,
+      supportsE2ee: syncSupportsE2eeFlag(data.supportsE2ee),
+      allowedScopes: stripE2eeScopes(data.allowedScopes),
       accessTokenTtlSeconds: data.accessTokenTtlSeconds || 3600,
       refreshTokenTtlSeconds: data.refreshTokenTtlSeconds || 30 * 24 * 60 * 60,
       allowUserIdScope: data.allowUserIdScope ?? false,
@@ -520,6 +527,13 @@ app.patch("/:appId", requireWritableDevUser, zValidator("json", baseAppSchema.pa
     nextOrganizationId = data.organizationId;
   }
 
+  const nextAllowedScopes = stripE2eeScopes(
+    data.allowedScopes ?? (accessible.app.allowedScopes as string[]),
+  );
+  const nextSupportsE2ee = syncSupportsE2eeFlag(
+    !!(data.supportsE2ee ?? accessible.app.supportsE2ee),
+  );
+
   const [updated] = await db
     .update(oauthApps)
     .set({
@@ -529,8 +543,8 @@ app.patch("/:appId", requireWritableDevUser, zValidator("json", baseAppSchema.pa
       iconUrl: data.iconUrl === undefined ? accessible.app.iconUrl : data.iconUrl,
       redirectUris: data.redirectUris ?? (accessible.app.redirectUris as string[]),
       developmentMode: data.developmentMode ?? accessible.app.developmentMode,
-      supportsE2ee: data.supportsE2ee ?? accessible.app.supportsE2ee,
-      allowedScopes: data.allowedScopes ?? (accessible.app.allowedScopes as string[]),
+      supportsE2ee: nextSupportsE2ee,
+      allowedScopes: nextAllowedScopes,
       accessTokenTtlSeconds: data.accessTokenTtlSeconds ?? accessible.app.accessTokenTtlSeconds,
       refreshTokenTtlSeconds: data.refreshTokenTtlSeconds ?? accessible.app.refreshTokenTtlSeconds,
       allowUserIdScope: data.allowUserIdScope ?? accessible.app.allowUserIdScope,

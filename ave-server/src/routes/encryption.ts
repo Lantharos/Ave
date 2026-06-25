@@ -6,12 +6,27 @@ import {
   db,
   identityEncryptionKeys,
   identities,
+  oauthApps,
+  oauthAuthorizations,
 } from "../db";
 import { validateOpaqueKeyEnvelope, validatePublicKeyBlob } from "../lib/encryption-key-payload";
 import { requireAuth, requireWritableForMutation } from "../middleware/auth";
 import { recordActivityLog } from "../lib/background-events";
+import { enforceRateLimits, ipRateLimit } from "../lib/rate-limit";
 
 const app = new Hono();
+
+const appLookupQuerySchema = z.object({
+  client_id: z.string().min(1),
+  handle: z.string().min(1).optional(),
+  public_key: z.string().min(1).optional(),
+}).refine((value) => {
+  const hasHandle = !!value.handle?.trim();
+  const hasPublicKey = !!value.public_key?.trim();
+  return hasHandle !== hasPublicKey;
+}, {
+  message: "Provide exactly one of handle or public_key",
+});
 
 const postKeySchema = z
   .object({
@@ -20,6 +35,99 @@ const postKeySchema = z
   });
 
 const putKeySchema = postKeySchema;
+
+app.get("/app-lookup", zValidator("query", appLookupQuerySchema), async (c) => {
+  const rateLimitResponse = await enforceRateLimits(c, [
+    ipRateLimit(c, "encryption:app-lookup:ip", 240, 60 * 1000),
+  ]);
+  if (rateLimitResponse) return rateLimitResponse;
+
+  const { client_id: clientId, handle, public_key: publicKey } = c.req.valid("query");
+
+  const [oauthApp] = await db
+    .select({ id: oauthApps.id, clientId: oauthApps.clientId })
+    .from(oauthApps)
+    .where(eq(oauthApps.clientId, clientId))
+    .limit(1);
+
+  if (!oauthApp) {
+    return c.json({ error: "App not found" }, 404);
+  }
+
+  if (handle) {
+    const normalizedHandle = handle.toLowerCase();
+    const [identity] = await db
+      .select()
+      .from(identities)
+      .where(eq(identities.handle, normalizedHandle))
+      .limit(1);
+
+    if (!identity) {
+      return c.json({ error: "Identity not found" }, 404);
+    }
+
+    const [authorization] = await db
+      .select()
+      .from(oauthAuthorizations)
+      .where(and(
+        eq(oauthAuthorizations.identityId, identity.id),
+        eq(oauthAuthorizations.appId, oauthApp.id),
+      ))
+      .limit(1);
+
+    if (!authorization) {
+      return c.json({ error: "User has not signed in to this app" }, 404);
+    }
+
+    if (!authorization.appPublicKey) {
+      return c.json({ error: "User has not provisioned an app encryption public key" }, 404);
+    }
+
+    return c.json({
+      clientId: oauthApp.clientId,
+      identityId: identity.id,
+      handle: identity.handle,
+      displayName: identity.displayName,
+      publicKey: authorization.appPublicKey,
+      encryptionMode: authorization.appEncryptionMode || "asymmetric",
+    });
+  }
+
+  const pk = validatePublicKeyBlob(publicKey!);
+  if (!pk.ok) {
+    return c.json({ error: pk.error }, 400);
+  }
+
+  const [result] = await db
+    .select({
+      identity: identities,
+      authorization: oauthAuthorizations,
+    })
+    .from(oauthAuthorizations)
+    .innerJoin(identities, eq(identities.id, oauthAuthorizations.identityId))
+    .where(and(
+      eq(oauthAuthorizations.appId, oauthApp.id),
+      eq(oauthAuthorizations.appPublicKey, publicKey!),
+    ))
+    .limit(1);
+
+  if (!result) {
+    return c.json({ error: "No user found for this app public key" }, 404);
+  }
+
+  if (!result.authorization.appPublicKey) {
+    return c.json({ error: "User has not provisioned an app encryption public key" }, 404);
+  }
+
+  return c.json({
+    clientId: oauthApp.clientId,
+    identityId: result.identity.id,
+    handle: result.identity.handle,
+    displayName: result.identity.displayName,
+    publicKey: result.authorization.appPublicKey,
+    encryptionMode: result.authorization.appEncryptionMode || "asymmetric",
+  });
+});
 
 app.get("/public-key/:handle", async (c) => {
   const handle = c.req.param("handle").toLowerCase();

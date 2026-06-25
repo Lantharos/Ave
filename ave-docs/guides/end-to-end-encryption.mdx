@@ -1,58 +1,84 @@
 ---
 title: "End-to-end encryption"
-description: "Implement Ave app-key handoff safely, avoid URL-fragment decoding pitfalls, and isolate identity data correctly."
+description: "App encryption scopes, key handoff, and multi-user asymmetric encryption."
 ---
 
-Ave can deliver a per-app, per-identity encryption key for E2EE-capable apps.
+Ave delivers per-app, per-identity encryption material when your app requests an `e2ee:*` scope (or legacy `supportsE2ee`).
 
-## Two mechanisms (do not confuse them)
+## Encryption scopes
 
-| Mechanism | What gets decrypted | Where the secret appears |
+Configure standard OIDC scopes in the developer portal if needed. Request `e2ee:*` scopes dynamically in your OAuth authorize URL — they are not configured in the portal.
+
+| Scope | Keys | Use case |
 | --- | --- | --- |
-| **App E2EE key (`app_key`)** | The per-app symmetric key ciphertext Ave stored for this grant | URL **`#fragment`** after consent — see below |
-| **Identity wrapped payloads** | Arbitrary bytes for another user | Encrypted with their **published public key**; ciphertext usually lives in **your** app — see [identity keys](/sdk/sdk-identity-keys) |
+| `e2ee:symmetric` | AES-256 `app_key` | Single-user or shared symmetric storage |
+| `e2ee:asymmetric` | ECDH P-256 keypair | Multi-user E2EE with public key lookup |
+| `e2ee:reset` | Modifier | Rotate keys (combine with a mode scope). Shows a warning on consent. |
+| `e2ee:pqc:kyber` | Reserved | Post-quantum (not yet available) |
+| `e2ee:pqc:dilithium` | Reserved | Post-quantum (not yet available) |
 
-`#app_key` is delivered in the fragment because only the **browser** on aveid.net can unlock the master key — not your redirect page alone. Wrapped invite ciphertext is stored **in your app**; the recipient unwraps with `decryptWrappedPayload` in the browser after unlocking the master key. Use the **E2EE app key** for ongoing storage after handoff — it is not the same as wrapped payload crypto. Details: [Identity keys](/sdk/sdk-identity-keys).
+Request one E2EE mode scope per authorization. Re-sign-in **reuses** existing per-app keys. Add `e2ee:reset` only when you intend to rotate them.
 
-## How key handoff works
+```text
+scope=openid profile email e2ee:asymmetric
+scope=openid profile email e2ee:asymmetric e2ee:reset
+```
 
-- App is marked `supportsE2ee`
-- During the consent step, the Ave authorization UI decrypts the server-stored encrypted key using the user's master key
-- The plaintext app key is passed to your callback as a URL fragment (`#app_key=...`) — never in the JSON token response
-- Parse and clear the fragment before or alongside the authorization code exchange
+## Key handoff
+
+During consent, Ave unlocks keys with the user's master key and returns plaintext only in the redirect **fragment** (never in the JSON token response):
+
+| Mode | Fragment |
+| --- | --- |
+| Symmetric | `#app_key=<base64>` |
+| Asymmetric | `#app_public_key=<base64>&app_private_key=<base64>` |
+| Key rotation (`e2ee:reset`) | New keys as above, plus `#app_key_old`, `#app_public_key_old`, `#app_private_key_old`, and `#app_key_reset=true` |
+
+Your app should:
+
+1. Parse the fragment immediately after redirect
+2. Store the private key (asymmetric) or app key (symmetric) in local secure storage
+3. Store the public key (asymmetric) on the user record in your database
+4. Clear the fragment from browser history
+
+Use `mergeAppEncryptionFromUrl` from `@ave-id/sdk` or `completeOAuthCallback` with `AveSession`.
+
+## Multi-user encryption
+
+With `e2ee:asymmetric`, encrypt data for another user without a handshake:
+
+1. `GET /api/encryption/app-lookup?client_id=…&handle=…` → their app public key (404 if they have never signed in to your app or have no key)
+2. `encryptForAppHandle` (SDK) → ciphertext + ephemeral sender key
+3. Recipient decrypts with their locally stored app private key
+
+Reverse lookup: `client_id` + `public_key` → user handle and identity id.
 
 ## Storage model
 
-- Key is identity-specific
-- Same identity gets same app key across logins
-- Different identities must map to separate encrypted data domains
+- Keys are stable per (app, identity) pair and are **not** regenerated on re-sign-in
+- Use `e2ee:reset` for intentional rotation or recovery when the app lost local key material
+- Server stores only master-key-wrapped copies on Ave ID
+- Different identities get different key material
 
-## URL-fragment parsing gotcha
+## URL fragment parsing
 
-When parsing fragment with `URLSearchParams`, `+` may become space. Normalize before decoding.
-
-```ts
-const hashParams = new URLSearchParams(window.location.hash.slice(1));
-const appKeyRaw = hashParams.get("app_key");
-const appKeyBase64 = appKeyRaw?.replace(/ /g, "+");
-```
-
-Then clear sensitive fragment from history.
+`URLSearchParams` treats `+` as space. Normalize before base64 decode:
 
 ```ts
-window.history.replaceState({}, document.title, window.location.pathname + window.location.search);
+const appKeyBase64 = hashParams.get("app_key")?.replace(/ /g, "+");
 ```
 
 ## Crypto recommendations
 
-- Import app key with Web Crypto
-- Use AES-GCM with random 96-bit IV per encryption
-- Store `{iv + ciphertext}` together
-- Never reuse IV with same key
+- AES-GCM with random 12-byte IV per message (symmetric)
+- ECDH P-256 + AES-GCM for asymmetric payloads (SDK helpers use this)
+- Never reuse IVs with the same key
 
-## Failure modes to handle
+## Failure modes
 
-- Missing key on first login for E2EE app (treat as setup failure)
-- Identity switch returns different key context
-- Key decode failures due to base64 normalization bug
-- Fragment key left in browser history/logs
+- Missing E2EE scope in authorize request when app expects encryption
+- Master key not unlocked on device during consent
+- Fragment left in browser history — strip after read
+- Identity switch → different key context; do not mix ciphertext domains
+
+See [App encryption SDK](/sdk/sdk-identity-keys) and [E2EE checklist](/guides/e2ee-integration-checklist).

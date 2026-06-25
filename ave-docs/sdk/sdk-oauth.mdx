@@ -138,7 +138,7 @@ function buildAuthorizeUrl(
 </ParamField>
 
 <ParamField path="params.extraParams" type="object">
-  Extra query parameters on the Ave sign-in URL. For encrypted invites, set `wrapped_key` to the value from `encodeWrappedPayloadParam()` — see [Identity keys & wrapped payloads](/sdk/sdk-identity-keys).
+  Extra query parameters on the Ave sign-in URL. Prefer standard OAuth parameters; encryption is requested via `e2ee:*` scopes — see [App encryption](/sdk/sdk-identity-keys).
 </ParamField>
 
 ```ts

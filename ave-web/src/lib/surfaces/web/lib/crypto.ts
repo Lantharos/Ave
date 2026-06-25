@@ -549,6 +549,33 @@ export async function decryptAppKey(
   return await importAppKey(appKeyB64);
 }
 
+export async function generateAppKeyPair(): Promise<{
+  publicKey: string;
+  privateKey: CryptoKey;
+}> {
+  return generateIdentityEncryptionKeyPair();
+}
+
+export async function exportAppPrivateKeyB64(privateKey: CryptoKey): Promise<string> {
+  const data = await exportIdentityEncryptionPrivateKey(privateKey);
+  return btoa(String.fromCharCode(...new Uint8Array(data)));
+}
+
+export async function encryptAppPrivateKey(
+  privateKey: CryptoKey,
+  masterKey: CryptoKey
+): Promise<string> {
+  const privateKeyData = await exportIdentityEncryptionPrivateKey(privateKey);
+  return await encrypt(privateKeyData, masterKey);
+}
+
+export async function decryptAppPrivateKey(
+  encryptedAppPrivateKey: string,
+  masterKey: CryptoKey
+): Promise<CryptoKey> {
+  return loadIdentityEncryptionPrivateKey(encryptedAppPrivateKey, masterKey);
+}
+
 /**
  * Generate a dedicated identity encryption keypair for shared secret transfer.
  */

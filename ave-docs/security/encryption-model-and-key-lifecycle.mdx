@@ -9,14 +9,13 @@ Ave's E2EE model gives each (app, identity) pair a **stable, isolated encryption
 
 At consent time, the Ave UI decrypts that ciphertext **in the browser** using the user's master key, then places the plaintext app key in the fragment. The token and authorization-code responses do not carry the decrypted secret.
 
-For **asymmetric** flows (encrypting an invite or secret for another user's identity), use identity keypairs and wrapped payloads in the [JavaScript SDK](/sdk/sdk-identity-keys).
+For **multi-user asymmetric** encryption, enable `e2ee:asymmetric` on your app and use per-user app keypairs with the [lookup API](/sdk/sdk-identity-keys). The old identity wrapped OAuth payload flow (`wrapped_key`) is removed.
 
-| Property | Value |
-|---|---|
-| Key isolation | Per-app, per-identity — different identities get different keys |
-| Key stability | Same app + same identity always gets the same key context |
-| Server knowledge | Zero — Ave stores only the encrypted key, never plaintext |
-| Encryption algorithm | AES-GCM with a unique IV per ciphertext |
+| Property | Symmetric (`e2ee:symmetric`) | Asymmetric (`e2ee:asymmetric`) |
+|---|---|---|
+| Key material | AES-256 app key | ECDH P-256 public + private keypair |
+| Fragment | `#app_key=` | `#app_public_key=` + `#app_private_key=` |
+| Multi-user | Encrypt with shared app key or roll your own | Lookup public keys; encrypt without Ave handshakes |
 
 ## Key lifecycle
 
