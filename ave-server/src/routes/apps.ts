@@ -52,7 +52,6 @@ const baseAppSchema = z.object({
   allowedScopes: z.array(z.enum(allowedScopes)).default(["openid", "profile", "email", "offline_access"]),
   accessTokenTtlSeconds: z.number().int().min(300).max(86400).optional(),
   refreshTokenTtlSeconds: z.number().int().min(3600).max(60 * 60 * 24 * 365).optional(),
-  allowUserIdScope: z.boolean().optional(),
   organizationId: z.string().min(1).optional(),
 });
 
@@ -100,7 +99,6 @@ export function serializeApp(
     allowedScopes: stripE2eeScopes(appRow.allowedScopes as string[]),
     accessTokenTtlSeconds: appRow.accessTokenTtlSeconds,
     refreshTokenTtlSeconds: appRow.refreshTokenTtlSeconds,
-    allowUserIdScope: !!appRow.allowUserIdScope,
     createdAt: appRow.createdAt,
     organizationId: appRow.organizationId,
     identityCount,
@@ -439,7 +437,6 @@ app.post("/", requireWritableDevUser, zValidator("json", baseAppSchema), async (
       allowedScopes: stripE2eeScopes(data.allowedScopes),
       accessTokenTtlSeconds: data.accessTokenTtlSeconds || 3600,
       refreshTokenTtlSeconds: data.refreshTokenTtlSeconds || 30 * 24 * 60 * 60,
-      allowUserIdScope: data.allowUserIdScope ?? false,
       clientId,
       clientSecretHash,
       ownerId: userId,
@@ -547,7 +544,6 @@ app.patch("/:appId", requireWritableDevUser, zValidator("json", baseAppSchema.pa
       allowedScopes: nextAllowedScopes,
       accessTokenTtlSeconds: data.accessTokenTtlSeconds ?? accessible.app.accessTokenTtlSeconds,
       refreshTokenTtlSeconds: data.refreshTokenTtlSeconds ?? accessible.app.refreshTokenTtlSeconds,
-      allowUserIdScope: data.allowUserIdScope ?? accessible.app.allowUserIdScope,
       organizationId: nextOrganizationId,
     })
     .where(eq(oauthApps.id, appId))

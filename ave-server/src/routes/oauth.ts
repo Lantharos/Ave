@@ -450,7 +450,7 @@ async function buildTokenResponseFromAuthorizationCode(params: {
     iat: issuedAt,
     scope: authCode.scope,
     cid: oauthApp.clientId,
-    uid: hasScope(authCode.scope, "user_id") && oauthApp.allowUserIdScope ? authCode.userId : undefined,
+    uid: hasScope(authCode.scope, "user_id") ? authCode.userId : undefined,
     ...(isQuickClient(clientId) ? { quick: true } : {}),
     ...organizationClaims(authCode),
   });
@@ -476,7 +476,7 @@ async function buildTokenResponseFromAuthorizationCode(params: {
   const [jwtAccessToken, idToken] = await Promise.all([jwtAccessTokenPromise, idTokenPromise]);
   response.access_token_jwt = jwtAccessToken;
 
-  if (hasScope(authCode.scope, "user_id") && oauthApp.allowUserIdScope) {
+  if (hasScope(authCode.scope, "user_id")) {
     response.user_id = authCode.userId;
   }
 
@@ -546,7 +546,6 @@ function buildQuickApp(clientId: string) {
     allowedScopes: [...QUICK_AUTH_SCOPES],
     accessTokenTtlSeconds: QUICK_AUTH_ACCESS_TOKEN_TTL_SECONDS,
     refreshTokenTtlSeconds: 0,
-    allowUserIdScope: false,
     developmentMode: false,
     supportsE2ee: false,
     ownerId: null as string | null,
@@ -1011,7 +1010,7 @@ app.post("/authorize", requireAuth, zValidator("json", z.object({
   const requestedScopes = parseScopes(scope);
   const allowedScopes = (oauthApp.allowedScopes || []) as string[];
   const invalidScopes = requestedScopes.filter(
-    (s) => !isScopeAllowedForApp(s, allowedScopes, { allowUserIdScope: oauthApp.allowUserIdScope }),
+    (s) => !isScopeAllowedForApp(s, allowedScopes),
   );
   if (invalidScopes.length > 0) {
     return c.json({ error: "invalid_scope", error_description: `Invalid scopes: ${invalidScopes.join(", ")}` }, 400);
@@ -1712,7 +1711,7 @@ app.post("/token", zValidator("json", oauthTokenRequestSchema), async (c) => {
       iat: issuedAt,
       scope: storedRefresh.scope,
       cid: oauthApp.clientId,
-      uid: hasScope(storedRefresh.scope, "user_id") && oauthApp.allowUserIdScope ? storedRefresh.userId : undefined,
+      uid: hasScope(storedRefresh.scope, "user_id") ? storedRefresh.userId : undefined,
       ...organizationClaims(refreshOrganizationContext),
     });
     const [idToken, jwtAccessToken] = await Promise.all([idTokenPromise, jwtAccessTokenPromise]);
@@ -1726,7 +1725,7 @@ app.post("/token", zValidator("json", oauthTokenRequestSchema), async (c) => {
       access_token_jwt: jwtAccessToken,
     };
 
-    if (hasScope(storedRefresh.scope, "user_id") && oauthApp.allowUserIdScope) {
+    if (hasScope(storedRefresh.scope, "user_id")) {
       response.user_id = storedRefresh.userId;
     }
 
@@ -1846,15 +1845,12 @@ app.post("/token", zValidator("json", oauthTokenRequestSchema), async (c) => {
     return c.json({ error: "invalid_request", error_description: "Client authentication required" }, 400);
   }
 
-  const baseScopes = (oauthApp.allowedScopes && oauthApp.allowedScopes.length > 0
+  const allowedScopes = (oauthApp.allowedScopes && oauthApp.allowedScopes.length > 0
     ? oauthApp.allowedScopes
     : ["openid", "profile", "email", "offline_access"]) as string[];
-  const allowedScopes = oauthApp.allowUserIdScope
-    ? [...new Set([...baseScopes, "user_id"])]
-    : baseScopes;
   const requestedScopes = parseScopes(authCode.scope);
   const invalidScopes = requestedScopes.filter(
-    (s) => !isScopeAllowedForApp(s, allowedScopes, { allowUserIdScope: oauthApp.allowUserIdScope }),
+    (s) => !isScopeAllowedForApp(s, allowedScopes),
   );
   if (invalidScopes.length > 0) {
     return c.json({ error: "invalid_scope", error_description: `Invalid scopes: ${invalidScopes.join(", ")}` }, 400);
@@ -1948,12 +1944,8 @@ app.get("/userinfo", async (c) => {
     response.email = identity.email;
   }
 
-  if (hasScope(record.scope, "user_id")) {
-    const oauthApp = await resolveOauthAppForAccessRecord(record);
-
-    if (oauthApp?.allowUserIdScope && record.userId) {
-      response.user_id = record.userId;
-    }
+  if (hasScope(record.scope, "user_id") && record.userId) {
+    response.user_id = record.userId;
   }
 
   if (record.organizationId) {

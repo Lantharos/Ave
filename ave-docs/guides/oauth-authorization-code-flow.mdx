@@ -55,7 +55,7 @@ Ave returns two different JWTs on a successful token exchange. Understanding the
     }
     ```
 
-    `cid` is your client ID. `sid` is the permanent user UUID (same across all identities). `uid` is also the user UUID, only present when the `user_id` scope was granted and your app has `allowUserIdScope` enabled.
+    `cid` is your client ID. `uid` is the user UUID, only present when the `user_id` scope was granted.
 
     **Use `access_token_jwt` for:**
     - Connector token-exchange grant (`subjectToken` field)
@@ -98,7 +98,7 @@ Ave returns two different JWTs on a successful token exchange. Understanding the
 | `picture` | `id_token` only | Avatar URL (requires `profile` scope) |
 | `cid` | `access_token_jwt` only | Your client ID |
 | `scope` | `access_token_jwt` only | Space-separated granted scopes |
-| `uid` | `access_token_jwt` only | User UUID (only if `user_id` scope + app config) |
+| `uid` | `access_token_jwt` only | User UUID (only if `user_id` scope was granted) |
 
   </Accordion>
 </AccordionGroup>
@@ -375,6 +375,6 @@ The returned claims depend on the scopes your access token has. The response alw
     The `offline_access` scope was not requested or was not granted. Add `offline_access` to your scope list.
   </Accordion>
   <Accordion title="uid claim missing from access_token_jwt">
-    The `user_id` scope was requested, but your app doesn't have `allowUserIdScope` configured in the developer portal, or the scope wasn't granted. The `uid` claim only appears when both conditions are met.
+    The `user_id` scope was not included in the granted scopes. The `uid` claim and `user_id` token response field only appear when `user_id` is in the authorized scope list.
   </Accordion>
 </AccordionGroup>

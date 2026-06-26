@@ -2,8 +2,7 @@ export type AppScope =
   | "openid"
   | "profile"
   | "email"
-  | "offline_access"
-  | "user_id";
+  | "offline_access";
 
 export const defaultScopes: AppScope[] = [
   "openid",
@@ -17,5 +16,4 @@ export const scopeDescriptions: Record<AppScope, string> = {
   profile: "Display name and avatar",
   email: "Email address",
   offline_access: "Refresh tokens",
-  user_id: "Persistent user identifier",
 };

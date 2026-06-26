@@ -274,7 +274,6 @@ export const oauthApps = sqliteTable("oauth_apps", {
     .$defaultFn(() => ["openid", "profile", "email", "offline_access"]),
   accessTokenTtlSeconds: integer("access_token_ttl_seconds").default(3600).notNull(),
   refreshTokenTtlSeconds: integer("refresh_token_ttl_seconds").default(30 * 24 * 60 * 60).notNull(),
-  allowUserIdScope: integer("allow_user_id_scope", { mode: "boolean" }).default(false).notNull(),
   
   // Does this app support E2EE?
   supportsE2ee: integer("supports_e2ee", { mode: "boolean" }).default(false),

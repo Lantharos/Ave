@@ -346,7 +346,6 @@
     iconUrl: string;
     redirectUris: string;
     developmentMode: boolean;
-    allowUserIdScope: boolean;
     accessTokenTtlSeconds: number;
     refreshTokenTtlSeconds: number;
     allowedScopes: string[];
@@ -370,7 +369,6 @@
         iconUrl: form.iconUrl || undefined,
         redirectUris,
         developmentMode: form.developmentMode,
-        allowUserIdScope: form.allowUserIdScope,
         accessTokenTtlSeconds: form.accessTokenTtlSeconds,
         refreshTokenTtlSeconds: form.refreshTokenTtlSeconds,
         allowedScopes: form.allowedScopes,
@@ -438,7 +436,6 @@
         allowedScopes: app.allowedScopes,
         accessTokenTtlSeconds: app.accessTokenTtlSeconds,
         refreshTokenTtlSeconds: app.refreshTokenTtlSeconds,
-        allowUserIdScope: app.allowUserIdScope,
         organizationId: app.organizationId || undefined,
       };
 

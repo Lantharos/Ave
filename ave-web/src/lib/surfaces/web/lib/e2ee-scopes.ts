@@ -33,6 +33,10 @@ export function hasE2eeResetScope(scopes: string[] | null | undefined): boolean 
   return (scopes ?? []).some(isE2eeResetScope);
 }
 
+export function hasUserIdScope(scopes: string[] | null | undefined): boolean {
+  return (scopes ?? []).some((scope) => scope === "user_id");
+}
+
 export function appEffectiveSupportsE2ee(app: {
   supportsE2ee?: boolean;
   allowedScopes?: string[] | null;

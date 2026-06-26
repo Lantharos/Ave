@@ -54,7 +54,6 @@ export interface DevApp {
   allowedScopes: string[];
   accessTokenTtlSeconds: number;
   refreshTokenTtlSeconds: number;
-  allowUserIdScope: boolean;
   createdAt: string;
   organizationId?: string | null;
   identityCount?: number;
@@ -146,7 +145,6 @@ export interface CreateAppPayload {
   allowedScopes: string[];
   accessTokenTtlSeconds?: number;
   refreshTokenTtlSeconds?: number;
-  allowUserIdScope?: boolean;
   organizationId?: string;
 }
 

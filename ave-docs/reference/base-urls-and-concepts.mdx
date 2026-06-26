@@ -85,7 +85,7 @@ Scopes are space-separated strings requested during authorization. They control 
 | `profile` | Adds `name`, `preferred_username`, `picture` to userinfo |
 | `email` | Adds `email` to userinfo |
 | `offline_access` | Returns `refresh_token` for long-lived sessions |
-| `user_id` | Returns raw `userId` — only available if the app has this scope enabled |
+| `user_id` | Returns raw `userId` when requested in the authorize scope |
 
 <Note>
   Scopes are allowlisted per app. Requesting a scope your app hasn't been granted will return an `invalid_scope` error.

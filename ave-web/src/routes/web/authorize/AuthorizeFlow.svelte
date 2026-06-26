@@ -20,6 +20,7 @@
         authorizationHasE2eeMaterial,
         e2eeModeLabel,
         hasE2eeResetScope,
+        hasUserIdScope,
         resolveE2eeAuthorization,
         resolveRequestedE2eeMode,
     } from "$lib/surfaces/web/lib/e2ee-scopes";
@@ -126,6 +127,10 @@
         if (!isQuickAuth) return null;
         try { return new URL(params.clientId.slice("origin:".length)).hostname; } catch { return null; }
     });
+    const authorizeRequestedScopes = $derived.by(() =>
+        params.scope.split(" ").map((value) => value.trim()).filter(Boolean),
+    );
+    const wantsUserIdScope = $derived(hasUserIdScope(authorizeRequestedScopes));
 
     let appInfo = $state<{
         name: string;
@@ -295,7 +300,7 @@
                 authData.codeChallengeMethod = params.codeChallengeMethod;
             }
 
-            const requestedScopes = params.scope.split(" ").map((value) => value.trim()).filter(Boolean);
+            const requestedScopes = authorizeRequestedScopes;
             const wantsE2eeReset = hasE2eeResetScope(requestedScopes);
             const e2eeAuth = appInfo
                 ? resolveE2eeAuthorization(requestedScopes, appInfo, existingAuth)
@@ -952,9 +957,8 @@
             {/if}
 
             {#if appInfo && appEffectiveSupportsE2ee(appInfo)}
-                {@const requestedScopes = params.scope.split(" ").map((value) => value.trim()).filter(Boolean)}
-                {@const activeE2eeMode = resolveRequestedE2eeMode(requestedScopes, appInfo, existingAuth)}
-                {@const wantsE2eeReset = hasE2eeResetScope(requestedScopes)}
+                {@const activeE2eeMode = resolveRequestedE2eeMode(authorizeRequestedScopes, appInfo, existingAuth)}
+                {@const wantsE2eeReset = hasE2eeResetScope(authorizeRequestedScopes)}
                 <div class="p-4 md:p-[30px] bg-[#0d1f12]/60 flex flex-col gap-2 md:gap-[10px] border border-[#32A94C]/20 rounded-[20px] md:rounded-[32px]">
                     <h3 class="font-poppins flex flex-row gap-2 md:gap-[10px] text-sm md:text-[20px] text-[#32A94C] items-center">
                         <svg class="w-4 h-4 md:w-6 md:h-6 shrink-0" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -970,6 +974,20 @@
                         {:else}
                             This app supports end-to-end encryption. Request an `e2ee:*` scope during sign-in to receive encryption keys.
                         {/if}
+                    </p>
+                </div>
+            {/if}
+
+            {#if wantsUserIdScope}
+                <div class="p-4 md:p-[30px] bg-[#2a1f0d]/60 flex flex-col gap-2 md:gap-[10px] border border-[#E8A43A]/25 rounded-[20px] md:rounded-[32px]">
+                    <h3 class="font-poppins flex flex-row gap-2 md:gap-[10px] text-sm md:text-[20px] text-[#E8A43A] items-center">
+                        <svg class="w-4 h-4 md:w-6 md:h-6 shrink-0" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M12 9V13M12 17H12.01M10.29 3.86L1.82 18C1.64537 18.3024 1.55299 18.6453 1.55201 18.9945C1.55103 19.3437 1.64151 19.6871 1.81445 19.9905C1.98738 20.2939 2.23675 20.5467 2.53773 20.7239C2.83871 20.901 3.18082 20.9962 3.53 21H20.47C20.8192 20.9962 21.1613 20.901 21.4623 20.7239C21.7633 20.5467 22.0126 20.2939 22.1856 19.9905C22.3585 19.6871 22.449 19.3437 22.448 18.9945C22.447 18.6453 22.3546 18.3024 22.18 18L13.71 3.86C13.5317 3.56611 13.2807 3.32312 12.9812 3.15448C12.6817 2.98585 12.3438 2.89725 12 2.89725C11.6562 2.89725 11.3183 2.98585 11.0188 3.15448C10.7193 3.32312 10.4683 3.56611 10.29 3.86Z" stroke="#E8A43A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                        Account identifier requested
+                    </h3>
+                    <p class="font-poppins text-xs md:text-[18px] text-[#666666]">
+                        This app requested `user_id`, your account-level ID that stays the same across all Ave identities. Most apps only need your identity ID (`sub`). Only continue if you trust this app to link activity across identities.
                     </p>
                 </div>
             {/if}

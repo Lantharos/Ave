@@ -102,16 +102,17 @@ These are available to all OAuth apps without any special configuration.
 
 ## Extended scopes
 
-These require explicit app configuration in the developer portal.
+These are requested dynamically at sign-in, not configured in the developer portal.
 
 <ParamField path="user_id" type="scope">
-  Exposes the permanent user UUID — stable across all identities for the same physical user. Requires `allowUserIdScope: true` in your app config.
+  **Discouraged for most apps.** Exposes the permanent user UUID — stable across all identities for the same Ave account. Users see a warning on the consent screen.
+
+  Prefer `sub` (identity ID) unless you need to link multiple identities to one app account.
 
   **Adds to `access_token_jwt`:**
   ```json
   {
-    "uid": "user-uuid",
-    "sid": "user-uuid"
+    "uid": "user-uuid"
   }
   ```
 
@@ -123,10 +124,8 @@ These require explicit app configuration in the developer portal.
   ```
 
   <Note>
-    `user_id` is **not** in the `id_token`. It is in `access_token_jwt` as `uid` and in the top-level token response as `user_id`. If you need it in Convex, you will need to pass it separately or use a Convex mutation to look it up from the `sub`.
+    `user_id` is **not** in the `id_token`. It is in `access_token_jwt` as `uid` and in the top-level token response as `user_id`.
   </Note>
-
-  Only request this when your app has a genuine need for cross-identity user linking. It increases the user consent surface and requires portal configuration.
 </ParamField>
 
 ## Encryption scopes
@@ -218,8 +217,8 @@ See [Connector app-to-app](/guides/connector-app-to-app) for details.
 ## Common mistakes
 
 <AccordionGroup>
-  <Accordion title="Requesting user_id without app config">
-    If your app does not have `allowUserIdScope` enabled, requesting `user_id` in the scope has no effect. The `uid` claim will not appear and the `user_id` field will not be in the token response.
+  <Accordion title="Requesting user_id without user awareness">
+    Users see a warning on the Ave consent screen when an app requests `user_id`. Only request it when you genuinely need cross-identity linking.
   </Accordion>
   <Accordion title="Assuming email is always present">
     Email is present only if you requested `email` scope and the identity has a verified email address. If the user has not linked and verified an email yet, Ave blocks the authorization flow until they do. Always treat the claim as optional in your app anyway.

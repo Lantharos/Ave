@@ -54,7 +54,7 @@
             * "profile" can include display name, handle, and avatar URL.
             * "email" can include your verified email address.
             * "offline_access" lets the app receive refresh tokens so it can keep a session.
-            * "user_id" can include your account-level user ID, but only for apps allowed to request it.
+            * "user_id" can include your account-level user ID when the app requests that scope. You will see a warning on the consent screen.
             <br><br>
             Apps may also receive OAuth access tokens, ID tokens, connector delegation tokens, and, for E2EE app flows, app keys through the browser flow after you approve access. Revoke access from your dashboard to stop future Ave-issued access, but connected apps may keep data they already received under their own privacy policies.
         </LegalSec>

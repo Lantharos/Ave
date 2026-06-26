@@ -263,10 +263,6 @@
         </label>
       </div>
 
-      <div class="flex flex-col gap-4">
-        <Toggle bind:checked={draft.allowUserIdScope} label="Allow user_id scope" />
-      </div>
-
       <div class="flex items-center justify-between gap-3 flex-wrap border-t border-white/[0.06] pt-6">
         <div class="flex gap-3 flex-wrap">
           <Button variant="outline" size="sm" onclick={() => onrotate(app.id)} disabled={rotating}>

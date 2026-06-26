@@ -73,23 +73,29 @@ export function storedModeToE2eeMode(
   return null;
 }
 
-/** E2EE scopes are chosen per OAuth request, not pre-configured on the app. */
+export const USER_ID_SCOPE = "user_id" as const;
+
+export function isUserIdScope(scope: string): boolean {
+  return scope === USER_ID_SCOPE;
+}
+
+export function isDynamicOAuthScope(scope: string): boolean {
+  return isE2eeScope(scope) || isUserIdScope(scope);
+}
+
+/** E2EE and user_id scopes are chosen per OAuth request, not pre-configured on the app. */
 export function isScopeAllowedForApp(
   scope: string,
   allowedScopes: string[],
-  options?: { allowUserIdScope?: boolean },
 ): boolean {
-  if (isE2eeScope(scope)) {
+  if (isDynamicOAuthScope(scope)) {
     return true;
-  }
-  if (scope === "user_id") {
-    return options?.allowUserIdScope === true || allowedScopes.includes("user_id");
   }
   return allowedScopes.includes(scope);
 }
 
 export function stripE2eeScopes(scopes: string[]): string[] {
-  return scopes.filter((scope) => !isE2eeScope(scope));
+  return scopes.filter((scope) => !isE2eeScope(scope) && !isUserIdScope(scope));
 }
 
 function collectRequestedE2eeModes(
@@ -159,12 +165,14 @@ export function resolveRequestedE2eeModeConflict(
   return resolveE2eeAuthorization(requestedScopes, app, existing);
 }
 
-export const STANDARD_OAUTH_SCOPES = [
+export const PORTAL_APP_SCOPES = [
   "openid",
   "profile",
   "email",
   "offline_access",
-  "user_id",
 ] as const;
 
-export const PORTAL_APP_SCOPES = [...STANDARD_OAUTH_SCOPES] as const;
+export const STANDARD_OAUTH_SCOPES = [
+  ...PORTAL_APP_SCOPES,
+  USER_ID_SCOPE,
+] as const;

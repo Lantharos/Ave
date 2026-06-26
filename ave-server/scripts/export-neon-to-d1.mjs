@@ -73,7 +73,6 @@ const booleanColumns = new Set([
   "is_primary",
   "backed_up",
   "is_active",
-  "allow_user_id_scope",
   "supports_e2ee",
 ]);
 
