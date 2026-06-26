@@ -466,6 +466,44 @@ export async function hasStoredMasterKey(): Promise<boolean> {
   }
 }
 
+export async function masterKeysMatch(a: CryptoKey, b: CryptoKey): Promise<boolean> {
+  try {
+    const [left, right] = await Promise.all([exportMasterKey(a), exportMasterKey(b)]);
+    if (left.byteLength !== right.byteLength) {
+      return false;
+    }
+    const leftBytes = new Uint8Array(left);
+    const rightBytes = new Uint8Array(right);
+    for (let index = 0; index < leftBytes.length; index += 1) {
+      if (leftBytes[index] !== rightBytes[index]) {
+        return false;
+      }
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export async function resolveActiveMasterKey(
+  inMemoryKey?: CryptoKey | null,
+): Promise<CryptoKey | null> {
+  const stored = await loadMasterKey();
+  if (stored && inMemoryKey && !(await masterKeysMatch(stored, inMemoryKey))) {
+    console.warn("[Crypto] Local master key storage was out of sync with the active session; repairing.");
+    await storeMasterKey(inMemoryKey);
+    return inMemoryKey;
+  }
+  if (stored) {
+    return stored;
+  }
+  if (inMemoryKey) {
+    await storeMasterKey(inMemoryKey);
+    return inMemoryKey;
+  }
+  return null;
+}
+
 /**
  * Derive an AES key from PRF output
  * PRF output is high-entropy, so we just import it directly as a key
