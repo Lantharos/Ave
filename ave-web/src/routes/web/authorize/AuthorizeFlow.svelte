@@ -179,6 +179,7 @@
     let recoveringMasterKey = $state(false);
     let recoveryCode = $state("");
     let masterKeyError = $state<string | null>(null);
+    let masterKeyMismatch = $state(false);
     let needsStorageAccess = $state(false);
     let redirectingToLogin = $state(false);
     let requestingStorageAccess = $state(false);
@@ -214,8 +215,21 @@
         masterKeyLoginRequestId = null;
         masterKeyEphemeralKeyPair = null;
         recoveryCode = "";
+        if (!masterKeyMismatch) {
+            masterKeyError = null;
+        }
         void loadTrustedDevices();
     });
+
+    function promptMasterKeyRecovery(mismatch: boolean) {
+        masterKeyMismatch = mismatch;
+        needsMasterKey = true;
+        masterKeyError = mismatch
+            ? "The encryption key on this device doesn't unlock this app's saved keys. Restore the correct key to continue without losing encrypted data."
+            : null;
+        authorizing = false;
+        sliderPosition = 0;
+    }
 
     function appDisplayName() {
         return appInfo?.name || quickOriginHostname || "this app";
@@ -278,6 +292,7 @@
             if (authorizeFlowShowsE2ee(bootstrap.app, authorizeRequestedScopes)) {
                 hasLocalMasterKey = !!(await loadMasterKey());
                 needsMasterKey = !hasLocalMasterKey;
+                masterKeyMismatch = false;
             }
 
             const authState = get(auth);
@@ -370,24 +385,24 @@
                     sameIdentity &&
                     authorizationHasE2eeMaterial(existingAuth, requestedE2eeMode);
 
-                async function loadStoredSymmetricKeys(): Promise<boolean> {
-                    if (!existingAuth?.encryptedAppKey) return false;
+                async function loadStoredSymmetricKeys(): Promise<"ok" | "missing" | "failed"> {
+                    if (!existingAuth?.encryptedAppKey) return "missing";
                     try {
                         const appKey = await decryptAppKey(existingAuth.encryptedAppKey, masterKey);
                         rawAppKey = await exportAppKey(appKey);
-                        return true;
+                        return "ok";
                     } catch (keyError) {
-                        console.warn("[Authorize] Existing encrypted app key could not be decrypted; generating new app keys.", keyError);
-                        return false;
+                        console.warn("[Authorize] Existing encrypted app key could not be decrypted.", keyError);
+                        return "failed";
                     }
                 }
 
-                async function loadStoredAsymmetricKeys(): Promise<boolean> {
+                async function loadStoredAsymmetricKeys(): Promise<"ok" | "missing" | "failed"> {
                     if (
                         !existingAuth?.appPublicKey ||
                         !existingAuth?.encryptedAppPrivateKey
                     ) {
-                        return false;
+                        return "missing";
                     }
                     try {
                         const privateKey = await decryptAppPrivateKey(
@@ -396,24 +411,31 @@
                         );
                         rawAppPublicKey = existingAuth.appPublicKey;
                         rawAppPrivateKey = await exportAppPrivateKeyB64(privateKey);
-                        return true;
+                        return "ok";
                     } catch (keyError) {
-                        console.warn("[Authorize] Existing app keypair could not be decrypted; generating new app keys.", keyError);
-                        return false;
+                        console.warn("[Authorize] Existing app keypair could not be decrypted.", keyError);
+                        return "failed";
                     }
+                }
+
+                async function loadStoredKeysForMode(): Promise<"ok" | "missing" | "failed"> {
+                    if (requestedE2eeMode === "symmetric") return loadStoredSymmetricKeys();
+                    if (requestedE2eeMode === "asymmetric") return loadStoredAsymmetricKeys();
+                    return "missing";
                 }
 
                 if (wantsE2eeReset) {
                     if (hasStoredMaterial) {
-                        if (requestedE2eeMode === "symmetric") {
-                            if (await loadStoredSymmetricKeys()) {
+                        const prior = await loadStoredKeysForMode();
+                        if (prior === "ok") {
+                            if (requestedE2eeMode === "symmetric") {
                                 rawAppKeyOld = rawAppKey;
-                            }
-                        } else if (requestedE2eeMode === "asymmetric") {
-                            if (await loadStoredAsymmetricKeys()) {
+                            } else if (requestedE2eeMode === "asymmetric") {
                                 rawAppPublicKeyOld = rawAppPublicKey;
                                 rawAppPrivateKeyOld = rawAppPrivateKey;
                             }
+                        } else if (prior === "failed") {
+                            console.warn("[Authorize] Could not decrypt prior app keys for rotation export; continuing with reset.");
                         }
                     }
 
@@ -435,26 +457,16 @@
                         throw new Error(`Encryption mode "${requestedE2eeMode}" is not available yet.`);
                     }
                 } else if (hasStoredMaterial) {
-                    const loaded =
-                        requestedE2eeMode === "symmetric"
-                            ? await loadStoredSymmetricKeys()
-                            : requestedE2eeMode === "asymmetric"
-                              ? await loadStoredAsymmetricKeys()
-                              : false;
-                    if (!loaded) {
-                        if (requestedE2eeMode === "symmetric") {
-                            const appKey = await generateAppKey();
-                            authData.encryptedAppKey = await encryptAppKey(appKey, masterKey);
-                            rawAppKey = await exportAppKey(appKey);
-                        } else if (requestedE2eeMode === "asymmetric") {
-                            const keyPair = await generateAppKeyPair();
-                            authData.appPublicKey = keyPair.publicKey;
-                            authData.encryptedAppPrivateKey = await encryptAppPrivateKey(keyPair.privateKey, masterKey);
-                            rawAppPublicKey = keyPair.publicKey;
-                            rawAppPrivateKey = await exportAppPrivateKeyB64(keyPair.privateKey);
-                        } else {
-                            throw new Error(`Encryption mode "${requestedE2eeMode}" is not available yet.`);
-                        }
+                    const loaded = await loadStoredKeysForMode();
+                    if (loaded === "failed") {
+                        promptMasterKeyRecovery(true);
+                        return;
+                    }
+                    if (loaded === "missing") {
+                        error = "This app has saved encryption keys but they could not be loaded. Try again or contact support.";
+                        authorizing = false;
+                        sliderPosition = 0;
+                        return;
                     }
                 } else if (requestedE2eeMode === "symmetric") {
                     const appKey = await generateAppKey();
@@ -876,6 +888,7 @@
 				return;
 			}
 			needsMasterKey = false;
+            masterKeyMismatch = false;
                 await handleAuthorize("instant");
 		} finally {
 			unlockingMasterKey = false;
@@ -905,6 +918,7 @@
 
     async function handleMasterKeyRecovered() {
         needsMasterKey = false;
+        masterKeyMismatch = false;
         masterKeyUnlockView = "options";
         await handleAuthorize("instant");
     }
@@ -1149,7 +1163,11 @@
                 <div class="text-center">
                     <Text type="h" size={24} color="#FFFFFF">Encryption Key Required</Text>
                     <p class="text-[#878787] text-[16px] mt-[10px] max-w-[400px]">
-                        This app uses end-to-end encryption. Your encryption key wasn't found on this device.
+                        {#if masterKeyMismatch}
+                            This app already has encryption keys saved. The key on this device can't unlock them — restore the correct key to continue without losing encrypted data.
+                        {:else}
+                            This app uses end-to-end encryption. Your encryption key wasn't found on this device.
+                        {/if}
                     </p>
                 </div>
                 <div class="flex flex-col gap-[15px] w-full max-w-[350px]">
