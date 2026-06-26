@@ -47,6 +47,16 @@ export function appEffectiveSupportsE2ee(app: {
   return hasAnyE2eeScope(app.allowedScopes);
 }
 
+export function authorizeFlowShowsE2ee(
+  app: {
+    supportsE2ee?: boolean;
+    allowedScopes?: string[] | null;
+  },
+  requestedScopes: string[],
+): boolean {
+  return appEffectiveSupportsE2ee(app) || hasAnyE2eeScope(requestedScopes);
+}
+
 function e2eeModeForScope(scope: E2eeScope): E2eeMode {
   switch (scope) {
     case E2EE_SCOPES.SYMMETRIC:

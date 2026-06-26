@@ -16,7 +16,7 @@
         decryptAppPrivateKey,
     } from "$lib/surfaces/web/lib/crypto";
     import {
-        appEffectiveSupportsE2ee,
+        authorizeFlowShowsE2ee,
         authorizationHasE2eeMaterial,
         e2eeModeLabel,
         hasE2eeResetScope,
@@ -139,6 +139,10 @@
         supportsE2ee: boolean;
         allowedScopes?: string[];
     } | null>(null);
+
+    const authorizeShowsE2ee = $derived.by(() =>
+        appInfo ? authorizeFlowShowsE2ee(appInfo, authorizeRequestedScopes) : false,
+    );
     
     let existingAuth = $state<{
         id: string;
@@ -235,7 +239,7 @@
             launchedExternalApp = false;
             loadedAuthorizeBootstrapClientId = clientId;
 
-            if (appEffectiveSupportsE2ee(bootstrap.app) && !hasMasterKey()) {
+            if (authorizeFlowShowsE2ee(bootstrap.app, authorizeRequestedScopes) && !hasMasterKey()) {
                 needsMasterKey = true;
             }
 
@@ -250,7 +254,7 @@
             selectedIdentity = preferredIdentity || existingIdentity || authState.currentIdentity || authState.identities[0] || null;
             emailDraft = selectedIdentity?.pendingEmail || selectedIdentity?.email || "";
 
-            const shouldAutoAuthorize = !!existingAuth && !!existingIdentity && (!appEffectiveSupportsE2ee(bootstrap.app) || hasMasterKey());
+            const shouldAutoAuthorize = !!existingAuth && !!existingIdentity && (!authorizeFlowShowsE2ee(bootstrap.app, authorizeRequestedScopes) || hasMasterKey());
 
             if (shouldAutoAuthorize && !(requiresEmailScope && !selectedIdentity?.email)) {
                 // Keep UI in loading state while we redirect.
@@ -955,7 +959,7 @@
                 </p>
             {/if}
 
-            {#if appInfo && appEffectiveSupportsE2ee(appInfo)}
+            {#if appInfo && authorizeShowsE2ee}
                 {@const activeE2eeMode = resolveRequestedE2eeMode(authorizeRequestedScopes, appInfo, existingAuth)}
                 {@const wantsE2eeReset = hasE2eeResetScope(authorizeRequestedScopes)}
                 <div class="p-4 md:p-[30px] bg-[#0d1f12]/60 flex flex-col gap-2 md:gap-[10px] border border-[#32A94C]/20 rounded-[20px] md:rounded-[32px]">
@@ -1051,30 +1055,30 @@
 
 
                     <!-- Identity selector -->
-                    <div class="relative w-full md:w-auto">
+                    <div class="relative w-full md:w-auto max-w-full">
                         {#if $identitiesStore.length > 1}
                         <button 
-                            class="bg-[#171717] p-1.5 md:p-[10px] items-center rounded-full flex flex-row gap-2 md:gap-[15px] hover:bg-[#242424] cursor-pointer transition-colors duration-300"
+                            class="bg-[#171717] p-1.5 md:p-[10px] items-center rounded-full flex flex-row gap-2 md:gap-[15px] hover:bg-[#242424] cursor-pointer transition-colors duration-300 max-w-full"
                             onclick={() => { identityDropdownOpen = !identityDropdownOpen; }}
                         >
                             {#if selectedIdentity.avatarUrl}
-                                <img src={selectedIdentity.avatarUrl} alt="User Avatar" class="w-8 h-8 md:w-[50px] md:h-[50px] rounded-full object-cover"/>
+                                <img src={selectedIdentity.avatarUrl} alt="User Avatar" class="w-8 h-8 md:w-[50px] md:h-[50px] aspect-square rounded-full object-cover shrink-0"/>
                             {:else}
-                                <div class="w-8 h-8 md:w-[50px] md:h-[50px] rounded-full bg-[#222222] flex items-center justify-center">
+                                <div class="w-8 h-8 md:w-[50px] md:h-[50px] rounded-full bg-[#222222] flex items-center justify-center shrink-0">
                                     <Text type="h" size={20} mobileSize={14} color="#878787">{selectedIdentity.displayName[0]}</Text>
                                 </div>
                             {/if}
-                            <span class="text-white text-base md:text-[24px] font-poppins font-semibold">
+                            <span class="text-white text-base md:text-[24px] font-poppins font-semibold whitespace-nowrap truncate min-w-0">
                                 {selectedIdentity.displayName}
                             </span>
-                            <svg class="w-5 h-5 md:w-6 md:h-6" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <svg class="w-5 h-5 md:w-6 md:h-6 shrink-0" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                                 <path d="M6 9L12 15L18 9" stroke="#C7C7C7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
                             </svg>
                         </button>
                         {:else}
                         <div class="bg-[#171717] p-1.5 md:p-[10px] pr-4 md:pr-[20px] items-center rounded-full flex flex-row gap-2 md:gap-[15px]">
                             {#if selectedIdentity.avatarUrl}
-                                <img src={selectedIdentity.avatarUrl} alt="User Avatar" class="w-8 h-8 md:w-[50px] md:h-[50px] rounded-full object-cover"/>
+                                <img src={selectedIdentity.avatarUrl} alt="User Avatar" class="w-8 h-8 md:w-[50px] md:h-[50px] aspect-square rounded-full object-cover shrink-0"/>
                             {:else}
                                 <div class="w-8 h-8 md:w-[50px] md:h-[50px] rounded-full bg-[#222222] flex items-center justify-center">
                                     <Text type="h" size={20} mobileSize={14} color="#878787">{selectedIdentity.displayName[0]}</Text>
@@ -1087,20 +1091,20 @@
                         {/if}
 
                         {#if identityDropdownOpen && $identitiesStore.length > 1}
-                            <div class="absolute top-full left-0 mt-2 md:mt-[10px] bg-[#171717] rounded-[16px] overflow-hidden z-50 min-w-full">
+                            <div class="absolute top-full left-0 mt-2 md:mt-[10px] bg-[#171717] rounded-[16px] overflow-hidden z-50 w-max min-w-full max-w-[min(100vw-2rem,28rem)]">
                                 {#each $identitiesStore as identity (identity.id)}
                                     <button 
                                         class="w-full flex flex-row gap-2 md:gap-[15px] items-center p-3 md:p-[15px] hover:bg-[#222222] transition-colors {identity.id === selectedIdentity.id ? 'bg-[#222222]' : ''}"
                                         onclick={() => { selectedIdentity = identity; emailDraft = identity.pendingEmail || identity.email || ""; emailCode = ""; identityDropdownOpen = false; }}
                                     >
                                         {#if identity.avatarUrl}
-                                            <img src={identity.avatarUrl} alt="" class="w-8 h-8 md:w-[40px] md:h-[40px] rounded-full object-cover"/>
+                                            <img src={identity.avatarUrl} alt="" class="w-8 h-8 md:w-[40px] md:h-[40px] aspect-square rounded-full object-cover shrink-0"/>
                                         {:else}
-                                            <div class="w-8 h-8 md:w-[40px] md:h-[40px] rounded-full bg-[#333333] flex items-center justify-center">
+                                            <div class="w-8 h-8 md:w-[40px] md:h-[40px] rounded-full bg-[#333333] flex items-center justify-center shrink-0">
                                                 <Text type="h" size={16} color="#878787">{identity.displayName[0]}</Text>
                                             </div>
                                         {/if}
-                                        <span class="text-white text-base md:text-[18px] font-poppins">{identity.displayName}</span>
+                                        <span class="text-white text-base md:text-[18px] font-poppins whitespace-nowrap">{identity.displayName}</span>
                                     </button>
                                 {/each}
                             </div>
@@ -1116,9 +1120,9 @@
                 >
                     <div class="flex flex-col gap-2 md:gap-[10px]">
                         <div class="flex flex-col md:flex-row gap-2 md:gap-[10px] w-full flex-1">
-                            <div class="p-3 md:p-[30px] bg-[#111111] rounded-[20px] md:rounded-[32px] flex-1">
+                            <div class="p-3 md:p-[30px] bg-[#111111] rounded-[20px] md:rounded-[32px] flex-1 min-w-0">
                                 <Text type="hd" size={16} mobileSize={12} color="#878787">NAME</Text>
-                                <Text type="h" size={26} mobileSize={18} color="#FFFFFF">{selectedIdentity.displayName}</Text>
+                                <Text type="h" size={26} mobileSize={18} color="#FFFFFF" cclass="truncate">{selectedIdentity.displayName}</Text>
                             </div>
                             <div class="p-3 md:p-[30px] bg-[#111111] rounded-[20px] md:rounded-[32px] flex-1">
                                 <Text type="hd" size={16} mobileSize={12} color="#878787">HANDLE</Text>

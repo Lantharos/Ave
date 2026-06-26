@@ -1,5 +1,6 @@
 <script lang="ts">
     import type { Snippet } from "svelte";
+    import AvatarCropModal from "$lib/surfaces/web/components/AvatarCropModal.svelte";
     
     let { 
         banner = undefined, 
@@ -27,6 +28,14 @@
     let showColorPicker = $state(false);
     let customColor = $state("#CCCCCC");
     let pickerPosition = $state({ top: 0, left: 0 });
+    let bannerImageFailed = $state(false);
+    let cropModalOpen = $state(false);
+    let pendingAvatarFile = $state<File | null>(null);
+
+    $effect(() => {
+        banner;
+        bannerImageFailed = false;
+    });
 
     $effect(() => {
         customColor = bannerColor || "#CCCCCC";
@@ -69,10 +78,21 @@
         const input = e.target as HTMLInputElement;
         const file = input.files?.[0];
         if (file) {
-            onUploadAvatar(file);
+            pendingAvatarFile = file;
+            cropModalOpen = true;
         }
-        // Reset input so same file can be selected again
         input.value = "";
+    }
+
+    function handleAvatarCropCancel() {
+        cropModalOpen = false;
+        pendingAvatarFile = null;
+    }
+
+    function handleAvatarCropConfirm(file: File) {
+        cropModalOpen = false;
+        pendingAvatarFile = null;
+        onUploadAvatar(file);
     }
     
     function handleBannerClick(e: MouseEvent) {
@@ -164,8 +184,13 @@
     />
 
     <div class="w-full {size === 'small' ? 'h-[50px] md:h-[100px]' : 'h-[60px] md:h-[150px]' } relative overflow-hidden rounded-t-[12px] md:rounded-t-[15px]">
-        {#if banner}
-            <img src={banner} alt="banner" class="w-full h-full object-cover hover:scale-105 transition-transform duration-300 ease-in-out" />
+        {#if banner && !bannerImageFailed}
+            <img
+                src={banner}
+                alt="banner"
+                class="w-full h-full object-cover hover:scale-105 transition-transform duration-300 ease-in-out"
+                onerror={() => { bannerImageFailed = true; }}
+            />
         {:else}
             <div class="w-full h-full" style="background-color: {bannerColor};"></div>
         {/if}
@@ -190,8 +215,8 @@
         {/if}
     </div>
 
-    <div class="{size === 'small' ? 'w-[60px] h-[60px] md:w-[125px] md:h-[125px]' : 'w-[70px] h-[70px] md:w-[160px] md:h-[160px]' } overflow-hidden mt-[15px] md:mt-[40px] ml-2.5 md:ml-[40px] z-10 absolute">
-        <img src={avatar} alt="avatar" class="w-full h-full border-2 md:border-[6px] border-[#171717] rounded-[12px] md:rounded-[32px] object-cover transition-transform duration-300 ease-in-out" />
+    <div class="{size === 'small' ? 'w-[60px] h-[60px] md:w-[125px] md:h-[125px]' : 'w-[70px] h-[70px] md:w-[160px] md:h-[160px]' } overflow-hidden mt-[15px] md:mt-[40px] ml-2.5 md:ml-[40px] z-10 absolute aspect-square">
+        <img src={avatar} alt="avatar" class="w-full h-full aspect-square border-2 md:border-[6px] border-[#171717] rounded-[12px] md:rounded-[32px] object-cover transition-transform duration-300 ease-in-out" />
 
         {#if editable}
             <button 
@@ -277,3 +302,10 @@
             </button>
         </div>
 {/if}
+
+<AvatarCropModal
+    file={pendingAvatarFile}
+    open={cropModalOpen}
+    onCancel={handleAvatarCropCancel}
+    onConfirm={handleAvatarCropConfirm}
+/>

@@ -2,6 +2,7 @@
     import Text from "$lib/surfaces/web/components/Text.svelte";
     import IdentityCard from "$lib/surfaces/web/components/IdentityCard.svelte";
     import Button from "$lib/surfaces/web/components/Button.svelte";
+    import { deriveBannerColorFromFile } from "$lib/surfaces/web/lib/avatar-image";
     import { api, type Identity as IdentityType } from "$lib/surfaces/web/lib/api";
     import { createStoredIdentityEncryptionKeyPair, loadMasterKey } from "$lib/surfaces/web/lib/crypto";
     import { auth } from "$lib/surfaces/web/stores/auth";
@@ -225,24 +226,22 @@
 
     async function handleAvatarUpload(file: File) {
         if (!identity) {
-            // For new identity, just use object URL
             avatarUrl = URL.createObjectURL(file);
+            bannerUrl = await deriveBannerColorFromFile(file);
             return;
         }
 
         try {
             uploadingAvatar = true;
             error = "";
-            const result = await api.upload.avatar(identity.id, file);
+            const bannerColor = await deriveBannerColorFromFile(file);
+            await api.upload.avatar(identity.id, file);
+            const { identity: updatedIdentity } = await api.identities.update(identity.id, {
+                bannerUrl: bannerColor,
+            });
             
-            console.log("[Avatar Upload] Got R2 URL:", result.avatarUrl);
-            
-            // Fetch the updated identity from the API to ensure we have the latest data
-            const { identity: updatedIdentity } = await api.identities.get(identity.id);
-            console.log("[Avatar Upload] Fetched updated identity:", updatedIdentity.avatarUrl);
-            
-            // Update auth store with fresh identity data
             auth.updateIdentity(updatedIdentity);
+            bannerUrl = bannerColor;
             
             success = "Avatar updated!";
             setTimeout(() => success = "", 2000);

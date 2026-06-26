@@ -2,6 +2,7 @@
     import Text from "$lib/surfaces/web/components/Text.svelte";
     import Button from "$lib/surfaces/web/components/Button.svelte";
     import IdentityCard from "$lib/surfaces/web/components/IdentityCard.svelte";
+    import { deriveBannerColorFromFile } from "$lib/surfaces/web/lib/avatar-image";
     import { api } from "$lib/surfaces/web/lib/api";
     import { ChevronRight } from "@lucide/svelte";
 
@@ -103,10 +104,10 @@
         });
     }
 
-    function handleAvatarUpload(file: File) {
-        // In production, upload to server and get URL
-        // For now, create a local object URL
+    async function handleAvatarUpload(file: File) {
         avatarUrl = URL.createObjectURL(file);
+        bannerColor = await deriveBannerColorFromFile(file);
+        bannerUrl = "";
     }
 
     function handleBannerChange(fileOrHex: File | string) {

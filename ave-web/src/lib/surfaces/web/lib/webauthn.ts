@@ -2,7 +2,7 @@
  * WebAuthn helpers for passkey authentication
  */
 
-import { startRegistration, startAuthentication } from "@simplewebauthn/browser";
+import { startRegistration, startAuthentication, bufferToBase64URLString, type PublicKeyCredentialRequestOptionsJSON } from "@simplewebauthn/browser";
 
 // PRF salt for master key encryption (static, application-wide)
 // This salt is combined with the passkey's unique PRF to derive a unique key per passkey
@@ -45,26 +45,79 @@ export function generatePrfSalt(): string {
  * Base64url uses - and _ instead of + and /, and has no padding
  * Also handles ArrayBuffer/Uint8Array inputs directly
  */
-function base64urlToBytes(input: string | ArrayBuffer | Uint8Array): Uint8Array {
-  // If already a Uint8Array, return it
+function coalesceToBytes(input: unknown): Uint8Array | undefined {
   if (input instanceof Uint8Array) {
     return input;
   }
-  
-  // If ArrayBuffer, wrap in Uint8Array
+
   if (input instanceof ArrayBuffer) {
     return new Uint8Array(input);
   }
-  
-  // It's a base64url string - convert to base64 then decode
-  let base64 = input.replace(/-/g, '+').replace(/_/g, '/');
-  
-  // Add padding if needed
-  while (base64.length % 4) {
-    base64 += '=';
+
+  if (ArrayBuffer.isView(input)) {
+    return new Uint8Array(input.buffer, input.byteOffset, input.byteLength);
   }
-  
-  return Uint8Array.from(atob(base64), c => c.charCodeAt(0));
+
+  if (typeof input !== "string") {
+    return undefined;
+  }
+
+  let base64 = input.replace(/-/g, "+").replace(/_/g, "/");
+
+  while (base64.length % 4) {
+    base64 += "=";
+  }
+
+  return Uint8Array.from(atob(base64), (char) => char.charCodeAt(0));
+}
+
+function coalesceToBase64UrlString(input: unknown): string | null {
+  if (typeof input === "string") {
+    return input;
+  }
+
+  const bytes = coalesceToBytes(input);
+  if (!bytes) {
+    return null;
+  }
+
+  return bufferToBase64URLString(toArrayBuffer(bytes));
+}
+
+function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
+  return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
+}
+
+function normalizeAuthenticationOptionsJSON(
+  options: PublicKeyCredentialRequestOptions,
+): PublicKeyCredentialRequestOptionsJSON {
+  const challenge = coalesceToBase64UrlString(options.challenge);
+  if (!challenge) {
+    throw new Error("Invalid WebAuthn challenge");
+  }
+
+  return {
+    ...options,
+    challenge,
+    allowCredentials: options.allowCredentials?.map((credential) => {
+      const id = coalesceToBase64UrlString(credential.id);
+      if (!id) {
+        throw new Error("Invalid WebAuthn credential id");
+      }
+      return {
+        ...credential,
+        id,
+      };
+    }),
+  } as PublicKeyCredentialRequestOptionsJSON;
+}
+
+function base64urlToBytes(input: unknown): Uint8Array {
+  const bytes = coalesceToBytes(input);
+  if (!bytes) {
+    throw new Error("Invalid PRF output format");
+  }
+  return bytes;
 }
 
 /**
@@ -97,9 +150,8 @@ export async function registerPasskey(
   let prfOutput: ArrayBuffer | undefined;
   
   if (prfSupported && prfResult?.results?.first) {
-    // PRF output is available - it's a base64url string from simplewebauthn
     const prfBytes = base64urlToBytes(prfResult.results.first);
-    prfOutput = prfBytes.buffer.slice(prfBytes.byteOffset, prfBytes.byteOffset + prfBytes.byteLength) as ArrayBuffer;
+    prfOutput = toArrayBuffer(prfBytes);
   }
   
   return {
@@ -117,26 +169,23 @@ export async function authenticateWithPasskey(
   requestPrf: boolean = false,
   prfSalt?: string
 ): Promise<{ credential: Credential; prfOutput?: ArrayBuffer }> {
-  let optionsToUse = options;
-  
-  if (requestPrf) {
-    // Add PRF extension to request
-    const salt = prfSalt ? base64urlToBytes(prfSalt) : PRF_SALT;
-    optionsToUse = {
-      ...options,
-      extensions: {
-        ...((options as any).extensions || {}),
-        prf: {
-          eval: {
-            first: salt,
+  const normalizedOptions = normalizeAuthenticationOptionsJSON(options);
+  const optionsToUse = requestPrf
+    ? {
+        ...normalizedOptions,
+        extensions: {
+          ...((normalizedOptions as PublicKeyCredentialRequestOptionsJSON & { extensions?: Record<string, unknown> }).extensions || {}),
+          prf: {
+            eval: {
+              first: toArrayBuffer(prfSalt ? base64urlToBytes(prfSalt) : PRF_SALT),
+            },
           },
         },
-      },
-    } as any;
-  }
+      }
+    : normalizedOptions;
   
   const response = await startAuthentication({
-    optionsJSON: optionsToUse as any,
+    optionsJSON: optionsToUse as Parameters<typeof startAuthentication>[0]["optionsJSON"],
   });
   
   let prfOutput: ArrayBuffer | undefined;
@@ -146,7 +195,7 @@ export async function authenticateWithPasskey(
     const prfResult = extensions?.prf;
     if (prfResult?.results?.first) {
       const prfBytes = base64urlToBytes(prfResult.results.first);
-      prfOutput = prfBytes.buffer.slice(prfBytes.byteOffset, prfBytes.byteOffset + prfBytes.byteLength) as ArrayBuffer;
+      prfOutput = toArrayBuffer(prfBytes);
     }
   }
   
