@@ -11,7 +11,16 @@ export type Scope =
   | "e2ee:pqc:dilithium";
 
 import { joinOAuthScopes } from "./oauth-scopes.js";
+import { formatOAuthPrompt, type OAuthPrompt } from "./oauth-prompt.js";
 export { joinOAuthScopes, normalizeScopeToken, parseOAuthScopes } from "./oauth-scopes.js";
+export {
+  formatOAuthPrompt,
+  OAUTH_PROMPT_VALUES,
+  parseOAuthPrompt,
+  requiresAuthorizeInteractionPrompt,
+  wantsAccountPickerPrompt,
+} from "./oauth-prompt.js";
+export type { OAuthPrompt } from "./oauth-prompt.js";
 export { getApiBase } from "./api-base.js";
 
 export {
@@ -124,6 +133,7 @@ export function buildAuthorizeUrl(config: AveConfig, params: {
   codeChallenge?: string;
   codeChallengeMethod?: "S256" | "plain";
   organizationId?: string;
+  prompt?: OAuthPrompt | OAuthPrompt[] | string;
   extraParams?: Record<string, string>;
 } = {}): string {
   const issuer = config.issuer || "https://aveid.net";
@@ -137,12 +147,28 @@ export function buildAuthorizeUrl(config: AveConfig, params: {
     ...params.extraParams,
   });
 
+  if (params.prompt) {
+    search.set("prompt", formatOAuthPrompt(params.prompt));
+  }
+
   if (params.codeChallenge) {
     search.set("code_challenge", params.codeChallenge);
     search.set("code_challenge_method", params.codeChallengeMethod || "S256");
   }
 
   return `${issuer}/signin?${search.toString()}`;
+}
+
+export function buildSwitchAccountUrl(
+  config: AveConfig,
+  params: Omit<Parameters<typeof buildAuthorizeUrl>[1], "prompt"> & {
+    prompt?: OAuthPrompt | OAuthPrompt[] | string;
+  } = {},
+): string {
+  return buildAuthorizeUrl(config, {
+    ...params,
+    prompt: params.prompt ?? "select_account",
+  });
 }
 
 export function buildConnectorUrl(config: AveConfig, params: {

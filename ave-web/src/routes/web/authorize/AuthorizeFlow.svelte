@@ -27,6 +27,11 @@
         resolveRequestedE2eeMode,
     } from "$lib/surfaces/web/lib/e2ee-scopes";
     import { parseOAuthScopes } from "$lib/surfaces/web/lib/oauth-scopes";
+    import {
+        parseOAuthPrompt,
+        requiresAuthorizeInteractionPrompt,
+        wantsAccountPickerPrompt,
+    } from "$lib/surfaces/web/lib/oauth-prompt";
 	import { auth, isAuthenticated, isLoading, identities as identitiesStore, currentIdentity } from "$lib/surfaces/web/stores/auth";
 	import { setReturnUrl } from "$lib/surfaces/web/util/return-url";
 	import { goto } from "$app/navigation";
@@ -113,9 +118,14 @@
                 fedcmContinue: searchParams.get("fedcm_continue") === "1",
 				codeChallenge: codeChallenge || undefined,
 				codeChallengeMethod: (codeChallengeMethod === "S256" || codeChallengeMethod === "plain") ? codeChallengeMethod : undefined,
+                prompt: searchParams.get("prompt") || "",
 			};
 
     });
+
+    const oauthPrompts = $derived.by(() => parseOAuthPrompt(params.prompt));
+    const forceAuthorizePrompt = $derived(requiresAuthorizeInteractionPrompt(oauthPrompts));
+    const wantsSelectAccount = $derived(wantsAccountPickerPrompt(oauthPrompts));
 
 	function postToEmbedHost(payload: unknown) {
 		const target = (window.opener && (window.opener as any).parent)
@@ -302,10 +312,17 @@
                 ? authState.identities.find((i) => i.id === existingAuth!.identityId)
                 : null;
 
-            selectedIdentity = preferredIdentity || existingIdentity || authState.currentIdentity || authState.identities[0] || null;
+            selectedIdentity = preferredIdentity
+                || (!wantsSelectAccount ? existingIdentity : null)
+                || authState.currentIdentity
+                || authState.identities[0]
+                || null;
             emailDraft = selectedIdentity?.pendingEmail || selectedIdentity?.email || "";
 
-            const shouldAutoAuthorize = !!existingAuth && !!existingIdentity && (!authorizeFlowShowsE2ee(bootstrap.app, authorizeRequestedScopes) || hasLocalMasterKey);
+            const shouldAutoAuthorize = !forceAuthorizePrompt
+                && !!existingAuth
+                && !!existingIdentity
+                && (!authorizeFlowShowsE2ee(bootstrap.app, authorizeRequestedScopes) || hasLocalMasterKey);
 
             if (shouldAutoAuthorize && !(requiresEmailScope && !selectedIdentity?.email)) {
                 // Keep UI in loading state while we redirect.

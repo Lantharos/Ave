@@ -23,6 +23,11 @@ import {
 } from "../lib/e2ee-scopes";
 import { buildE2eeAuthUpdate, validateE2eeAuthPayload } from "../lib/app-e2ee-auth";
 import { parseOAuthScopes, normalizeScopeToken } from "../lib/oauth-scopes";
+import {
+  parseOAuthPrompt,
+  requiresAuthorizeInteractionPrompt,
+  wantsAccountPickerPrompt,
+} from "../lib/oauth-prompt";
 
 const app = new Hono();
 export const oidcRoutes = new Hono();
@@ -757,6 +762,9 @@ app.post("/fedcm/assertion", async (c) => {
   const scope = typeof extraParams.scope === "string" ? extraParams.scope : "openid profile email";
   const state = typeof extraParams.state === "string" ? extraParams.state : "";
   const nonce = typeof extraParams.nonce === "string" ? extraParams.nonce : undefined;
+  const promptRaw = typeof extraParams.prompt === "string" ? extraParams.prompt : "";
+  const oauthPrompts = parseOAuthPrompt(promptRaw);
+  const forceAuthorizeInteraction = requiresAuthorizeInteractionPrompt(oauthPrompts);
 
   const oauthApp = await resolveOauthAppForClient(clientId);
   if (!oauthApp) {
@@ -791,14 +799,22 @@ app.post("/fedcm/assertion", async (c) => {
     ))
     .limit(1);
 
-  if ((parseScopes(scope).includes("email") && !identity.email) || appEffectiveSupportsE2ee(oauthApp) || !existingAuth) {
-    const continueUrl = new URL(`${getWebBase()}/authorize`);
+  if (
+    forceAuthorizeInteraction
+    || (parseScopes(scope).includes("email") && !identity.email)
+    || appEffectiveSupportsE2ee(oauthApp)
+    || !existingAuth
+  ) {
+    const continueUrl = new URL(`${getWebBase()}/signin`);
     continueUrl.searchParams.set("client_id", clientId);
     continueUrl.searchParams.set("redirect_uri", redirectUri);
     continueUrl.searchParams.set("scope", scope);
     if (state) continueUrl.searchParams.set("state", state);
     if (nonce) continueUrl.searchParams.set("nonce", nonce);
-    continueUrl.searchParams.set("identity_id", identity.id);
+    if (promptRaw) continueUrl.searchParams.set("prompt", promptRaw);
+    if (!wantsAccountPickerPrompt(oauthPrompts)) {
+      continueUrl.searchParams.set("identity_id", identity.id);
+    }
     continueUrl.searchParams.set("fedcm_continue", "1");
 
     return c.json({ continue_on: continueUrl.toString() });

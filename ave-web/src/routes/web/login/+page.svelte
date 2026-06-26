@@ -16,7 +16,7 @@
     let currentPage = $state<"login" | "methods" | "trust-code" | "waiting">("login");
     
     const returnUrl = getReturnUrl();
-    let pendingOauth = $state<{ clientId: string; redirectUri: string; scope: string; state?: string; nonce?: string; embed?: boolean; codeChallenge?: string; codeChallengeMethod?: string } | null>(null);
+    let pendingOauth = $state<{ clientId: string; redirectUri: string; scope: string; state?: string; nonce?: string; embed?: boolean; codeChallenge?: string; codeChallengeMethod?: string; prompt?: string } | null>(null);
     let pendingAuthContext = $state<PendingAuthContext | null>(null);
     let authContextReady = $state(returnUrl ? !(returnUrl.startsWith("/authorize") || returnUrl.startsWith("/signin")) : true);
 
@@ -36,6 +36,7 @@
                 embed: params.get("embed") === "1",
                 codeChallenge: params.get("code_challenge") || undefined,
                 codeChallengeMethod: params.get("code_challenge_method") || undefined,
+                prompt: params.get("prompt") || undefined,
             };
         }
 
@@ -124,6 +125,9 @@
             }
             if (pendingOauth.codeChallengeMethod) {
                 params.set("code_challenge_method", pendingOauth.codeChallengeMethod);
+            }
+            if (pendingOauth.prompt) {
+                params.set("prompt", pendingOauth.prompt);
             }
             goto(resolve(`/signin?${params.toString()}` as any));
             return;

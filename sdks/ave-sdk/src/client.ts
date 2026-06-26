@@ -4,10 +4,12 @@ import {
   buildConnectorUrl,
   exchangeCode,
   exchangeFedCmAssertion,
+  formatOAuthPrompt,
   generateCodeChallenge,
   generateCodeVerifier,
   generateNonce,
   getApiBase,
+  type OAuthPrompt,
 } from "./index.js";
 import { isJwtVerificationSupported } from "./crypto-runtime.js";
 import { verifyJwt } from "./jwt.js";
@@ -66,6 +68,7 @@ interface FedCmOptions {
   issuer?: string;
   state?: string;
   nonce?: string;
+  prompt?: OAuthPrompt | OAuthPrompt[] | string;
   mediation?: CredentialMediationRequirement;
 }
 
@@ -200,6 +203,7 @@ export async function startPkceLogin(params: {
   state?: string;
   nonce?: string;
   organizationId?: string;
+  prompt?: OAuthPrompt | OAuthPrompt[] | string;
 }): Promise<void> {
   const verifier = generateCodeVerifier();
   const challenge = await generateCodeChallenge(verifier);
@@ -226,6 +230,7 @@ export async function startPkceLogin(params: {
       codeChallenge: challenge,
       codeChallengeMethod: "S256",
       organizationId: params.organizationId,
+      prompt: params.prompt,
     }
   );
 
@@ -264,6 +269,7 @@ export async function signInWithFedCm(params: FedCmOptions): Promise<FedCmTokenR
             redirectUri: params.redirectUri,
             state,
             nonce,
+            ...(params.prompt ? { prompt: formatOAuthPrompt(params.prompt) } : {}),
           },
         },
       ],

@@ -137,6 +137,10 @@ function buildAuthorizeUrl(
   Optional Ave Business organization ID. When present, Ave verifies that the selected identity belongs to the organization and includes `org_id`, `org_role`, `org_scopes`, `org_signing_authority`, `org_encryption_mode`, `org_key_custody`, and SSO auth metadata in issued tokens. If the organization requires SSO, the current Ave session must come from that organization's active SSO connection.
 </ParamField>
 
+<ParamField path="params.prompt" type={`"none" | "login" | "consent" | "select_account" | string`}>
+  OAuth-style interaction hint. Use `select_account` when your app offers **Switch account** or **Sign out** so Ave always shows the swipe-to-authorize screen and identity picker instead of silently reusing the last authorization. Combine values with a space (for example `consent select_account`).
+</ParamField>
+
 <ParamField path="params.extraParams" type="object">
   Extra query parameters on the Ave sign-in URL. Prefer standard OAuth parameters; encryption is requested via `e2ee:*` scopes — see [App encryption](/sdk/sdk-identity-keys).
 </ParamField>
@@ -154,6 +158,39 @@ const url = buildAuthorizeUrl(
 );
 window.location.href = url;
 ```
+
+---
+
+### `buildSwitchAccountUrl(config, params?)`
+
+Convenience wrapper around `buildAuthorizeUrl` that sets `prompt=select_account`. Use from your app's **Switch account** or **Use a different profile** action so Ave blocks quick re-authorization and always shows the identity picker plus swipe-to-authorize UI.
+
+```ts
+function buildSwitchAccountUrl(
+  config: AveConfig,
+  params?: Parameters<typeof buildAuthorizeUrl>[1]
+): string
+```
+
+```ts
+import { buildSwitchAccountUrl, generateCodeChallenge, generateCodeVerifier } from "@ave-id/sdk";
+
+const verifier = generateCodeVerifier();
+const challenge = await generateCodeChallenge(verifier);
+
+window.location.href = buildSwitchAccountUrl(
+  { clientId: "YOUR_CLIENT_ID", redirectUri: "https://yourapp.com/callback" },
+  {
+    scope: ["openid", "profile", "email", "offline_access"],
+    state: crypto.randomUUID(),
+    nonce: generateNonce(),
+    codeChallenge: challenge,
+    codeChallengeMethod: "S256",
+  }
+);
+```
+
+For embed flows, pass `extraParams: { prompt: "select_account" }` to `openAveSheet` / `openAvePopup` instead.
 
 ---
 
@@ -305,6 +342,7 @@ async function signInWithFedCm(params: {
   issuer?: string;
   state?: string;
   nonce?: string;
+  prompt?: "none" | "login" | "consent" | "select_account" | string;
   mediation?: CredentialMediationRequirement;
 }): Promise<FedCmTokenResponse>
 ```
@@ -377,6 +415,7 @@ async function startPkceLogin(params: {
   state?: string;   // optional — auto-generated if omitted
   nonce?: string;   // optional — auto-generated if omitted
   organizationId?: string;
+  prompt?: "none" | "login" | "consent" | "select_account" | string;
 }): Promise<void>
 ```
 
