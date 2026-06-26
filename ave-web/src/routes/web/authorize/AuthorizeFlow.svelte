@@ -16,6 +16,7 @@
         encryptAppPrivateKey,
         exportAppPrivateKeyB64,
         decryptAppPrivateKey,
+        decryptAppPrivateKeyB64,
     } from "$lib/surfaces/web/lib/crypto";
     import {
         authorizeFlowShowsE2ee,
@@ -403,12 +404,11 @@
                         return "missing";
                     }
                     try {
-                        const privateKey = await decryptAppPrivateKey(
+                        rawAppPublicKey = existingAuth.appPublicKey;
+                        rawAppPrivateKey = await decryptAppPrivateKeyB64(
                             existingAuth.encryptedAppPrivateKey,
                             activeKey,
                         );
-                        rawAppPublicKey = existingAuth.appPublicKey;
-                        rawAppPrivateKey = await exportAppPrivateKeyB64(privateKey);
                         return "ok";
                     } catch (keyError) {
                         console.warn("[Authorize] Existing app keypair could not be decrypted.", keyError);

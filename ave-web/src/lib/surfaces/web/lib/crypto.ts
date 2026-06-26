@@ -628,6 +628,14 @@ export async function decryptAppPrivateKey(
   return loadIdentityEncryptionPrivateKey(encryptedAppPrivateKey, masterKey);
 }
 
+export async function decryptAppPrivateKeyB64(
+  encryptedAppPrivateKey: string,
+  masterKey: CryptoKey,
+): Promise<string> {
+  const privateKeyData = await decrypt(encryptedAppPrivateKey, masterKey);
+  return bytesToBase64(new Uint8Array(privateKeyData));
+}
+
 /**
  * Generate a dedicated identity encryption keypair for shared secret transfer.
  */
