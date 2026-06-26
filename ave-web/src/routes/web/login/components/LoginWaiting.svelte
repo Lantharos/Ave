@@ -7,9 +7,10 @@
     import { auth } from "$lib/surfaces/web/stores/auth";
     import { websocket } from "$lib/surfaces/web/stores/websocket";
 
-    let { loginRequestId, ephemeralKeyPair, onSuccess, onError, onBack } = $props<{
+    let { loginRequestId, ephemeralKeyPair, masterKeyOnly = false, onSuccess, onError, onBack } = $props<{
         loginRequestId: string | null;
         ephemeralKeyPair: { publicKey: string; privateKey: CryptoKey } | null;
+        masterKeyOnly?: boolean;
         onSuccess?: () => void;
         onError?: (error: string) => void;
         onBack?: () => void;
@@ -67,11 +68,11 @@
                 pollInterval = null;
             }
             
-            // If we have full data (from polling), use it directly
-            if (data.sessionToken && data.identities && data.device) {
+            if (masterKeyOnly) {
+                await completeMasterKeyUnlock(data);
+            } else if (data.sessionToken && data.identities && data.device) {
                 await completeLogin(data);
             } else {
-                // WebSocket only sent partial data, fetch full session from API
                 await fetchSessionAndLogin();
             }
         } else if (data.status === "denied") {
@@ -96,15 +97,52 @@
         
         try {
             const result = await api.login.checkRequestStatus(loginRequestId);
-            if (result.status === "approved" && result.sessionToken && result.identities && result.device) {
-                await completeLogin(result);
-            } else {
-                console.error("Failed to get session data after approval:", result);
-                onError?.("Failed to complete login after approval");
+            if (result.status === "approved") {
+                if (masterKeyOnly) {
+                    await completeMasterKeyUnlock(result);
+                } else if (result.sessionToken && result.identities && result.device) {
+                    await completeLogin(result);
+                } else {
+                    console.error("Failed to get session data after approval:", result);
+                    onError?.("Failed to complete login after approval");
+                }
             }
         } catch (e: any) {
             console.error("Failed to fetch session:", e);
-            onError?.("Failed to complete login");
+            onError?.(masterKeyOnly ? "Failed to receive encryption key" : "Failed to complete login");
+        }
+    }
+
+    async function completeMasterKeyUnlock(data: {
+        encryptedMasterKey?: string;
+        approverPublicKey?: string;
+    }) {
+        let payload = data;
+
+        if ((!payload.encryptedMasterKey || !payload.approverPublicKey) && loginRequestId) {
+            const result = await api.login.checkRequestStatus(loginRequestId);
+            if (result.status === "approved") {
+                payload = result;
+            }
+        }
+
+        if (!payload.encryptedMasterKey || !ephemeralKeyPair || !payload.approverPublicKey) {
+            onError?.("Failed to receive encryption key from your other device");
+            return;
+        }
+
+        try {
+            const masterKey = await decryptMasterKeyFromDevice(
+                payload.encryptedMasterKey,
+                payload.approverPublicKey,
+                ephemeralKeyPair.privateKey,
+            );
+            await auth.setMasterKey(masterKey);
+            await new Promise((resolve) => setTimeout(resolve, 100));
+            onSuccess?.();
+        } catch (e) {
+            console.error("Failed to decrypt master key:", e);
+            onError?.("Failed to decrypt encryption key");
         }
     }
 
@@ -159,7 +197,11 @@
     <div class="text-center">
         <h1 class="font-black text-2xl md:text-[36px] text-[#FFFFFF]/80">WAITING FOR APPROVAL</h1>
         <p class="text-[#878787] text-sm md:text-base mt-2">
-            Open Ave on one of your trusted devices and approve this login request.
+            {#if masterKeyOnly}
+                Open Ave on one of your trusted devices and approve this request to transfer your encryption key.
+            {:else}
+                Open Ave on one of your trusted devices and approve this login request.
+            {/if}
         </p>
     </div>
 
@@ -170,8 +212,13 @@
                 Waiting for approval...
             </Text>
             <p class="text-[#555] text-sm text-center max-w-sm">
-                A notification has been sent to your trusted devices. 
-                Open the Ave app and tap "Approve" to sign in.
+                {#if masterKeyOnly}
+                    A notification has been sent to your trusted devices.
+                    Open the Ave app and tap "Approve" to continue.
+                {:else}
+                    A notification has been sent to your trusted devices. 
+                    Open the Ave app and tap "Approve" to sign in.
+                {/if}
             </p>
         {:else if status === "approved"}
             <div class="w-16 h-16 bg-[#32A94C]/20 rounded-full flex items-center justify-center">
@@ -180,7 +227,7 @@
                 </svg>
             </div>
             <Text type="p" size={18} color="#32A94C">
-                Approved! Signing you in...
+                {masterKeyOnly ? "Approved! Restoring your encryption key…" : "Approved! Signing you in..."}
             </Text>
         {:else if status === "denied"}
             <div class="w-16 h-16 bg-red-500/20 rounded-full flex items-center justify-center">

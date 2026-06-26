@@ -449,7 +449,21 @@ export function clearMasterKey(): void {
  * Check if master key exists in storage
  */
 export function hasMasterKey(): boolean {
-  return getLocalStorageValue(MASTER_KEY_AVAILABLE_KEY) !== null || getLocalStorageValue(MASTER_KEY_STORAGE_KEY) !== null;
+  if (getLocalStorageValue(MASTER_KEY_AVAILABLE_KEY) !== null) {
+    return true;
+  }
+  return getLocalStorageValue(MASTER_KEY_STORAGE_KEY) !== null;
+}
+
+export async function hasStoredMasterKey(): Promise<boolean> {
+  if (hasMasterKey()) {
+    return true;
+  }
+  try {
+    return (await getStoredMasterKey()) !== null;
+  } catch {
+    return false;
+  }
 }
 
 /**

@@ -747,8 +747,9 @@ export const api = {
         }[];
       }>(`/api/oauth/app/${encodeURIComponent(clientId)}`),
 
-    getAuthorizeBootstrap: (clientId: string) =>
-      request<{
+    getAuthorizeBootstrap: (clientId: string, identityId?: string) => {
+      const query = identityId ? `?identity_id=${encodeURIComponent(identityId)}` : "";
+      return request<{
         app: {
           id?: string;
           name: string;
@@ -775,7 +776,8 @@ export const api = {
           appEncryptionMode?: string;
           createdAt: string;
         } | null;
-      }>(`/api/oauth/authorize/bootstrap/${encodeURIComponent(clientId)}`),
+      }>(`/api/oauth/authorize/bootstrap/${encodeURIComponent(clientId)}${query}`);
+    },
 
     getResource: (resourceKey: string) =>
       request<{

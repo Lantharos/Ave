@@ -834,6 +834,7 @@ app.post("/fedcm/assertion", async (c) => {
 app.get("/authorize/bootstrap/:clientId", requireAuth, async (c) => {
   const user = c.get("user")!;
   const clientId = c.req.param("clientId") || "";
+  const identityId = c.req.query("identity_id");
 
   if (isQuickClient(clientId)) {
     const quickOrigin = getQuickOrigin(clientId);
@@ -888,10 +889,18 @@ app.get("/authorize/bootstrap/:clientId", requireAuth, async (c) => {
     db
       .select()
       .from(oauthAuthorizations)
-      .where(and(
-        eq(oauthAuthorizations.userId, user.id),
-        eq(oauthAuthorizations.appId, oauthApp.id),
-      ))
+      .where(
+        identityId
+          ? and(
+              eq(oauthAuthorizations.userId, user.id),
+              eq(oauthAuthorizations.appId, oauthApp.id),
+              eq(oauthAuthorizations.identityId, identityId),
+            )
+          : and(
+              eq(oauthAuthorizations.userId, user.id),
+              eq(oauthAuthorizations.appId, oauthApp.id),
+            ),
+      )
       .orderBy(desc(oauthAuthorizations.lastAuthorizedAt))
       .limit(1)
       .then((rows) => rows[0] ?? null),

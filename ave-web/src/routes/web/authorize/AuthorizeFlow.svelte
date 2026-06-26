@@ -8,9 +8,10 @@
         exportAppKey,
         loadMasterKey,
         decryptAppKey,
-        hasMasterKey,
-        clearMasterKey,
         generateAppKeyPair,
+        generateEphemeralKeyPair,
+        recoverMasterKeyFromBackup,
+        storeMasterKey,
         encryptAppPrivateKey,
         exportAppPrivateKeyB64,
         decryptAppPrivateKey,
@@ -32,6 +33,8 @@
 	import StorageAccessGate from "$lib/surfaces/web/components/StorageAccessGate.svelte";
 	import { supportsStorageAccessApi, hasStorageAccess, requestStorageAccess } from "$lib/surfaces/web/lib/storage-access";
 	import { unlockMasterKeyWithPasskey } from "$lib/surfaces/web/lib/master-key-unlock";
+	import { getDeviceInfo } from "$lib/surfaces/web/lib/webauthn";
+	import LoginWaiting from "../login/components/LoginWaiting.svelte";
 	import { postMessageTargetOriginFromRedirectUri } from "$lib/surfaces/web/util/embed-post-message-origin";
 
 	function openAuthPopupHere(): boolean {
@@ -167,6 +170,14 @@
     let sliderActive = $state(false);
     let needsMasterKey = $state(false);
     let unlockingMasterKey = $state(false);
+    let masterKeyUnlockView = $state<"options" | "device" | "recovery">("options");
+    let hasTrustedDevices = $state(false);
+    let loadingTrustedDevices = $state(false);
+    let masterKeyLoginRequestId = $state<string | null>(null);
+    let masterKeyEphemeralKeyPair = $state<{ publicKey: string; privateKey: CryptoKey } | null>(null);
+    let requestingDeviceApproval = $state(false);
+    let recoveringMasterKey = $state(false);
+    let recoveryCode = $state("");
     let masterKeyError = $state<string | null>(null);
     let needsStorageAccess = $state(false);
     let redirectingToLogin = $state(false);
@@ -183,6 +194,28 @@
 
     const embedPopup = $derived.by(() => params.embed && !!window.opener);
     const embedSheet = $derived.by(() => params.embed && !embedPopup);
+
+    async function loadTrustedDevices() {
+        if (!needsMasterKey || loadingTrustedDevices) return;
+        loadingTrustedDevices = true;
+        try {
+            const { devices } = await api.devices.list();
+            hasTrustedDevices = devices.length > 0;
+        } catch {
+            hasTrustedDevices = false;
+        } finally {
+            loadingTrustedDevices = false;
+        }
+    }
+
+    $effect(() => {
+        if (!needsMasterKey) return;
+        masterKeyUnlockView = "options";
+        masterKeyLoginRequestId = null;
+        masterKeyEphemeralKeyPair = null;
+        recoveryCode = "";
+        void loadTrustedDevices();
+    });
 
     function appDisplayName() {
         return appInfo?.name || quickOriginHostname || "this app";
@@ -231,15 +264,20 @@
         error = null;
 
         try {
-            const bootstrap = await api.oauth.getAuthorizeBootstrap(clientId);
+            const bootstrap = await api.oauth.getAuthorizeBootstrap(
+                clientId,
+                params.identityId || get(auth).currentIdentity?.id || undefined,
+            );
 
             appInfo = bootstrap.app;
             existingAuth = bootstrap.authorization;
             launchedExternalApp = false;
             loadedAuthorizeBootstrapClientId = clientId;
 
-            if (authorizeFlowShowsE2ee(bootstrap.app, authorizeRequestedScopes) && !hasMasterKey()) {
-                needsMasterKey = true;
+            let hasLocalMasterKey = true;
+            if (authorizeFlowShowsE2ee(bootstrap.app, authorizeRequestedScopes)) {
+                hasLocalMasterKey = !!(await loadMasterKey());
+                needsMasterKey = !hasLocalMasterKey;
             }
 
             const authState = get(auth);
@@ -253,7 +291,7 @@
             selectedIdentity = preferredIdentity || existingIdentity || authState.currentIdentity || authState.identities[0] || null;
             emailDraft = selectedIdentity?.pendingEmail || selectedIdentity?.email || "";
 
-            const shouldAutoAuthorize = !!existingAuth && !!existingIdentity && (!authorizeFlowShowsE2ee(bootstrap.app, authorizeRequestedScopes) || hasMasterKey());
+            const shouldAutoAuthorize = !!existingAuth && !!existingIdentity && (!authorizeFlowShowsE2ee(bootstrap.app, authorizeRequestedScopes) || hasLocalMasterKey);
 
             if (shouldAutoAuthorize && !(requiresEmailScope && !selectedIdentity?.email)) {
                 // Keep UI in loading state while we redirect.
@@ -339,12 +377,7 @@
                         rawAppKey = await exportAppKey(appKey);
                         return true;
                     } catch (keyError) {
-                        console.warn("[Authorize] Existing encrypted app key could not be decrypted.", keyError);
-                        clearMasterKey();
-                        needsMasterKey = true;
-                        masterKeyError = "Your local encryption key doesn't match this account. Recover your key with passkey unlock or a recovery code.";
-                        authorizing = false;
-                        sliderPosition = 0;
+                        console.warn("[Authorize] Existing encrypted app key could not be decrypted; generating new app keys.", keyError);
                         return false;
                     }
                 }
@@ -365,12 +398,7 @@
                         rawAppPrivateKey = await exportAppPrivateKeyB64(privateKey);
                         return true;
                     } catch (keyError) {
-                        console.warn("[Authorize] Existing app keypair could not be decrypted.", keyError);
-                        clearMasterKey();
-                        needsMasterKey = true;
-                        masterKeyError = "Your local encryption key doesn't match this account. Recover your key with passkey unlock or a recovery code.";
-                        authorizing = false;
-                        sliderPosition = 0;
+                        console.warn("[Authorize] Existing app keypair could not be decrypted; generating new app keys.", keyError);
                         return false;
                     }
                 }
@@ -378,12 +406,14 @@
                 if (wantsE2eeReset) {
                     if (hasStoredMaterial) {
                         if (requestedE2eeMode === "symmetric") {
-                            if (!(await loadStoredSymmetricKeys())) return;
-                            rawAppKeyOld = rawAppKey;
+                            if (await loadStoredSymmetricKeys()) {
+                                rawAppKeyOld = rawAppKey;
+                            }
                         } else if (requestedE2eeMode === "asymmetric") {
-                            if (!(await loadStoredAsymmetricKeys())) return;
-                            rawAppPublicKeyOld = rawAppPublicKey;
-                            rawAppPrivateKeyOld = rawAppPrivateKey;
+                            if (await loadStoredAsymmetricKeys()) {
+                                rawAppPublicKeyOld = rawAppPublicKey;
+                                rawAppPrivateKeyOld = rawAppPrivateKey;
+                            }
                         }
                     }
 
@@ -405,12 +435,26 @@
                         throw new Error(`Encryption mode "${requestedE2eeMode}" is not available yet.`);
                     }
                 } else if (hasStoredMaterial) {
-                    if (requestedE2eeMode === "symmetric") {
-                        if (!(await loadStoredSymmetricKeys())) return;
-                    } else if (requestedE2eeMode === "asymmetric") {
-                        if (!(await loadStoredAsymmetricKeys())) return;
-                    } else {
-                        throw new Error(`Encryption mode "${requestedE2eeMode}" is not available yet.`);
+                    const loaded =
+                        requestedE2eeMode === "symmetric"
+                            ? await loadStoredSymmetricKeys()
+                            : requestedE2eeMode === "asymmetric"
+                              ? await loadStoredAsymmetricKeys()
+                              : false;
+                    if (!loaded) {
+                        if (requestedE2eeMode === "symmetric") {
+                            const appKey = await generateAppKey();
+                            authData.encryptedAppKey = await encryptAppKey(appKey, masterKey);
+                            rawAppKey = await exportAppKey(appKey);
+                        } else if (requestedE2eeMode === "asymmetric") {
+                            const keyPair = await generateAppKeyPair();
+                            authData.appPublicKey = keyPair.publicKey;
+                            authData.encryptedAppPrivateKey = await encryptAppPrivateKey(keyPair.privateKey, masterKey);
+                            rawAppPublicKey = keyPair.publicKey;
+                            rawAppPrivateKey = await exportAppPrivateKeyB64(keyPair.privateKey);
+                        } else {
+                            throw new Error(`Encryption mode "${requestedE2eeMode}" is not available yet.`);
+                        }
                     }
                 } else if (requestedE2eeMode === "symmetric") {
                     const appKey = await generateAppKey();
@@ -425,6 +469,8 @@
                 } else {
                     throw new Error(`Encryption mode "${requestedE2eeMode}" is not available yet.`);
                 }
+
+                await storeMasterKey(masterKey);
             }
             
             const result = await api.oauth.authorize(authData);
@@ -835,6 +881,59 @@
 			unlockingMasterKey = false;
 		}
 	}
+
+    async function handleMasterKeyDeviceApproval() {
+        if (!selectedIdentity?.handle || requestingDeviceApproval) return;
+        requestingDeviceApproval = true;
+        masterKeyError = null;
+        try {
+            const keyPair = await generateEphemeralKeyPair();
+            masterKeyEphemeralKeyPair = keyPair;
+            const result = await api.login.requestApproval({
+                handle: selectedIdentity.handle,
+                requesterPublicKey: keyPair.publicKey,
+                device: getDeviceInfo(),
+            });
+            masterKeyLoginRequestId = result.requestId;
+            masterKeyUnlockView = "device";
+        } catch (err) {
+            masterKeyError = err instanceof Error ? err.message : "Failed to request device approval";
+        } finally {
+            requestingDeviceApproval = false;
+        }
+    }
+
+    async function handleMasterKeyRecovered() {
+        needsMasterKey = false;
+        masterKeyUnlockView = "options";
+        await handleAuthorize("instant");
+    }
+
+    async function handleRecoveryCodeSubmit() {
+        if (!selectedIdentity?.handle || !recoveryCode.trim() || recoveringMasterKey) return;
+        recoveringMasterKey = true;
+        masterKeyError = null;
+        try {
+            const result = await api.login.recoverKey({
+                handle: selectedIdentity.handle,
+                code: recoveryCode.trim(),
+            });
+            const masterKey = await recoverMasterKeyFromBackup(
+                result.encryptedMasterKeyBackup,
+                recoveryCode.trim(),
+            );
+            if (!masterKey) {
+                masterKeyError = "That recovery code didn't work. Check it and try again.";
+                return;
+            }
+            await storeMasterKey(masterKey);
+            await handleMasterKeyRecovered();
+        } catch (err) {
+            masterKeyError = err instanceof Error ? err.message : "Invalid recovery code";
+        } finally {
+            recoveringMasterKey = false;
+        }
+    }
 </script>
 
 {#if embedSheet && !$isAuthenticated && !resolvedAppInfo && !appInfo && !quickOriginHostname}
@@ -1000,6 +1099,47 @@
     <div class="flex-1 w-full md:min-h-full px-4 md:px-[75px] z-10 py-5 md:py-[70px] flex flex-col justify-between rounded-[24px] md:rounded-[64px] bg-[#111111]/60 backdrop-blur-xl">
         {#if needsMasterKey}
             <div class="flex flex-col gap-[30px] items-center justify-center flex-1">
+                {#if masterKeyUnlockView === "device" && masterKeyLoginRequestId}
+                    <LoginWaiting
+                        loginRequestId={masterKeyLoginRequestId}
+                        ephemeralKeyPair={masterKeyEphemeralKeyPair}
+                        masterKeyOnly
+                        onSuccess={handleMasterKeyRecovered}
+                        onError={(message) => { masterKeyError = message; masterKeyUnlockView = "options"; }}
+                        onBack={() => { masterKeyUnlockView = "options"; masterKeyLoginRequestId = null; masterKeyEphemeralKeyPair = null; }}
+                    />
+                {:else if masterKeyUnlockView === "recovery"}
+                    <div class="w-full max-w-[350px] flex flex-col gap-[20px]">
+                        <div class="text-center">
+                            <Text type="h" size={24} color="#FFFFFF">Recovery code</Text>
+                            <p class="text-[#878787] text-[16px] mt-[10px]">
+                                Enter a one-time recovery code to restore your encryption key on this device.
+                            </p>
+                        </div>
+                        {#if masterKeyError}
+                            <p class="text-[#E14747] text-[14px] text-center">{masterKeyError}</p>
+                        {/if}
+                        <input
+                            class="w-full px-4 py-3 bg-[#171717] text-white rounded-[16px] text-center tracking-widest outline-none focus:ring-1 focus:ring-white/20"
+                            placeholder="Recovery code"
+                            bind:value={recoveryCode}
+                            onkeydown={(e) => { if (e.key === "Enter") void handleRecoveryCodeSubmit(); }}
+                        />
+                        <button
+                            class="w-full py-[18px] bg-[#FFFFFF] text-[#090909] font-semibold rounded-[16px] hover:bg-[#E0E0E0] transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                            disabled={recoveringMasterKey || !recoveryCode.trim()}
+                            onclick={() => void handleRecoveryCodeSubmit()}
+                        >
+                            {recoveringMasterKey ? "Restoring…" : "Restore encryption key"}
+                        </button>
+                        <button
+                            class="w-full py-[14px] text-[#878787] hover:text-white transition-colors"
+                            onclick={() => { masterKeyUnlockView = "options"; masterKeyError = null; }}
+                        >
+                            Back
+                        </button>
+                    </div>
+                {:else}
                 <div class="w-[80px] h-[80px] rounded-full bg-[#E14747]/20 flex items-center justify-center">
                     <svg width="40" height="40" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                         <path d="M12 2L4 7V12C4 16.4183 7.58172 20 12 20C16.4183 20 20 16.4183 20 12V7L12 2Z" stroke="#E14747" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
@@ -1023,19 +1163,23 @@
 					>
 						{unlockingMasterKey ? "Unlocking…" : "Unlock with Passkey"}
 					</button>
+                    {#if hasTrustedDevices}
+                        <button
+                            class="w-full py-[18px] bg-[#171717] text-[#FFFFFF] font-semibold rounded-[16px] hover:bg-[#222222] transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                            disabled={requestingDeviceApproval}
+                            onclick={() => void handleMasterKeyDeviceApproval()}
+                        >
+                            {requestingDeviceApproval ? "Requesting…" : "Approve on another device"}
+                        </button>
+                    {/if}
                     <button 
-                        class="w-full py-[18px] bg-[#FFFFFF] text-[#090909] font-semibold rounded-[16px] hover:bg-[#E0E0E0] transition-colors"
-                        onclick={() => {
-                            setReturnUrl(window.location.pathname + window.location.search);
-                            safeGoto(goto, "/login");
-                        }}
+                        class="w-full py-[18px] bg-[#171717] text-[#FFFFFF] font-semibold rounded-[16px] hover:bg-[#222222] transition-colors"
+                        onclick={() => { masterKeyUnlockView = "recovery"; masterKeyError = null; }}
                     >
-                        Sign In with Recovery Code
+                        Use recovery code
                     </button>
-                    <p class="text-[#666666] text-[14px] text-center">
-                        Use a one-time recovery code to restore your encryption key on this device.
-                    </p>
                 </div>
+                {/if}
             </div>
         {:else if error}
             <div class="flex flex-col gap-[20px] items-center justify-center flex-1">
