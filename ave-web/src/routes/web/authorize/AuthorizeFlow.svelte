@@ -225,9 +225,6 @@
     function promptMasterKeyRecovery(syncIssue: boolean) {
         masterKeyMismatch = syncIssue;
         needsMasterKey = true;
-        masterKeyError = syncIssue
-            ? "Couldn't read this app's saved encryption setup with the key in this browser. Restore your account encryption key to sync this device."
-            : null;
         authorizing = false;
         sliderPosition = 0;
     }
@@ -1200,7 +1197,7 @@
                     </p>
                 </div>
                 <div class="flex flex-col gap-[15px] w-full max-w-[350px]">
-					{#if masterKeyError}
+					{#if masterKeyError && !masterKeyMismatch}
 						<p class="text-[#E14747] text-[14px] text-center">{masterKeyError}</p>
 					{/if}
 					<button
