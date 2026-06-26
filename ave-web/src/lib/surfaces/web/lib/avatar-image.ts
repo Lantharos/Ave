@@ -4,8 +4,43 @@ export type AvatarCropState = {
   offsetY: number;
 };
 
+export const MIN_AVATAR_CROP_SCALE = 1;
+export const MAX_AVATAR_CROP_SCALE = 3;
+
+export function clampAvatarCropScale(scale: number): number {
+  return Math.min(MAX_AVATAR_CROP_SCALE, Math.max(MIN_AVATAR_CROP_SCALE, scale));
+}
+
+export function clampAvatarCrop(
+  image: HTMLImageElement,
+  viewportSize: number,
+  state: AvatarCropState,
+): AvatarCropState {
+  const scale = clampAvatarCropScale(state.scale);
+  const normalized = { ...state, scale };
+  const { drawWidth, drawHeight } = computeAvatarDrawParams(image, viewportSize, normalized);
+  const maxOffsetX = Math.max(0, (drawWidth - viewportSize) / 2);
+  const maxOffsetY = Math.max(0, (drawHeight - viewportSize) / 2);
+
+  return {
+    scale,
+    offsetX: Math.min(maxOffsetX, Math.max(-maxOffsetX, normalized.offsetX)),
+    offsetY: Math.min(maxOffsetY, Math.max(-maxOffsetY, normalized.offsetY)),
+  };
+}
+
+export function zoomPercentForScale(scale: number): number {
+  const clamped = clampAvatarCropScale(scale);
+  return ((clamped - MIN_AVATAR_CROP_SCALE) / (MAX_AVATAR_CROP_SCALE - MIN_AVATAR_CROP_SCALE)) * 100;
+}
+
+export function scaleForZoomPercent(percent: number): number {
+  const normalized = Math.min(100, Math.max(0, percent));
+  return MIN_AVATAR_CROP_SCALE + (normalized / 100) * (MAX_AVATAR_CROP_SCALE - MIN_AVATAR_CROP_SCALE);
+}
+
 export const DEFAULT_AVATAR_CROP: AvatarCropState = {
-  scale: 1,
+  scale: MIN_AVATAR_CROP_SCALE,
   offsetX: 0,
   offsetY: 0,
 };

@@ -3,16 +3,40 @@ import { startAuthentication, bufferToBase64URLString, type PublicKeyCredentialR
 const PRF_SALT = new TextEncoder().encode("ave-master-key-prf-v1");
 
 function coalesceToBytes(input: unknown): Uint8Array | undefined {
+  if (input == null) return undefined;
   if (input instanceof Uint8Array) return input;
   if (input instanceof ArrayBuffer) return new Uint8Array(input);
   if (ArrayBuffer.isView(input)) {
     return new Uint8Array(input.buffer, input.byteOffset, input.byteLength);
   }
+  if (Array.isArray(input)) {
+    if (input.every((value) => typeof value === "number")) {
+      return new Uint8Array(input);
+    }
+    return undefined;
+  }
+  if (typeof input === "object") {
+    const record = input as Record<string, unknown>;
+    if (record.type === "Buffer" && Array.isArray(record.data)) {
+      return new Uint8Array(record.data as number[]);
+    }
+    const numericValues = Object.keys(record)
+      .filter((key) => /^\d+$/.test(key))
+      .sort((left, right) => Number(left) - Number(right))
+      .map((key) => record[key]);
+    if (numericValues.length > 0 && numericValues.every((value) => typeof value === "number")) {
+      return new Uint8Array(numericValues as number[]);
+    }
+  }
   if (typeof input !== "string") return undefined;
 
   let base64 = input.replace(/-/g, "+").replace(/_/g, "/");
   while (base64.length % 4) base64 += "=";
-  return Uint8Array.from(atob(base64), (char) => char.charCodeAt(0));
+  try {
+    return Uint8Array.from(atob(base64), (char) => char.charCodeAt(0));
+  } catch {
+    return undefined;
+  }
 }
 
 function coalesceToBase64UrlString(input: unknown): string | null {
@@ -23,6 +47,11 @@ function coalesceToBase64UrlString(input: unknown): string | null {
 
 function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
   return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
+}
+
+function readPrfOutput(input: unknown): ArrayBuffer | undefined {
+  const bytes = coalesceToBytes(input);
+  return bytes ? toArrayBuffer(bytes) : undefined;
 }
 
 function normalizeAuthenticationOptionsJSON(
@@ -58,9 +87,8 @@ export async function authenticateWithPasskey(
 
   const prfResult = (response as { clientExtensionResults?: { prf?: { results?: { first?: unknown } } } }).clientExtensionResults?.prf;
   const first = prfResult?.results?.first;
-  const prfBytes = first ? coalesceToBytes(first) : null;
   return {
     credential: response as unknown as Credential,
-    prfOutput: prfBytes ? toArrayBuffer(prfBytes) : undefined,
+    prfOutput: first !== undefined ? readPrfOutput(first) : undefined,
   };
 }

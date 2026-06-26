@@ -46,6 +46,10 @@ export function generatePrfSalt(): string {
  * Also handles ArrayBuffer/Uint8Array inputs directly
  */
 function coalesceToBytes(input: unknown): Uint8Array | undefined {
+  if (input == null) {
+    return undefined;
+  }
+
   if (input instanceof Uint8Array) {
     return input;
   }
@@ -58,6 +62,29 @@ function coalesceToBytes(input: unknown): Uint8Array | undefined {
     return new Uint8Array(input.buffer, input.byteOffset, input.byteLength);
   }
 
+  if (Array.isArray(input)) {
+    if (input.every((value) => typeof value === "number")) {
+      return new Uint8Array(input);
+    }
+    return undefined;
+  }
+
+  if (typeof input === "object") {
+    const record = input as Record<string, unknown>;
+    if (record.type === "Buffer" && Array.isArray(record.data)) {
+      return new Uint8Array(record.data as number[]);
+    }
+
+    const numericValues = Object.keys(record)
+      .filter((key) => /^\d+$/.test(key))
+      .sort((left, right) => Number(left) - Number(right))
+      .map((key) => record[key]);
+
+    if (numericValues.length > 0 && numericValues.every((value) => typeof value === "number")) {
+      return new Uint8Array(numericValues as number[]);
+    }
+  }
+
   if (typeof input !== "string") {
     return undefined;
   }
@@ -68,7 +95,29 @@ function coalesceToBytes(input: unknown): Uint8Array | undefined {
     base64 += "=";
   }
 
-  return Uint8Array.from(atob(base64), (char) => char.charCodeAt(0));
+  try {
+    return Uint8Array.from(atob(base64), (char) => char.charCodeAt(0));
+  } catch {
+    return undefined;
+  }
+}
+
+function readPrfOutput(input: unknown): ArrayBuffer | undefined {
+  const bytes = coalesceToBytes(input);
+  return bytes ? toArrayBuffer(bytes) : undefined;
+}
+
+function prfSaltBytes(prfSalt?: string): Uint8Array {
+  if (!prfSalt) {
+    return PRF_SALT;
+  }
+
+  const bytes = coalesceToBytes(prfSalt);
+  if (!bytes) {
+    throw new Error("Invalid PRF salt");
+  }
+
+  return bytes;
 }
 
 function coalesceToBase64UrlString(input: unknown): string | null {
@@ -112,14 +161,6 @@ function normalizeAuthenticationOptionsJSON(
   } as PublicKeyCredentialRequestOptionsJSON;
 }
 
-function base64urlToBytes(input: unknown): Uint8Array {
-  const bytes = coalesceToBytes(input);
-  if (!bytes) {
-    throw new Error("Invalid PRF output format");
-  }
-  return bytes;
-}
-
 /**
  * Register a new passkey with PRF extension support
  */
@@ -149,9 +190,8 @@ export async function registerPasskey(
   const prfSupported = prfResult?.enabled === true;
   let prfOutput: ArrayBuffer | undefined;
   
-  if (prfSupported && prfResult?.results?.first) {
-    const prfBytes = base64urlToBytes(prfResult.results.first);
-    prfOutput = toArrayBuffer(prfBytes);
+  if (prfSupported && prfResult?.results?.first !== undefined) {
+    prfOutput = readPrfOutput(prfResult.results.first);
   }
   
   return {
@@ -177,7 +217,7 @@ export async function authenticateWithPasskey(
           ...((normalizedOptions as PublicKeyCredentialRequestOptionsJSON & { extensions?: Record<string, unknown> }).extensions || {}),
           prf: {
             eval: {
-              first: toArrayBuffer(prfSalt ? base64urlToBytes(prfSalt) : PRF_SALT),
+              first: prfSaltBytes(prfSalt),
             },
           },
         },
@@ -193,9 +233,8 @@ export async function authenticateWithPasskey(
   if (requestPrf) {
     const extensions = (response as any).clientExtensionResults;
     const prfResult = extensions?.prf;
-    if (prfResult?.results?.first) {
-      const prfBytes = base64urlToBytes(prfResult.results.first);
-      prfOutput = toArrayBuffer(prfBytes);
+    if (prfResult?.results?.first !== undefined) {
+      prfOutput = readPrfOutput(prfResult.results.first);
     }
   }
   

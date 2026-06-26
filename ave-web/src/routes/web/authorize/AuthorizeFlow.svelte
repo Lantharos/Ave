@@ -18,7 +18,6 @@
     import {
         authorizeFlowShowsE2ee,
         authorizationHasE2eeMaterial,
-        e2eeModeLabel,
         hasE2eeResetScope,
         hasUserIdScope,
         resolveE2eeAuthorization,
@@ -971,11 +970,11 @@
                     </h3>
                     <p class="font-poppins text-xs md:text-[18px] text-[#666666]">
                         {#if wantsE2eeReset && activeE2eeMode}
-                            This app requested encryption key rotation. Once you authorize, your previous {e2eeModeLabel(activeE2eeMode)} for this app will be replaced. If the app did not store your current key, encrypted data may be unrecoverable.
+                            This app asked to rotate your encryption keys. Your previous keys for this app will be replaced, and encrypted data may be lost if the app did not keep a backup.
                         {:else if activeE2eeMode}
-                            This app will receive your existing {e2eeModeLabel(activeE2eeMode)} for this account. Keys are not regenerated on re-sign-in unless the app requests `e2ee:reset`.
+                            This app will receive encryption keys so it can protect your data end-to-end.
                         {:else}
-                            This app supports end-to-end encryption. Request an `e2ee:*` scope during sign-in to receive encryption keys.
+                            This app supports end-to-end encryption.
                         {/if}
                     </p>
                 </div>
@@ -990,7 +989,7 @@
                         Account identifier requested
                     </h3>
                     <p class="font-poppins text-xs md:text-[18px] text-[#666666]">
-                        This app requested `user_id`, your account-level ID that stays the same across all Ave identities. Most apps only need your identity ID (`sub`). Only continue if you trust this app to link activity across identities.
+                        This app asked for your account ID, which stays the same across all your identities. Most apps only need your profile identity. Only continue if you trust this app to recognize you across identities.
                     </p>
                 </div>
             {/if}
