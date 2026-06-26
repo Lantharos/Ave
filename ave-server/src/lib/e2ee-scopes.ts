@@ -1,3 +1,5 @@
+import { normalizeScopeToken } from "./oauth-scopes";
+
 export const E2EE_SCOPES = {
   SYMMETRIC: "e2ee:symmetric",
   ASYMMETRIC: "e2ee:asymmetric",
@@ -16,11 +18,11 @@ export type E2eeScope = (typeof E2EE_SCOPES)[keyof typeof E2EE_SCOPES];
 const IMPLEMENTED_E2EE_MODES = new Set<E2eeMode>(["symmetric", "asymmetric"]);
 
 export function isE2eeResetScope(scope: string): boolean {
-  return scope === E2EE_RESET_SCOPE;
+  return normalizeScopeToken(scope) === E2EE_RESET_SCOPE;
 }
 
 export function isE2eeModeScope(scope: string): boolean {
-  return (E2EE_SCOPE_VALUES as readonly string[]).includes(scope);
+  return (E2EE_SCOPE_VALUES as readonly string[]).includes(normalizeScopeToken(scope));
 }
 
 export function isE2eeScope(scope: string): boolean {
@@ -76,7 +78,7 @@ export function storedModeToE2eeMode(
 export const USER_ID_SCOPE = "user_id" as const;
 
 export function isUserIdScope(scope: string): boolean {
-  return scope === USER_ID_SCOPE;
+  return normalizeScopeToken(scope) === USER_ID_SCOPE;
 }
 
 export function isDynamicOAuthScope(scope: string): boolean {
@@ -91,11 +93,13 @@ export function isScopeAllowedForApp(
   if (isDynamicOAuthScope(scope)) {
     return true;
   }
-  return allowedScopes.includes(scope);
+  return allowedScopes.includes(normalizeScopeToken(scope));
 }
 
 export function stripE2eeScopes(scopes: string[]): string[] {
-  return scopes.filter((scope) => !isE2eeScope(scope) && !isUserIdScope(scope));
+  return scopes
+    .map(normalizeScopeToken)
+    .filter((scope) => !isE2eeScope(scope) && !isUserIdScope(scope));
 }
 
 function collectRequestedE2eeModes(
@@ -108,7 +112,7 @@ function collectRequestedE2eeModes(
   const matched: E2eeMode[] = [];
   for (const scope of requestedScopes) {
     if (!isE2eeModeScope(scope)) continue;
-    matched.push(e2eeModeForScope(scope as E2eeScope));
+    matched.push(e2eeModeForScope(normalizeScopeToken(scope) as E2eeScope));
   }
 
   if (legacySymmetric && !requestedScopes.some(isE2eeModeScope)) {

@@ -22,6 +22,7 @@ import {
   resolveRequestedE2eeModeConflict,
 } from "../lib/e2ee-scopes";
 import { buildE2eeAuthUpdate, validateE2eeAuthPayload } from "../lib/app-e2ee-auth";
+import { parseOAuthScopes, normalizeScopeToken } from "../lib/oauth-scopes";
 
 const app = new Hono();
 export const oidcRoutes = new Hono();
@@ -108,7 +109,7 @@ function nowSeconds(): number {
 }
 
 function parseScopes(scope: string): string[] {
-  return scope.split(" ").map((s) => s.trim()).filter(Boolean);
+  return parseOAuthScopes(scope);
 }
 
 async function getRefreshTokenFamilyIds(seedId: string): Promise<string[]> {
@@ -173,7 +174,7 @@ function getApiBase(): string {
 }
 
 function hasScope(scope: string, requested: string): boolean {
-  return parseScopes(scope).includes(requested);
+  return parseScopes(scope).includes(normalizeScopeToken(requested));
 }
 
 function hasAllScopes(grantedScope: string, requestedScope: string): boolean {
@@ -790,7 +791,7 @@ app.post("/fedcm/assertion", async (c) => {
     ))
     .limit(1);
 
-  if ((scope.split(" ").map((value) => value.trim()).filter(Boolean).includes("email") && !identity.email) || appEffectiveSupportsE2ee(oauthApp) || !existingAuth) {
+  if ((parseScopes(scope).includes("email") && !identity.email) || appEffectiveSupportsE2ee(oauthApp) || !existingAuth) {
     const continueUrl = new URL(`${getWebBase()}/authorize`);
     continueUrl.searchParams.set("client_id", clientId);
     continueUrl.searchParams.set("redirect_uri", redirectUri);

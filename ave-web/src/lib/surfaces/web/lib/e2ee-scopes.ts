@@ -1,3 +1,5 @@
+import { normalizeScopeToken } from "./oauth-scopes";
+
 export const E2EE_SCOPES = {
   SYMMETRIC: "e2ee:symmetric",
   ASYMMETRIC: "e2ee:asymmetric",
@@ -14,11 +16,11 @@ export type E2eeMode = "symmetric" | "asymmetric" | "pqc_kyber" | "pqc_dilithium
 export type E2eeScope = (typeof E2EE_SCOPES)[keyof typeof E2EE_SCOPES];
 
 export function isE2eeResetScope(scope: string): boolean {
-  return scope === E2EE_RESET_SCOPE;
+  return normalizeScopeToken(scope) === E2EE_RESET_SCOPE;
 }
 
 export function isE2eeModeScope(scope: string): boolean {
-  return (E2EE_SCOPE_VALUES as readonly string[]).includes(scope);
+  return (E2EE_SCOPE_VALUES as readonly string[]).includes(normalizeScopeToken(scope));
 }
 
 export function isE2eeScope(scope: string): boolean {
@@ -34,7 +36,7 @@ export function hasE2eeResetScope(scopes: string[] | null | undefined): boolean 
 }
 
 export function hasUserIdScope(scopes: string[] | null | undefined): boolean {
-  return (scopes ?? []).some((scope) => scope === "user_id");
+  return (scopes ?? []).some((scope) => normalizeScopeToken(scope) === "user_id");
 }
 
 export function appEffectiveSupportsE2ee(app: {
@@ -80,7 +82,7 @@ export function resolveE2eeAuthorization(
   const matched: E2eeMode[] = [];
   for (const scope of requestedScopes) {
     if (!isE2eeModeScope(scope)) continue;
-    matched.push(e2eeModeForScope(scope as E2eeScope));
+    matched.push(e2eeModeForScope(normalizeScopeToken(scope) as E2eeScope));
   }
 
   if (legacySymmetric && !requestedScopes.some(isE2eeModeScope)) {

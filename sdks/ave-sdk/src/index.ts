@@ -10,7 +10,8 @@ export type Scope =
   | "e2ee:pqc:kyber"
   | "e2ee:pqc:dilithium";
 
-export type { AveConfig } from "./types.js";
+import { joinOAuthScopes } from "./oauth-scopes.js";
+export { joinOAuthScopes, normalizeScopeToken, parseOAuthScopes } from "./oauth-scopes.js";
 export { getApiBase } from "./api-base.js";
 
 export {
@@ -129,7 +130,7 @@ export function buildAuthorizeUrl(config: AveConfig, params: {
   const search = new URLSearchParams({
     client_id: config.clientId,
     redirect_uri: config.redirectUri,
-    scope: (params.scope || ["openid", "profile", "email"]).join(" "),
+    scope: joinOAuthScopes(params.scope || ["openid", "profile", "email"]),
     state: params.state || "",
     nonce: params.nonce || "",
     ...(params.organizationId ? { organization_id: params.organizationId } : {}),

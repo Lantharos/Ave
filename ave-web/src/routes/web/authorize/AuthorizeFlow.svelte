@@ -24,6 +24,7 @@
         resolveE2eeAuthorization,
         resolveRequestedE2eeMode,
     } from "$lib/surfaces/web/lib/e2ee-scopes";
+    import { parseOAuthScopes } from "$lib/surfaces/web/lib/oauth-scopes";
 	import { auth, isAuthenticated, isLoading, identities as identitiesStore, currentIdentity } from "$lib/surfaces/web/stores/auth";
 	import { setReturnUrl } from "$lib/surfaces/web/util/return-url";
 	import { goto } from "$app/navigation";
@@ -121,15 +122,13 @@
 	}
 
     const isQuickAuth = $derived(params.clientId.startsWith("origin:"));
-    const requiresEmailScope = $derived.by(() => params.scope.split(" ").map((value) => value.trim()).filter(Boolean).includes("email"));
+    const requiresEmailScope = $derived.by(() => parseOAuthScopes(params.scope).includes("email"));
     const selectedIdentityNeedsEmail = $derived.by(() => Boolean(selectedIdentity && requiresEmailScope && !selectedIdentity.email));
     const quickOriginHostname = $derived.by(() => {
         if (!isQuickAuth) return null;
         try { return new URL(params.clientId.slice("origin:".length)).hostname; } catch { return null; }
     });
-    const authorizeRequestedScopes = $derived.by(() =>
-        params.scope.split(" ").map((value) => value.trim()).filter(Boolean),
-    );
+    const authorizeRequestedScopes = $derived.by(() => parseOAuthScopes(params.scope));
     const wantsUserIdScope = $derived(hasUserIdScope(authorizeRequestedScopes));
 
     let appInfo = $state<{
