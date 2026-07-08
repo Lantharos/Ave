@@ -1,3 +1,5 @@
+import { sha256Pure } from "./sha256-pure.js";
+
 export interface AveCryptoRuntime {
   getRandomValues?<T extends Uint8Array>(array: T): T;
   digestSha256?(input: Uint8Array): Promise<ArrayBuffer | Uint8Array>;
@@ -43,6 +45,10 @@ function toUint8Array(value: ArrayBuffer | Uint8Array): Uint8Array {
   return value instanceof Uint8Array ? value : new Uint8Array(value);
 }
 
+function toBufferSource(input: Uint8Array): BufferSource {
+  return input.buffer.slice(input.byteOffset, input.byteOffset + input.byteLength) as ArrayBuffer;
+}
+
 async function importNodeCrypto(): Promise<any | null> {
   try {
     const loadNodeCrypto = Function("return import('node:crypto')") as () => Promise<any>;
@@ -50,6 +56,55 @@ async function importNodeCrypto(): Promise<any | null> {
   } catch {
     return null;
   }
+}
+
+async function digestSha256WithSubtle(subtle: SubtleCrypto, input: Uint8Array): Promise<Uint8Array | null> {
+  try {
+    return new Uint8Array(
+      await subtle.digest("SHA-256", toBufferSource(input)),
+    );
+  } catch {
+    return null;
+  }
+}
+
+async function digestSha256WithNode(input: Uint8Array): Promise<Uint8Array | null> {
+  const nodeCrypto = await importNodeCrypto();
+  if (!nodeCrypto) {
+    return null;
+  }
+
+  if (typeof nodeCrypto.createHash === "function") {
+    return new Uint8Array(nodeCrypto.createHash("sha256").update(input).digest());
+  }
+
+  const webcrypto = nodeCrypto.webcrypto as Crypto | undefined;
+  if (webcrypto?.subtle) {
+    return digestSha256WithSubtle(webcrypto.subtle, input);
+  }
+
+  return null;
+}
+
+function cryptoRuntimeError(kind: "random" | "sha256"): Error {
+  const secureContext =
+    typeof globalThis !== "undefined" &&
+    "isSecureContext" in globalThis &&
+    (globalThis as typeof globalThis & { isSecureContext?: boolean }).isSecureContext === false;
+
+  if (kind === "random") {
+    return new Error(
+      secureContext
+        ? "[Ave] No secure random source is available. Use HTTPS or configure configureCryptoRuntime(createExpoCryptoRuntime(ExpoCrypto)) in Expo."
+        : "[Ave] No secure random source is available. In Expo, install expo-crypto and call configureCryptoRuntime(createExpoCryptoRuntime(ExpoCrypto)) during app startup.",
+    );
+  }
+
+  return new Error(
+    secureContext
+      ? "[Ave] SHA-256 is unavailable in this runtime. PKCE requires a secure context (HTTPS) or configureCryptoRuntime(createExpoCryptoRuntime(ExpoCrypto)) in Expo."
+      : "[Ave] No SHA-256 implementation is available in this runtime. In Expo, install expo-crypto and call configureCryptoRuntime(createExpoCryptoRuntime(ExpoCrypto)) during app startup.",
+  );
 }
 
 export function fillRandomValues<T extends Uint8Array>(array: T): T {
@@ -63,34 +118,28 @@ export function fillRandomValues<T extends Uint8Array>(array: T): T {
     return configuredCryptoRuntime.getRandomValues(array);
   }
 
-  throw new Error(
-    "[Ave] No secure random source is available in this runtime. In Expo, install expo-crypto and call configureCryptoRuntime(createExpoCryptoRuntime(ExpoCrypto)) during app startup.",
-  );
+  throw cryptoRuntimeError("random");
 }
 
 export async function digestSha256(input: Uint8Array): Promise<Uint8Array> {
   const globalCrypto = getGlobalCrypto();
   if (globalCrypto?.subtle) {
-    return new Uint8Array(
-      await globalCrypto.subtle.digest("SHA-256", input as unknown as BufferSource),
-    );
+    const digest = await digestSha256WithSubtle(globalCrypto.subtle, input);
+    if (digest) {
+      return digest;
+    }
   }
 
   if (configuredCryptoRuntime?.digestSha256) {
     return toUint8Array(await configuredCryptoRuntime.digestSha256(input));
   }
 
-  const nodeCrypto = await importNodeCrypto();
-  const webcrypto = nodeCrypto?.webcrypto as Crypto | undefined;
-  if (webcrypto?.subtle) {
-    return new Uint8Array(
-      await webcrypto.subtle.digest("SHA-256", input as unknown as BufferSource),
-    );
+  const nodeDigest = await digestSha256WithNode(input);
+  if (nodeDigest) {
+    return nodeDigest;
   }
 
-  throw new Error(
-    "[Ave] No SHA-256 implementation is available in this runtime. In Expo, install expo-crypto and call configureCryptoRuntime(createExpoCryptoRuntime(ExpoCrypto)) during app startup.",
-  );
+  return sha256Pure(input);
 }
 
 export async function resolveSubtleCrypto(): Promise<SubtleCrypto | null> {
