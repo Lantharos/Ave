@@ -1481,30 +1481,43 @@
 <style>
     /*
      * Keep the desktop composition on laptops and under browser/system zoom,
-     * but scale its fixed-pixel design tokens as a unit. The reciprocal width
-     * and height preserve a full viewport after CSS zoom is applied.
+     * but scale its fixed-pixel design tokens as a unit. A fixed reciprocal
+     * viewport canvas keeps transformed geometry inside the visible screen;
+     * unlike CSS zoom, its right edge always lands exactly at 100vw.
      */
     @media (min-width: 769px) and (max-width: 1099px) {
         .authorize-shell {
-            width: 138.889%;
-            min-height: 138.889vh;
-            zoom: 0.72;
+            position: fixed;
+            inset: 0 auto auto 0;
+            width: 138.889vw;
+            height: 138.889vh;
+            min-height: 0;
+            transform: scale(0.72);
+            transform-origin: top left;
         }
     }
 
     @media (min-width: 1100px) and (max-width: 1299px) {
         .authorize-shell {
-            width: 125%;
-            min-height: 125vh;
-            zoom: 0.8;
+            position: fixed;
+            inset: 0 auto auto 0;
+            width: 125vw;
+            height: 125vh;
+            min-height: 0;
+            transform: scale(0.8);
+            transform-origin: top left;
         }
     }
 
     @media (min-width: 1300px) and (max-width: 1440px) {
         .authorize-shell {
-            width: 111.112%;
-            min-height: 111.112vh;
-            zoom: 0.9;
+            position: fixed;
+            inset: 0 auto auto 0;
+            width: 111.112vw;
+            height: 111.112vh;
+            min-height: 0;
+            transform: scale(0.9);
+            transform-origin: top left;
         }
     }
 </style>
