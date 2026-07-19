@@ -54,8 +54,7 @@
         height: 16px;
     }
 
-    /* Match the app-wide desktop breakpoint. */
-    @media (min-width: 1441px) {
+    @media (min-width: 768px) {
         .action-card__icon {
             width: var(--action-icon-size, 24px);
             height: var(--action-icon-size, 24px);

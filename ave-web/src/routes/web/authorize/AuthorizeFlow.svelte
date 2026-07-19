@@ -1043,8 +1043,8 @@
 			{/if}
 	    </div>
 	{:else}
-<div class="bg-[#090909] min-h-screen-fixed flex flex-col md:flex-row md:items-stretch items-center gap-6 md:gap-[50px] p-6 md:p-[50px] relative overflow-auto hide-scrollbar">
-    <div class="flex-1 z-10 flex flex-col items-start justify-start md:justify-between p-4 md:p-[50px] w-full max-w-[760px] md:max-w-none mx-auto">
+<div class="authorize-shell bg-[#090909] min-h-screen-fixed flex flex-col md:flex-row md:items-stretch items-center gap-6 md:gap-[50px] p-6 md:p-[50px] relative overflow-auto hide-scrollbar">
+    <div class="flex-1 z-10 flex flex-col items-start justify-start md:justify-between p-4 md:p-[50px] w-full max-w-[760px] md:max-w-none mx-auto md:mx-0">
         <div class="flex flex-row gap-4 md:gap-[20px] items-start">
             <!-- App icon that becomes back button on hover -->
             <button 
@@ -1153,7 +1153,7 @@
 
     </div>
 
-    <div class="flex-1 w-full max-w-[760px] md:max-w-none mx-auto md:min-h-full px-4 md:px-[75px] z-10 py-5 md:py-[70px] flex flex-col justify-between rounded-[24px] md:rounded-[64px] bg-[#111111]/60 backdrop-blur-xl">
+    <div class="flex-1 w-full max-w-[760px] md:max-w-none mx-auto md:mx-0 md:min-h-full px-4 md:px-[75px] z-10 py-5 md:py-[70px] flex flex-col justify-between rounded-[24px] md:rounded-[64px] bg-[#111111]/60 backdrop-blur-xl">
         {#if needsMasterKey}
             <div class="flex flex-col gap-[30px] items-center justify-center flex-1">
                 {#if masterKeyUnlockView === "device" && masterKeyLoginRequestId}
@@ -1477,3 +1477,34 @@
     </div>
 </div>
 {/if}
+
+<style>
+    /*
+     * Keep the desktop composition on laptops and under browser/system zoom,
+     * but scale its fixed-pixel design tokens as a unit. The reciprocal width
+     * and height preserve a full viewport after CSS zoom is applied.
+     */
+    @media (min-width: 769px) and (max-width: 1099px) {
+        .authorize-shell {
+            width: 138.889%;
+            min-height: 138.889vh;
+            zoom: 0.72;
+        }
+    }
+
+    @media (min-width: 1100px) and (max-width: 1299px) {
+        .authorize-shell {
+            width: 125%;
+            min-height: 125vh;
+            zoom: 0.8;
+        }
+    }
+
+    @media (min-width: 1300px) and (max-width: 1440px) {
+        .authorize-shell {
+            width: 111.112%;
+            min-height: 111.112vh;
+            zoom: 0.9;
+        }
+    }
+</style>
