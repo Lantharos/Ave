@@ -22,8 +22,20 @@
 		<script>
 			function setVh() {
 				const zoom = parseFloat(getComputedStyle(document.documentElement).zoom) || 1;
-				const vh = (window.innerHeight / zoom) * 0.01;
+				const viewportWidth = window.innerWidth / zoom;
+				const viewportHeight = window.innerHeight / zoom;
+				const desktopScale = viewportWidth >= 900 && viewportWidth < 1600
+					? viewportWidth / 1600
+					: 1;
+				const canvasWidth = viewportWidth / desktopScale;
+				const canvasHeight = viewportHeight / desktopScale;
+				const vh = viewportHeight * 0.01;
+
 				document.documentElement.style.setProperty("--vh", `${vh}px`);
+				document.documentElement.style.setProperty("--desktop-scale", `${desktopScale}`);
+				document.documentElement.style.setProperty("--desktop-canvas-width", `${canvasWidth}px`);
+				document.documentElement.style.setProperty("--desktop-canvas-height", `${canvasHeight}px`);
+				document.documentElement.style.setProperty("--desktop-canvas-vh", `${canvasHeight * 0.01}px`);
 			}
 
 			if (document.readyState === "loading") {

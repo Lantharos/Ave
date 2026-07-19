@@ -54,7 +54,7 @@
         height: 16px;
     }
 
-    @media (min-width: 768px) {
+    @media (min-width: 900px) {
         .action-card__icon {
             width: var(--action-icon-size, 24px);
             height: var(--action-icon-size, 24px);

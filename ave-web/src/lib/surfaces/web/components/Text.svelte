@@ -20,7 +20,7 @@
     .responsive-text {
         font-size: var(--mobile-size);
     }
-    @media (min-width: 768px) {
+    @media (min-width: 900px) {
         .responsive-text {
             font-size: var(--desktop-size);
         }

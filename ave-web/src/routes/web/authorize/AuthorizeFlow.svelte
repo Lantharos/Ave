@@ -719,8 +719,9 @@
         
         // Auto-authorize when fully slid
         if (position >= 0.95) {
+            sliderPosition = 1;
             cleanupSlider();
-            handleAuthorize();
+            void handleAuthorize();
         }
     }
 
@@ -1492,15 +1493,6 @@
                             style="transform: scaleX({sliderPosition});"
                         ></div>
 
-                        <div
-                            class="auth-slider-target absolute right-[5px] md:right-[6px] top-[5px] md:top-[6px] w-[40px] h-[40px] md:w-[60px] md:h-[60px] rounded-full flex items-center justify-center pointer-events-none"
-                            style="opacity: {0.25 + sliderPosition * 0.75};"
-                        >
-                            <svg class="w-4 h-4 md:w-5 md:h-5" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                                <path d="M5 12H19M14 7L19 12L14 17" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                            </svg>
-                        </div>
-
                         <div 
                             bind:this={sliderHandleRef}
                             class="auth-slider-handle w-[40px] h-[40px] md:w-[60px] md:h-[60px] bg-white rounded-full cursor-grab flex items-center justify-center absolute top-[5px] left-[5px] md:top-[6px] md:left-[6px] z-10 {sliderActive ? '' : 'transition-[transform] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)]'}"
@@ -1565,21 +1557,10 @@
         transition: opacity 180ms ease;
     }
 
-    .auth-slider-target {
-        color: rgba(255, 255, 255, 0.64);
-        background: rgba(255, 255, 255, 0.035);
-        box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.055);
-        transition: opacity 160ms ease, background-color 160ms ease;
-    }
-
     .auth-slider-handle {
         box-shadow:
             0 6px 20px rgba(0, 0, 0, 0.32),
             0 0 0 3px rgba(255, 255, 255, 0.09);
-    }
-
-    .auth-slider.is-sliding .auth-slider-target {
-        background: rgba(255, 255, 255, 0.07);
     }
 
     .auth-slider.is-success .auth-slider-progress {
@@ -1588,51 +1569,8 @@
 
     @media (prefers-reduced-motion: reduce) {
         .auth-slider *,
-        .auth-slider-progress,
-        .auth-slider-target {
+        .auth-slider-progress {
             transition-duration: 0.01ms !important;
-        }
-    }
-
-    /*
-     * Keep the desktop composition on laptops and under browser/system zoom,
-     * but scale its fixed-pixel design tokens as a unit. A fixed reciprocal
-     * viewport canvas keeps transformed geometry inside the visible screen;
-     * unlike CSS zoom, its right edge always lands exactly at 100vw.
-     */
-    @media (min-width: 769px) and (max-width: 1099px) {
-        .authorize-shell {
-            position: fixed;
-            inset: 0 auto auto 0;
-            width: 138.889vw;
-            height: 138.889vh;
-            min-height: 0;
-            transform: scale(0.72);
-            transform-origin: top left;
-        }
-    }
-
-    @media (min-width: 1100px) and (max-width: 1299px) {
-        .authorize-shell {
-            position: fixed;
-            inset: 0 auto auto 0;
-            width: 125vw;
-            height: 125vh;
-            min-height: 0;
-            transform: scale(0.8);
-            transform-origin: top left;
-        }
-    }
-
-    @media (min-width: 1300px) and (max-width: 1440px) {
-        .authorize-shell {
-            position: fixed;
-            inset: 0 auto auto 0;
-            width: 111.112vw;
-            height: 111.112vh;
-            min-height: 0;
-            transform: scale(0.9);
-            transform-origin: top left;
         }
     }
 </style>
