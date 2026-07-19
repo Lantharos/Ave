@@ -649,26 +649,42 @@
     }
 
     let sliderPointerId: number | null = null;
-    let sliderRef: HTMLElement | null = null;
+    let sliderRef = $state<HTMLElement | null>(null);
+    let sliderHandleRef = $state<HTMLElement | null>(null);
     let sliderMaxTravel = $state(0);
 
-    function getButtonWidth() {
-        return typeof window !== 'undefined' && window.innerWidth < 768 ? 44 : 70;
+    function measureSlider() {
+        if (!sliderRef || !sliderHandleRef) return;
+        const inset = sliderHandleRef.offsetLeft;
+        sliderMaxTravel = Math.max(0, sliderRef.clientWidth - sliderHandleRef.offsetWidth - inset * 2);
     }
+
+    $effect(() => {
+        if (!sliderRef) return;
+        const observer = new ResizeObserver(measureSlider);
+        observer.observe(sliderRef);
+        measureSlider();
+        return () => observer.disconnect();
+    });
 
     function handleSliderStart(e: PointerEvent) {
         if (authorizing) return;
+        if (!sliderHandleRef) return;
+
+        const handleRect = sliderHandleRef.getBoundingClientRect();
+        if (
+            e.clientX < handleRect.left ||
+            e.clientX > handleRect.right ||
+            e.clientY < handleRect.top ||
+            e.clientY > handleRect.bottom
+        ) return;
+
         e.preventDefault();
         
         sliderActive = true;
         sliderPointerId = e.pointerId;
         
-        // Get the slider track element and calculate max travel distance
-        sliderRef = document.getElementById("auth-slider");
-        if (sliderRef) {
-            const rect = sliderRef.getBoundingClientRect();
-            sliderMaxTravel = rect.width - getButtonWidth();
-        }
+        measureSlider();
         
         // Use pointer capture on the slider track for reliable cross-browser tracking
         if (sliderRef) {
@@ -693,8 +709,11 @@
         if (!sliderRef || sliderMaxTravel <= 0) return;
         
         const rect = sliderRef.getBoundingClientRect();
-        const buttonWidth = getButtonWidth();
-        const relativeX = e.clientX - rect.left - buttonWidth / 2;
+        const visualScale = rect.width / sliderRef.offsetWidth || 1;
+        const buttonWidth = sliderHandleRef?.offsetWidth || 60;
+        const inset = sliderHandleRef?.offsetLeft || 6;
+        const logicalX = (e.clientX - rect.left) / visualScale;
+        const relativeX = logicalX - inset - buttonWidth / 2;
         const position = Math.max(0, Math.min(1, relativeX / sliderMaxTravel));
         sliderPosition = position;
         
@@ -730,10 +749,30 @@
         }
         
         sliderPointerId = null;
-        sliderRef = null;
         document.removeEventListener("pointermove", handleSliderMove);
         document.removeEventListener("pointerup", handleSliderEnd);
         document.removeEventListener("pointercancel", handleSliderEnd);
+    }
+
+    function handleSliderKeydown(e: KeyboardEvent) {
+        if (authorizing) return;
+
+        if (e.key === "ArrowRight" || e.key === "ArrowUp") {
+            e.preventDefault();
+            sliderPosition = Math.min(1, sliderPosition + 0.1);
+        } else if (e.key === "ArrowLeft" || e.key === "ArrowDown") {
+            e.preventDefault();
+            sliderPosition = Math.max(0, sliderPosition - 0.1);
+        } else if (e.key === "Home") {
+            e.preventDefault();
+            sliderPosition = 0;
+        } else if (e.key === "End") {
+            e.preventDefault();
+            sliderPosition = 1;
+        } else if ((e.key === "Enter" || e.key === " ") && sliderPosition >= 0.95) {
+            e.preventDefault();
+            void handleAuthorize();
+        }
     }
 
 
@@ -1153,7 +1192,7 @@
 
     </div>
 
-    <div class="flex-1 w-full max-w-[760px] md:max-w-none mx-auto md:mx-0 md:min-h-full px-4 md:px-[75px] z-10 py-5 md:py-[70px] flex flex-col justify-between rounded-[24px] md:rounded-[64px] bg-[#111111]/60 backdrop-blur-xl">
+    <div class="flex-1 w-full max-w-[760px] md:max-w-none mx-auto md:mx-0 md:min-h-full px-4 md:px-[56px] z-10 py-5 md:py-[48px] flex flex-col justify-between rounded-[24px] md:rounded-[52px] bg-[#111111]/60 backdrop-blur-xl">
         {#if needsMasterKey}
             <div class="flex flex-col gap-[30px] items-center justify-center flex-1">
                 {#if masterKeyUnlockView === "device" && masterKeyLoginRequestId}
@@ -1253,7 +1292,7 @@
                 </button>
             </div>
         {:else if selectedIdentity}
-            <div class="flex flex-col gap-4 md:gap-[40px]">
+            <div class="flex flex-col gap-4 md:gap-[28px]">
                 <div class="flex flex-col md:flex-row gap-3 md:gap-[20px] items-start md:items-center">
                 <h1 class="text-white text-xl md:text-[48px] font-bold font-poppins">Sign in as</h1>
 
@@ -1321,22 +1360,23 @@
                     banner={selectedIdentity.bannerUrl?.startsWith("#") ? undefined : selectedIdentity.bannerUrl || undefined} 
                     bannerColor={selectedIdentity.bannerUrl?.startsWith("#") ? selectedIdentity.bannerUrl : "#B9BBBE"} 
                     editable={false}
+                    compact
                 >
                     <div class="flex flex-col gap-2 md:gap-[10px]">
                         <div class="flex flex-col md:flex-row gap-2 md:gap-[10px] w-full flex-1">
-                            <div class="p-3 md:p-[30px] bg-[#111111] rounded-[20px] md:rounded-[32px] flex-1 min-w-0">
-                                <Text type="hd" size={16} mobileSize={12} color="#878787">NAME</Text>
-                                <Text type="h" size={26} mobileSize={18} color="#FFFFFF" cclass="truncate">{selectedIdentity.displayName}</Text>
+                            <div class="p-3 md:p-[20px] bg-[#111111] rounded-[20px] md:rounded-[24px] flex-1 min-w-0">
+                                <Text type="hd" size={14} mobileSize={12} color="#878787">NAME</Text>
+                                <Text type="h" size={22} mobileSize={18} color="#FFFFFF" cclass="truncate">{selectedIdentity.displayName}</Text>
                             </div>
-                            <div class="p-3 md:p-[30px] bg-[#111111] rounded-[20px] md:rounded-[32px] flex-1">
-                                <Text type="hd" size={16} mobileSize={12} color="#878787">HANDLE</Text>
-                                <Text type="h" size={26} mobileSize={18} color="#FFFFFF">{selectedIdentity.handle}</Text>
+                            <div class="p-3 md:p-[20px] bg-[#111111] rounded-[20px] md:rounded-[24px] flex-1">
+                                <Text type="hd" size={14} mobileSize={12} color="#878787">HANDLE</Text>
+                                <Text type="h" size={22} mobileSize={18} color="#FFFFFF">{selectedIdentity.handle}</Text>
                             </div>
                         </div>
                         {#if selectedIdentity.email}
-                            <div class="p-3 md:p-[30px] bg-[#111111] rounded-[20px] md:rounded-[32px]">
-                                <Text type="hd" size={16} mobileSize={12} color="#878787">EMAIL</Text>
-                                <Text type="h" size={26} mobileSize={18} color="#FFFFFF">{selectedIdentity.email}</Text>
+                            <div class="p-3 md:p-[20px] bg-[#111111] rounded-[20px] md:rounded-[24px]">
+                                <Text type="hd" size={14} mobileSize={12} color="#878787">EMAIL</Text>
+                                <Text type="h" size={22} mobileSize={18} color="#FFFFFF">{selectedIdentity.email}</Text>
                             </div>
                         {/if}
                     </div>
@@ -1428,31 +1468,58 @@
                     </div>
                 </div>
             {:else}
-                <div class="flex flex-col gap-3 md:gap-[20px] mt-4 md:mt-0">
-                    <!-- svelte-ignore a11y_no_static_element_interactions -->
+                <div class="flex flex-col gap-3 md:gap-[14px] mt-4 md:mt-0">
                     <div 
                         id="auth-slider"
-                        class="rounded-full bg-[#171717] w-full relative h-[50px] md:h-[82px] touch-none select-none"
+                        bind:this={sliderRef}
+                        class="auth-slider rounded-full w-full relative h-[50px] md:h-[72px] touch-none select-none overflow-hidden outline-none focus-visible:ring-2 focus-visible:ring-white/40 {sliderActive ? 'is-sliding' : ''} {authorizing ? 'is-success' : ''}"
+                        role="slider"
+                        tabindex="0"
+                        aria-label="Slide to sign in"
+                        aria-valuemin="0"
+                        aria-valuemax="100"
+                        aria-valuenow={Math.round(sliderPosition * 100)}
+                        aria-valuetext={authorizing ? "Signing in" : sliderPosition >= 0.95 ? "Ready to sign in" : `${Math.round(sliderPosition * 100)} percent`}
+                        aria-busy={authorizing}
                         onpointerdown={handleSliderStart}
                         onpointermove={handleSliderMove}
                         onpointerup={handleSliderEnd}
                         onpointercancel={handleSliderEnd}
+                        onkeydown={handleSliderKeydown}
                     >
+                        <div
+                            class="auth-slider-progress absolute inset-0 pointer-events-none"
+                            style="transform: scaleX({sliderPosition});"
+                        ></div>
+
+                        <div
+                            class="auth-slider-target absolute right-[5px] md:right-[6px] top-[5px] md:top-[6px] w-[40px] h-[40px] md:w-[60px] md:h-[60px] rounded-full flex items-center justify-center pointer-events-none"
+                            style="opacity: {0.25 + sliderPosition * 0.75};"
+                        >
+                            <svg class="w-4 h-4 md:w-5 md:h-5" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                                <path d="M5 12H19M14 7L19 12L14 17" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                        </div>
+
                         <div 
-                            class="w-[44px] h-[44px] md:w-[70px] md:h-[70px] bg-white rounded-full cursor-grab flex items-center justify-center absolute top-[3px] left-[3px] md:top-[6px] md:left-[6px] z-10 pointer-events-none {sliderActive ? '' : 'transition-[transform] duration-300'}"
+                            bind:this={sliderHandleRef}
+                            class="auth-slider-handle w-[40px] h-[40px] md:w-[60px] md:h-[60px] bg-white rounded-full cursor-grab flex items-center justify-center absolute top-[5px] left-[5px] md:top-[6px] md:left-[6px] z-10 {sliderActive ? '' : 'transition-[transform] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)]'}"
                             style="transform: translateX({sliderMaxTravel > 0 ? sliderPosition * sliderMaxTravel : sliderPosition * 100}px);"
                         >
                             {#if authorizing}
                                 <div class="w-5 h-5 md:w-[24px] md:h-[24px] border-2 border-[#090909] border-t-transparent rounded-full animate-spin"></div>
                             {:else}
-                                <svg class="w-5 h-5 md:w-[35px] md:h-[35px]" viewBox="0 0 35 35" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                    <path d="M11 30L23 18L11 6" stroke="#090909" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+                                <svg class="w-5 h-5 md:w-[28px] md:h-[28px]" viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                                    <path d="M7 6L15 14L7 22M13 6L21 14L13 22" stroke="#090909" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
                                 </svg>
                             {/if}
                         </div>
 
-                        <p class="text-[#878787] text-sm md:text-[18px] font-poppins font-normal absolute top-0 bottom-0 left-0 right-0 text-center flex items-center justify-center pointer-events-none">
-                            {authorizing ? "Signing in..." : "Swipe to Sign In"}
+                        <p
+                            class="text-[#A0A0A0] text-sm md:text-[16px] font-poppins font-medium absolute inset-0 text-center flex items-center justify-center pointer-events-none transition-all duration-200"
+                            style="opacity: {authorizing ? 1 : Math.max(0.18, 1 - sliderPosition * 1.25)}; transform: translateX({sliderPosition * 10}px);"
+                        >
+                            {authorizing ? "Signing in…" : sliderPosition > 0.72 ? "Keep going" : "Slide to sign in"}
                         </p>
 
                     </div>
@@ -1479,6 +1546,54 @@
 {/if}
 
 <style>
+    .auth-slider {
+        background: linear-gradient(180deg, #1b1b1b 0%, #151515 100%);
+        box-shadow:
+            inset 0 1px 0 rgba(255, 255, 255, 0.04),
+            inset 0 0 0 1px rgba(255, 255, 255, 0.025);
+        cursor: default;
+    }
+
+    .auth-slider.is-sliding,
+    .auth-slider.is-sliding .auth-slider-handle {
+        cursor: grabbing;
+    }
+
+    .auth-slider-progress {
+        transform-origin: left center;
+        background: linear-gradient(90deg, rgba(255, 255, 255, 0.11), rgba(255, 255, 255, 0.035));
+        transition: opacity 180ms ease;
+    }
+
+    .auth-slider-target {
+        color: rgba(255, 255, 255, 0.64);
+        background: rgba(255, 255, 255, 0.035);
+        box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.055);
+        transition: opacity 160ms ease, background-color 160ms ease;
+    }
+
+    .auth-slider-handle {
+        box-shadow:
+            0 6px 20px rgba(0, 0, 0, 0.32),
+            0 0 0 3px rgba(255, 255, 255, 0.09);
+    }
+
+    .auth-slider.is-sliding .auth-slider-target {
+        background: rgba(255, 255, 255, 0.07);
+    }
+
+    .auth-slider.is-success .auth-slider-progress {
+        background: linear-gradient(90deg, rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0.08));
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+        .auth-slider *,
+        .auth-slider-progress,
+        .auth-slider-target {
+            transition-duration: 0.01ms !important;
+        }
+    }
+
     /*
      * Keep the desktop composition on laptops and under browser/system zoom,
      * but scale its fixed-pixel design tokens as a unit. A fixed reciprocal

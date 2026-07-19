@@ -6,7 +6,8 @@
         banner = undefined, 
         bannerColor = "#CCCCCC", 
         avatar, 
-        size = "small", 
+        size = "small",
+        compact = false,
         onUploadAvatar = (file: File) => {}, 
         onChangeBanner = (fileOrHex: File | string) => {},
         editable = true,
@@ -16,6 +17,7 @@
         bannerColor?: string;
         avatar: string;
         size?: "small" | "large";
+        compact?: boolean;
         onUploadAvatar?: (file: File) => void;
         onChangeBanner?: (fileOrHex: File | string) => void;
         editable?: boolean;
@@ -166,7 +168,7 @@
     }
 }} />
 
-<div class="flex flex-col w-full rounded-[16px] md:rounded-[32px] overflow-clip relative">
+<div class="flex flex-col w-full rounded-[16px] {compact ? 'md:rounded-[28px]' : 'md:rounded-[32px]'} overflow-clip relative">
     <!-- Hidden file inputs -->
     <input 
         type="file" 
@@ -183,7 +185,7 @@
         onchange={handleBannerChange}
     />
 
-    <div class="w-full {size === 'small' ? 'h-[50px] md:h-[100px]' : 'h-[60px] md:h-[150px]' } relative overflow-hidden rounded-t-[12px] md:rounded-t-[15px]">
+    <div class="w-full {compact ? 'h-[50px] md:h-[72px]' : size === 'small' ? 'h-[50px] md:h-[100px]' : 'h-[60px] md:h-[150px]' } relative overflow-hidden rounded-t-[12px] md:rounded-t-[15px]">
         {#if banner && !bannerImageFailed}
             <img
                 src={banner}
@@ -215,8 +217,8 @@
         {/if}
     </div>
 
-    <div class="{size === 'small' ? 'w-[60px] h-[60px] md:w-[125px] md:h-[125px]' : 'w-[70px] h-[70px] md:w-[160px] md:h-[160px]' } overflow-hidden mt-[15px] md:mt-[40px] ml-2.5 md:ml-[40px] z-10 absolute aspect-square">
-        <img src={avatar} alt="avatar" class="w-full h-full aspect-square border-2 md:border-[6px] border-[#171717] rounded-[12px] md:rounded-[32px] object-cover transition-transform duration-300 ease-in-out" />
+    <div class="{compact ? 'w-[60px] h-[60px] md:w-[88px] md:h-[88px]' : size === 'small' ? 'w-[60px] h-[60px] md:w-[125px] md:h-[125px]' : 'w-[70px] h-[70px] md:w-[160px] md:h-[160px]' } overflow-hidden {compact ? 'mt-[15px] md:mt-[24px] ml-2.5 md:ml-[24px]' : 'mt-[15px] md:mt-[40px] ml-2.5 md:ml-[40px]'} z-10 absolute aspect-square">
+        <img src={avatar} alt="avatar" class="w-full h-full aspect-square border-2 {compact ? 'md:border-[4px]' : 'md:border-[6px]'} border-[#171717] rounded-[12px] {compact ? 'md:rounded-[24px]' : 'md:rounded-[32px]'} object-cover transition-transform duration-300 ease-in-out" />
 
         {#if editable}
             <button 
@@ -231,7 +233,7 @@
         {/if}
     </div>
 
-    <div class="w-full bg-[#171717] flex flex-col p-2.5 md:p-[40px] pt-[35px] md:pt-[80px]">
+    <div class="w-full bg-[#171717] flex flex-col p-2.5 {compact ? 'md:p-[24px]' : 'md:p-[40px]'} pt-[35px] {compact ? 'md:pt-[56px]' : 'md:pt-[80px]'}">
         {#if children}
             {@render children()}
         {/if}
