@@ -10,7 +10,7 @@
     }>();
 </script>
 
-<div class="w-full min-h-screen-fixed flex flex-col items-center justify-center px-6 md:px-[150px] py-12 md:py-[150px] gap-8 md:gap-[150px]">
+<div class="w-full max-w-[760px] md:max-w-none mx-auto min-h-screen-fixed flex flex-col items-center justify-center px-6 md:px-[150px] py-12 md:py-[150px] gap-8 md:gap-[150px]">
     <div class="w-full md:w-[60%] h-auto flex flex-col items-center z-10 gap-6 md:gap-[50px]">
         <div class="flex flex-col gap-4 md:gap-[10px] text-center md:text-left">
             <h2 class="font-black text-[#D3D3D3] text-xl md:text-[36px]">YOU'RE ALL SET!</h2>

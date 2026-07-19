@@ -20,7 +20,8 @@
     .responsive-text {
         font-size: var(--mobile-size);
     }
-    @media (min-width: 768px) {
+    /* Match the app-wide desktop breakpoint; 768px is still a compact layout. */
+    @media (min-width: 1441px) {
         .responsive-text {
             font-size: var(--desktop-size);
         }

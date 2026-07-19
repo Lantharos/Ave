@@ -2,6 +2,15 @@
 
 @theme {
   --font-sans: "Poppins", sans-serif;
+  /*
+   * The product uses `md:` as its full desktop treatment (large type,
+   * two-column shells and generous spacing), rather than as a tablet
+   * treatment. Keep that layout for viewports that can actually hold it.
+   * Common laptop widths (1280/1366/1440 CSS px) and zoomed desktops need
+   * the compact layout; the generous desktop composition starts once there
+   * is genuinely enough room for its 48-96px type and two-column shells.
+   */
+  --breakpoint-md: 90.0625rem;
 }
 
 @layer base {

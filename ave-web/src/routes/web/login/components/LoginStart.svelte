@@ -91,7 +91,7 @@
     }
 </script>
 
-<div class="w-full md:w-auto h-auto flex flex-col items-center z-10 px-4 md:px-0">
+<div class="w-full max-w-[480px] md:max-w-none md:w-auto h-auto flex flex-col items-center z-10 px-4 md:px-0">
     {#if appName}
         {#if appIconUrl}
             <img src={appIconUrl} alt={appName} class="h-14 w-auto md:h-[72px] mb-4 md:mb-6 object-contain" />

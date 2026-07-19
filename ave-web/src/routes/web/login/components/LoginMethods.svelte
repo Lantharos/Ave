@@ -202,7 +202,7 @@
     }
 </script>
 
-<div class="w-full md:w-[60%] h-auto flex flex-col items-center z-10 gap-6 md:gap-[50px] px-4 md:px-0">
+<div class="w-full max-w-[720px] md:max-w-none md:w-[60%] h-auto flex flex-col items-center z-10 gap-6 md:gap-[50px] px-4 md:px-0">
     <h1 class="font-black text-2xl md:text-[36px] text-[#FFFFFF]/80 text-center">PROVE IT'S YOU</h1>
     
     {#if identity}

@@ -142,7 +142,7 @@
     }
 </script>
 
-<div class="w-full md:w-[50%] h-auto flex flex-col items-center z-10 gap-5 md:gap-[30px] px-4 md:px-0">
+<div class="w-full max-w-[720px] md:max-w-none md:w-[50%] h-auto flex flex-col items-center z-10 gap-5 md:gap-[30px] px-4 md:px-0">
     <div class="text-center">
         {#if isRecoveryMode}
             <h1 class="font-black text-2xl md:text-[36px] text-[#FFFFFF]/80">RECOVER ENCRYPTION KEY</h1>

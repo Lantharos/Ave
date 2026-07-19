@@ -9,7 +9,7 @@
     }
 </script>
 
-<div class="w-full min-h-screen-fixed flex flex-col items-center justify-center px-6 md:px-[150px] py-12 md:py-[150px] gap-12 md:gap-[150px]">
+<div class="w-full max-w-[760px] md:max-w-none mx-auto min-h-screen-fixed flex flex-col items-center justify-center px-6 md:px-[150px] py-12 md:py-[150px] gap-12 md:gap-[150px]">
     <div class="flex flex-col md:flex-row w-full items-start justify-between gap-8 md:gap-[100px]">
         <div class="flex flex-col w-full md:w-[55%] items-start justify-start gap-4 md:gap-[20px]">
             {#if appName}

@@ -30,7 +30,7 @@
     }
 </script>
 
-<div class="w-full min-h-screen-fixed flex flex-col items-start justify-center px-6 md:px-[150px] py-12 md:py-[150px] gap-8 md:gap-[120px]">
+<div class="w-full max-w-[760px] md:max-w-none mx-auto min-h-screen-fixed flex flex-col items-start justify-center px-6 md:px-[150px] py-12 md:py-[150px] gap-8 md:gap-[120px]">
     <div class="flex flex-col md:flex-row items-start justify-between gap-8 md:gap-[80px] w-full z-10">
         <div class="flex flex-col gap-4 md:gap-[14px] w-full md:w-[48%]">
             <h2 class="font-black text-[#D3D3D3] text-xl md:text-[36px]">SET UP RECOVERY</h2>
