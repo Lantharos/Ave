@@ -23,6 +23,14 @@ import { recordActivityLog } from "../lib/background-events";
 
 const app = new Hono();
 
+function isIdentityHandleUniqueViolation(error: unknown): boolean {
+  const message = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase();
+  return message.includes("unique") && (
+    message.includes("identities.handle")
+    || message.includes("identities_handle")
+  );
+}
+
 // Schema for starting registration
 const startRegistrationSchema = z.object({
   handle: z.string().min(3).max(32).regex(/^[a-zA-Z0-9_]+$/, "Handle can only contain letters, numbers, and underscores"),
@@ -33,8 +41,8 @@ app.post("/start", zValidator("json", startRegistrationSchema), async (c) => {
   const { handle } = c.req.valid("json");
   const normalizedHandle = handle.toLowerCase();
   const rateLimitResponse = await enforceRateLimits(c, [
-    ipRateLimit(c, "register:start:ip", 20, 10 * 60 * 1000),
-    subjectRateLimit("register:start:handle", normalizedHandle, 10, 10 * 60 * 1000),
+    ipRateLimit(c, "register:start:ip", 20, 10 * 60 * 1000, { failClosed: true }),
+    subjectRateLimit("register:start:handle", normalizedHandle, 10, 10 * 60 * 1000, { failClosed: true }),
   ]);
   if (rateLimitResponse) return rateLimitResponse;
   
@@ -114,8 +122,8 @@ const completeRegistrationSchema = z.object({
 app.post("/complete", zValidator("json", completeRegistrationSchema), async (c) => {
   const data = c.req.valid("json");
   const rateLimitResponse = await enforceRateLimits(c, [
-    ipRateLimit(c, "register:complete:ip", 20, 10 * 60 * 1000),
-    subjectRateLimit("register:complete:session", data.tempUserId, 8, 10 * 60 * 1000),
+    ipRateLimit(c, "register:complete:ip", 20, 10 * 60 * 1000, { failClosed: true }),
+    subjectRateLimit("register:complete:session", data.tempUserId, 8, 10 * 60 * 1000, { failClosed: true }),
   ]);
   if (rateLimitResponse) return rateLimitResponse;
   
@@ -159,12 +167,12 @@ app.post("/complete", zValidator("json", completeRegistrationSchema), async (c) 
   // D1 in this runtime path does not support SQL BEGIN/COMMIT from Drizzle transactions.
   // Execute writes sequentially and best-effort rollback user row on failure.
   let createdUserId: string | null = null;
-    let result: {
-      user: typeof users.$inferSelect;
-      identity: typeof identities.$inferSelect;
-      device: typeof devices.$inferSelect;
-      sessionToken: string;
-    };
+  let result: {
+    user: typeof users.$inferSelect;
+    identity: typeof identities.$inferSelect;
+    device: typeof devices.$inferSelect;
+    sessionToken: string;
+  };
 
   try {
     // Create user (no encryptedMasterKeyBackup yet - will be set after client encrypts with real trust codes)
@@ -272,6 +280,9 @@ app.post("/complete", zValidator("json", completeRegistrationSchema), async (c) 
         console.error("[Registration] Cleanup failed after write error:", cleanupError);
       }
     }
+    if (isIdentityHandleUniqueViolation(error)) {
+      return c.json({ error: "Handle is already taken" }, 409);
+    }
     throw error;
   }
 
@@ -283,7 +294,6 @@ app.post("/complete", zValidator("json", completeRegistrationSchema), async (c) 
 
   return c.json({
     success: true,
-    sessionToken: result.sessionToken,
     trustCodes: [],
     user: {
       id: result.user.id,
@@ -303,7 +313,7 @@ app.post("/complete", zValidator("json", completeRegistrationSchema), async (c) 
 app.get("/check-handle/:handle", async (c) => {
   const handle = c.req.param("handle").toLowerCase();
   const rateLimitResponse = await enforceRateLimits(c, [
-    ipRateLimit(c, "register:check-handle:ip", 120, 60 * 1000),
+    ipRateLimit(c, "register:check-handle:ip", 120, 60 * 1000, { failClosed: true }),
   ]);
   if (rateLimitResponse) return rateLimitResponse;
   

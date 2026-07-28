@@ -7,7 +7,7 @@ import {
   generateTrustCode, 
   hashTrustCode
 } from "../lib/crypto";
-import { eq, and, desc, isNull } from "drizzle-orm";
+import { eq, and, desc, isNull, sql } from "drizzle-orm";
 import {
   generateRegistrationOptions,
   verifyRegistrationResponse,
@@ -24,21 +24,21 @@ const app = new Hono();
 const RECOVERY_CODE_COUNT = 5;
 
 async function countUnusedTrustCodes(userId: string): Promise<number> {
-  const userTrustCodes = await db
-    .select({ id: trustCodes.id })
+  const [result] = await db
+    .select({ count: sql<number>`count(*)` })
     .from(trustCodes)
     .where(and(eq(trustCodes.userId, userId), isNull(trustCodes.usedAt)));
 
-  return userTrustCodes.length;
+  return Number(result?.count || 0);
 }
 
 async function countAllTrustCodes(userId: string): Promise<number> {
-  const userTrustCodes = await db
-    .select({ id: trustCodes.id })
+  const [result] = await db
+    .select({ count: sql<number>`count(*)` })
     .from(trustCodes)
     .where(eq(trustCodes.userId, userId));
 
-  return userTrustCodes.length;
+  return Number(result?.count || 0);
 }
 
 async function createTrustCodes(userId: string): Promise<string[]> {
@@ -71,8 +71,10 @@ app.get("/", async (c) => {
     .where(eq(passkeys.userId, user.id))
     .orderBy(desc(passkeys.createdAt));
   
-  const trustCodesRemaining = await countUnusedTrustCodes(user.id);
-  const totalTrustCodes = await countAllTrustCodes(user.id);
+  const [trustCodesRemaining, totalTrustCodes] = await Promise.all([
+    countUnusedTrustCodes(user.id),
+    countAllTrustCodes(user.id),
+  ]);
   
   return c.json({
     passkeys: userPasskeys.map((pk) => ({
@@ -85,7 +87,6 @@ app.get("/", async (c) => {
     trustCodesRemaining,
     recoveryCodesRemaining: trustCodesRemaining,
     hasRecoveryCodes: totalTrustCodes > 0,
-    securityQuestionIds: [],
   });
 });
 
@@ -519,17 +520,6 @@ app.post("/trust-codes/regenerate", async (c) => {
     recoveryCodesRemaining: codes.length,
     trustCodesRemaining: codes.length,
   });
-});
-
-// Security questions were removed from Ave.
-app.put("/questions", zValidator("json", z.object({
-  questions: z.array(z.object({
-    questionId: z.number().min(0).max(20),
-    answer: z.string().min(1),
-  })).length(3),
-})), async (c) => {
-  c.req.valid("json");
-  return c.json({ error: "security_questions_removed" }, 410);
 });
 
 export default app;

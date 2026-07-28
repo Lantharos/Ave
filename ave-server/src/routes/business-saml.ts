@@ -1,15 +1,15 @@
 import { Hono } from "hono";
 import { and, eq } from "drizzle-orm";
 import { db, organizations, organizationSsoConnections } from "../db";
-import { hasBusinessScope, requireBusinessAccess, shouldRequireEnterpriseSsoForBusinessAccess } from "../lib/business";
+import { hasBusinessScope, requireBusinessAccess } from "../lib/business";
 import { buildSamlRedirectUrl, validateSamlResponse } from "../lib/business-saml";
 import { completeEnterpriseSsoLogin, recordSsoConnectionTest } from "../lib/business-sso-login";
 import { clientIp, userAgent } from "../lib/business-route-utils";
+import { rejectWithoutRequiredSso } from "../lib/business-route-guards";
 import { deleteChallenge, getChallenge, setChallenge } from "../lib/challenge-store";
 import { randomBase64Url } from "../lib/business-oidc";
 import { buildSamlServiceProviderMetadata } from "../lib/sso-metadata";
 import { businessOrigin, enterpriseSsoReturnTo } from "../lib/enterprise-sso-return";
-import { getRequiredEnterpriseSsoForOrganization } from "../lib/enterprise-sso-policy";
 import { recordBusinessAuditEvent } from "../lib/background-events";
 
 const app = new Hono();
@@ -27,13 +27,7 @@ async function rejectSsoTestAccess(c: any, organizationId: string) {
   if (user.isReadOnly) return c.text("Demo account is read-only", 403);
   const access = await requireBusinessAccess(user.id, organizationId, "admin");
   if (!access || !hasBusinessScope(access.member, "manage_sso")) return c.text("Organization not found", 404);
-  if (!shouldRequireEnterpriseSsoForBusinessAccess(user, access)) return null;
-  const policy = await getRequiredEnterpriseSsoForOrganization(access.organization);
-  return c.json({
-    error: "enterprise_sso_required",
-    loginUrl: policy?.loginUrl,
-    organization: { id: access.organization.id, name: access.organization.name },
-  }, 403);
+  return rejectWithoutRequiredSso(c, access);
 }
 
 app.get("/sso/saml/:connectionId/metadata.xml", async (c) => {

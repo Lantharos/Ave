@@ -11,11 +11,8 @@ import {
 } from "../db";
 import { requireAuth, requireWritableForMutation } from "../middleware/auth";
 import {
-  buildAuditPayload,
   hasBusinessScope,
   requireBusinessAccess,
-  shouldRequireEnterpriseSsoForBusinessAccess,
-  verifySignedBusinessAction,
 } from "../lib/business";
 import {
   decryptSsoClientSecret,
@@ -32,9 +29,14 @@ import {
 } from "../lib/sso-metadata";
 import { completeEnterpriseSsoLogin, recordSsoConnectionTest } from "../lib/business-sso-login";
 import { clientIp, userAgent, verificationToken, verifyDnsTxt } from "../lib/business-route-utils";
+import {
+  rejectWithoutRequiredSso,
+  rejectWithoutSigningAuthority,
+  requireSignedAction,
+} from "../lib/business-route-guards";
 import { deleteChallenge, getChallenge, setChallenge } from "../lib/challenge-store";
 import { businessOrigin, enterpriseSsoReturnTo } from "../lib/enterprise-sso-return";
-import { getRequiredEnterpriseSsoForEmail, getRequiredEnterpriseSsoForOrganization } from "../lib/enterprise-sso-policy";
+import { getRequiredEnterpriseSsoForEmail } from "../lib/enterprise-sso-policy";
 import { recordBusinessAuditEvent } from "../lib/background-events";
 
 const app = new Hono();
@@ -52,34 +54,6 @@ type EnterpriseSsoState = {
   codeVerifier?: string;
   returnTo?: string;
 };
-
-async function requireSignedAction(c: any, actorIdentityId: string, action: string, details: Record<string, unknown>, signature?: string) {
-  if (!signature) return c.json({ error: "Action signature required" }, 400);
-  const result = await verifySignedBusinessAction({
-    actorIdentityId,
-    payload: buildAuditPayload(action, details),
-    signature,
-  });
-  if (result.status === "verified") return null;
-  if (result.status === "missing_key") return c.json({ error: "Acting identity needs a signing key" }, 400);
-  return c.json({ error: "Invalid action signature" }, 400);
-}
-
-function rejectWithoutSigningAuthority(c: any, member: { signingAuthority: boolean }) {
-  if (member.signingAuthority) return null;
-  return c.json({ error: "Signing authority required" }, 403);
-}
-
-async function rejectWithoutRequiredSso(c: any, access: NonNullable<Awaited<ReturnType<typeof requireBusinessAccess>>>) {
-  const user = c.get("user")!;
-  if (!shouldRequireEnterpriseSsoForBusinessAccess(user, access)) return null;
-  const policy = await getRequiredEnterpriseSsoForOrganization(access.organization);
-  return c.json({
-    error: "enterprise_sso_required",
-    loginUrl: policy?.loginUrl,
-    organization: { id: access.organization.id, name: access.organization.name },
-  }, 403);
-}
 
 async function rejectSsoTestAccess(c: any, organizationId: string) {
   const user = c.get("user");
@@ -103,7 +77,6 @@ app.post("/sso/discover", zValidator("json", z.object({ email: z.string().email(
     loginAvailable: true,
     loginUrl: sso.loginUrl,
     organization: sso.organization,
-    connection: serializeSsoConnection(sso.connection),
   });
 });
 

@@ -69,6 +69,25 @@ const paginationQuerySchema = z.object({
   offset: z.coerce.number().int().min(0).default(0).optional(),
 });
 
+type AppActivityRow = {
+  id: string;
+  action: string;
+  details: string | Record<string, unknown> | null;
+  severity: string;
+  createdAt: number | string | Date;
+  source: "activity" | "delegation";
+};
+
+function parseActivityDetails(details: AppActivityRow["details"]): Record<string, unknown> | null {
+  if (!details) return null;
+  if (typeof details === "object") return details;
+  try {
+    return JSON.parse(details) as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+}
+
 function serializeResource(resource: typeof oauthResources.$inferSelect) {
   return {
     id: resource.id,
@@ -164,14 +183,22 @@ async function getAppInsights(appId: string, redirectUris: string[]) {
   const now = Date.now();
   const nowDate = new Date(now);
   const weekAgo = new Date(now - 7 * 24 * 60 * 60 * 1000);
-  const [authorizationRows, weeklyAuthorizations, refreshTokens, analyticsCount, revocations, delegations, resources] = await Promise.all([
+  const [authorizationTotals, authorizationMethods, weeklyAuthorizations, refreshTokens, analyticsCount, revocations, delegations, resources] = await Promise.all([
     db
       .select({
-        lastAuthMethod: oauthAuthorizations.lastAuthMethod,
-        authorizationCount: oauthAuthorizations.authorizationCount,
+        totalIdentities: sql<number>`count(*)`,
+        totalAuthorizations: sql<number>`coalesce(sum(${oauthAuthorizations.authorizationCount}), 0)`,
       })
       .from(oauthAuthorizations)
       .where(eq(oauthAuthorizations.appId, appId)),
+    db
+      .select({
+        lastAuthMethod: oauthAuthorizations.lastAuthMethod,
+        count: sql<number>`count(*)`,
+      })
+      .from(oauthAuthorizations)
+      .where(eq(oauthAuthorizations.appId, appId))
+      .groupBy(oauthAuthorizations.lastAuthMethod),
     db
       .select({ count: sql<number>`count(*)` })
       .from(oauthAuthorizations)
@@ -205,12 +232,13 @@ async function getAppInsights(appId: string, redirectUris: string[]) {
     unknown: 0,
   };
 
-  for (const authorization of authorizationRows) {
-    const method = authorization.lastAuthMethod;
-    if (method === "passkey") methodCounts.passkey += 1;
-    else if (method === "instant") methodCounts.deviceApproval += 1;
-    else if (method === "fallback" || method === "trust_code" || method === "device_approval") methodCounts.trustCode += 1;
-    else methodCounts.unknown += 1;
+  for (const authorizationMethod of authorizationMethods) {
+    const count = Number(authorizationMethod.count || 0);
+    const method = authorizationMethod.lastAuthMethod;
+    if (method === "passkey") methodCounts.passkey += count;
+    else if (method === "instant") methodCounts.deviceApproval += count;
+    else if (method === "fallback" || method === "trust_code" || method === "device_approval") methodCounts.trustCode += count;
+    else methodCounts.unknown += count;
   }
 
   const totalMethodEvents = methodCounts.passkey + methodCounts.deviceApproval + methodCounts.trustCode + methodCounts.unknown;
@@ -221,8 +249,8 @@ async function getAppInsights(appId: string, redirectUris: string[]) {
   const httpsRedirects = redirectUris.filter((uri) => uri.startsWith("https://")).length;
 
   return {
-    totalIdentities: authorizationRows.length,
-    totalAuthorizations: authorizationRows.reduce((total, entry) => total + (entry.authorizationCount || 0), 0),
+    totalIdentities: Number(authorizationTotals[0]?.totalIdentities || 0),
+    totalAuthorizations: Number(authorizationTotals[0]?.totalAuthorizations || 0),
     weeklyAuthorizations: weeklyAuthorizations[0]?.count || 0,
     activeRefreshTokens: refreshTokens[0]?.count || 0,
     instantSignInRate: instantRate,
@@ -308,20 +336,28 @@ async function getAppIdentities(appId: string, limit = 25, offset = 0) {
 }
 
 async function getAppActivity(appId: string, limit = 25, offset = 0) {
-  const windowSize = limit + offset;
-  const [analyticsEvents, delegationLogs, analyticsCount, delegationCount] = await Promise.all([
-    db
-      .select()
-      .from(appAnalyticsEvents)
-      .where(eq(appAnalyticsEvents.appId, appId))
-      .orderBy(desc(appAnalyticsEvents.createdAt))
-      .limit(windowSize),
-    db
-      .select()
-      .from(oauthDelegationAuditLogs)
-      .where(eq(oauthDelegationAuditLogs.sourceAppId, appId))
-      .orderBy(desc(oauthDelegationAuditLogs.createdAt))
-      .limit(windowSize),
+  const d1 = (db as unknown as { $client?: D1Database }).$client;
+  if (!d1) {
+    throw new Error("D1 client unavailable for activity query");
+  }
+
+  const [activityResult, analyticsCount, delegationCount] = await Promise.all([
+    d1
+      .prepare(
+        `SELECT id, action, details, severity, createdAt, source FROM (
+          SELECT id, event_type AS action, metadata AS details, severity, created_at AS createdAt, 'activity' AS source
+          FROM app_analytics_events
+          WHERE app_id = ?
+          UNION ALL
+          SELECT id, event_type AS action, details, 'info' AS severity, created_at AS createdAt, 'delegation' AS source
+          FROM oauth_delegation_audit_logs
+          WHERE source_app_id = ?
+        )
+        ORDER BY createdAt DESC
+        LIMIT ? OFFSET ?`,
+      )
+      .bind(appId, appId, limit, offset)
+      .all<AppActivityRow>(),
     db
       .select({ count: sql<number>`count(*)` })
       .from(appAnalyticsEvents)
@@ -332,27 +368,14 @@ async function getAppActivity(appId: string, limit = 25, offset = 0) {
       .where(eq(oauthDelegationAuditLogs.sourceAppId, appId)),
   ]);
 
-  const appLogs = analyticsEvents.map((event) => ({
-    id: event.id,
-    action: event.eventType,
-    details: event.metadata,
-    severity: event.severity,
-    createdAt: event.createdAt,
-    source: "activity" as const,
+  const items = (activityResult.results || []).map((row) => ({
+    id: row.id,
+    action: row.action,
+    details: parseActivityDetails(row.details),
+    severity: row.severity,
+    createdAt: new Date(row.createdAt),
+    source: row.source,
   }));
-
-  const delegationEvents = delegationLogs.map((log) => ({
-    id: log.id,
-    action: log.eventType,
-    details: log.details,
-    severity: "info" as const,
-    createdAt: log.createdAt,
-    source: "delegation" as const,
-  }));
-
-  const items = [...appLogs, ...delegationEvents].sort(
-    (left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime(),
-  ).slice(offset, offset + limit);
 
   const total = (analyticsCount[0]?.count || 0) + (delegationCount[0]?.count || 0);
 
@@ -374,14 +397,15 @@ app.get("/", async (c) => {
   const requestedOrganizationId = c.req.query("organizationId");
   const apps = await getAccessibleApps(userId, requestedOrganizationId);
   const resources = await listAppResources(apps.map((appRow) => appRow.id));
-  const authorizations = apps.length
+  const authorizationCounts = apps.length
     ? await db
         .select({
           appId: oauthAuthorizations.appId,
-          identityId: oauthAuthorizations.identityId,
+          identityCount: sql<number>`count(distinct ${oauthAuthorizations.identityId})`,
         })
         .from(oauthAuthorizations)
         .where(inArray(oauthAuthorizations.appId, apps.map((appRow) => appRow.id)))
+        .groupBy(oauthAuthorizations.appId)
     : [];
 
   const resourcesByAppId = new Map<string, typeof resources>();
@@ -391,11 +415,9 @@ app.get("/", async (c) => {
     resourcesByAppId.set(resource.ownerAppId, list);
   }
 
-  const identityIdsByAppId = new Map<string, Set<string>>();
-  for (const authorization of authorizations) {
-    const existing = identityIdsByAppId.get(authorization.appId) || new Set<string>();
-    existing.add(authorization.identityId);
-    identityIdsByAppId.set(authorization.appId, existing);
+  const identityCountByAppId = new Map<string, number>();
+  for (const authorizationCount of authorizationCounts) {
+    identityCountByAppId.set(authorizationCount.appId, Number(authorizationCount.identityCount || 0));
   }
 
   return c.json({
@@ -403,7 +425,7 @@ app.get("/", async (c) => {
       serializeApp(
         appRow,
         resourcesByAppId.get(appRow.id) || [],
-        identityIdsByAppId.get(appRow.id)?.size || 0,
+        identityCountByAppId.get(appRow.id) || 0,
       ),
     ),
   });

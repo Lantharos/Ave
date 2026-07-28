@@ -1,4 +1,4 @@
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import {
   db,
   identityEncryptionKeys,
@@ -48,15 +48,35 @@ export async function verifyDnsTxt(domain: string, token: string) {
   return hasTxtToken(await response.json(), token);
 }
 
-export async function getOrganizationBundle(organizationId: string, options: { includeAudit?: boolean } = {}) {
-  const [memberRows, keys, grants, encryptionPolicies, ssoConnections, domains, auditEvents] = await Promise.all([
+export async function getOrganizationBundle(
+  organizationId: string,
+  options: {
+    includeAudit?: boolean;
+    includeSsoDetails?: boolean;
+    includeDomainTokens?: boolean;
+    memberLimit?: number;
+  } = {},
+) {
+  const memberLimit = Math.max(1, Math.min(options.memberLimit ?? 100, 100));
+  const [memberRows, membersTotalRows, keys, grants, encryptionPolicies, ssoConnections, domains, auditEvents] = await Promise.all([
     db
       .select({ member: organizationIdentityMembers, identity: identities, key: identityEncryptionKeys })
       .from(organizationIdentityMembers)
       .innerJoin(identities, eq(identities.id, organizationIdentityMembers.identityId))
       .leftJoin(identityEncryptionKeys, eq(identityEncryptionKeys.identityId, organizationIdentityMembers.identityId))
-      .where(eq(organizationIdentityMembers.organizationId, organizationId))
-      .orderBy(desc(organizationIdentityMembers.createdAt)),
+      .where(and(
+        eq(organizationIdentityMembers.organizationId, organizationId),
+        eq(organizationIdentityMembers.status, "active"),
+      ))
+      .orderBy(desc(organizationIdentityMembers.createdAt))
+      .limit(memberLimit),
+    db
+      .select({ count: sql<number>`count(*)` })
+      .from(organizationIdentityMembers)
+      .where(and(
+        eq(organizationIdentityMembers.organizationId, organizationId),
+        eq(organizationIdentityMembers.status, "active"),
+      )),
     db.select().from(organizationKeyrings).where(eq(organizationKeyrings.organizationId, organizationId)),
     db.select().from(organizationKeyGrants).where(eq(organizationKeyGrants.organizationId, organizationId)),
     db.select().from(organizationEncryptionPolicies).where(eq(organizationEncryptionPolicies.organizationId, organizationId)).limit(1),
@@ -78,9 +98,12 @@ export async function getOrganizationBundle(organizationId: string, options: { i
     list.push(grant);
     grantsByKey.set(grant.keyringId, list);
   }
+  const membersTotal = Number(membersTotalRows[0]?.count || 0);
 
   return {
     members: memberRows.map(serializeBusinessMember),
+    membersTotal,
+    membersTruncated: membersTotal > memberRows.length,
     keys: keys.map((key) => ({
       id: key.id,
       name: key.name,
@@ -103,11 +126,22 @@ export async function getOrganizationBundle(organizationId: string, options: { i
       updatedAt: key.updatedAt,
     })),
     encryptionPolicy: serializeEncryptionPolicy(encryptionPolicies[0] ?? null, organizationId),
-    ssoConnections: ssoConnections.map(serializeSsoConnection),
+    ssoConnections: options.includeSsoDetails
+      ? ssoConnections.map(serializeSsoConnection)
+      : ssoConnections.map((connection) => ({
+          id: connection.id,
+          type: connection.type,
+          provider: connection.provider,
+          name: connection.name,
+          domain: connection.domain,
+          status: connection.status,
+          createdAt: connection.createdAt,
+          updatedAt: connection.updatedAt,
+        })),
     domains: domains.map((domain) => ({
       id: domain.id,
       domain: domain.domain,
-      token: domain.token,
+      token: options.includeDomainTokens ? domain.token : null,
       status: domain.status,
       verifiedAt: domain.verifiedAt,
       createdAt: domain.createdAt,

@@ -10,11 +10,8 @@ import {
   organizationKeyrings,
 } from "../db";
 import {
-  buildAuditPayload,
   hasBusinessScope,
   requireBusinessAccess,
-  shouldRequireEnterpriseSsoForBusinessAccess,
-  verifySignedBusinessAction,
 } from "../lib/business";
 import {
   kmsProviders,
@@ -25,8 +22,12 @@ import {
   type OrganizationEncryptionMode,
 } from "../lib/business-encryption";
 import { clientIp, userAgent } from "../lib/business-route-utils";
+import {
+  rejectWithoutRequiredSso,
+  rejectWithoutSigningAuthority,
+  requireSignedAction,
+} from "../lib/business-route-guards";
 import { validateOpaqueKeyEnvelope, validatePublicKeyBlob } from "../lib/encryption-key-payload";
-import { getRequiredEnterpriseSsoForOrganization } from "../lib/enterprise-sso-policy";
 import { recordBusinessAuditEvent } from "../lib/background-events";
 import { requireAuth, requireWritableForMutation } from "../middleware/auth";
 
@@ -44,34 +45,6 @@ const grantSchema = z.object({
 
 app.use("/organizations/*", requireAuth);
 app.use("/organizations/*", requireWritableForMutation);
-
-async function requireSignedAction(c: any, actorIdentityId: string, action: string, details: Record<string, unknown>, signature?: string) {
-  if (!signature) return c.json({ error: "Action signature required" }, 400);
-  const result = await verifySignedBusinessAction({
-    actorIdentityId,
-    payload: buildAuditPayload(action, details),
-    signature,
-  });
-  if (result.status === "verified") return null;
-  if (result.status === "missing_key") return c.json({ error: "Acting identity needs a signing key" }, 400);
-  return c.json({ error: "Invalid action signature" }, 400);
-}
-
-function rejectWithoutSigningAuthority(c: any, member: { signingAuthority: boolean }) {
-  if (member.signingAuthority) return null;
-  return c.json({ error: "Signing authority required" }, 403);
-}
-
-async function rejectWithoutRequiredSso(c: any, access: NonNullable<Awaited<ReturnType<typeof requireBusinessAccess>>>) {
-  const user = c.get("user")!;
-  if (!shouldRequireEnterpriseSsoForBusinessAccess(user, access)) return null;
-  const policy = await getRequiredEnterpriseSsoForOrganization(access.organization);
-  return c.json({
-    error: "enterprise_sso_required",
-    loginUrl: policy?.loginUrl,
-    organization: { id: access.organization.id, name: access.organization.name },
-  }, 403);
-}
 
 async function requireKeyAccess(c: any, organizationId: string) {
   const user = c.get("user")!;

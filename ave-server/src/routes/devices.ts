@@ -149,7 +149,7 @@ app.post("/approve-request", zValidator("json", z.object({
   }
   
   // Update request with encrypted master key
-  await db
+  const [updated] = await db
     .update(loginRequests)
     .set({
       status: "approved",
@@ -157,7 +157,16 @@ app.post("/approve-request", zValidator("json", z.object({
       approvedByDeviceId: user.deviceId,
       approverPublicKey,
     })
-    .where(eq(loginRequests.id, requestId));
+    .where(and(
+      eq(loginRequests.id, requestId),
+      eq(loginRequests.status, "pending"),
+      gt(loginRequests.expiresAt, new Date()),
+    ))
+    .returning({ id: loginRequests.id });
+
+  if (!updated) {
+    return c.json({ error: "Request already handled" }, 400);
+  }
 
   
   // Log activity
@@ -215,10 +224,19 @@ app.post("/deny-request", zValidator("json", z.object({
   }
   
   // Update request status
-  await db
+  const [updated] = await db
     .update(loginRequests)
     .set({ status: "denied" })
-    .where(eq(loginRequests.id, requestId));
+    .where(and(
+      eq(loginRequests.id, requestId),
+      eq(loginRequests.status, "pending"),
+      gt(loginRequests.expiresAt, new Date()),
+    ))
+    .returning({ id: loginRequests.id });
+
+  if (!updated) {
+    return c.json({ error: "Request already handled" }, 400);
+  }
   
   // Log activity
   recordActivityLog(c, {

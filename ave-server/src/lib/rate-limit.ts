@@ -11,12 +11,14 @@ type RateLimitRule = {
   key: string;
   limit: number;
   windowMs: number;
+  failClosed?: boolean;
 };
 
 type RateLimitResult = {
   allowed: boolean;
   retryAfterSeconds: number;
   resetAt: number;
+  unavailable?: boolean;
 };
 
 const memoryFallback = new Map<string, StoredRateLimit>();
@@ -91,18 +93,38 @@ async function checkRule(c: Context, rule: RateLimitRule): Promise<RateLimitResu
   const key = storageKey(rule);
   const namespace = getRateLimitNamespace(c);
   if (namespace) {
-    const id = namespace.idFromName(key);
-    const response = await namespace.get(id).fetch("https://rate-limit/check", {
-      method: "POST",
-      body: JSON.stringify({
-        limit: rule.limit,
-        windowMs: rule.windowMs,
-      }),
-    });
+    try {
+      const id = namespace.idFromName(key);
+      const response = await namespace.get(id).fetch("https://rate-limit/check", {
+        method: "POST",
+        body: JSON.stringify({
+          limit: rule.limit,
+          windowMs: rule.windowMs,
+        }),
+      });
 
-    if (response.ok) {
-      return await response.json() as RateLimitResult;
+      if (response.ok) {
+        return await response.json() as RateLimitResult;
+      }
+    } catch {
+      // fall through
     }
+
+    if (rule.failClosed) {
+      return {
+        allowed: false,
+        retryAfterSeconds: 30,
+        resetAt: Date.now() + 30_000,
+        unavailable: true,
+      };
+    }
+  } else if (rule.failClosed) {
+    return {
+      allowed: false,
+      retryAfterSeconds: 30,
+      resetAt: Date.now() + 30_000,
+      unavailable: true,
+    };
   }
 
   const { next, result } = await updateBucket(memoryFallback.get(key), rule.limit, rule.windowMs);
@@ -118,6 +140,9 @@ export async function enforceRateLimits(c: Context, rules: RateLimitRule[]): Pro
       c.header("Retry-After", String(result.retryAfterSeconds));
       c.header("X-RateLimit-Limit", String(rule.limit));
       c.header("X-RateLimit-Reset", String(Math.ceil(result.resetAt / 1000)));
+      if (result.unavailable) {
+        return c.json({ error: "Rate limiting temporarily unavailable. Try again shortly." }, 503);
+      }
       return c.json({ error: "Too many attempts. Try again shortly." }, 429);
     }
   }
@@ -125,20 +150,34 @@ export async function enforceRateLimits(c: Context, rules: RateLimitRule[]): Pro
   return null;
 }
 
-export function ipRateLimit(c: Context, namespace: string, limit: number, windowMs: number): RateLimitRule {
+export function ipRateLimit(
+  c: Context,
+  namespace: string,
+  limit: number,
+  windowMs: number,
+  options: { failClosed?: boolean } = {},
+): RateLimitRule {
   return {
     namespace,
     key: `ip:${getClientIp(c)}`,
     limit,
     windowMs,
+    failClosed: options.failClosed,
   };
 }
 
-export function subjectRateLimit(namespace: string, subject: string, limit: number, windowMs: number): RateLimitRule {
+export function subjectRateLimit(
+  namespace: string,
+  subject: string,
+  limit: number,
+  windowMs: number,
+  options: { failClosed?: boolean } = {},
+): RateLimitRule {
   return {
     namespace,
-    key: `subject:${subject.toLowerCase()}`,
+    key: `subject:${subject}`,
     limit,
     windowMs,
+    failClosed: options.failClosed,
   };
 }

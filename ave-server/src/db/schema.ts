@@ -129,6 +129,7 @@ export const devices = sqliteTable("devices", {
 }, (table) => [
   index("devices_user_id_idx").on(table.userId),
   index("devices_fingerprint_idx").on(table.fingerprint),
+  index("devices_user_fingerprint_idx").on(table.userId, table.fingerprint),
 ]);
 
 // Sessions - active login sessions
@@ -176,7 +177,7 @@ export const loginRequests = sqliteTable("login_requests", {
   requesterPublicKey: text("requester_public_key").notNull(),
   
   // Status
-  status: text("status").notNull().default("pending"), // pending, approved, denied, expired
+  status: text("status").notNull().default("pending"), // pending, approved, denied, expired, consumed
   
   // When approved, the approving device encrypts the master key with requester's public key
   encryptedMasterKey: text("encrypted_master_key"),
@@ -419,6 +420,7 @@ export const oauthDelegationAuditLogs = sqliteTable("oauth_delegation_audit_logs
   index("oauth_delegation_audit_logs_grant_id_idx").on(table.grantId),
   index("oauth_delegation_audit_logs_user_id_idx").on(table.userId),
   index("oauth_delegation_audit_logs_event_type_idx").on(table.eventType),
+  index("oauth_delegation_audit_logs_source_app_created_at_idx").on(table.sourceAppId, table.createdAt),
 ]);
 
 // Signing keys - Ed25519 keypairs per identity for Ave Signing

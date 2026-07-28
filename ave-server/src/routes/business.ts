@@ -17,10 +17,7 @@ import {
   createBusinessOrganization,
   hasBusinessScope,
   requireBusinessAccess,
-  buildAuditPayload,
   scopesForRole,
-  shouldRequireEnterpriseSsoForBusinessAccess,
-  verifySignedBusinessAction,
   type BusinessRole,
 } from "../lib/business";
 import {
@@ -28,7 +25,11 @@ import {
   getOrganizationBundle,
   userAgent,
 } from "../lib/business-route-utils";
-import { getRequiredEnterpriseSsoForOrganization } from "../lib/enterprise-sso-policy";
+import {
+  rejectWithoutRequiredSso,
+  rejectWithoutSigningAuthority,
+  requireSignedAction,
+} from "../lib/business-route-guards";
 import { recordBusinessAuditEvent } from "../lib/background-events";
 import businessKeyRoutes from "./business-keys";
 import businessSsoRoutes from "./business-sso";
@@ -38,34 +39,6 @@ const app = new Hono();
 const roleSchema = z.enum(["owner", "admin", "signer", "member", "viewer"]);
 const scopeSchema = z.enum(businessScopes as [string, ...string[]]);
 const signedActionSchema = z.object({ signature: z.string().min(1).max(2000) }).optional();
-
-async function requireSignedAction(c: any, actorIdentityId: string, action: string, details: Record<string, unknown>, signature?: string) {
-  if (!signature) return c.json({ error: "Action signature required" }, 400);
-  const result = await verifySignedBusinessAction({
-    actorIdentityId,
-    payload: buildAuditPayload(action, details),
-    signature,
-  });
-  if (result.status === "verified") return null;
-  if (result.status === "missing_key") return c.json({ error: "Acting identity needs a signing key" }, 400);
-  return c.json({ error: "Invalid action signature" }, 400);
-}
-
-function rejectWithoutSigningAuthority(c: any, member: { signingAuthority: boolean }) {
-  if (member.signingAuthority) return null;
-  return c.json({ error: "Signing authority required" }, 403);
-}
-
-async function rejectWithoutRequiredSso(c: any, access: NonNullable<Awaited<ReturnType<typeof requireBusinessAccess>>>) {
-  const user = c.get("user")!;
-  if (!shouldRequireEnterpriseSsoForBusinessAccess(user, access)) return null;
-  const policy = await getRequiredEnterpriseSsoForOrganization(access.organization);
-  return c.json({
-    error: "enterprise_sso_required",
-    loginUrl: policy?.loginUrl,
-    organization: { id: access.organization.id, name: access.organization.name },
-  }, 403);
-}
 
 app.route("/", businessSsoRoutes);
 app.route("/", businessKeyRoutes);
@@ -165,6 +138,8 @@ app.get("/organizations/:organizationId", async (c) => {
   if (!access) return c.json({ error: "Organization not found" }, 404);
   const ssoError = await rejectWithoutRequiredSso(c, access);
   if (ssoError) return ssoError;
+  const canManageOrganization = hasBusinessScope(access.member, "manage_org");
+  const canManageSso = hasBusinessScope(access.member, "manage_sso");
 
   return c.json({
     organization: {
@@ -179,7 +154,11 @@ app.get("/organizations/:organizationId", async (c) => {
       actingIdentityId: access.identity.id,
       actingHandle: access.identity.handle,
     },
-    ...(await getOrganizationBundle(organizationId, { includeAudit: c.req.query("includeAudit") === "true" })),
+    ...(await getOrganizationBundle(organizationId, {
+      includeAudit: canManageOrganization && c.req.query("includeAudit") === "true",
+      includeSsoDetails: canManageSso,
+      includeDomainTokens: canManageOrganization,
+    })),
   });
 });
 

@@ -40,20 +40,40 @@ async function createUniqueSsoHandle(email: string, organization: Organization) 
   return `sso_${crypto.randomUUID().replace(/-/g, "").slice(0, 28)}`;
 }
 
+function isIdentityHandleUniqueViolation(error: unknown): boolean {
+  const message = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase();
+  return message.includes("unique") && (
+    message.includes("identities.handle")
+    || message.includes("identities_handle")
+  );
+}
+
 async function resolveEnterpriseIdentity(email: string, displayName: string | null | undefined, organization: Organization) {
   const [existing] = await db.select().from(identities).where(eq(identities.email, email)).limit(1);
-  if (existing) return { identity: existing, created: false };
+  if (existing) return { identity: existing, created: false, createdUserId: null };
 
   const [user] = await db.insert(users).values({}).returning();
-  const [identity] = await db.insert(identities).values({
-    userId: user.id,
-    displayName: normalizeDisplayName(displayName, email),
-    handle: await createUniqueSsoHandle(email, organization),
-    email,
-    isPrimary: true,
-  }).returning();
+  try {
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      try {
+        const [identity] = await db.insert(identities).values({
+          userId: user.id,
+          displayName: normalizeDisplayName(displayName, email),
+          handle: await createUniqueSsoHandle(email, organization),
+          email,
+          isPrimary: true,
+        }).returning();
+        return { identity, created: true, createdUserId: user.id };
+      } catch (error) {
+        if (!isIdentityHandleUniqueViolation(error)) throw error;
+      }
+    }
 
-  return { identity, created: true };
+    throw new Error("Could not allocate a unique SSO handle");
+  } catch (error) {
+    await db.delete(users).where(eq(users.id, user.id));
+    throw error;
+  }
 }
 
 async function ensureOrganizationMembership(organizationId: string, identityId: string) {
@@ -64,14 +84,26 @@ async function ensureOrganizationMembership(organizationId: string, identityId: 
     .limit(1);
 
   if (!membership) {
-    await db.insert(organizationIdentityMembers).values({
-      organizationId,
-      identityId,
-      role: "member",
-      scopes: ["read"],
-      signingAuthority: false,
-      status: "active",
-    });
+    try {
+      await db.insert(organizationIdentityMembers).values({
+        organizationId,
+        identityId,
+        role: "member",
+        scopes: ["read"],
+        signingAuthority: false,
+        status: "active",
+      });
+    } catch (error) {
+      const [concurrentMembership] = await db
+        .select()
+        .from(organizationIdentityMembers)
+        .where(and(eq(organizationIdentityMembers.organizationId, organizationId), eq(organizationIdentityMembers.identityId, identityId)))
+        .limit(1);
+      if (!concurrentMembership) throw error;
+      if (concurrentMembership.status !== "active") {
+        await db.update(organizationIdentityMembers).set({ status: "active", updatedAt: new Date() }).where(eq(organizationIdentityMembers.id, concurrentMembership.id));
+      }
+    }
   } else if (membership.status !== "active") {
     await db.update(organizationIdentityMembers).set({ status: "active", updatedAt: new Date() }).where(eq(organizationIdentityMembers.id, membership.id));
   }
@@ -85,8 +117,16 @@ export async function completeEnterpriseSsoLogin(input: {
   displayName?: string | null;
 }) {
   const { c, organization, connection, email } = input;
-  const { identity, created } = await resolveEnterpriseIdentity(email, input.displayName, organization);
-  await ensureOrganizationMembership(organization.id, identity.id);
+  const resolvedIdentity = await resolveEnterpriseIdentity(email, input.displayName, organization);
+  const { identity, created } = resolvedIdentity;
+  try {
+    await ensureOrganizationMembership(organization.id, identity.id);
+  } catch (error) {
+    if (resolvedIdentity.createdUserId) {
+      await db.delete(users).where(eq(users.id, resolvedIdentity.createdUserId));
+    }
+    throw error;
+  }
 
   const [device] = await db.insert(devices).values({
     userId: identity.userId,

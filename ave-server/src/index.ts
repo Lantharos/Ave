@@ -184,6 +184,7 @@ function buildApp() {
     c.header("X-Content-Type-Options", "nosniff");
     c.header("Referrer-Policy", "no-referrer");
     c.header("Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=()");
+    c.header("Content-Security-Policy", "default-src 'none'; frame-ancestors 'none'; base-uri 'none'");
 
     const host = c.req.header("host");
     if (host === "api.aveid.net" || host === "aveid.net" || host?.endsWith(".aveid.net")) {
@@ -447,7 +448,7 @@ export class ApiAppDurableObject {
       if (url.pathname === "/__internal/login-request-status" && request.method === "POST") {
         const expectedToken = this.env.INTERNAL_API_TOKEN;
         const providedToken = request.headers.get("x-internal-token");
-        if (expectedToken && expectedToken !== providedToken) {
+        if (!expectedToken || expectedToken !== providedToken) {
           return new Response("Forbidden", { status: 403 });
         }
 
@@ -471,7 +472,7 @@ export class ApiAppDurableObject {
       if (url.pathname === "/__internal/login-request" && request.method === "POST") {
         const expectedToken = this.env.INTERNAL_API_TOKEN;
         const providedToken = request.headers.get("x-internal-token");
-        if (expectedToken && expectedToken !== providedToken) {
+        if (!expectedToken || expectedToken !== providedToken) {
           return new Response("Forbidden", { status: 403 });
         }
 
@@ -498,7 +499,7 @@ export class ApiAppDurableObject {
       if (url.pathname === "/__internal/cleanup" && request.method === "POST") {
         const expectedToken = this.env.INTERNAL_API_TOKEN;
         const providedToken = request.headers.get("x-internal-token");
-        if (expectedToken && expectedToken !== providedToken) {
+        if (!expectedToken || expectedToken !== providedToken) {
           return new Response("Forbidden", { status: 403 });
         }
 

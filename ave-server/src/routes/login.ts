@@ -14,7 +14,7 @@ import {
   verifyTrustCode,
 } from "../lib/crypto";
 import { clearSessionCookie, setSessionCookie, SESSION_COOKIE_NAME } from "../lib/session-cookie";
-import { eq, and, gt, desc, isNull } from "drizzle-orm";
+import { eq, and, gt, desc, isNull, sql } from "drizzle-orm";
 import { sendLoginRequestNotification, sendAccountEventNotification, type PushSubscription } from "../lib/webpush";
 import { deleteChallenge, getChallenge, setChallenge } from "../lib/challenge-store";
 import { serializeIdentityForOwner } from "../lib/identity-serialization";
@@ -60,7 +60,7 @@ async function notifyLoginRequestInApiApp(
   }
 }
 
-async function rejectRequiredEnterpriseSso(c: any, identity: typeof identities.$inferSelect) {
+async function rejectRequiredEnterpriseSso(c: any, identity: { email: string | null }) {
   const sso = await getRequiredEnterpriseSsoForEmail(identity.email);
   if (!sso) return null;
   return c.json({
@@ -102,14 +102,16 @@ async function findUnusedTrustCode(userId: string, code: string) {
   };
 }
 
-async function markTrustCodeUsed(userId: string, trustCodeId: string) {
-  await db
+async function claimTrustCode(userId: string, trustCodeId: string): Promise<number | null> {
+  const claimed = await db
     .update(trustCodes)
     .set({ usedAt: new Date() })
-    .where(eq(trustCodes.id, trustCodeId));
+    .where(and(eq(trustCodes.id, trustCodeId), eq(trustCodes.userId, userId), isNull(trustCodes.usedAt)))
+    .returning({ id: trustCodes.id });
+
+  if (!claimed.length) return null;
 
   const remainingCodes = await getUnusedTrustCodes(userId);
-
   return remainingCodes.length;
 }
 
@@ -234,14 +236,20 @@ app.post("/start", zValidator("json", z.object({
   const { handle } = c.req.valid("json");
   const normalizedHandle = handle.toLowerCase();
   const rateLimitResponse = await enforceRateLimits(c, [
-    ipRateLimit(c, "login:start:ip", 60, 60 * 1000),
-    subjectRateLimit("login:start:handle", normalizedHandle, 20, 5 * 60 * 1000),
+    ipRateLimit(c, "login:start:ip", 60, 60 * 1000, { failClosed: true }),
+    subjectRateLimit("login:start:handle", normalizedHandle, 20, 5 * 60 * 1000, { failClosed: true }),
   ]);
   if (rateLimitResponse) return rateLimitResponse;
   
-  // Find identity by handle
   const [identity] = await db
-    .select()
+    .select({
+      id: identities.id,
+      userId: identities.userId,
+      displayName: identities.displayName,
+      handle: identities.handle,
+      avatarUrl: identities.avatarUrl,
+      email: identities.email,
+    })
     .from(identities)
     .where(eq(identities.handle, normalizedHandle))
     .limit(1);
@@ -271,32 +279,30 @@ app.post("/start", zValidator("json", z.object({
       authSessionId: null,
     });
   }
-  
-  // Check if user has trusted devices (for device approval option)
-  const userDevices = await db
-    .select()
-    .from(devices)
-    .where(and(eq(devices.userId, identity.userId), eq(devices.isActive, true)));
-  
-  // Get passkeys for WebAuthn
-  const userPasskeys = await db
-    .select()
-    .from(passkeys)
-    .where(eq(passkeys.userId, identity.userId));
-  
+
+  const [[deviceCount], [passkeyCount]] = await Promise.all([
+    db
+      .select({ count: sql<number>`count(*)` })
+      .from(devices)
+      .where(and(eq(devices.userId, identity.userId), eq(devices.isActive, true))),
+    db
+      .select({ count: sql<number>`count(*)` })
+      .from(passkeys)
+      .where(eq(passkeys.userId, identity.userId)),
+  ]);
+
+  const hasDevices = Number(deviceCount?.count || 0) > 0;
+  const hasPasskeys = Number(passkeyCount?.count || 0) > 0;
   const rpId = process.env.RP_ID || "localhost";
   
-  // Generate auth options if user has passkeys
   let authOptions = null;
   let authSessionId = null;
   
-  if (userPasskeys.length > 0) {
+  if (hasPasskeys) {
     authSessionId = crypto.randomUUID();
     
     authOptions = await generateAuthenticationOptions({
       rpID: rpId,
-      // Don't restrict to specific credentials - allow discoverable credentials
-      // This helps with password managers like 1Password
       allowCredentials: [],
       userVerification: "required",
     });
@@ -320,8 +326,8 @@ app.post("/start", zValidator("json", z.object({
       handle: identity.handle,
       avatarUrl: identity.avatarUrl,
     },
-    hasDevices: userDevices.length > 0,
-    hasPasskeys: userPasskeys.length > 0,
+    hasDevices,
+    hasPasskeys,
     demoPasswordEnabled: false,
     authOptions,
     authSessionId,
@@ -342,8 +348,8 @@ app.post("/demo", zValidator("json", z.object({
   const { handle, password, device } = c.req.valid("json");
   const normalizedHandle = handle.toLowerCase();
   const rateLimitResponse = await enforceRateLimits(c, [
-    ipRateLimit(c, "login:demo:ip", 8, 60 * 1000),
-    subjectRateLimit("login:demo:handle", normalizedHandle, 8, 15 * 60 * 1000),
+    ipRateLimit(c, "login:demo:ip", 8, 60 * 1000, { failClosed: true }),
+    subjectRateLimit("login:demo:handle", normalizedHandle, 8, 15 * 60 * 1000, { failClosed: true }),
   ]);
   if (rateLimitResponse) return rateLimitResponse;
 
@@ -399,7 +405,6 @@ app.post("/demo", zValidator("json", z.object({
 
   return c.json({
     success: true,
-    sessionToken,
     device: {
       id: deviceRecord.id,
       name: deviceRecord.name,
@@ -425,8 +430,8 @@ app.post("/passkey", zValidator("json", z.object({
 })), async (c) => {
   const { authSessionId, credential, device } = c.req.valid("json");
   const rateLimitResponse = await enforceRateLimits(c, [
-    ipRateLimit(c, "login:passkey:ip", 30, 60 * 1000),
-    subjectRateLimit("login:passkey:session", authSessionId, 10, 10 * 60 * 1000),
+    ipRateLimit(c, "login:passkey:ip", 30, 60 * 1000, { failClosed: true }),
+    subjectRateLimit("login:passkey:session", authSessionId, 10, 10 * 60 * 1000, { failClosed: true }),
   ]);
   if (rateLimitResponse) return rateLimitResponse;
   
@@ -560,7 +565,6 @@ app.post("/passkey", zValidator("json", z.object({
     
     return c.json({
       success: true,
-      sessionToken,
       device: {
         id: deviceRecord.id,
         name: deviceRecord.name,
@@ -596,8 +600,8 @@ app.post("/request-approval", zValidator("json", z.object({
   const { handle, requesterPublicKey, device } = c.req.valid("json");
   const normalizedHandle = handle.toLowerCase();
   const rateLimitResponse = await enforceRateLimits(c, [
-    ipRateLimit(c, "login:approval:ip", 10, 60 * 1000),
-    subjectRateLimit("login:approval:handle", normalizedHandle, 6, 5 * 60 * 1000),
+    ipRateLimit(c, "login:approval:ip", 10, 60 * 1000, { failClosed: true }),
+    subjectRateLimit("login:approval:handle", normalizedHandle, 6, 5 * 60 * 1000, { failClosed: true }),
   ]);
   if (rateLimitResponse) return rateLimitResponse;
   
@@ -683,8 +687,8 @@ app.post("/request-approval", zValidator("json", z.object({
 app.get("/request-status/:requestId", async (c) => {
   const requestId = c.req.param("requestId");
   const rateLimitResponse = await enforceRateLimits(c, [
-    ipRateLimit(c, "login:status:ip", 180, 60 * 1000),
-    subjectRateLimit("login:status:request", requestId, 180, 60 * 1000),
+    ipRateLimit(c, "login:status:ip", 180, 60 * 1000, { failClosed: true }),
+    subjectRateLimit("login:status:request", requestId, 180, 60 * 1000, { failClosed: true }),
   ]);
   if (rateLimitResponse) return rateLimitResponse;
   
@@ -701,20 +705,33 @@ app.get("/request-status/:requestId", async (c) => {
   if (new Date() > request.expiresAt) {
     return c.json({ status: "expired" });
   }
+
+  if (request.status === "consumed") {
+    return c.json({ status: "pending" });
+  }
   
   if (request.status === "approved" && request.encryptedMasterKey) {
     if (!request.approverPublicKey) {
       return c.json({ error: "Approval key missing" }, 400);
     }
 
-    // Login approved! Return the encrypted master key
-    // The requesting device can decrypt this with its private ephemeral key
-    
-    // Find identity for session creation
+    const [claimed] = await db
+      .update(loginRequests)
+      .set({ status: "consumed" })
+      .where(and(
+        eq(loginRequests.id, requestId),
+        eq(loginRequests.status, "approved"),
+      ))
+      .returning();
+
+    if (!claimed) {
+      return c.json({ status: "pending" });
+    }
+
     const [identity] = await db
       .select()
       .from(identities)
-      .where(eq(identities.handle, request.handle))
+      .where(eq(identities.handle, claimed.handle))
       .limit(1);
     
     if (!identity) {
@@ -724,37 +741,35 @@ app.get("/request-status/:requestId", async (c) => {
     const ssoRequired = await rejectRequiredEnterpriseSso(c, identity);
     if (ssoRequired) return ssoRequired;
     
-    // Get or create device (reuses existing device if fingerprint matches)
     const deviceRecord = await getOrCreateDevice(identity.userId, {
-      name: request.deviceName || "Unknown Device",
-      type: request.deviceType || "computer",
-      browser: request.browser || undefined,
-      os: request.os || undefined,
-      fingerprint: request.fingerprint || undefined,
+      name: claimed.deviceName || "Unknown Device",
+      type: claimed.deviceType || "computer",
+      browser: claimed.browser || undefined,
+      os: claimed.os || undefined,
+      fingerprint: claimed.fingerprint || undefined,
     });
     
     const sessionToken = generateSessionToken();
     const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
-      await db.insert(sessions).values({
-        userId: identity.userId,
-        deviceId: deviceRecord.id,
-        tokenHash: hashSessionToken(sessionToken),
-        expiresAt,
-        ipAddress: request.ipAddress,
-        userAgent: c.req.header("user-agent"),
-        authMethod: "device_approval",
-      });
+    await db.insert(sessions).values({
+      userId: identity.userId,
+      deviceId: deviceRecord.id,
+      tokenHash: hashSessionToken(sessionToken),
+      expiresAt,
+      ipAddress: claimed.ipAddress,
+      userAgent: c.req.header("user-agent"),
+      authMethod: "device_approval",
+    });
 
     setSessionCookie(c, sessionToken, expiresAt);
     c.header("Set-Login", "logged-in");
     
-    // Log activity
     recordActivityLog(c, {
       userId: identity.userId,
       action: "login",
       details: { method: "device_approval", deviceName: deviceRecord.name, isNewDevice: deviceRecord.isNew },
       deviceId: deviceRecord.id,
-      ipAddress: request.ipAddress,
+      ipAddress: claimed.ipAddress,
       severity: "info",
     });
 
@@ -768,20 +783,17 @@ app.get("/request-status/:requestId", async (c) => {
       deviceRecord.id
     );
     
-    // Get user's identities
     const userIdentities = await db
       .select()
       .from(identities)
       .where(eq(identities.userId, identity.userId));
-    
-    // Delete the login request
+
     await db.delete(loginRequests).where(eq(loginRequests.id, requestId));
     
     return c.json({
       status: "approved",
-      sessionToken,
-      encryptedMasterKey: request.encryptedMasterKey,
-      approverPublicKey: request.approverPublicKey,
+      encryptedMasterKey: claimed.encryptedMasterKey,
+      approverPublicKey: claimed.approverPublicKey,
       device: {
         id: deviceRecord.id,
         name: deviceRecord.name,
@@ -816,8 +828,8 @@ app.post("/trust-code", zValidator("json", z.object({
   const { handle, code, device } = c.req.valid("json");
   const normalizedHandle = handle.toLowerCase();
   const rateLimitResponse = await enforceRateLimits(c, [
-    ipRateLimit(c, "login:trust-code:ip", 5, 15 * 60 * 1000),
-    subjectRateLimit("login:trust-code:handle", normalizedHandle, 5, 30 * 60 * 1000),
+    ipRateLimit(c, "login:trust-code:ip", 5, 15 * 60 * 1000, { failClosed: true }),
+    subjectRateLimit("login:trust-code:handle", normalizedHandle, 5, 30 * 60 * 1000, { failClosed: true }),
   ]);
   if (rateLimitResponse) return rateLimitResponse;
   
@@ -855,6 +867,13 @@ app.post("/trust-code", zValidator("json", z.object({
     
     return c.json({ 
       error: `That recovery code is invalid or already used. ${availableCodes} recovery code(s) remaining.` 
+    }, 400);
+  }
+
+  const remainingCodes = await claimTrustCode(identity.userId, matchedCode.id);
+  if (remainingCodes === null) {
+    return c.json({
+      error: `That recovery code is invalid or already used. ${Math.max(availableCodes - 1, 0)} recovery code(s) remaining.`,
     }, 400);
   }
   
@@ -910,8 +929,6 @@ app.post("/trust-code", zValidator("json", z.object({
     .from(identities)
     .where(eq(identities.userId, identity.userId));
 
-  const remainingCodes = await markTrustCodeUsed(identity.userId, matchedCode.id);
-
   recordActivityLog(c, {
     userId: identity.userId,
     action: "trust_code_used",
@@ -924,7 +941,6 @@ app.post("/trust-code", zValidator("json", z.object({
   
   return c.json({
     success: true,
-    sessionToken,
     // Return the encrypted master key backup - client will decrypt with the trust code
     encryptedMasterKeyBackup: user?.encryptedMasterKeyBackup,
     device: {
@@ -934,8 +950,8 @@ app.post("/trust-code", zValidator("json", z.object({
       isNew: deviceRecord.isNew,
     },
     identities: userIdentities.map(serializeIdentityForOwner),
-    remainingTrustCodes: remainingCodes ?? 0,
-    remainingRecoveryCodes: remainingCodes ?? 0,
+    remainingTrustCodes: remainingCodes,
+    remainingRecoveryCodes: remainingCodes,
   });
 });
 
@@ -948,8 +964,8 @@ app.post("/recover-key", zValidator("json", z.object({
   const { handle, code } = c.req.valid("json");
   const normalizedHandle = handle.toLowerCase();
   const rateLimitResponse = await enforceRateLimits(c, [
-    ipRateLimit(c, "login:recover-key:ip", 5, 15 * 60 * 1000),
-    subjectRateLimit("login:recover-key:handle", normalizedHandle, 5, 30 * 60 * 1000),
+    ipRateLimit(c, "login:recover-key:ip", 5, 15 * 60 * 1000, { failClosed: true }),
+    subjectRateLimit("login:recover-key:handle", normalizedHandle, 5, 30 * 60 * 1000, { failClosed: true }),
   ]);
   if (rateLimitResponse) return rateLimitResponse;
   
@@ -987,6 +1003,13 @@ app.post("/recover-key", zValidator("json", z.object({
     
     return c.json({ error: `That recovery code is invalid or already used. ${availableCodes} recovery code(s) remaining.` }, 400);
   }
+
+  const remainingCodes = await claimTrustCode(identity.userId, matchedCode.id);
+  if (remainingCodes === null) {
+    return c.json({
+      error: `That recovery code is invalid or already used. ${Math.max(availableCodes - 1, 0)} recovery code(s) remaining.`,
+    }, 400);
+  }
   
   // Get user for encrypted master key backup
   const [user] = await db
@@ -1009,8 +1032,6 @@ app.post("/recover-key", zValidator("json", z.object({
     severity: "warning",
   });
 
-  const remainingCodes = await markTrustCodeUsed(identity.userId, matchedCode.id);
-
   recordActivityLog(c, {
     userId: identity.userId,
     action: "trust_code_used",
@@ -1023,8 +1044,8 @@ app.post("/recover-key", zValidator("json", z.object({
   return c.json({
     success: true,
     encryptedMasterKeyBackup: user.encryptedMasterKeyBackup,
-    remainingTrustCodes: remainingCodes ?? 0,
-    remainingRecoveryCodes: remainingCodes ?? 0,
+    remainingTrustCodes: remainingCodes,
+    remainingRecoveryCodes: remainingCodes,
   });
 });
 
