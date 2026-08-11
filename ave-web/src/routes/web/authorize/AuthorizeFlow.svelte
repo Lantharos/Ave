@@ -293,7 +293,7 @@
         try {
             const bootstrap = await api.oauth.getAuthorizeBootstrap(
                 clientId,
-                params.identityId || undefined,
+                params.identityId || get(auth).currentIdentity?.id || undefined,
             );
 
             appInfo = bootstrap.app;

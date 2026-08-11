@@ -49,6 +49,13 @@ export function validateE2eeAuthPayload(
     return `Unsupported encryption mode: ${mode}`;
   }
 
+  if (
+    existing?.appEncryptionMode &&
+    existing.appEncryptionMode !== mode
+  ) {
+    return "Changing an existing app encryption mode requires e2ee:reset";
+  }
+
   if (mode === "symmetric") {
     if (!payload.encryptedAppKey && !existing?.encryptedAppKey) {
       return "E2EE symmetric scope requires encryptedAppKey";
@@ -56,6 +63,12 @@ export function validateE2eeAuthPayload(
     if (payload.encryptedAppKey) {
       const enc = validateOpaqueKeyEnvelope(payload.encryptedAppKey);
       if (!enc.ok) return enc.error;
+      if (
+        existing?.encryptedAppKey &&
+        payload.encryptedAppKey !== existing.encryptedAppKey
+      ) {
+        return "Replacing an existing app encryption key requires e2ee:reset";
+      }
     }
     return null;
   }
@@ -71,10 +84,22 @@ export function validateE2eeAuthPayload(
     if (payload.appPublicKey) {
       const pk = validatePublicKeyBlob(payload.appPublicKey);
       if (!pk.ok) return pk.error;
+      if (
+        existing?.appPublicKey &&
+        payload.appPublicKey !== existing.appPublicKey
+      ) {
+        return "Replacing an existing app encryption keypair requires e2ee:reset";
+      }
     }
     if (payload.encryptedAppPrivateKey) {
       const enc = validateOpaqueKeyEnvelope(payload.encryptedAppPrivateKey);
       if (!enc.ok) return enc.error;
+      if (
+        existing?.encryptedAppPrivateKey &&
+        payload.encryptedAppPrivateKey !== existing.encryptedAppPrivateKey
+      ) {
+        return "Replacing an existing app encryption keypair requires e2ee:reset";
+      }
     }
     return null;
   }
@@ -92,12 +117,15 @@ export function buildE2eeAuthUpdate(
     if (mode === "symmetric") {
       return {
         encryptedAppKey: payload.encryptedAppKey ?? null,
+        appPublicKey: null,
+        encryptedAppPrivateKey: null,
         appEncryptionMode: "symmetric",
       };
     }
 
     if (mode === "asymmetric") {
       return {
+        encryptedAppKey: null,
         appPublicKey: payload.appPublicKey ?? null,
         encryptedAppPrivateKey: payload.encryptedAppPrivateKey ?? null,
         appEncryptionMode: "asymmetric",
@@ -109,16 +137,16 @@ export function buildE2eeAuthUpdate(
 
   if (mode === "symmetric") {
     return {
-      encryptedAppKey: payload.encryptedAppKey ?? existing?.encryptedAppKey ?? null,
+      encryptedAppKey: existing?.encryptedAppKey ?? payload.encryptedAppKey ?? null,
       appEncryptionMode: "symmetric",
     };
   }
 
   if (mode === "asymmetric") {
     return {
-      appPublicKey: payload.appPublicKey ?? existing?.appPublicKey ?? null,
+      appPublicKey: existing?.appPublicKey ?? payload.appPublicKey ?? null,
       encryptedAppPrivateKey:
-        payload.encryptedAppPrivateKey ?? existing?.encryptedAppPrivateKey ?? null,
+        existing?.encryptedAppPrivateKey ?? payload.encryptedAppPrivateKey ?? null,
       appEncryptionMode: "asymmetric",
     };
   }

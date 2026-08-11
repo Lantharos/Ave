@@ -22,6 +22,7 @@ import {
   isScopeAllowedForApp,
   resolveRequestedE2eeModeConflict,
 } from "../../lib/e2ee-scopes";
+import type { E2eeMode } from "../../lib/e2ee-scopes";
 import { getRequiredEnterpriseSsoForOrganization } from "../../lib/enterprise-sso-policy";
 import { hasVerifiedEmail } from "../../lib/identity-serialization";
 import { createAuthorizationCodeWrite } from "../../lib/oauth-store";
@@ -261,6 +262,8 @@ app.post("/authorize", requireAuth, zValidator("json", z.object({
     id: string;
     e2ee: ReturnType<typeof buildE2eeAuthUpdate>;
   } | null = null;
+  let authorizedE2eeMode: E2eeMode | null = null;
+  let resetsE2ee = false;
   if (!isQuick) {
     const { mode: requestedE2eeMode, conflict: e2eeModeConflict, reset: e2eeReset } =
       resolveRequestedE2eeModeConflict(
@@ -268,6 +271,8 @@ app.post("/authorize", requireAuth, zValidator("json", z.object({
       oauthApp,
       existingAuth,
     );
+    authorizedE2eeMode = requestedE2eeMode;
+    resetsE2ee = e2eeReset;
     if (e2eeModeConflict) {
       return c.json({
         error: "invalid_scope",
@@ -329,18 +334,50 @@ app.post("/authorize", requireAuth, zValidator("json", z.object({
       createdAuthorization = inserted.length > 0;
 
       if (!createdAuthorization) {
-        await db.update(oauthAuthorizations)
-          .set({
-            ...e2eeUpdate,
-            lastAuthorizedAt: new Date(),
-            authorizationCount: sql`${oauthAuthorizations.authorizationCount} + 1`,
-            lastAuthMethod: authorizationMethod,
-          })
+        const [concurrentAuthorization] = await db
+          .select()
+          .from(oauthAuthorizations)
           .where(and(
             eq(oauthAuthorizations.userId, user.id),
             eq(oauthAuthorizations.appId, oauthApp.id),
             eq(oauthAuthorizations.identityId, identityId),
-          ));
+          ))
+          .limit(1);
+
+        if (!concurrentAuthorization) {
+          return c.json({
+            error: "authorization_conflict",
+            error_description: "The authorization changed while it was being created. Please try again.",
+          }, 409);
+        }
+
+        if (requestedE2eeMode) {
+          const validationError = validateE2eeAuthPayload(
+            requestedE2eeMode,
+            e2eePayload,
+            concurrentAuthorization,
+            { reset: e2eeReset },
+          );
+          if (validationError) {
+            return c.json({
+              error: "authorization_conflict",
+              error_description: `${validationError}. Reload the authorization and try again.`,
+            }, 409);
+          }
+        }
+
+        existingAuth = concurrentAuthorization;
+        authorizationUpdate = {
+          id: concurrentAuthorization.id,
+          e2ee: requestedE2eeMode
+            ? buildE2eeAuthUpdate(
+              requestedE2eeMode,
+              e2eePayload,
+              concurrentAuthorization,
+              { reset: e2eeReset },
+            )
+            : {},
+        };
       }
     } else {
       authorizationUpdate = {
@@ -433,11 +470,21 @@ app.post("/authorize", requireAuth, zValidator("json", z.object({
 
   // Get the encrypted app key to include in the auth code
   // Either from the new authorization or from an existing one
-  const finalEncryptedAppKey = encryptedAppKey || existingAuth?.encryptedAppKey || undefined;
-  const finalAppPublicKey = appPublicKey || existingAuth?.appPublicKey || undefined;
+  const finalEncryptedAppKey = (
+    resetsE2ee
+      ? encryptedAppKey
+      : existingAuth?.encryptedAppKey || encryptedAppKey
+  ) || undefined;
+  const finalAppPublicKey = (
+    resetsE2ee
+      ? appPublicKey
+      : existingAuth?.appPublicKey || appPublicKey
+  ) || undefined;
   const finalEncryptedAppPrivateKey =
-    encryptedAppPrivateKey || existingAuth?.encryptedAppPrivateKey || undefined;
-  const finalAppEncryptionMode = existingAuth?.appEncryptionMode || undefined;
+    (resetsE2ee
+      ? encryptedAppPrivateKey
+      : existingAuth?.encryptedAppPrivateKey || encryptedAppPrivateKey) || undefined;
+  const finalAppEncryptionMode = authorizedE2eeMode || existingAuth?.appEncryptionMode || undefined;
 
   const authorizationCodeWrite = createAuthorizationCodeWrite(code, {
     userId: user.id,
