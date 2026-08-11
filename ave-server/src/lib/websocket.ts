@@ -178,9 +178,3 @@ export function notifyLoginRequestStatus(requestId: string, status: "approved" |
     console.error("Failed to send login status notification:", error);
   }
 }
-
-// Check if a user has connected devices (for showing "confirm on device" option)
-export function hasConnectedDevices(userId: string): boolean {
-  const sockets = connectedClients.get(userId);
-  return sockets !== undefined && sockets.size > 0;
-}

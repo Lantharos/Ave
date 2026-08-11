@@ -1,6 +1,6 @@
 import { validateOpaqueKeyEnvelope, validatePublicKeyBlob } from "./encryption-key-payload";
 import type { E2eeMode } from "./e2ee-scopes";
-import { isImplementedE2eeMode, storedModeToE2eeMode } from "./e2ee-scopes";
+import { isImplementedE2eeMode } from "./e2ee-scopes";
 
 export type E2eeAuthPayload = {
   encryptedAppKey?: string;
@@ -124,28 +124,4 @@ export function buildE2eeAuthUpdate(
   }
 
   return { appEncryptionMode: mode };
-}
-
-export function hasStoredE2eeMaterial(
-  mode: E2eeMode,
-  stored?: StoredE2eeAuth | null,
-): boolean {
-  if (!stored) return false;
-  if (mode === "symmetric") return !!stored.encryptedAppKey;
-  if (mode === "asymmetric") {
-    return !!stored.appPublicKey && !!stored.encryptedAppPrivateKey;
-  }
-  return false;
-}
-
-export function authorizationHasE2eeMaterial(
-  stored?: StoredE2eeAuth | null,
-  mode?: E2eeMode | null,
-): boolean {
-  if (!stored) return false;
-  const resolved = mode ?? storedModeToE2eeMode(stored.appEncryptionMode);
-  if (!resolved) {
-    return !!stored.encryptedAppKey || !!stored.appPublicKey;
-  }
-  return hasStoredE2eeMaterial(resolved, stored);
 }

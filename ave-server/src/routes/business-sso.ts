@@ -5,7 +5,6 @@ import { and, eq } from "drizzle-orm";
 import {
   db,
   organizationDomainVerifications,
-  organizationIdentityMembers,
   organizations,
   organizationSsoConnections,
 } from "../db";

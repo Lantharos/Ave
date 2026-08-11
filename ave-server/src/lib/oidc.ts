@@ -161,10 +161,6 @@ async function readVerifiedJwtPayloadWithoutAudience(token: string): Promise<Rec
   return payload as Record<string, unknown>;
 }
 
-export async function verifyJwtSignatureIssuerExp(token: string): Promise<Record<string, unknown> | null> {
-  return readVerifiedJwtPayloadWithoutAudience(token);
-}
-
 export async function verifyJwt(token: string, audience?: string): Promise<Record<string, unknown> | null> {
   const payload = await readVerifiedJwtPayloadWithoutAudience(token);
   if (!payload) {

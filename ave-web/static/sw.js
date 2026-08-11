@@ -3,29 +3,22 @@
  * Handles push notifications for login requests
  */
 
-self.addEventListener("install", (event) => {
-  console.log("[SW] Installing service worker...");
+self.addEventListener("install", () => {
   self.skipWaiting();
 });
 
 self.addEventListener("activate", (event) => {
-  console.log("[SW] Service worker activated");
   event.waitUntil(clients.claim());
 });
 
 // Handle push notifications
 self.addEventListener("push", (event) => {
-  console.log("[SW] Push notification received");
-  
   if (!event.data) {
-    console.log("[SW] No data in push event");
     return;
   }
   
   try {
     const data = event.data.json();
-    console.log("[SW] Push data:", data);
-    
     const options = {
       body: data.body || "You have a new notification",
       icon: data.icon || "/icon.png",
@@ -46,8 +39,6 @@ self.addEventListener("push", (event) => {
 
 // Handle notification clicks
 self.addEventListener("notificationclick", (event) => {
-  console.log("[SW] Notification clicked:", event.action);
-  
   event.notification.close();
   
   const data = event.notification.data || {};
@@ -80,9 +71,4 @@ self.addEventListener("notificationclick", (event) => {
       }
     })
   );
-});
-
-// Handle notification close
-self.addEventListener("notificationclose", (event) => {
-  console.log("[SW] Notification closed");
 });

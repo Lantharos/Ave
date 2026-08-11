@@ -30,7 +30,7 @@ function persistBookmark(bookmark: string | null): void {
   }
 }
 
-export function clearD1Bookmark(): void {
+function clearD1Bookmark(): void {
   persistBookmark(null);
 }
 
@@ -124,6 +124,12 @@ export interface PaginatedResult<T> {
   total: number;
   limit: number;
   offset: number;
+  hasMore: boolean;
+}
+
+export interface CursorPaginatedResult<T> {
+  items: T[];
+  nextCursor: string | null;
   hasMore: boolean;
 }
 
@@ -234,14 +240,6 @@ function mapWorkspaceState(payload: {
   };
 }
 
-export async function fetchOrganizations(organizationId?: string): Promise<{
-  organizations: WorkspaceSummary[];
-  currentOrganizationId: string | null;
-}> {
-  const query = organizationId ? `?organizationId=${encodeURIComponent(organizationId)}` : "";
-  return request(`/api/organizations${query}`);
-}
-
 export async function fetchPortalBootstrap(organizationId?: string): Promise<PortalBootstrap> {
   const query = organizationId ? `?organizationId=${encodeURIComponent(organizationId)}` : "";
   const data = await request<PortalBootstrap>(`/api/organizations/bootstrap${query}`);
@@ -317,13 +315,13 @@ export async function fetchAppIdentities(
 
 export async function fetchAppActivity(
   appId: string,
-  options: { limit?: number; offset?: number } = {},
-): Promise<PaginatedResult<AppEvent>> {
+  options: { limit?: number; cursor?: string } = {},
+): Promise<CursorPaginatedResult<AppEvent>> {
   const query = new URLSearchParams();
   if (options.limit !== undefined) query.set("limit", String(options.limit));
-  if (options.offset !== undefined) query.set("offset", String(options.offset));
+  if (options.cursor) query.set("cursor", options.cursor);
   const suffix = query.toString() ? `?${query.toString()}` : "";
-  return request<PaginatedResult<AppEvent>>(`/api/apps/${appId}/activity${suffix}`);
+  return request<CursorPaginatedResult<AppEvent>>(`/api/apps/${appId}/activity${suffix}`);
 }
 
 export async function createApp(
@@ -406,12 +404,6 @@ export async function uploadWorkspaceLogo(organizationId: string, file: File): P
   }
 
   return data as { logoUrl: string };
-}
-
-export async function logoutSession(): Promise<void> {
-  await request<{ success: boolean }>("/api/login/logout", {
-    method: "POST",
-  });
 }
 
 export { ApiError };

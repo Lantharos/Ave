@@ -47,5 +47,5 @@ WHERE `id` NOT IN (
 --> statement-breakpoint
 DROP INDEX IF EXISTS `oauth_authorizations_user_app_identity_idx`;
 --> statement-breakpoint
-CREATE UNIQUE INDEX `oauth_authorizations_user_app_identity_unique`
+CREATE UNIQUE INDEX IF NOT EXISTS `oauth_authorizations_user_app_identity_unique`
 ON `oauth_authorizations` (`user_id`, `app_id`, `identity_id`);

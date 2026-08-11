@@ -1,5 +1,5 @@
 import { Context, Next } from "hono";
-import { db, sessions, devices, users } from "../db";
+import { db, sessions, devices } from "../db";
 import { eq, and, gt, lt } from "drizzle-orm";
 import { hashSessionToken } from "../lib/crypto";
 import { getCookieValue, SESSION_COOKIE_NAME, setSessionCookie } from "../lib/session-cookie";

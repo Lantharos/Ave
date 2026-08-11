@@ -11,7 +11,6 @@ import {
   mapBusinessRoleToOrganizationRole,
   requireOrganizationAccess,
   signingAuthorityForOrganizationRole,
-  type OrganizationRole,
 } from "../lib/dev-portal";
 import { scopesForRole } from "../lib/business";
 import { listAppResources, serializeApp } from "./apps";

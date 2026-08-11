@@ -99,7 +99,7 @@
 
         <div class="flex flex-col gap-3">
           {#if notableEvents.length}
-            {#each notableEvents as event (event.id)}
+            {#each notableEvents as event (`${event.source}:${event.id}`)}
               <div class="flex items-start justify-between gap-4 rounded-[22px] bg-white/[0.03] px-5 py-4">
                 <div class="min-w-0">
                   <p class="m-0 text-[15px] font-medium text-white">{getActivityLabel(event.action)}</p>

@@ -9,10 +9,6 @@ function escapeXml(value: string): string {
     .replace(/'/g, "&apos;");
 }
 
-export function getBusinessBaseUrl(): string {
-  return process.env.BUSINESS_ORIGIN || "https://business.aveid.net";
-}
-
 export function getApiBaseUrl(): string {
   return process.env.OIDC_DISCOVERY_BASE || "https://api.aveid.net";
 }

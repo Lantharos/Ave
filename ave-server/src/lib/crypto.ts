@@ -38,19 +38,6 @@ export function verifyTrustCode(code: string, hash: string): boolean {
   return hashTrustCode(code) === hash;
 }
 
-// Hash security question answers
-// We use SHA-256 with salt for simplicity, but argon2 would be better for production
-export function hashSecurityAnswer(answer: string, salt: string): string {
-  // Normalize: lowercase, trim, remove extra spaces
-  const normalized = answer.toLowerCase().trim().replace(/\s+/g, " ");
-  return createHash("sha256").update(salt + normalized).digest("hex");
-}
-
-// Generate a random salt
-export function generateSalt(): string {
-  return randomBytes(16).toString("hex");
-}
-
 // Generate a session token
 export function generateSessionToken(): string {
   return randomBytes(32).toString("hex");
@@ -64,9 +51,4 @@ export function hashSessionToken(token: string): string {
 // Generate a random ID (for things like client IDs)
 export function generateRandomId(length: number = 32): string {
   return randomBytes(length).toString("hex").slice(0, length);
-}
-
-// Generate bytes as base64 (for WebAuthn challenges, etc.)
-export function generateChallenge(): string {
-  return randomBytes(32).toString("base64url");
 }

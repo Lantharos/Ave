@@ -75,6 +75,8 @@
   let appEvents: AppEvent[] = $state([]);
   let appIdentitiesTotal = $state(0);
   let appEventsTotal = $state(0);
+  let appEventsCursor: string | null = $state(null);
+  let appEventsHasMore = $state(false);
   let appIdentitiesLoadingMore = $state(false);
   let appEventsLoadingMore = $state(false);
   let appBundles: Record<string, AppOverviewBundle> = $state({});
@@ -159,6 +161,10 @@
         appEvents = [];
         appIdentitiesTotal = 0;
         appEventsTotal = 0;
+        appEventsCursor = null;
+        appEventsHasMore = false;
+        appEventsCursor = null;
+        appEventsHasMore = false;
       }
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) {
@@ -188,6 +194,8 @@
       appEvents = [];
       appIdentitiesTotal = 0;
       appEventsTotal = 0;
+      appEventsCursor = null;
+      appEventsHasMore = false;
       appLoading = true;
     }
 
@@ -243,18 +251,17 @@
   }
 
   async function loadAppActivityPage(appId: string, reset = false) {
-    const nextOffset = reset ? 0 : appEvents.length;
-    if (!reset) {
-      appEventsLoadingMore = true;
-    }
+    if (appEventsLoadingMore) return;
+    appEventsLoadingMore = true;
 
     try {
       const page = await queryClient.fetchQuery({
-        queryKey: [...queryKeys.appActivity(appId), nextOffset, 25],
-        queryFn: () => fetchAppActivity(appId, { limit: 25, offset: nextOffset }),
+        queryKey: [...queryKeys.appActivity(appId), reset ? null : appEventsCursor, 25],
+        queryFn: () => fetchAppActivity(appId, { limit: 25, cursor: reset ? undefined : appEventsCursor || undefined }),
       });
       appEvents = reset ? page.items : [...appEvents, ...page.items];
-      appEventsTotal = page.total;
+      appEventsCursor = page.nextCursor;
+      appEventsHasMore = page.hasMore;
     } catch (err) {
       error = err instanceof Error ? err.message : "Failed to load app activity";
     } finally {
@@ -268,6 +275,8 @@
     appEvents = bundle.events;
     appIdentitiesTotal = bundle.insights.totalIdentities;
     appEventsTotal = bundle.insights.totalActivityEvents;
+    appEventsCursor = null;
+    appEventsHasMore = bundle.events.length < bundle.insights.totalActivityEvents;
   }
 
   function handleSignIn() {
@@ -285,6 +294,8 @@
     appEvents = [];
     appIdentitiesTotal = 0;
     appEventsTotal = 0;
+    appEventsCursor = null;
+    appEventsHasMore = false;
     createModalOpen = false;
     createOrganizationModalOpen = false;
     workspaceSection = section;
@@ -297,6 +308,8 @@
     appEvents = [];
     appIdentitiesTotal = 0;
     appEventsTotal = 0;
+    appEventsCursor = null;
+    appEventsHasMore = false;
     appBundles = {};
     appLoading = false;
     createModalOpen = false;
@@ -313,6 +326,8 @@
       appEvents = [];
       appIdentitiesTotal = 0;
       appEventsTotal = 0;
+      appEventsCursor = null;
+      appEventsHasMore = false;
       appLoading = false;
       createModalOpen = false;
       createOrganizationModalOpen = false;
@@ -864,7 +879,7 @@
             events={appEvents}
             total={appEventsTotal}
             loadingmore={appEventsLoadingMore}
-            hasmore={appEvents.length < appEventsTotal}
+            hasmore={appEventsHasMore}
             onloadmore={() => loadAppActivityPage(selectedApp.id)}
           />
         {:else if selectedApp && appSection === "configure"}

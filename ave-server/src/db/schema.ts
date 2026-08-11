@@ -301,6 +301,7 @@ export const oauthRefreshTokens = sqliteTable("oauth_refresh_tokens", {
   organizationMemberId: text("organization_member_id").references(() => organizationIdentityMembers.id, { onDelete: "set null" }),
   enterpriseSsoOrganizationId: text("enterprise_sso_organization_id").references(() => organizations.id, { onDelete: "set null" }),
   enterpriseSsoConnectionId: text("enterprise_sso_connection_id"),
+  familyId: text("family_id").notNull(),
   rotatedFromId: text("rotated_from_id"),
   reuseDetectedAt: integer("reuse_detected_at", { mode: "timestamp_ms" }),
 }, (table) => [
@@ -310,6 +311,7 @@ export const oauthRefreshTokens = sqliteTable("oauth_refresh_tokens", {
   index("oauth_refresh_tokens_organization_id_idx").on(table.organizationId),
   index("oauth_refresh_tokens_enterprise_sso_organization_id_idx").on(table.enterpriseSsoOrganizationId),
   index("oauth_refresh_tokens_token_hash_idx").on(table.tokenHash),
+  index("oauth_refresh_tokens_family_id_idx").on(table.familyId),
   index("oauth_refresh_tokens_rotated_from_id_idx").on(table.rotatedFromId),
 ]);
 
