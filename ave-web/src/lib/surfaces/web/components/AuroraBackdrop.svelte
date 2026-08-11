@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { onMount, onDestroy } from "svelte";
+    import { onMount } from "svelte";
 
     type PresetName =
         | "home"
@@ -247,10 +247,6 @@ void main() {
     onMount(() => {
         void setup();
         return () => teardown();
-    });
-
-    onDestroy(() => {
-        teardown();
     });
 </script>
 

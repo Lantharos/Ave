@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { afterNavigate } from "$app/navigation";
   import { page } from "$app/state";
   import { setQueryClientContext } from "@tanstack/svelte-query";
   import { onMount } from "svelte";
@@ -7,11 +8,23 @@
 
   let { children } = $props();
 
-  const staticRoutes = ["/web", "/web/privacy", "/web/terms", "/web/docs"];
-  const isStaticRoute = $derived.by(() => {
-    const path = page.url.pathname;
-    return staticRoutes.some((route) => path === route || path.startsWith(`${route}/`));
-  });
+  const staticRoutes = new Set(["/", "/privacy", "/terms", "/docs"]);
+
+  function publicPathname(pathname: string) {
+    const path = pathname === "/web"
+      ? "/"
+      : pathname.startsWith("/web/")
+        ? pathname.slice(4)
+        : pathname;
+
+    return path.length > 1 && path.endsWith("/") ? path.slice(0, -1) : path;
+  }
+
+  function isStaticPath(pathname: string) {
+    return staticRoutes.has(publicPathname(pathname));
+  }
+
+  const isStaticRoute = $derived(isStaticPath(page.url.pathname));
 
   setQueryClientContext(queryClient);
 
@@ -36,8 +49,13 @@
     window.setTimeout(warmLikelyRoutes, 1200);
   }
 
+  afterNavigate(() => {
+    if (!isStaticPath(page.url.pathname)) {
+      void auth.init();
+    }
+  });
+
   onMount(() => {
-    void auth.init();
     scheduleRouteWarmup();
   });
 </script>
