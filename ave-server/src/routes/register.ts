@@ -350,8 +350,6 @@ app.post("/finalize-backup", zValidator("json", z.object({
     .set({ encryptedMasterKeyBackup })
     .where(eq(users.id, user.id));
   
-  console.log(`[Finalize Backup] Updated master key backup for user ${user.id}`);
-  
   return c.json({ success: true });
 });
 

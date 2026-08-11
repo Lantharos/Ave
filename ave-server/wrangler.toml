@@ -1,4 +1,5 @@
 name = "ave-server"
+account_id = "2e3bfcbc9512a7ab1ea3a9cb9a474b30"
 main = "src/index.ts"
 compatibility_date = "2026-02-08"
 compatibility_flags = ["nodejs_compat"]
@@ -77,7 +78,6 @@ r8x0bddlxRJ3lbpAIOj2husbjhC+BebvJF5VhpsysuRAL+9jJoAvLkWGTkxJ2VtJ
 QwIDAQAB
 -----END PUBLIC KEY-----"""
 OIDC_RESOURCE_AUDIENCE = "https://aveid.net"
-PORT = "3000"
 R2_PUBLIC_URL = "https://assets.aveid.net"
 RP_ID = "aveid.net"
 RP_NAME = "Ave"
@@ -87,9 +87,9 @@ VAPID_SUBJECT = "mailto:hello@lantharos.com"
 EMAIL_FROM_ADDRESS = "no-reply@aveid.net"
 EMAIL_FROM_NAME = "Ave"
 DEMO_HANDLE="demo"
-DEMO_PASSWORD="CTP8stZyDF-ou@*gpcpV"
 
 # Keep these as Cloudflare secrets (do NOT commit to wrangler.toml):
 # OIDC_PRIVATE_KEY_PEM
 # SESSION_SECRET
 # VAPID_PRIVATE_KEY
+# DEMO_PASSWORD

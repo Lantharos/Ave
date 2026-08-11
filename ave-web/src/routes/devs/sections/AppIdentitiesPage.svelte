@@ -54,7 +54,7 @@
       </div>
 
       <div class="flex flex-col gap-3">
-        {#each filtered as identity}
+        {#each filtered as identity (identity.id)}
           <div class="grid gap-4 rounded-[24px] bg-white/[0.03] px-4 py-4 lg:grid-cols-[1.2fr_0.8fr_0.8fr_0.7fr_0.7fr] lg:items-center">
             <div class="min-w-0">
               <div class="flex items-center gap-3">

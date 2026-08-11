@@ -300,12 +300,6 @@ export async function updateOrganizationMemberRole(
   });
 }
 
-export async function fetchApps(organizationId?: string): Promise<DevApp[]> {
-  const query = organizationId ? `?organizationId=${encodeURIComponent(organizationId)}` : "";
-  const data = await request<{ apps: DevApp[] }>(`/api/apps${query}`);
-  return data.apps;
-}
-
 export async function fetchAppOverview(appId: string): Promise<AppOverviewBundle> {
   return request<AppOverviewBundle>(`/api/apps/${appId}/overview`);
 }

@@ -27,7 +27,6 @@
     type AppInsightSnapshot,
     type AppOverviewBundle,
     type DevApp,
-    type PaginatedResult,
     type UpdateAppPayload,
   } from "$lib/surfaces/devs/lib/api";
   import { queryClient } from "$lib/surfaces/devs/lib/query-client";
@@ -232,7 +231,9 @@
         queryKey: [...queryKeys.appIdentities(appId), nextOffset, 25],
         queryFn: () => fetchAppIdentities(appId, { limit: 25, offset: nextOffset }),
       });
-      appIdentities = reset ? page.items : [...appIdentities, ...page.items];
+      appIdentities = reset
+        ? page.items
+        : [...new Map([...appIdentities, ...page.items].map((identity) => [identity.id, identity])).values()];
       appIdentitiesTotal = page.total;
     } catch (err) {
       error = err instanceof Error ? err.message : "Failed to load app identities";

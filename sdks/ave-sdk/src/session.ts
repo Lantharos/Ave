@@ -101,8 +101,6 @@ export function snapshotFromTokenResponse(
 
 type Listener = (state: { status: AveSessionStatus; snapshot: AveSessionSnapshot | null }) => void;
 
-const REFRESH_LOCK_NAME = "ave-oauth-refresh";
-
 declare global {
   interface Window {
     __aveSessionDev?: AveSessionDevApi;
@@ -124,12 +122,14 @@ export class AveSession {
   private readonly fetchImpl: typeof fetch;
   private readonly crossTabSync: boolean;
   private readonly syncChannelName: string;
+  private readonly refreshLockName: string;
   private bc: BroadcastChannel | null = null;
   private lastRefreshError: Error | null = null;
 
   private status: AveSessionStatus = "signedOut";
   private snapshot: AveSessionSnapshot | null = null;
   private hydrated = false;
+  private hydrateInFlight: Promise<void> | null = null;
   private refreshInFlight: Promise<void> | null = null;
   private listeners = new Set<Listener>();
 
@@ -141,6 +141,7 @@ export class AveSession {
     this.fetchImpl = options.fetch ?? globalThis.fetch.bind(globalThis);
     this.crossTabSync = options.crossTabSync !== false;
     this.syncChannelName = options.syncChannelName ?? "ave_session";
+    this.refreshLockName = `ave-oauth-refresh:${this.oauth.clientId}:${this.syncChannelName}`;
 
     if (typeof window !== "undefined" && this.crossTabSync && typeof BroadcastChannel !== "undefined") {
       this.bc = new BroadcastChannel(this.syncChannelName);
@@ -184,7 +185,7 @@ export class AveSession {
   private async applyPeerSignOut(): Promise<void> {
     this.snapshot = null;
     this.setStatus("signedOut");
-    this.hydrated = false;
+    this.hydrated = true;
   }
 
   getState(): { status: AveSessionStatus; snapshot: AveSessionSnapshot | null } {
@@ -216,24 +217,31 @@ export class AveSession {
    */
   async hydrate(): Promise<void> {
     if (this.hydrated) return;
-    this.setStatus("loading");
-    try {
-      const raw = await this.storage.load();
-      if (raw && raw.access_token_jwt && raw.access_token) {
-        const effectiveExpiry =
-          raw.expiresAtMs ||
-          jwtExpMs((raw as { id_token?: string }).id_token || raw.access_token_jwt);
-        this.snapshot = { ...raw, expiresAtMs: effectiveExpiry };
-        this.setStatus("signedIn");
-      } else {
-        this.snapshot = null;
-        this.setStatus("signedOut");
-      }
-    } catch {
-      this.snapshot = null;
-      this.setStatus("signedOut");
+    if (!this.hydrateInFlight) {
+      this.hydrateInFlight = (async () => {
+        this.setStatus("loading");
+        try {
+          const raw = await this.storage.load();
+          if (raw && raw.access_token_jwt && raw.access_token) {
+            const effectiveExpiry =
+              raw.expiresAtMs ||
+              jwtExpMs((raw as { id_token?: string }).id_token || raw.access_token_jwt);
+            this.snapshot = { ...raw, expiresAtMs: effectiveExpiry };
+            this.setStatus("signedIn");
+          } else {
+            this.snapshot = null;
+            this.setStatus("signedOut");
+          }
+        } catch {
+          this.snapshot = null;
+          this.setStatus("signedOut");
+        }
+        this.hydrated = true;
+      })().finally(() => {
+        this.hydrateInFlight = null;
+      });
     }
-    this.hydrated = true;
+    await this.hydrateInFlight;
   }
 
   /**
@@ -291,7 +299,7 @@ export class AveSession {
     await this.storage.save(null);
     this.bc?.postMessage({ type: "session_cleared" });
     this.setStatus("signedOut");
-    this.hydrated = false;
+    this.hydrated = true;
   }
 
   private needsProactiveRefresh(): boolean {
@@ -308,7 +316,7 @@ export class AveSession {
     const nav = typeof navigator !== "undefined" ? navigator : null;
     const locks = nav && "locks" in nav ? (nav as Navigator & { locks: { request: (n: string, cb: () => Promise<T>) => Promise<T> } }).locks : null;
     if (locks?.request) {
-      return locks.request(REFRESH_LOCK_NAME, fn);
+      return locks.request(this.refreshLockName, fn);
     }
     return fn();
   }
@@ -339,7 +347,6 @@ export class AveSession {
           };
           this.snapshot = merged;
           this.setStatus("signedIn");
-          this.emit();
           return;
         }
       }

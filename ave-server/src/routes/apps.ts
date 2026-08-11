@@ -183,18 +183,12 @@ async function getAppInsights(appId: string, redirectUris: string[]) {
   const now = Date.now();
   const nowDate = new Date(now);
   const weekAgo = new Date(now - 7 * 24 * 60 * 60 * 1000);
-  const [authorizationTotals, authorizationMethods, weeklyAuthorizations, refreshTokens, analyticsCount, revocations, delegations, resources] = await Promise.all([
-    db
-      .select({
-        totalIdentities: sql<number>`count(*)`,
-        totalAuthorizations: sql<number>`coalesce(sum(${oauthAuthorizations.authorizationCount}), 0)`,
-      })
-      .from(oauthAuthorizations)
-      .where(eq(oauthAuthorizations.appId, appId)),
+  const [authorizationGroups, weeklyAuthorizations, refreshTokens, analyticsCount, revocations, delegations, resources] = await Promise.all([
     db
       .select({
         lastAuthMethod: oauthAuthorizations.lastAuthMethod,
-        count: sql<number>`count(*)`,
+        identityCount: sql<number>`count(*)`,
+        authorizationCount: sql<number>`sum(${oauthAuthorizations.authorizationCount})`,
       })
       .from(oauthAuthorizations)
       .where(eq(oauthAuthorizations.appId, appId))
@@ -232,9 +226,9 @@ async function getAppInsights(appId: string, redirectUris: string[]) {
     unknown: 0,
   };
 
-  for (const authorizationMethod of authorizationMethods) {
-    const count = Number(authorizationMethod.count || 0);
-    const method = authorizationMethod.lastAuthMethod;
+  for (const authorization of authorizationGroups) {
+    const count = Number(authorization.identityCount || 0);
+    const method = authorization.lastAuthMethod;
     if (method === "passkey") methodCounts.passkey += count;
     else if (method === "instant") methodCounts.deviceApproval += count;
     else if (method === "fallback" || method === "trust_code" || method === "device_approval") methodCounts.trustCode += count;
@@ -249,8 +243,8 @@ async function getAppInsights(appId: string, redirectUris: string[]) {
   const httpsRedirects = redirectUris.filter((uri) => uri.startsWith("https://")).length;
 
   return {
-    totalIdentities: Number(authorizationTotals[0]?.totalIdentities || 0),
-    totalAuthorizations: Number(authorizationTotals[0]?.totalAuthorizations || 0),
+    totalIdentities: authorizationGroups.reduce((total, entry) => total + Number(entry.identityCount || 0), 0),
+    totalAuthorizations: authorizationGroups.reduce((total, entry) => total + Number(entry.authorizationCount || 0), 0),
     weeklyAuthorizations: weeklyAuthorizations[0]?.count || 0,
     activeRefreshTokens: refreshTokens[0]?.count || 0,
     instantSignInRate: instantRate,
@@ -264,74 +258,75 @@ async function getAppInsights(appId: string, redirectUris: string[]) {
 }
 
 async function getAppIdentities(appId: string, limit = 25, offset = 0) {
-  const [totalRow, authorizations] = await Promise.all([
+  const refreshCount = sql<number>`count(${oauthRefreshTokens.id})`;
+  const lastRefreshAt = sql<number | null>`max(${oauthRefreshTokens.createdAt})`;
+  const lastActiveAt = sql<number>`max(
+    coalesce(${oauthRefreshTokens.createdAt}, 0),
+    ${oauthAuthorizations.lastAuthorizedAt}
+  )`;
+
+  const [totalRow, rows] = await Promise.all([
     db
       .select({ count: sql<number>`count(*)` })
       .from(oauthAuthorizations)
       .where(eq(oauthAuthorizations.appId, appId)),
     db
-      .select()
+      .select({
+        id: identities.id,
+        displayName: identities.displayName,
+        handle: identities.handle,
+        email: identities.email,
+        avatarUrl: identities.avatarUrl,
+        isPrimary: identities.isPrimary,
+        identityCreatedAt: identities.createdAt,
+        firstSeen: oauthAuthorizations.createdAt,
+        lastAuthorizedAt: oauthAuthorizations.lastAuthorizedAt,
+        authorizationCount: oauthAuthorizations.authorizationCount,
+        lastMethod: oauthAuthorizations.lastAuthMethod,
+        refreshCount,
+        lastRefreshAt,
+      })
       .from(oauthAuthorizations)
+      .innerJoin(identities, eq(identities.id, oauthAuthorizations.identityId))
+      .leftJoin(
+        oauthRefreshTokens,
+        and(
+          eq(oauthRefreshTokens.appId, oauthAuthorizations.appId),
+          eq(oauthRefreshTokens.identityId, oauthAuthorizations.identityId),
+        ),
+      )
       .where(eq(oauthAuthorizations.appId, appId))
-      .orderBy(desc(oauthAuthorizations.lastAuthorizedAt))
+      .groupBy(oauthAuthorizations.id, identities.id)
+      .orderBy(desc(lastActiveAt), desc(oauthAuthorizations.id))
       .limit(limit)
       .offset(offset),
   ]);
 
   const total = totalRow[0]?.count || 0;
-  const identityIds = authorizations.map((entry) => entry.identityId);
-  if (!identityIds.length) {
+  const items = rows.map((row) => {
+    const lastRefresh = row.lastRefreshAt ? new Date(row.lastRefreshAt) : null;
     return {
-      items: [],
-      total,
-      limit,
-      offset,
-      hasMore: false,
+      id: row.id,
+      displayName: row.displayName,
+      handle: row.handle,
+      email: row.email,
+      avatarUrl: row.avatarUrl,
+      isPrimary: row.isPrimary,
+      firstSeen: row.firstSeen || row.identityCreatedAt,
+      lastActive: lastRefresh || row.lastAuthorizedAt || row.identityCreatedAt,
+      signInCount: row.authorizationCount + row.refreshCount,
+      authorizationCount: row.authorizationCount,
+      refreshCount: row.refreshCount,
+      lastMethod: row.lastMethod,
     };
-  }
-
-  const [identityRows, refreshTokens] = await Promise.all([
-    db.select().from(identities).where(inArray(identities.id, identityIds)),
-    db.select().from(oauthRefreshTokens).where(and(eq(oauthRefreshTokens.appId, appId), inArray(oauthRefreshTokens.identityId, identityIds))),
-  ]);
-
-  const refreshCountByIdentityId = new Map<string, { count: number; lastActive: Date | null }>();
-  for (const token of refreshTokens) {
-    const createdAt = new Date(token.createdAt);
-    const existing = refreshCountByIdentityId.get(token.identityId) || { count: 0, lastActive: null };
-    existing.count += 1;
-    if (!existing.lastActive || createdAt > existing.lastActive) {
-      existing.lastActive = createdAt;
-    }
-    refreshCountByIdentityId.set(token.identityId, existing);
-  }
-
-  const items = identityRows.map((identity) => {
-    const authorization = authorizations.find((entry) => entry.identityId === identity.id);
-    const refresh = refreshCountByIdentityId.get(identity.id);
-    return {
-      id: identity.id,
-      displayName: identity.displayName,
-      handle: identity.handle,
-      email: identity.email,
-      avatarUrl: identity.avatarUrl,
-      isPrimary: identity.isPrimary,
-      firstSeen: authorization?.createdAt || identity.createdAt,
-      lastActive: refresh?.lastActive || authorization?.lastAuthorizedAt || identity.createdAt,
-      signInCount: (authorization?.authorizationCount || 0) + (refresh?.count || 0),
-      authorizationCount: authorization?.authorizationCount || 0,
-      refreshCount: refresh?.count || 0,
-      lastMethod: authorization?.lastAuthMethod || null,
-      };
-    })
-    .sort((left, right) => new Date(right.lastActive).getTime() - new Date(left.lastActive).getTime());
+  });
 
   return {
     items,
     total,
     limit,
     offset,
-    hasMore: offset + items.length < total,
+    hasMore: offset + limit < total,
   };
 }
 

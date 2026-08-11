@@ -1,15 +1,10 @@
-import { createInfiniteQuery, createMutation, createQuery } from "@tanstack/svelte-query";
+import { createMutation } from "@tanstack/svelte-query";
 import {
   createApp,
   createOrganization,
   createResource,
   deleteApp,
   deleteResource,
-  fetchAppActivity,
-  fetchAppIdentities,
-  fetchAppOverview,
-  fetchOrganization,
-  fetchPortalBootstrap,
   inviteOrganizationMember,
   rotateSecret,
   updateApp,
@@ -18,7 +13,6 @@ import {
   uploadWorkspaceLogo,
   type AppOverviewBundle,
   type CreateAppPayload,
-  type PortalBootstrap,
   type UpdateAppPayload,
 } from "./api";
 import type { WorkspaceRole } from "./portal";
@@ -31,65 +25,6 @@ export const queryKeys = {
   appActivity: (appId: string) => ["appActivity", appId] as const,
   workspace: (organizationId: string) => ["workspace", organizationId] as const,
 };
-
-export function createPortalBootstrapQuery(getOrganizationId: () => string | null) {
-  return createQuery(() => {
-    const organizationId = getOrganizationId();
-
-    return {
-      queryKey: queryKeys.portal(organizationId ?? undefined),
-      queryFn: async (): Promise<PortalBootstrap> => fetchPortalBootstrap(organizationId ?? undefined),
-    };
-  });
-}
-
-export function createAppOverviewQuery(getAppId: () => string | null) {
-  return createQuery(() => {
-    const appId = getAppId();
-
-    return {
-      queryKey: queryKeys.appOverview(appId ?? ""),
-      queryFn: async (): Promise<AppOverviewBundle> => fetchAppOverview(appId as string),
-      enabled: Boolean(appId),
-    };
-  });
-}
-
-export function createAppIdentitiesInfiniteQuery(getAppId: () => string | null, pageSize = 25) {
-  return createInfiniteQuery(() => {
-    const appId = getAppId();
-
-    return {
-      queryKey: queryKeys.appIdentities(appId ?? ""),
-      enabled: Boolean(appId),
-      initialPageParam: 0,
-      queryFn: async ({ pageParam = 0 }) =>
-        fetchAppIdentities(appId as string, { limit: pageSize, offset: pageParam }),
-      getNextPageParam: (lastPage) => {
-        if (!lastPage.hasMore) return undefined;
-        return lastPage.offset + lastPage.items.length;
-      },
-    };
-  });
-}
-
-export function createAppActivityInfiniteQuery(getAppId: () => string | null, pageSize = 25) {
-  return createInfiniteQuery(() => {
-    const appId = getAppId();
-
-    return {
-      queryKey: queryKeys.appActivity(appId ?? ""),
-      enabled: Boolean(appId),
-      initialPageParam: 0,
-      queryFn: async ({ pageParam = 0 }) =>
-        fetchAppActivity(appId as string, { limit: pageSize, offset: pageParam }),
-      getNextPageParam: (lastPage) => {
-        if (!lastPage.hasMore) return undefined;
-        return lastPage.offset + lastPage.items.length;
-      },
-    };
-  });
-}
 
 export function createCreateAppMutation(getOrganizationId: () => string | null) {
   return createMutation(() => ({
@@ -216,16 +151,4 @@ export function createDeleteResourceMutation() {
       await queryClient.invalidateQueries({ queryKey: ["portal"] });
     },
   }));
-}
-
-export function createWorkspaceQuery(getOrganizationId: () => string | null) {
-  return createQuery(() => {
-    const organizationId = getOrganizationId();
-
-    return {
-      queryKey: queryKeys.workspace(organizationId ?? ""),
-      enabled: Boolean(organizationId),
-      queryFn: () => fetchOrganization(organizationId as string),
-    };
-  });
 }

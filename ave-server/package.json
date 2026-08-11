@@ -5,36 +5,36 @@
   "scripts": {
     "dev": "wrangler dev",
     "start": "wrangler dev",
-    "deploy": "wrangler deploy",
+    "deploy": "CLOUDFLARE_ACCOUNT_ID=2e3bfcbc9512a7ab1ea3a9cb9a474b30 wrangler deploy",
     "check": "tsc --noEmit",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "npm run db:migrate:local",
     "db:migrate:local": "wrangler d1 migrations apply ave --local",
-    "db:migrate:remote": "wrangler d1 migrations apply ave --remote",
+    "db:migrate:remote": "CLOUDFLARE_ACCOUNT_ID=2e3bfcbc9512a7ab1ea3a9cb9a474b30 wrangler d1 migrations apply ave --remote",
     "db:export:neon": "node ./scripts/export-neon-to-d1.mjs",
     "db:import:data:local": "wrangler d1 execute ave --local --file ./tmp/neon-data.sql",
-    "db:import:data:remote": "wrangler d1 execute ave --remote --file ./tmp/neon-data.sql"
+    "db:import:data:remote": "CLOUDFLARE_ACCOUNT_ID=2e3bfcbc9512a7ab1ea3a9cb9a474b30 wrangler d1 execute ave --remote --file ./tmp/neon-data.sql"
   },
   "dependencies": {
     "@hono/zod-validator": "^0.9.0",
     "@noble/ed25519": "^3.1.0",
-    "@noble/hashes": "^2.2.0",
+    "@noble/hashes": "^2.3.0",
     "@simplewebauthn/server": "^13.3.2",
     "@xmldom/xmldom": "0.9.10",
     "drizzle-orm": "^0.45.2",
-    "hono": "^4.12.31",
+    "hono": "^4.13.1",
     "postgres": "^3.4.9",
     "web-push": "^3.6.7",
     "xml-crypto": "6.1.2",
     "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^5.20260719.1",
-    "@types/node": "^26.1.1",
+    "@cloudflare/workers-types": "^5.20260811.1",
+    "@types/node": "^26.2.0",
     "@types/web-push": "^3.6.4",
     "drizzle-kit": "^0.31.10",
     "typescript": "^7.0.2",
-    "wrangler": "^4.112.0"
+    "wrangler": "^4.120.1"
   },
   "overrides": {
     "bn.js": "4.12.3",

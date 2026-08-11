@@ -14,23 +14,24 @@
 	},
 	"devDependencies": {
 		"@sveltejs/adapter-cloudflare": "^7.2.9",
-		"@sveltejs/kit": "^2.70.1",
-		"@sveltejs/vite-plugin-svelte": "^7.2.0",
+		"@sveltejs/kit": "^2.70.2",
+		"@sveltejs/vite-plugin-svelte": "^7.3.0",
 		"@tailwindcss/vite": "^4.3.3",
-		"@types/node": "^26.1.1",
-		"svelte": "^5.56.6",
-		"svelte-check": "^4.7.3",
+		"@types/node": "^26.2.0",
+		"@typescript/native": "npm:typescript@7",
+		"svelte": "^5.56.8",
+		"svelte-check": "^4.7.5",
 		"tailwindcss": "^4.3.3",
-		"typescript": "^6.0.3",
-		"vite": "^8.1.5",
-		"wrangler": "^4.112.0"
+		"typescript": "~6",
+		"vite": "^8.2.1",
+		"wrangler": "^4.120.1"
 	},
 	"dependencies": {
-		"@lucide/svelte": "^1.25.0",
+		"@lucide/svelte": "^1.31.0",
 		"@noble/ed25519": "^3.1.0",
-		"@noble/hashes": "^2.2.0",
+		"@noble/hashes": "^2.3.0",
 		"@simplewebauthn/browser": "^13.3.0",
-		"@tanstack/svelte-query": "^6.1.36",
+		"@tanstack/svelte-query": "^6.1.38",
 		"ogl": "^1.0.11"
 	}
 }

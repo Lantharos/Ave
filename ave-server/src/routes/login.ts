@@ -451,20 +451,6 @@ app.post("/passkey", zValidator("json", z.object({
     .limit(1);
   
   if (!passkey) {
-    console.log(`Passkey not found for credential ID: ${credential.id}`);
-    console.log(`Looking for user ${storedChallenge.userId}`);
-    
-    // Try to find any passkey for this user to help with debugging
-    const userPasskeys = await db
-      .select()
-      .from(passkeys)
-      .where(eq(passkeys.userId, storedChallenge.userId));
-    
-    console.log(`User has ${userPasskeys.length} passkey(s) registered`);
-    if (userPasskeys.length > 0) {
-      console.log(`Registered passkey IDs:`, userPasskeys.map(pk => pk.id));
-    }
-    
     return c.json({ error: "Passkey not recognized. It may have been registered on a different device or browser." }, 400);
   }
   

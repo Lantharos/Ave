@@ -3,7 +3,7 @@ import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import { db, oauthApps, oauthAuthorizations, oauthRefreshTokens, identities, oauthResources, oauthDelegationGrants, organizationEncryptionPolicies, organizationIdentityMembers, organizations } from "../db";
 import { requireAuth, requireWritable } from "../middleware/auth";
-import { eq, and, isNull, desc, inArray } from "drizzle-orm";
+import { eq, and, isNull, desc, inArray, sql } from "drizzle-orm";
 import { randomUUID, timingSafeEqual } from "crypto";
 import { hashSessionToken } from "../lib/crypto";
 import { getIssuer, getResourceAudience, getJwtPublicJwk, signJwt, verifyJwt, hashToken } from "../lib/oidc";
@@ -1189,7 +1189,7 @@ app.post("/authorize", requireAuth, zValidator("json", z.object({
       : {};
 
     if (!existingAuth) {
-      await db.insert(oauthAuthorizations).values({
+      const inserted = await db.insert(oauthAuthorizations).values({
         userId: user.id,
         appId: oauthApp.id,
         identityId,
@@ -1200,14 +1200,33 @@ app.post("/authorize", requireAuth, zValidator("json", z.object({
         appPublicKey: e2eeUpdate.appPublicKey ?? null,
         encryptedAppPrivateKey: e2eeUpdate.encryptedAppPrivateKey ?? null,
         appEncryptionMode: e2eeUpdate.appEncryptionMode ?? null,
-      });
-      createdAuthorization = true;
+      })
+        .onConflictDoNothing({
+          target: [oauthAuthorizations.userId, oauthAuthorizations.appId, oauthAuthorizations.identityId],
+        })
+        .returning({ id: oauthAuthorizations.id });
+      createdAuthorization = inserted.length > 0;
+
+      if (!createdAuthorization) {
+        await db.update(oauthAuthorizations)
+          .set({
+            ...e2eeUpdate,
+            lastAuthorizedAt: new Date(),
+            authorizationCount: sql`${oauthAuthorizations.authorizationCount} + 1`,
+            lastAuthMethod: authorizationMethod,
+          })
+          .where(and(
+            eq(oauthAuthorizations.userId, user.id),
+            eq(oauthAuthorizations.appId, oauthApp.id),
+            eq(oauthAuthorizations.identityId, identityId),
+          ));
+      }
     } else {
       await db.update(oauthAuthorizations)
         .set({
           ...e2eeUpdate,
           lastAuthorizedAt: new Date(),
-          authorizationCount: existingAuth.authorizationCount + 1,
+          authorizationCount: sql`${oauthAuthorizations.authorizationCount} + 1`,
           lastAuthMethod: authorizationMethod,
         })
         .where(eq(oauthAuthorizations.id, existingAuth.id));
@@ -1665,7 +1684,7 @@ app.post("/token", zValidator("json", oauthTokenRequestSchema), async (c) => {
     const refreshTokenTtl = oauthApp.refreshTokenTtlSeconds || 30 * 24 * 60 * 60;
 
     const accessToken = generateAccessToken();
-    const accessTokenWrite = setAccessToken(accessToken, {
+    const accessTokenRecord: AccessTokenRecord = {
       userId: storedRefresh.userId,
       identityId: storedRefresh.identityId,
       appId: storedRefresh.appId,
@@ -1682,7 +1701,7 @@ app.post("/token", zValidator("json", oauthTokenRequestSchema), async (c) => {
       organizationKeyCustody: refreshOrganizationContext.organizationKeyCustody,
       organizationAuthMethod: refreshOrganizationContext.organizationAuthMethod,
       organizationSsoConnectionId: refreshOrganizationContext.organizationSsoConnectionId,
-    });
+    };
     const identityLookup = db
       .select()
       .from(identities)
@@ -1690,12 +1709,21 @@ app.post("/token", zValidator("json", oauthTokenRequestSchema), async (c) => {
       .limit(1);
 
     const rotatedRefreshToken = generateRefreshToken();
-    await accessTokenWrite;
-    await db.update(oauthRefreshTokens)
+    const claimedRefresh = await db.update(oauthRefreshTokens)
       .set({ revokedAt: new Date() })
-      .where(eq(oauthRefreshTokens.id, storedRefresh.id));
+      .where(and(
+        eq(oauthRefreshTokens.id, storedRefresh.id),
+        isNull(oauthRefreshTokens.revokedAt),
+        isNull(oauthRefreshTokens.reuseDetectedAt),
+      ))
+      .returning({ id: oauthRefreshTokens.id });
 
-    await db.insert(oauthRefreshTokens).values({
+    if (!claimedRefresh.length) {
+      await markRefreshTokenFamilyReuse(storedRefresh.id);
+      return c.json({ error: "invalid_grant", error_description: "Refresh token was already used" }, 400);
+    }
+
+    const refreshTokenWrite = db.insert(oauthRefreshTokens).values({
       userId: storedRefresh.userId,
       identityId: storedRefresh.identityId,
       appId: storedRefresh.appId,
@@ -1708,6 +1736,7 @@ app.post("/token", zValidator("json", oauthTokenRequestSchema), async (c) => {
       enterpriseSsoOrganizationId: refreshOrganizationContext.organizationAuthMethod === "enterprise_sso" ? refreshOrganizationContext.organizationId : undefined,
       enterpriseSsoConnectionId: refreshOrganizationContext.organizationSsoConnectionId,
     });
+    const accessTokenWrite = setAccessToken(accessToken, accessTokenRecord);
 
     const [identity] = await identityLookup;
 
@@ -1740,7 +1769,12 @@ app.post("/token", zValidator("json", oauthTokenRequestSchema), async (c) => {
       uid: hasScope(storedRefresh.scope, "user_id") ? storedRefresh.userId : undefined,
       ...organizationClaims(refreshOrganizationContext),
     });
-    const [idToken, jwtAccessToken] = await Promise.all([idTokenPromise, jwtAccessTokenPromise]);
+    const [idToken, jwtAccessToken] = await Promise.all([
+      idTokenPromise,
+      jwtAccessTokenPromise,
+      accessTokenWrite,
+      refreshTokenWrite,
+    ]);
 
     const response: Record<string, unknown> = {
       access_token: accessToken,
