@@ -7,6 +7,18 @@ import { getQuickOrigin, isQuickClient } from "./shared";
 
 const app = new Hono();
 
+function serializeTimestamp(value: unknown): string | null {
+  const date = value instanceof Date
+    ? value
+    : typeof value === "number"
+      ? new Date(value)
+      : typeof value === "string"
+        ? new Date(/^\d+$/.test(value) ? Number(value) : value)
+        : null;
+
+  return date && !Number.isNaN(date.getTime()) ? date.toISOString() : null;
+}
+
 app.get("/authorize/bootstrap/:clientId", requireAuth, async (c) => {
   const user = c.get("user")!;
   const clientId = c.req.param("clientId") || "";
@@ -89,22 +101,25 @@ app.get("/authorize/bootstrap/:clientId", requireAuth, async (c) => {
     supportsE2ee: appRow.appSupportsE2ee,
     allowedScopes: appRow.appAllowedScopes,
   };
-  const authorizations = appAuthorizationRows.flatMap((row) => row.authorizationId
-    ? [{
+  const authorizations = appAuthorizationRows.flatMap((row) => {
+    if (!row.authorizationId) return [];
+
+    const createdAt = serializeTimestamp(row.authorizationCreatedAt);
+    return [{
       id: row.authorizationId,
       identityId: row.authorizationIdentityId,
       encryptedAppKey: row.authorizationEncryptedAppKey,
       appPublicKey: row.authorizationAppPublicKey,
       encryptedAppPrivateKey: row.authorizationEncryptedAppPrivateKey,
       appEncryptionMode: row.authorizationAppEncryptionMode,
-      createdAt: row.authorizationCreatedAt,
-    }]
-    : []);
+      createdAt,
+    }];
+  });
 
   const invalidAuthorization = authorizations.some((authorization) =>
     typeof authorization.id !== "string" ||
     typeof authorization.identityId !== "string" ||
-    !(authorization.createdAt instanceof Date) ||
+    authorization.createdAt === null ||
     (authorization.encryptedAppKey !== null && typeof authorization.encryptedAppKey !== "string") ||
     (authorization.appPublicKey !== null && typeof authorization.appPublicKey !== "string") ||
     (authorization.encryptedAppPrivateKey !== null && typeof authorization.encryptedAppPrivateKey !== "string") ||

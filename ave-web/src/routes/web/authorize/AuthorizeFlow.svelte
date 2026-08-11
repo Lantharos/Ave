@@ -198,7 +198,7 @@
     let loadingAppInfo = $state(false);
     let resolvedAppInfo = $state(false);
     let authorizeBootstrapClientId = $state<string | null>(null);
-    let loadedAuthorizeBootstrapClientId = $state<string | null>(null);
+    let resolvedAuthorizeBootstrapClientId = $state<string | null>(null);
     let retryingCookieSession = $state(false);
     let attemptedCookieSessionRetry = $state(false);
 
@@ -286,7 +286,7 @@
             return;
         }
 
-        if (authorizeBootstrapClientId === clientId || loadedAuthorizeBootstrapClientId === clientId) {
+        if (authorizeBootstrapClientId === clientId || resolvedAuthorizeBootstrapClientId === clientId) {
             return;
         }
 
@@ -302,7 +302,6 @@
             appInfo = bootstrap.app;
             appAuthorizations = bootstrap.authorizations;
             launchedExternalApp = false;
-            loadedAuthorizeBootstrapClientId = clientId;
 
             let hasLocalMasterKey = true;
             if (authorizeFlowShowsE2ee(bootstrap.app, authorizeRequestedScopes)) {
@@ -350,6 +349,7 @@
             error = err instanceof Error ? err.message : "Failed to load app info";
         } finally {
             if (authorizeBootstrapClientId === clientId) {
+                resolvedAuthorizeBootstrapClientId = clientId;
                 authorizeBootstrapClientId = null;
             }
             if (!completed) {
@@ -829,8 +829,8 @@
 
     // Check auth and load app info
 	$effect(() => {
-        if (loadedAuthorizeBootstrapClientId && loadedAuthorizeBootstrapClientId !== params.clientId) {
-            loadedAuthorizeBootstrapClientId = null;
+        if (resolvedAuthorizeBootstrapClientId && resolvedAuthorizeBootstrapClientId !== params.clientId) {
+            resolvedAuthorizeBootstrapClientId = null;
             authorizeBootstrapClientId = null;
             appAuthorizations = [];
             existingAuth = null;
