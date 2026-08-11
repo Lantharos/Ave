@@ -89,6 +89,32 @@ app.get("/authorize/bootstrap/:clientId", requireAuth, async (c) => {
     supportsE2ee: appRow.appSupportsE2ee,
     allowedScopes: appRow.appAllowedScopes,
   };
+  const authorizations = appAuthorizationRows.flatMap((row) => row.authorizationId
+    ? [{
+      id: row.authorizationId,
+      identityId: row.authorizationIdentityId,
+      encryptedAppKey: row.authorizationEncryptedAppKey,
+      appPublicKey: row.authorizationAppPublicKey,
+      encryptedAppPrivateKey: row.authorizationEncryptedAppPrivateKey,
+      appEncryptionMode: row.authorizationAppEncryptionMode,
+      createdAt: row.authorizationCreatedAt,
+    }]
+    : []);
+
+  const invalidAuthorization = authorizations.some((authorization) =>
+    typeof authorization.id !== "string" ||
+    typeof authorization.identityId !== "string" ||
+    !(authorization.createdAt instanceof Date) ||
+    (authorization.encryptedAppKey !== null && typeof authorization.encryptedAppKey !== "string") ||
+    (authorization.appPublicKey !== null && typeof authorization.appPublicKey !== "string") ||
+    (authorization.encryptedAppPrivateKey !== null && typeof authorization.encryptedAppPrivateKey !== "string") ||
+    (authorization.appEncryptionMode !== null && typeof authorization.appEncryptionMode !== "string")
+  );
+  if (invalidAuthorization) {
+    return c.json({ error: "Invalid authorization data" }, 500);
+  }
+
+  c.header("Cache-Control", "no-store");
 
   return c.json({
     app: {
@@ -96,17 +122,7 @@ app.get("/authorize/bootstrap/:clientId", requireAuth, async (c) => {
       supportsE2ee: appEffectiveSupportsE2ee(oauthApp),
     },
     resources,
-    authorizations: appAuthorizationRows.flatMap((row) => row.authorizationId
-      ? [{
-        id: row.authorizationId,
-        identityId: row.authorizationIdentityId!,
-        encryptedAppKey: row.authorizationEncryptedAppKey,
-        appPublicKey: row.authorizationAppPublicKey,
-        encryptedAppPrivateKey: row.authorizationEncryptedAppPrivateKey,
-        appEncryptionMode: row.authorizationAppEncryptionMode,
-        createdAt: row.authorizationCreatedAt!,
-      }]
-      : []),
+    authorizations,
   });
 });
 
