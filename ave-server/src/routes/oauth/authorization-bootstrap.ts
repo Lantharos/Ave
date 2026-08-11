@@ -35,16 +35,20 @@ app.get("/authorize/bootstrap/:clientId", requireAuth, async (c) => {
   const [appAuthorizationRows, resources] = await db.batch([
     db
       .select({
-        oauthApp: {
-          id: oauthApps.id,
-          name: oauthApps.name,
-          description: oauthApps.description,
-          iconUrl: oauthApps.iconUrl,
-          websiteUrl: oauthApps.websiteUrl,
-          supportsE2ee: oauthApps.supportsE2ee,
-          allowedScopes: oauthApps.allowedScopes,
-        },
-        authorization: oauthAuthorizations,
+        appId: oauthApps.id,
+        appName: oauthApps.name,
+        appDescription: oauthApps.description,
+        appIconUrl: oauthApps.iconUrl,
+        appWebsiteUrl: oauthApps.websiteUrl,
+        appSupportsE2ee: oauthApps.supportsE2ee,
+        appAllowedScopes: oauthApps.allowedScopes,
+        authorizationId: oauthAuthorizations.id,
+        authorizationIdentityId: oauthAuthorizations.identityId,
+        authorizationEncryptedAppKey: oauthAuthorizations.encryptedAppKey,
+        authorizationAppPublicKey: oauthAuthorizations.appPublicKey,
+        authorizationEncryptedAppPrivateKey: oauthAuthorizations.encryptedAppPrivateKey,
+        authorizationAppEncryptionMode: oauthAuthorizations.appEncryptionMode,
+        authorizationCreatedAt: oauthAuthorizations.createdAt,
       })
       .from(oauthApps)
       .leftJoin(oauthAuthorizations, and(
@@ -70,11 +74,21 @@ app.get("/authorize/bootstrap/:clientId", requireAuth, async (c) => {
         eq(oauthResources.status, "active"),
       )),
   ]);
-  const oauthApp = appAuthorizationRows[0]?.oauthApp;
+  const appRow = appAuthorizationRows[0];
 
-  if (!oauthApp) {
+  if (!appRow) {
     return c.json({ error: "App not found" }, 404);
   }
+
+  const oauthApp = {
+    id: appRow.appId,
+    name: appRow.appName,
+    description: appRow.appDescription,
+    iconUrl: appRow.appIconUrl,
+    websiteUrl: appRow.appWebsiteUrl,
+    supportsE2ee: appRow.appSupportsE2ee,
+    allowedScopes: appRow.appAllowedScopes,
+  };
 
   return c.json({
     app: {
@@ -82,15 +96,15 @@ app.get("/authorize/bootstrap/:clientId", requireAuth, async (c) => {
       supportsE2ee: appEffectiveSupportsE2ee(oauthApp),
     },
     resources,
-    authorizations: appAuthorizationRows.flatMap(({ authorization }) => authorization
+    authorizations: appAuthorizationRows.flatMap((row) => row.authorizationId
       ? [{
-        id: authorization.id,
-        identityId: authorization.identityId,
-        encryptedAppKey: authorization.encryptedAppKey,
-        appPublicKey: authorization.appPublicKey,
-        encryptedAppPrivateKey: authorization.encryptedAppPrivateKey,
-        appEncryptionMode: authorization.appEncryptionMode,
-        createdAt: authorization.createdAt,
+        id: row.authorizationId,
+        identityId: row.authorizationIdentityId!,
+        encryptedAppKey: row.authorizationEncryptedAppKey,
+        appPublicKey: row.authorizationAppPublicKey,
+        encryptedAppPrivateKey: row.authorizationEncryptedAppPrivateKey,
+        appEncryptionMode: row.authorizationAppEncryptionMode,
+        createdAt: row.authorizationCreatedAt!,
       }]
       : []),
   });
