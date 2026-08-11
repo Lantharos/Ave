@@ -9,18 +9,42 @@ export interface PendingAuthContext {
   originHostname: string | null;
 }
 
+function publicPathname(pathname: string) {
+  return pathname === "/web"
+    ? "/"
+    : pathname.startsWith("/web/")
+      ? pathname.slice(4)
+      : pathname;
+}
+
+function isAuthRequestUrl(url: URL) {
+  const pathname = publicPathname(url.pathname);
+  if (pathname === "/authorize" || pathname === "/signin") {
+    return url.searchParams.has("client_id");
+  }
+
+  return pathname === "/login"
+    && url.searchParams.has("client_id")
+    && url.searchParams.has("redirect_uri");
+}
+
 function parsePendingAuthLocation() {
+  const currentUrl = new URL(window.location.href);
+  if (isAuthRequestUrl(currentUrl)) {
+    return currentUrl;
+  }
+
   const returnUrl = getReturnUrl();
   if (!returnUrl) {
     return null;
   }
 
   const url = new URL(returnUrl, window.location.origin);
-  if (url.pathname !== "/authorize" && url.pathname !== "/signin") {
-    return null;
-  }
+  return isAuthRequestUrl(url) ? url : null;
+}
 
-  return url;
+export function hasPendingAuthRequest() {
+  return parsePendingAuthLocation() !== null;
 }
 
 export async function loadPendingAuthContext(): Promise<PendingAuthContext | null> {

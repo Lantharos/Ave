@@ -11,14 +11,14 @@
     import { getReturnUrl, clearReturnUrl } from "$lib/surfaces/web/util/return-url";
     import type { Identity, Device } from "$lib/surfaces/web/lib/api";
     import { onMount } from "svelte";
-    import { loadPendingAuthContext, type PendingAuthContext } from "$lib/surfaces/web/util/auth-context";
+    import { hasPendingAuthRequest, loadPendingAuthContext, type PendingAuthContext } from "$lib/surfaces/web/util/auth-context";
 
     let currentPage = $state<"login" | "methods" | "trust-code" | "waiting">("login");
     
     const returnUrl = getReturnUrl();
     let pendingOauth = $state<{ clientId: string; redirectUri: string; scope: string; state?: string; nonce?: string; embed?: boolean; codeChallenge?: string; codeChallengeMethod?: string; prompt?: string } | null>(null);
     let pendingAuthContext = $state<PendingAuthContext | null>(null);
-    let authContextReady = $state(returnUrl ? !(returnUrl.startsWith("/authorize") || returnUrl.startsWith("/signin")) : true);
+    let authContextReady = $state(true);
 
     
     onMount(() => {
@@ -38,6 +38,10 @@
                 codeChallengeMethod: params.get("code_challenge_method") || undefined,
                 prompt: params.get("prompt") || undefined,
             };
+        }
+
+        if (hasPendingAuthRequest()) {
+            authContextReady = false;
         }
 
         void loadPendingAuthContext().then((context) => {
