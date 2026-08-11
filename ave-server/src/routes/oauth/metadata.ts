@@ -54,7 +54,7 @@ app.get("/app/:clientId", async (c) => {
       status: oauthResources.status,
     })
     .from(oauthResources)
-    .where(and(eq(oauthResources.ownerAppId, (oauthApp as any).id), eq(oauthResources.status, "active")));
+    .where(and(eq(oauthResources.ownerAppId, oauthApp.id), eq(oauthResources.status, "active")));
 
   return c.json({ app: oauthApp, resources });
 });

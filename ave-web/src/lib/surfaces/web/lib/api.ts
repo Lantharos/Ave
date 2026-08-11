@@ -36,7 +36,12 @@ export function clearD1Bookmark(): void {
   persistBookmark(null);
 }
 
-function mergeHeaders(base: HeadersInit | undefined, token: string | null, hasJsonBody: boolean): Headers {
+function mergeHeaders(
+  base: HeadersInit | undefined,
+  token: string | null,
+  hasJsonBody: boolean,
+  includeBookmark: boolean,
+): Headers {
   const headers = new Headers(base);
 
   if (hasJsonBody && !headers.has("Content-Type")) {
@@ -47,9 +52,11 @@ function mergeHeaders(base: HeadersInit | undefined, token: string | null, hasJs
     headers.set("Authorization", `Bearer ${token}`);
   }
 
-  const bookmark = readStoredBookmark();
-  if (bookmark) {
-    headers.set(D1_BOOKMARK_HEADER, bookmark);
+  if (includeBookmark) {
+    const bookmark = readStoredBookmark();
+    if (bookmark) {
+      headers.set(D1_BOOKMARK_HEADER, bookmark);
+    }
   }
 
   return headers;
@@ -71,18 +78,19 @@ class ApiError extends Error {
 
 async function request<T>(
   endpoint: string,
-  options: (RequestInit & { timeoutMs?: number }) = {}
+  options: (RequestInit & { timeoutMs?: number; publicRequest?: boolean }) = {}
 ): Promise<T> {
+  const { timeoutMs, publicRequest = false, ...fetchOptions } = options;
   let token: string | null = null;
-  try {
-    token = localStorage.getItem("ave_session_token");
-  } catch {
-    token = null;
+  if (!publicRequest) {
+    try {
+      token = localStorage.getItem("ave_session_token");
+    } catch {
+      token = null;
+    }
   }
   
-  const headers = mergeHeaders(options.headers, token, typeof options.body === "string");
-  
-  const { timeoutMs, ...fetchOptions } = options;
+  const headers = mergeHeaders(fetchOptions.headers, token, typeof fetchOptions.body === "string", !publicRequest);
   let controller: AbortController | null = null;
   let timeoutId: number | null = null;
   let signal = fetchOptions.signal;
@@ -101,7 +109,7 @@ async function request<T>(
   try {
     response = await fetch(`${API_BASE}${endpoint}`, {
       ...fetchOptions,
-      credentials: fetchOptions.credentials ?? "include",
+      credentials: publicRequest ? "omit" : fetchOptions.credentials ?? "include",
       headers,
       signal,
     });
@@ -116,9 +124,11 @@ async function request<T>(
     }
   }
 
-  captureBookmark(response);
+  if (!publicRequest) {
+    captureBookmark(response);
+  }
 
-  if (response.status === 401) {
+  if (!publicRequest && response.status === 401) {
     clearD1Bookmark();
   }
   
@@ -746,7 +756,7 @@ export const api = {
           audience: string;
           status: string;
         }[];
-      }>(`/api/oauth/app/${encodeURIComponent(clientId)}`),
+      }>(`/api/oauth/app/${encodeURIComponent(clientId)}`, { publicRequest: true }),
 
     getAuthorizeBootstrap: (clientId: string, identityId?: string) => {
       const query = identityId ? `?identity_id=${encodeURIComponent(identityId)}` : "";
@@ -795,7 +805,7 @@ export const api = {
           ownerAppIconUrl?: string;
           ownerAppWebsiteUrl?: string;
         };
-      }>(`/api/oauth/resource/${encodeURIComponent(resourceKey)}`),
+      }>(`/api/oauth/resource/${encodeURIComponent(resourceKey)}`, { publicRequest: true }),
     
     authorize: (data: {
       clientId: string;
