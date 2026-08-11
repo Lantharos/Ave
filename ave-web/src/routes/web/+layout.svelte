@@ -3,6 +3,7 @@
   import { page } from "$app/state";
   import { setQueryClientContext } from "@tanstack/svelte-query";
   import { queryClient } from "$lib/surfaces/web/lib/query-client";
+  import { installAppKeyRecoveryConsole } from "$lib/surfaces/web/lib/app-key-recovery";
   import { auth, isLoading } from "$lib/surfaces/web/stores/auth";
 
   let { children } = $props();
@@ -26,6 +27,7 @@
   const isStaticRoute = $derived(isStaticPath(page.url.pathname));
 
   setQueryClientContext(queryClient);
+  installAppKeyRecoveryConsole();
 
   afterNavigate(() => {
     if (!isStaticPath(page.url.pathname)) {

@@ -1,7 +1,7 @@
 <script lang="ts">
     import IdentityCard from "$lib/surfaces/web/components/IdentityCard.svelte";
     import Text from "$lib/surfaces/web/components/Text.svelte";
-    import { api, type Identity } from "$lib/surfaces/web/lib/api";
+    import { api, type Identity, type OAuthAuthorization } from "$lib/surfaces/web/lib/api";
     import {
         generateAppKey,
         encryptAppKey,
@@ -162,15 +162,8 @@
         appInfo ? authorizeFlowShowsE2ee(appInfo, authorizeRequestedScopes) : false,
     );
     
-    let existingAuth = $state<{
-        id: string;
-        identityId: string;
-        encryptedAppKey?: string;
-        appPublicKey?: string;
-        encryptedAppPrivateKey?: string;
-        appEncryptionMode?: string;
-        createdAt: string;
-    } | null>(null);
+    let appAuthorizations = $state.raw<OAuthAuthorization[]>([]);
+    let existingAuth = $state.raw<OAuthAuthorization | null>(null);
     
     let selectedIdentity = $state<Identity | null>(null);
     let identityDropdownOpen = $state(false);
@@ -254,6 +247,17 @@
         emailDraft = identity.pendingEmail || identity.email || "";
     }
 
+    function selectIdentity(identity: Identity) {
+        auth.setCurrentIdentity(identity);
+        selectedIdentity = identity;
+        existingAuth = appAuthorizations.find((authorization) =>
+            authorization.identityId === identity.id
+        ) || null;
+        emailDraft = identity.pendingEmail || identity.email || "";
+        emailCode = "";
+        identityDropdownOpen = false;
+    }
+
     async function ensureAppInfo() {
         if (!params.clientId || appInfo || loadingAppInfo || resolvedAppInfo) {
             return;
@@ -293,11 +297,10 @@
         try {
             const bootstrap = await api.oauth.getAuthorizeBootstrap(
                 clientId,
-                params.identityId || get(auth).currentIdentity?.id || undefined,
             );
 
             appInfo = bootstrap.app;
-            existingAuth = bootstrap.authorization;
+            appAuthorizations = bootstrap.authorizations;
             launchedExternalApp = false;
             loadedAuthorizeBootstrapClientId = clientId;
 
@@ -312,8 +315,9 @@
             const preferredIdentity = params.identityId
                 ? authState.identities.find((i) => i.id === params.identityId) || null
                 : null;
-            const existingIdentity = existingAuth
-                ? authState.identities.find((i) => i.id === existingAuth!.identityId)
+            const latestAuthorization = appAuthorizations[0] || null;
+            const existingIdentity = latestAuthorization
+                ? authState.identities.find((i) => i.id === latestAuthorization.identityId)
                 : null;
 
             selectedIdentity = preferredIdentity
@@ -321,6 +325,11 @@
                 || authState.currentIdentity
                 || authState.identities[0]
                 || null;
+            existingAuth = selectedIdentity
+                ? appAuthorizations.find((authorization) =>
+                    authorization.identityId === selectedIdentity!.id
+                ) || null
+                : null;
             emailDraft = selectedIdentity?.pendingEmail || selectedIdentity?.email || "";
 
             const shouldAutoAuthorize = !forceAuthorizePrompt
@@ -823,6 +832,7 @@
         if (loadedAuthorizeBootstrapClientId && loadedAuthorizeBootstrapClientId !== params.clientId) {
             loadedAuthorizeBootstrapClientId = null;
             authorizeBootstrapClientId = null;
+            appAuthorizations = [];
             existingAuth = null;
             appInfo = null;
         }
@@ -1343,7 +1353,7 @@
                                 {#each $identitiesStore as identity (identity.id)}
                                     <button 
                                         class="w-full flex flex-row gap-2 md:gap-[15px] items-center p-3 md:p-[15px] hover:bg-[#222222] transition-colors {identity.id === selectedIdentity.id ? 'bg-[#222222]' : ''}"
-                                        onclick={() => { selectedIdentity = identity; emailDraft = identity.pendingEmail || identity.email || ""; emailCode = ""; identityDropdownOpen = false; }}
+                                        onclick={() => selectIdentity(identity)}
                                     >
                                         {#if identity.avatarUrl}
                                             <img src={identity.avatarUrl} alt="" class="w-8 h-8 md:w-[40px] md:h-[40px] aspect-square rounded-full object-cover shrink-0"/>

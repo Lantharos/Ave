@@ -1,0 +1,32 @@
+---
+title: "Recover an app key"
+description: "Restore a known symmetric app key to an existing Ave authorization without exposing its plaintext to the server."
+---
+
+Use this recovery command only when you still have the original plaintext app key from a trusted app session, but the encrypted key stored in the Ave authorization no longer represents it. This operation replaces the encrypted envelope for an existing authorization. It does not rotate the plaintext app key or repair data encrypted with a different key.
+
+1. Sign in at `https://aveid.net/dashboard` as the identity that owns the authorization.
+2. Make sure the account encryption key is unlocked on that device.
+3. Copy the recovered base64 app key to the clipboard.
+4. Open the browser developer console on the Ave page and run:
+
+```js
+await window.aveRecoverAppKey({
+  clientId: "YOUR_APP_CLIENT_ID"
+});
+```
+
+For a non-current identity, also pass its Ave identity ID:
+
+```js
+await window.aveRecoverAppKey({
+  clientId: "YOUR_APP_CLIENT_ID",
+  identityId: "YOUR_IDENTITY_ID"
+});
+```
+
+The browser reads the key from the clipboard, validates the recovered AES-256 key, encrypts it with the locally unlocked Ave master key, and sends only that encrypted envelope to Ave. A successful result includes a SHA-256 fingerprint that you can compare with the fingerprint from the trusted app session. If clipboard access is unavailable, pass `appKey` explicitly as a function argument and clear the console history afterward.
+
+<Warning>
+  This deliberately replaces the encrypted key envelope for that app and identity. A wrong key will make existing app data unreadable. Keep the trusted session open until old encrypted data has been successfully decrypted after recovery, and never paste the key into support messages, issue trackers, or server terminals.
+</Warning>

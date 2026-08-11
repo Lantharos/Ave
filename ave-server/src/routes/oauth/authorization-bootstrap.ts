@@ -28,7 +28,7 @@ app.get("/authorize/bootstrap/:clientId", requireAuth, async (c) => {
         supportsE2ee: false,
       },
       resources: [],
-      authorization: null,
+      authorizations: [],
     });
   }
 
@@ -53,8 +53,7 @@ app.get("/authorize/bootstrap/:clientId", requireAuth, async (c) => {
         identityId ? eq(oauthAuthorizations.identityId, identityId) : undefined,
       ))
       .where(eq(oauthApps.clientId, clientId))
-      .orderBy(desc(oauthAuthorizations.lastAuthorizedAt))
-      .limit(1),
+      .orderBy(desc(oauthAuthorizations.lastAuthorizedAt)),
     db
       .select({
         resourceKey: oauthResources.resourceKey,
@@ -71,7 +70,7 @@ app.get("/authorize/bootstrap/:clientId", requireAuth, async (c) => {
         eq(oauthResources.status, "active"),
       )),
   ]);
-  const [{ oauthApp, authorization } = { oauthApp: null, authorization: null }] = appAuthorizationRows;
+  const oauthApp = appAuthorizationRows[0]?.oauthApp;
 
   if (!oauthApp) {
     return c.json({ error: "App not found" }, 404);
@@ -83,17 +82,17 @@ app.get("/authorize/bootstrap/:clientId", requireAuth, async (c) => {
       supportsE2ee: appEffectiveSupportsE2ee(oauthApp),
     },
     resources,
-    authorization: authorization
-      ? {
-          id: authorization.id,
-          identityId: authorization.identityId,
-          encryptedAppKey: authorization.encryptedAppKey,
-          appPublicKey: authorization.appPublicKey,
-          encryptedAppPrivateKey: authorization.encryptedAppPrivateKey,
-          appEncryptionMode: authorization.appEncryptionMode,
-          createdAt: authorization.createdAt,
-        }
-      : null,
+    authorizations: appAuthorizationRows.flatMap(({ authorization }) => authorization
+      ? [{
+        id: authorization.id,
+        identityId: authorization.identityId,
+        encryptedAppKey: authorization.encryptedAppKey,
+        appPublicKey: authorization.appPublicKey,
+        encryptedAppPrivateKey: authorization.encryptedAppPrivateKey,
+        appEncryptionMode: authorization.appEncryptionMode,
+        createdAt: authorization.createdAt,
+      }]
+      : []),
   });
 });
 

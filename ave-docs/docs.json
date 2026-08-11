@@ -111,7 +111,10 @@
           },
           {
             "group": "Troubleshooting",
-            "pages": ["troubleshooting/common-mistakes-and-edge-cases"]
+            "pages": [
+              "troubleshooting/common-mistakes-and-edge-cases",
+              "troubleshooting/recover-app-key"
+            ]
           }
         ]
       }

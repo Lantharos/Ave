@@ -167,6 +167,16 @@ export interface Identity {
   hasEncryptionKey?: boolean;
 }
 
+export interface OAuthAuthorization {
+  id: string;
+  identityId: string;
+  encryptedAppKey?: string;
+  appPublicKey?: string;
+  encryptedAppPrivateKey?: string;
+  appEncryptionMode?: string;
+  createdAt: string;
+}
+
 export interface Device {
   id: string;
   name: string;
@@ -778,15 +788,7 @@ export const api = {
           audience: string;
           status: string;
         }[];
-        authorization: {
-          id: string;
-          identityId: string;
-          encryptedAppKey?: string;
-          appPublicKey?: string;
-          encryptedAppPrivateKey?: string;
-          appEncryptionMode?: string;
-          createdAt: string;
-        } | null;
+        authorizations: OAuthAuthorization[];
       }>(`/api/oauth/authorize/bootstrap/${encodeURIComponent(clientId)}${query}`);
     },
 
@@ -835,16 +837,26 @@ export const api = {
     
     getAuthorization: (clientId: string) =>
       request<{
-        authorization: {
-          id: string;
-          identityId: string;
-          encryptedAppKey?: string;
-          appPublicKey?: string;
-          encryptedAppPrivateKey?: string;
-          appEncryptionMode?: string;
-          createdAt: string;
-        } | null;
+        authorization: OAuthAuthorization | null;
       }>(`/api/oauth/authorization/${encodeURIComponent(clientId)}`),
+
+    recoverSymmetricAppKey: (data: {
+      clientId: string;
+      identityId: string;
+      encryptedAppKey: string;
+      confirmRecovery: true;
+    }) =>
+      request<{ success: true }>(
+        `/api/oauth/authorization/${encodeURIComponent(data.clientId)}/encryption-key`,
+        {
+          method: "PUT",
+          body: JSON.stringify({
+            identityId: data.identityId,
+            encryptedAppKey: data.encryptedAppKey,
+            confirmRecovery: data.confirmRecovery,
+          }),
+        },
+      ),
     
     getAuthorizations: () =>
       request<{

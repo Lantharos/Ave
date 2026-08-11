@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { getIssuer, getJwtPublicJwk } from "../lib/oidc";
 import accountRoutes from "./oauth/account";
+import appKeyRecoveryRoutes from "./oauth/app-key-recovery";
 import authorizationBootstrapRoutes from "./oauth/authorization-bootstrap";
 import authorizationRoutes from "./oauth/authorize";
 import fedCmRoutes from "./oauth/fedcm";
@@ -17,6 +18,7 @@ app.route("/", authorizationBootstrapRoutes);
 app.route("/", authorizationRoutes);
 app.route("/", tokenRoutes);
 app.route("/", accountRoutes);
+app.route("/", appKeyRecoveryRoutes);
 
 oidcRoutes.get("/webfinger", (c) => {
   const resource = c.req.query("resource");
