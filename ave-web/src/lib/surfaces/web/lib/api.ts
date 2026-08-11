@@ -814,6 +814,7 @@ export const api = {
       requestedResource?: string;
       requestedScope?: string;
       communicationMode?: "user_present" | "background";
+      interactionMode?: "instant" | "prompt";
     }) =>
       request<{ redirectUrl: string }>("/api/oauth/authorize", {
         method: "POST",

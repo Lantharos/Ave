@@ -87,6 +87,10 @@
 		}
 	}
 
+    function parseCodeChallengeMethod(value: string | null): "S256" | "plain" | undefined {
+        return value === "S256" || value === "plain" ? value : undefined;
+    }
+
     // Parse query params from window.location
     let querystring = $state(window.location.search.slice(1));
     
@@ -117,7 +121,7 @@
 				embed: searchParams.get("embed") === "1",
                 fedcmContinue: searchParams.get("fedcm_continue") === "1",
 				codeChallenge: codeChallenge || undefined,
-				codeChallengeMethod: (codeChallengeMethod === "S256" || codeChallengeMethod === "plain") ? codeChallengeMethod : undefined,
+				codeChallengeMethod: parseCodeChallengeMethod(codeChallengeMethod),
                 prompt: searchParams.get("prompt") || "",
 			};
 
@@ -204,11 +208,6 @@
     let loadedAuthorizeBootstrapClientId = $state<string | null>(null);
     let retryingCookieSession = $state(false);
     let attemptedCookieSessionRetry = $state(false);
-    let authorizeBootstrapPrefetch: {
-        clientId: string;
-        identityId?: string;
-        promise: ReturnType<typeof api.oauth.getAuthorizeBootstrap>;
-    } | null = null;
 
     const embedPopup = $derived.by(() => params.embed && !!window.opener);
     const embedSheet = $derived.by(() => params.embed && !embedPopup);
@@ -272,42 +271,6 @@
         }
     }
 
-    function getAuthorizeBootstrap(clientId: string, identityId?: string) {
-        if (
-            authorizeBootstrapPrefetch?.clientId === clientId
-            && authorizeBootstrapPrefetch.identityId === identityId
-        ) {
-            return authorizeBootstrapPrefetch.promise;
-        }
-
-        const promise = api.oauth.getAuthorizeBootstrap(clientId, identityId);
-        authorizeBootstrapPrefetch = { clientId, identityId, promise };
-        void promise.catch(() => {
-            if (authorizeBootstrapPrefetch?.promise === promise) {
-                authorizeBootstrapPrefetch = null;
-            }
-        });
-        return promise;
-    }
-
-    function prefetchAuthorizeBootstrap() {
-        const clientId = params.clientId;
-        if (!clientId) return;
-        const identityId = params.identityId || undefined;
-        if (
-            authorizeBootstrapPrefetch?.clientId === clientId
-            && authorizeBootstrapPrefetch.identityId === identityId
-        ) return;
-
-        void getAuthorizeBootstrap(clientId, identityId)
-            .then((bootstrap) => {
-                if (params.clientId !== clientId) return;
-                appInfo = bootstrap.app;
-                resolvedAppInfo = true;
-            })
-            .catch(() => ensureAppInfo());
-    }
-
     // Load app info
     async function loadAppInfo() {
         if (completed) return;
@@ -328,7 +291,7 @@
         error = null;
 
         try {
-            const bootstrap = await getAuthorizeBootstrap(
+            const bootstrap = await api.oauth.getAuthorizeBootstrap(
                 clientId,
                 params.identityId || undefined,
             );
@@ -368,7 +331,7 @@
             if (shouldAutoAuthorize && !(requiresEmailScope && !selectedIdentity?.email)) {
                 // Keep UI in loading state while we redirect.
                 autoAuthorizing = true;
-                await handleAuthorize();
+                await handleAuthorize("instant");
                 // If we got here, redirect failed (error set) or we're embedded.
                 if (!completed) {
                     autoAuthorizing = false;
@@ -393,7 +356,7 @@
             authorizing = true;
             error = null;
             
-            const authData: any = {
+            const authData: Parameters<typeof api.oauth.authorize>[0] = {
                 clientId: params.clientId,
                 redirectUri: params.redirectUri,
                 scope: params.scope,
@@ -860,18 +823,17 @@
         if (loadedAuthorizeBootstrapClientId && loadedAuthorizeBootstrapClientId !== params.clientId) {
             loadedAuthorizeBootstrapClientId = null;
             authorizeBootstrapClientId = null;
-            authorizeBootstrapPrefetch = null;
             existingAuth = null;
             appInfo = null;
         }
 		if (params.resource) {
 			window.location.replace(`/connect${window.location.search}`);
 			return;
-		}
+        }
         if (completed) return;
-        prefetchAuthorizeBootstrap();
 		if (!$isAuthenticated) {
             if ($isLoading || retryingCookieSession) return;
+            void ensureAppInfo();
             if (!attemptedCookieSessionRetry && !embedSheet) {
                 void retryCookieSessionBeforeLogin();
                 return;
