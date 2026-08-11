@@ -789,7 +789,9 @@ export const api = {
           status: string;
         }[];
         authorizations: OAuthAuthorization[];
-      }>(`/api/oauth/authorize/bootstrap/${encodeURIComponent(clientId)}${query}`);
+      }>(`/api/oauth/authorize/bootstrap/${encodeURIComponent(clientId)}${query}`, {
+        cache: "no-store",
+      });
     },
 
     getResource: (resourceKey: string) =>
