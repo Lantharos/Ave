@@ -204,6 +204,11 @@
     let loadedAuthorizeBootstrapClientId = $state<string | null>(null);
     let retryingCookieSession = $state(false);
     let attemptedCookieSessionRetry = $state(false);
+    let authorizeBootstrapPrefetch: {
+        clientId: string;
+        identityId?: string;
+        promise: ReturnType<typeof api.oauth.getAuthorizeBootstrap>;
+    } | null = null;
 
     const embedPopup = $derived.by(() => params.embed && !!window.opener);
     const embedSheet = $derived.by(() => params.embed && !embedPopup);
@@ -267,6 +272,42 @@
         }
     }
 
+    function getAuthorizeBootstrap(clientId: string, identityId?: string) {
+        if (
+            authorizeBootstrapPrefetch?.clientId === clientId
+            && authorizeBootstrapPrefetch.identityId === identityId
+        ) {
+            return authorizeBootstrapPrefetch.promise;
+        }
+
+        const promise = api.oauth.getAuthorizeBootstrap(clientId, identityId);
+        authorizeBootstrapPrefetch = { clientId, identityId, promise };
+        void promise.catch(() => {
+            if (authorizeBootstrapPrefetch?.promise === promise) {
+                authorizeBootstrapPrefetch = null;
+            }
+        });
+        return promise;
+    }
+
+    function prefetchAuthorizeBootstrap() {
+        const clientId = params.clientId;
+        if (!clientId) return;
+        const identityId = params.identityId || undefined;
+        if (
+            authorizeBootstrapPrefetch?.clientId === clientId
+            && authorizeBootstrapPrefetch.identityId === identityId
+        ) return;
+
+        void getAuthorizeBootstrap(clientId, identityId)
+            .then((bootstrap) => {
+                if (params.clientId !== clientId) return;
+                appInfo = bootstrap.app;
+                resolvedAppInfo = true;
+            })
+            .catch(() => ensureAppInfo());
+    }
+
     // Load app info
     async function loadAppInfo() {
         if (completed) return;
@@ -287,9 +328,9 @@
         error = null;
 
         try {
-            const bootstrap = await api.oauth.getAuthorizeBootstrap(
+            const bootstrap = await getAuthorizeBootstrap(
                 clientId,
-                params.identityId || get(auth).currentIdentity?.id || undefined,
+                params.identityId || undefined,
             );
 
             appInfo = bootstrap.app;
@@ -819,6 +860,7 @@
         if (loadedAuthorizeBootstrapClientId && loadedAuthorizeBootstrapClientId !== params.clientId) {
             loadedAuthorizeBootstrapClientId = null;
             authorizeBootstrapClientId = null;
+            authorizeBootstrapPrefetch = null;
             existingAuth = null;
             appInfo = null;
         }
@@ -827,7 +869,7 @@
 			return;
 		}
         if (completed) return;
-        void ensureAppInfo();
+        prefetchAuthorizeBootstrap();
 		if (!$isAuthenticated) {
             if ($isLoading || retryingCookieSession) return;
             if (!attemptedCookieSessionRetry && !embedSheet) {

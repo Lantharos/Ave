@@ -32,25 +32,29 @@ app.get("/authorize/bootstrap/:clientId", requireAuth, async (c) => {
     });
   }
 
-  const [oauthApp] = await db
-    .select({
-      id: oauthApps.id,
-      name: oauthApps.name,
-      description: oauthApps.description,
-      iconUrl: oauthApps.iconUrl,
-      websiteUrl: oauthApps.websiteUrl,
-      supportsE2ee: oauthApps.supportsE2ee,
-      allowedScopes: oauthApps.allowedScopes,
-    })
-    .from(oauthApps)
-    .where(eq(oauthApps.clientId, clientId))
-    .limit(1);
-
-  if (!oauthApp) {
-    return c.json({ error: "App not found" }, 404);
-  }
-
-  const [resources, authorization] = await Promise.all([
+  const [appAuthorizationRows, resources] = await db.batch([
+    db
+      .select({
+        oauthApp: {
+          id: oauthApps.id,
+          name: oauthApps.name,
+          description: oauthApps.description,
+          iconUrl: oauthApps.iconUrl,
+          websiteUrl: oauthApps.websiteUrl,
+          supportsE2ee: oauthApps.supportsE2ee,
+          allowedScopes: oauthApps.allowedScopes,
+        },
+        authorization: oauthAuthorizations,
+      })
+      .from(oauthApps)
+      .leftJoin(oauthAuthorizations, and(
+        eq(oauthAuthorizations.userId, user.id),
+        eq(oauthAuthorizations.appId, oauthApps.id),
+        identityId ? eq(oauthAuthorizations.identityId, identityId) : undefined,
+      ))
+      .where(eq(oauthApps.clientId, clientId))
+      .orderBy(desc(oauthAuthorizations.lastAuthorizedAt))
+      .limit(1),
     db
       .select({
         resourceKey: oauthResources.resourceKey,
@@ -61,26 +65,17 @@ app.get("/authorize/bootstrap/:clientId", requireAuth, async (c) => {
         status: oauthResources.status,
       })
       .from(oauthResources)
-      .where(and(eq(oauthResources.ownerAppId, oauthApp.id), eq(oauthResources.status, "active"))),
-    db
-      .select()
-      .from(oauthAuthorizations)
-      .where(
-        identityId
-          ? and(
-              eq(oauthAuthorizations.userId, user.id),
-              eq(oauthAuthorizations.appId, oauthApp.id),
-              eq(oauthAuthorizations.identityId, identityId),
-            )
-          : and(
-              eq(oauthAuthorizations.userId, user.id),
-              eq(oauthAuthorizations.appId, oauthApp.id),
-            ),
-      )
-      .orderBy(desc(oauthAuthorizations.lastAuthorizedAt))
-      .limit(1)
-      .then((rows) => rows[0] ?? null),
+      .innerJoin(oauthApps, eq(oauthApps.id, oauthResources.ownerAppId))
+      .where(and(
+        eq(oauthApps.clientId, clientId),
+        eq(oauthResources.status, "active"),
+      )),
   ]);
+  const [{ oauthApp, authorization } = { oauthApp: null, authorization: null }] = appAuthorizationRows;
+
+  if (!oauthApp) {
+    return c.json({ error: "App not found" }, 404);
+  }
 
   return c.json({
     app: {

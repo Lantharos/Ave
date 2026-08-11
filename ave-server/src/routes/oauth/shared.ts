@@ -3,7 +3,7 @@ import { eq } from "drizzle-orm";
 import { randomUUID, timingSafeEqual } from "crypto";
 import { hashSessionToken } from "../../lib/crypto";
 import { getIssuer, getResourceAudience, signJwt, verifyJwt, hashToken } from "../../lib/oidc";
-import { getAccessToken, setAccessToken, setAuthorizationCode, type AccessTokenRecord } from "../../lib/oauth-store";
+import { createAccessTokenWrite, getAccessToken, setAuthorizationCode, type AccessTokenRecord } from "../../lib/oauth-store";
 import { serializeIdentityForApp } from "../../lib/identity-serialization";
 import { isOriginAllowedForApp, normalizeRedirectUri } from "../../lib/redirect-uri";
 import { scopesForRole, type BusinessRole } from "../../lib/business";
@@ -343,8 +343,15 @@ export async function buildTokenResponseFromAuthorizationCode(params: {
   const accessToken = generateAccessToken();
   const accessTokenTtl = oauthApp.accessTokenTtlSeconds || 3600;
   const refreshTokenTtl = oauthApp.refreshTokenTtlSeconds || 30 * 24 * 60 * 60;
+  const issuedAt = nowSeconds();
+  const expiresAt = issuedAt + accessTokenTtl;
+  const shouldIssueRefreshToken = issueRefreshToken
+    && hasScope(authCode.scope, "offline_access")
+    && !isQuickClient(clientId);
+  const refreshToken = shouldIssueRefreshToken ? generateRefreshToken() : null;
+  const refreshTokenId = shouldIssueRefreshToken ? randomUUID() : null;
 
-  const accessTokenWrite = setAccessToken(accessToken, {
+  const accessTokenWrite = createAccessTokenWrite(accessToken, {
     userId: authCode.userId,
     identityId: authCode.identityId,
     appId: oauthApp.id,
@@ -368,23 +375,38 @@ export async function buildTokenResponseFromAuthorizationCode(params: {
     .from(identities)
     .where(eq(identities.id, authCode.identityId))
     .limit(1);
-  const [[identity]] = await Promise.all([identityLookup, accessTokenWrite]);
 
-  const subject = authCode.identityId;
-  const issuedAt = nowSeconds();
-  const expiresAt = issuedAt + accessTokenTtl;
+  async function persistTokenState() {
+    if (refreshToken && refreshTokenId) {
+      const [identityRows] = await db.batch([
+        identityLookup,
+        accessTokenWrite,
+        db.insert(oauthRefreshTokens).values({
+          id: refreshTokenId,
+          familyId: refreshTokenId,
+          userId: authCode.userId,
+          identityId: authCode.identityId,
+          appId: oauthApp.id,
+          tokenHash: hashToken(refreshToken),
+          scope: authCode.scope,
+          expiresAt: new Date(Date.now() + refreshTokenTtl * 1000),
+          organizationId: authCode.organizationId,
+          organizationMemberId: authCode.organizationMemberId,
+          enterpriseSsoOrganizationId: authCode.organizationAuthMethod === "enterprise_sso" ? authCode.organizationId : undefined,
+          enterpriseSsoConnectionId: authCode.organizationSsoConnectionId,
+        }),
+      ]);
+      return identityRows[0];
+    }
 
-  const response: Record<string, unknown> = {
-    access_token: accessToken,
-    token_type: "Bearer",
-    expires_in: accessTokenTtl,
-    scope: authCode.scope,
-    user: identity ? serializeIdentityForApp(identity) : null,
-  };
+    const [identityRows] = await db.batch([identityLookup, accessTokenWrite]);
+    return identityRows[0];
+  }
 
+  const identityPromise = persistTokenState();
   const jwtAccessTokenPromise = signJwt({
     iss: getIssuer(),
-    sub: subject,
+    sub: authCode.identityId,
     aud: getResourceAudience(),
     exp: expiresAt,
     iat: issuedAt,
@@ -394,11 +416,20 @@ export async function buildTokenResponseFromAuthorizationCode(params: {
     ...(isQuickClient(clientId) ? { quick: true } : {}),
     ...organizationClaims(authCode),
   });
+  const identity = await identityPromise;
+
+  const response: Record<string, unknown> = {
+    access_token: accessToken,
+    token_type: "Bearer",
+    expires_in: accessTokenTtl,
+    scope: authCode.scope,
+    user: identity ? serializeIdentityForApp(identity) : null,
+  };
 
   const idTokenPromise = hasScope(authCode.scope, "openid")
     ? signJwt({
       iss: getIssuer(),
-      sub: subject,
+      sub: authCode.identityId,
       aud: oauthApp.clientId,
       exp: expiresAt,
       iat: issuedAt,
@@ -424,23 +455,7 @@ export async function buildTokenResponseFromAuthorizationCode(params: {
     response.id_token = idToken;
   }
 
-  if (issueRefreshToken && hasScope(authCode.scope, "offline_access") && !isQuickClient(clientId)) {
-    const refreshToken = generateRefreshToken();
-    const refreshTokenId = randomUUID();
-    await db.insert(oauthRefreshTokens).values({
-      id: refreshTokenId,
-      familyId: refreshTokenId,
-      userId: authCode.userId,
-      identityId: authCode.identityId,
-      appId: oauthApp.id,
-      tokenHash: hashToken(refreshToken),
-      scope: authCode.scope,
-      expiresAt: new Date(Date.now() + refreshTokenTtl * 1000),
-      organizationId: authCode.organizationId,
-      organizationMemberId: authCode.organizationMemberId,
-      enterpriseSsoOrganizationId: authCode.organizationAuthMethod === "enterprise_sso" ? authCode.organizationId : undefined,
-      enterpriseSsoConnectionId: authCode.organizationSsoConnectionId,
-    });
+  if (refreshToken) {
     response.refresh_token = refreshToken;
   }
 

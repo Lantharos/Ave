@@ -56,8 +56,8 @@ export type AccessTokenRecord = {
   nonce?: string;
 };
 
-export async function setAuthorizationCode(id: string, value: AuthorizationCodeRecord): Promise<void> {
-  await db.insert(oauthAuthorizationCodes)
+export function createAuthorizationCodeWrite(id: string, value: AuthorizationCodeRecord) {
+  return db.insert(oauthAuthorizationCodes)
     .values({
       id,
       value: value as unknown as Record<string, unknown>,
@@ -70,6 +70,10 @@ export async function setAuthorizationCode(id: string, value: AuthorizationCodeR
         expiresAt: new Date(value.expiresAt),
       },
     });
+}
+
+export async function setAuthorizationCode(id: string, value: AuthorizationCodeRecord): Promise<void> {
+  await createAuthorizationCodeWrite(id, value);
 }
 
 export async function getAuthorizationCode(id: string): Promise<{
@@ -124,8 +128,8 @@ export async function deleteAuthorizationCode(id: string): Promise<void> {
   await db.delete(oauthAuthorizationCodes).where(eq(oauthAuthorizationCodes.id, id));
 }
 
-export async function setAccessToken(id: string, value: AccessTokenRecord): Promise<void> {
-  await db.insert(oauthAccessTokens)
+export function createAccessTokenWrite(id: string, value: AccessTokenRecord) {
+  return db.insert(oauthAccessTokens)
     .values({
       id,
       value: value as unknown as Record<string, unknown>,
@@ -138,6 +142,10 @@ export async function setAccessToken(id: string, value: AccessTokenRecord): Prom
         expiresAt: new Date(value.expiresAt),
       },
     });
+}
+
+export async function setAccessToken(id: string, value: AccessTokenRecord): Promise<void> {
+  await createAccessTokenWrite(id, value);
 }
 
 export async function getAccessToken(id: string): Promise<AccessTokenRecord | null> {

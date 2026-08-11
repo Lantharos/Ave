@@ -6,12 +6,23 @@ type StoredRateLimit = {
   resetAt: number;
 };
 
-type RateLimitRule = {
+export type RateLimitRule = {
   namespace: string;
   key: string;
   limit: number;
   windowMs: number;
   failClosed?: boolean;
+};
+
+export type NativeRateLimitRule = {
+  binding: string;
+  key: string;
+  periodSeconds: 10 | 60;
+  fallback: RateLimitRule;
+};
+
+export type NativeRateLimitBinding = {
+  limit(options: { key: string }): Promise<{ success: boolean }>;
 };
 
 type RateLimitResult = {
@@ -145,6 +156,34 @@ export async function enforceRateLimits(c: Context, rules: RateLimitRule[]): Pro
       }
       return c.json({ error: "Too many attempts. Try again shortly." }, 429);
     }
+  }
+
+  return null;
+}
+
+export async function enforceNativeRateLimits(c: Context, rules: NativeRateLimitRule[]): Promise<Response | null> {
+  const env = c.env as Record<string, unknown> | undefined;
+  const bindings = rules.map((rule) => env?.[rule.binding] as NativeRateLimitBinding | undefined);
+
+  if (bindings.some((binding) => !binding)) {
+    return enforceRateLimits(c, rules.map((rule) => rule.fallback));
+  }
+
+  let results: Array<{ success: boolean }>;
+  try {
+    results = await Promise.all(rules.map((rule, index) => bindings[index]!.limit({ key: rule.key })));
+  } catch {
+    return enforceRateLimits(c, rules.map((rule) => rule.fallback));
+  }
+
+  for (const [index, result] of results.entries()) {
+    if (result.success) continue;
+
+    const rule = rules[index];
+    c.header("Retry-After", String(rule.periodSeconds));
+    c.header("X-RateLimit-Limit", String(rule.fallback.limit));
+    c.header("X-RateLimit-Reset", String(Math.ceil(Date.now() / 1000) + rule.periodSeconds));
+    return c.json({ error: "Too many attempts. Try again shortly." }, 429);
   }
 
   return null;

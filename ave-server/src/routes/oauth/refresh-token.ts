@@ -13,7 +13,7 @@ import { serializeEncryptionPolicy } from "../../lib/business-encryption";
 import { scopesForRole, type BusinessRole } from "../../lib/business";
 import { getRequiredEnterpriseSsoForOrganization } from "../../lib/enterprise-sso-policy";
 import { getIssuer, getResourceAudience, hashToken, signJwt } from "../../lib/oidc";
-import { setAccessToken, type AccessTokenRecord } from "../../lib/oauth-store";
+import { createAccessTokenWrite, type AccessTokenRecord } from "../../lib/oauth-store";
 import {
   generateAccessToken,
   generateRefreshToken,
@@ -32,24 +32,34 @@ export async function handleRefreshToken(c: Context, payload: RefreshTokenReques
   const { refreshToken, clientId, clientSecret } = payload;
   const tokenHash = hashToken(refreshToken);
 
-  const [oauthAppRows, storedRefreshRows] = await Promise.all([
-    db
-      .select()
+  const [tokenContext] = await db
+    .select({
+      oauthApp: oauthApps,
+      storedRefresh: oauthRefreshTokens,
+      identity: identities,
+    })
+    .from(oauthRefreshTokens)
+    .innerJoin(oauthApps, and(
+      eq(oauthApps.id, oauthRefreshTokens.appId),
+      eq(oauthApps.clientId, clientId),
+    ))
+    .leftJoin(identities, eq(identities.id, oauthRefreshTokens.identityId))
+    .where(eq(oauthRefreshTokens.tokenHash, tokenHash))
+    .limit(1);
+
+  if (!tokenContext) {
+    const [oauthApp] = await db
+      .select({ id: oauthApps.id })
       .from(oauthApps)
       .where(eq(oauthApps.clientId, clientId))
-      .limit(1),
-    db
-      .select()
-      .from(oauthRefreshTokens)
-      .where(eq(oauthRefreshTokens.tokenHash, tokenHash))
-      .limit(1),
-  ]);
-  const [oauthApp] = oauthAppRows;
-  const [storedRefresh] = storedRefreshRows;
+      .limit(1);
 
-  if (!oauthApp) {
-    return c.json({ error: "invalid_client", error_description: "Client not found" }, 400);
+    return oauthApp
+      ? c.json({ error: "invalid_grant", error_description: "Refresh token not found" }, 400)
+      : c.json({ error: "invalid_client", error_description: "Client not found" }, 400);
   }
+
+  const { oauthApp, storedRefresh, identity } = tokenContext;
 
   if (clientSecret) {
     if (!isClientSecretValid(oauthApp.clientSecretHash, clientSecret)) {
@@ -57,14 +67,6 @@ export async function handleRefreshToken(c: Context, payload: RefreshTokenReques
     }
   } else if (!isAllowedPublicClientRequest(c, oauthApp)) {
     return c.json({ error: "invalid_client", error_description: "Request origin is not allowed for this client" }, 400);
-  }
-
-  if (!storedRefresh) {
-    return c.json({ error: "invalid_grant", error_description: "Refresh token not found" }, 400);
-  }
-
-  if (storedRefresh.appId !== oauthApp.id) {
-    return c.json({ error: "invalid_grant", error_description: "Refresh token does not belong to client" }, 400);
   }
 
   if (storedRefresh.revokedAt || storedRefresh.reuseDetectedAt) {
@@ -162,79 +164,66 @@ export async function handleRefreshToken(c: Context, payload: RefreshTokenReques
     organizationAuthMethod: refreshOrganizationContext.organizationAuthMethod,
     organizationSsoConnectionId: refreshOrganizationContext.organizationSsoConnectionId,
   };
-  const identityLookup = db
-    .select()
-    .from(identities)
-    .where(eq(identities.id, storedRefresh.identityId))
-    .limit(1);
-
   const rotatedRefreshToken = generateRefreshToken();
-  const claimedRefresh = await db.update(oauthRefreshTokens)
-    .set({ revokedAt: new Date() })
-    .where(and(
-      eq(oauthRefreshTokens.id, storedRefresh.id),
-      isNull(oauthRefreshTokens.revokedAt),
-      isNull(oauthRefreshTokens.reuseDetectedAt),
-    ))
-    .returning({ id: oauthRefreshTokens.id });
+  const issuedAt = nowSeconds();
+  const expiresAt = issuedAt + accessTokenTtl;
+  const [claimedRefresh, idToken, jwtAccessToken] = await Promise.all([
+    db.update(oauthRefreshTokens)
+      .set({ revokedAt: new Date() })
+      .where(and(
+        eq(oauthRefreshTokens.id, storedRefresh.id),
+        isNull(oauthRefreshTokens.revokedAt),
+        isNull(oauthRefreshTokens.reuseDetectedAt),
+      ))
+      .returning({ id: oauthRefreshTokens.id }),
+    signJwt({
+      iss: getIssuer(),
+      sub: storedRefresh.identityId,
+      aud: oauthApp.clientId,
+      exp: expiresAt,
+      iat: issuedAt,
+      auth_time: issuedAt,
+      azp: oauthApp.clientId,
+      name: hasScope(storedRefresh.scope, "profile") ? identity?.displayName : undefined,
+      preferred_username: hasScope(storedRefresh.scope, "profile") ? identity?.handle : undefined,
+      email: hasScope(storedRefresh.scope, "email") ? identity?.email : undefined,
+      picture: hasScope(storedRefresh.scope, "profile") ? identity?.avatarUrl : undefined,
+      ...organizationClaims(refreshOrganizationContext),
+    }),
+    signJwt({
+      iss: getIssuer(),
+      sub: storedRefresh.identityId,
+      aud: getResourceAudience(),
+      exp: expiresAt,
+      iat: issuedAt,
+      scope: storedRefresh.scope,
+      cid: oauthApp.clientId,
+      uid: hasScope(storedRefresh.scope, "user_id") ? storedRefresh.userId : undefined,
+      ...organizationClaims(refreshOrganizationContext),
+    }),
+  ]);
 
   if (!claimedRefresh.length) {
     await markRefreshTokenFamilyReuse(storedRefresh.familyId);
     return c.json({ error: "invalid_grant", error_description: "Refresh token was already used" }, 400);
   }
 
-  const refreshTokenWrite = db.insert(oauthRefreshTokens).values({
-    userId: storedRefresh.userId,
-    identityId: storedRefresh.identityId,
-    appId: storedRefresh.appId,
-    tokenHash: hashToken(rotatedRefreshToken),
-    scope: storedRefresh.scope,
-    expiresAt: new Date(Date.now() + refreshTokenTtl * 1000),
-    familyId: storedRefresh.familyId,
-    rotatedFromId: storedRefresh.id,
-    organizationId: refreshOrganizationContext.organizationId,
-    organizationMemberId: refreshOrganizationContext.organizationMemberId,
-    enterpriseSsoOrganizationId: refreshOrganizationContext.organizationAuthMethod === "enterprise_sso" ? refreshOrganizationContext.organizationId : undefined,
-    enterpriseSsoConnectionId: refreshOrganizationContext.organizationSsoConnectionId,
-  });
-  const accessTokenWrite = setAccessToken(accessToken, accessTokenRecord);
-
-  const [identity] = await identityLookup;
-
-  const issuedAt = nowSeconds();
-  const expiresAt = issuedAt + accessTokenTtl;
-
-  const idTokenPromise = signJwt({
-    iss: getIssuer(),
-    sub: storedRefresh.identityId,
-    aud: oauthApp.clientId,
-    exp: expiresAt,
-    iat: issuedAt,
-    auth_time: issuedAt,
-    azp: oauthApp.clientId,
-    name: hasScope(storedRefresh.scope, "profile") ? identity?.displayName : undefined,
-    preferred_username: hasScope(storedRefresh.scope, "profile") ? identity?.handle : undefined,
-    email: hasScope(storedRefresh.scope, "email") ? identity?.email : undefined,
-    picture: hasScope(storedRefresh.scope, "profile") ? identity?.avatarUrl : undefined,
-    ...organizationClaims(refreshOrganizationContext),
-  });
-
-  const jwtAccessTokenPromise = signJwt({
-    iss: getIssuer(),
-    sub: storedRefresh.identityId,
-    aud: getResourceAudience(),
-    exp: expiresAt,
-    iat: issuedAt,
-    scope: storedRefresh.scope,
-    cid: oauthApp.clientId,
-    uid: hasScope(storedRefresh.scope, "user_id") ? storedRefresh.userId : undefined,
-    ...organizationClaims(refreshOrganizationContext),
-  });
-  const [idToken, jwtAccessToken] = await Promise.all([
-    idTokenPromise,
-    jwtAccessTokenPromise,
-    accessTokenWrite,
-    refreshTokenWrite,
+  await db.batch([
+    createAccessTokenWrite(accessToken, accessTokenRecord),
+    db.insert(oauthRefreshTokens).values({
+      userId: storedRefresh.userId,
+      identityId: storedRefresh.identityId,
+      appId: storedRefresh.appId,
+      tokenHash: hashToken(rotatedRefreshToken),
+      scope: storedRefresh.scope,
+      expiresAt: new Date(Date.now() + refreshTokenTtl * 1000),
+      familyId: storedRefresh.familyId,
+      rotatedFromId: storedRefresh.id,
+      organizationId: refreshOrganizationContext.organizationId,
+      organizationMemberId: refreshOrganizationContext.organizationMemberId,
+      enterpriseSsoOrganizationId: refreshOrganizationContext.organizationAuthMethod === "enterprise_sso" ? refreshOrganizationContext.organizationId : undefined,
+      enterpriseSsoConnectionId: refreshOrganizationContext.organizationSsoConnectionId,
+    }),
   ]);
 
   const response: Record<string, unknown> = {

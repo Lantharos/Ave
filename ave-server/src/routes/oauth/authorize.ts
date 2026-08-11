@@ -24,8 +24,8 @@ import {
 } from "../../lib/e2ee-scopes";
 import { getRequiredEnterpriseSsoForOrganization } from "../../lib/enterprise-sso-policy";
 import { hasVerifiedEmail } from "../../lib/identity-serialization";
-import { setAuthorizationCode } from "../../lib/oauth-store";
-import { enforceRateLimits, ipRateLimit, subjectRateLimit } from "../../lib/rate-limit";
+import { createAuthorizationCodeWrite } from "../../lib/oauth-store";
+import { enforceNativeRateLimits, getClientIp, ipRateLimit, subjectRateLimit } from "../../lib/rate-limit";
 import { isRedirectUriAllowedForApp, normalizeRedirectUri } from "../../lib/redirect-uri";
 import { requireAuth } from "../../middleware/auth";
 import {
@@ -80,10 +80,25 @@ app.post("/authorize", requireAuth, zValidator("json", z.object({
     communicationMode,
     interactionMode,
   } = c.req.valid("json");
-  const rateLimitResponse = await enforceRateLimits(c, [
-    ipRateLimit(c, "oauth:authorize:ip", 120, 60 * 1000),
-    subjectRateLimit("oauth:authorize:user", user.id, 120, 60 * 1000),
-    subjectRateLimit("oauth:authorize:client", clientId, 180, 60 * 1000),
+  const rateLimitResponse = await enforceNativeRateLimits(c, [
+    {
+      binding: "OAUTH_AUTHORIZE_ACTOR_RATE_LIMITER",
+      key: `ip:${getClientIp(c)}`,
+      periodSeconds: 60,
+      fallback: ipRateLimit(c, "oauth:authorize:ip", 120, 60 * 1000),
+    },
+    {
+      binding: "OAUTH_AUTHORIZE_ACTOR_RATE_LIMITER",
+      key: `user:${user.id}`,
+      periodSeconds: 60,
+      fallback: subjectRateLimit("oauth:authorize:user", user.id, 120, 60 * 1000),
+    },
+    {
+      binding: "OAUTH_CLIENT_RATE_LIMITER",
+      key: `authorize:${clientId}`,
+      periodSeconds: 60,
+      fallback: subjectRateLimit("oauth:authorize:client", clientId, 180, 60 * 1000),
+    },
   ]);
   if (rateLimitResponse) return rateLimitResponse;
 
@@ -91,6 +106,8 @@ app.post("/authorize", requireAuth, zValidator("json", z.object({
   // Find (or derive) the OAuth app
   const isQuick = isQuickClient(clientId);
   let oauthApp: ReturnType<typeof buildQuickApp> | typeof oauthApps.$inferSelect;
+  let identity: typeof identities.$inferSelect | null;
+  let existingAuth: typeof oauthAuthorizations.$inferSelect | null = null;
 
   if (isQuick) {
     const quickOrigin = getQuickOrigin(clientId);
@@ -113,17 +130,38 @@ app.post("/authorize", requireAuth, zValidator("json", z.object({
       return c.json({ error: "invalid_request", error_description: "code_challenge_method must be S256 for Quick Ave" }, 400);
     }
     oauthApp = buildQuickApp(clientId);
-  } else {
-    const [app] = await db
+    const [quickIdentity] = await db
       .select()
+      .from(identities)
+      .where(and(eq(identities.id, identityId), eq(identities.userId, user.id)))
+      .limit(1);
+    identity = quickIdentity ?? null;
+  } else {
+    const [authorizationContext] = await db
+      .select({
+        oauthApp: oauthApps,
+        identity: identities,
+        authorization: oauthAuthorizations,
+      })
       .from(oauthApps)
+      .leftJoin(identities, and(
+        eq(identities.id, identityId),
+        eq(identities.userId, user.id),
+      ))
+      .leftJoin(oauthAuthorizations, and(
+        eq(oauthAuthorizations.userId, user.id),
+        eq(oauthAuthorizations.appId, oauthApps.id),
+        eq(oauthAuthorizations.identityId, identityId),
+      ))
       .where(eq(oauthApps.clientId, clientId))
       .limit(1);
 
-    if (!app) {
+    if (!authorizationContext) {
       return c.json({ error: "Invalid client_id" }, 400);
     }
-    oauthApp = app;
+    oauthApp = authorizationContext.oauthApp;
+    identity = authorizationContext.identity;
+    existingAuth = authorizationContext.authorization;
 
     // Validate redirect URI
     if (!isRedirectUriAllowedForApp(oauthApp, redirectUri)) {
@@ -140,13 +178,6 @@ app.post("/authorize", requireAuth, zValidator("json", z.object({
     return c.json({ error: "invalid_scope", error_description: `Invalid scopes: ${invalidScopes.join(", ")}` }, 400);
   }
 
-
-  // Validate identity belongs to user
-  const [identity] = await db
-    .select()
-    .from(identities)
-    .where(and(eq(identities.id, identityId), eq(identities.userId, user.id)))
-    .limit(1);
 
   if (!identity) {
     return c.json({ error: "Invalid identity" }, 400);
@@ -225,20 +256,12 @@ app.post("/authorize", requireAuth, zValidator("json", z.object({
       : user.authMethod || "unknown";
 
   // Track authorization (skipped for Quick Auth — no persistent app record)
-  let existingAuth: typeof oauthAuthorizations.$inferSelect | undefined;
   let createdAuthorization = false;
+  let authorizationUpdate: {
+    id: string;
+    e2ee: ReturnType<typeof buildE2eeAuthUpdate>;
+  } | null = null;
   if (!isQuick) {
-    const [found] = await db
-      .select()
-      .from(oauthAuthorizations)
-      .where(and(
-        eq(oauthAuthorizations.userId, user.id),
-        eq(oauthAuthorizations.appId, oauthApp.id),
-        eq(oauthAuthorizations.identityId, identityId),
-      ))
-      .limit(1);
-    existingAuth = found;
-
     const { mode: requestedE2eeMode, conflict: e2eeModeConflict, reset: e2eeReset } =
       resolveRequestedE2eeModeConflict(
       requestedScopes,
@@ -320,14 +343,10 @@ app.post("/authorize", requireAuth, zValidator("json", z.object({
           ));
       }
     } else {
-      await db.update(oauthAuthorizations)
-        .set({
-          ...e2eeUpdate,
-          lastAuthorizedAt: new Date(),
-          authorizationCount: sql`${oauthAuthorizations.authorizationCount} + 1`,
-          lastAuthMethod: authorizationMethod,
-        })
-        .where(eq(oauthAuthorizations.id, existingAuth.id));
+      authorizationUpdate = {
+        id: existingAuth.id,
+        e2ee: e2eeUpdate,
+      };
     }
   }
 
@@ -420,7 +439,7 @@ app.post("/authorize", requireAuth, zValidator("json", z.object({
     encryptedAppPrivateKey || existingAuth?.encryptedAppPrivateKey || undefined;
   const finalAppEncryptionMode = existingAuth?.appEncryptionMode || undefined;
 
-  await setAuthorizationCode(code, {
+  const authorizationCodeWrite = createAuthorizationCodeWrite(code, {
     userId: user.id,
     appId: oauthApp.id,
     identityId,
@@ -449,6 +468,22 @@ app.post("/authorize", requireAuth, zValidator("json", z.object({
     communicationMode: connector ? communicationMode : undefined,
     delegationGrantId,
   });
+
+  if (authorizationUpdate) {
+    await db.batch([
+      db.update(oauthAuthorizations)
+        .set({
+          ...authorizationUpdate.e2ee,
+          lastAuthorizedAt: new Date(),
+          authorizationCount: sql`${oauthAuthorizations.authorizationCount} + 1`,
+          lastAuthMethod: authorizationMethod,
+        })
+        .where(eq(oauthAuthorizations.id, authorizationUpdate.id)),
+      authorizationCodeWrite,
+    ]);
+  } else {
+    await authorizationCodeWrite;
+  }
 
 
   // Log activity

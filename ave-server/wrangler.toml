@@ -21,6 +21,30 @@ class_name = "ApiAppDurableObject"
 name = "RATE_LIMITER"
 class_name = "RateLimitDurableObject"
 
+[[ratelimits]]
+name = "OAUTH_TOKEN_IP_RATE_LIMITER"
+namespace_id = "10001"
+
+  [ratelimits.simple]
+  limit = 300
+  period = 60
+
+[[ratelimits]]
+name = "OAUTH_AUTHORIZE_ACTOR_RATE_LIMITER"
+namespace_id = "10002"
+
+  [ratelimits.simple]
+  limit = 120
+  period = 60
+
+[[ratelimits]]
+name = "OAUTH_CLIENT_RATE_LIMITER"
+namespace_id = "10003"
+
+  [ratelimits.simple]
+  limit = 180
+  period = 60
+
 [[queues.producers]]
 binding = "BACKGROUND_EVENTS"
 queue = "ave-background-events"
