@@ -63,7 +63,9 @@ function errorMessage(data: unknown, fallback = "Request failed") {
 
 async function request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
   const headers = new Headers(options.headers);
-  if (!headers.has("Content-Type")) headers.set("Content-Type", "application/json");
+  if (typeof options.body === "string" && !headers.has("Content-Type")) {
+    headers.set("Content-Type", "application/json");
+  }
   const bookmark = readBookmark();
   if (bookmark) headers.set(D1_BOOKMARK_HEADER, bookmark);
 

@@ -73,7 +73,7 @@ export async function getAppInsights(appId: string, redirectUris: string[]) {
   const now = Date.now();
   const nowDate = new Date(now);
   const weekAgo = new Date(now - 7 * 24 * 60 * 60 * 1000);
-  const [authorizationGroups, weeklyAuthorizations, refreshTokens, analyticsCount, delegationAuditCount, revocations, delegations, resources] = await Promise.all([
+  const [authorizationGroups, weeklyAuthorizations, refreshTokens, analyticsCount, delegationAuditCount, revocations, delegations, resources] = await db.batch([
     db
       .select({
         lastAuthMethod: oauthAuthorizations.lastAuthMethod,
@@ -159,7 +159,7 @@ export async function getAppIdentities(appId: string, limit = 25, offset = 0) {
     ${oauthAuthorizations.lastAuthorizedAt}
   )`;
 
-  const [totalRow, rows] = await Promise.all([
+  const [totalRow, rows] = await db.batch([
     db
       .select({ count: sql<number>`count(*)` })
       .from(oauthAuthorizations)

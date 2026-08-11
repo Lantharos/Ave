@@ -58,7 +58,7 @@ export async function getOrganizationBundle(
   } = {},
 ) {
   const memberLimit = Math.max(1, Math.min(options.memberLimit ?? 100, 100));
-  const [memberRows, membersTotalRows, keys, grants, encryptionPolicies, ssoConnections, domains, auditEvents] = await Promise.all([
+  const [memberRows, membersTotalRows, keys, grants, encryptionPolicies, ssoConnections, domains] = await db.batch([
     db
       .select({ member: organizationIdentityMembers, identity: identities, key: identityEncryptionKeys })
       .from(organizationIdentityMembers)
@@ -82,15 +82,15 @@ export async function getOrganizationBundle(
     db.select().from(organizationEncryptionPolicies).where(eq(organizationEncryptionPolicies.organizationId, organizationId)).limit(1),
     db.select().from(organizationSsoConnections).where(eq(organizationSsoConnections.organizationId, organizationId)),
     db.select().from(organizationDomainVerifications).where(eq(organizationDomainVerifications.organizationId, organizationId)),
-    options.includeAudit
-      ? db
-          .select()
-          .from(organizationAuditEvents)
-          .where(eq(organizationAuditEvents.organizationId, organizationId))
-          .orderBy(desc(organizationAuditEvents.createdAt))
-          .limit(50)
-      : Promise.resolve([]),
   ]);
+  const auditEvents = options.includeAudit
+    ? await db
+        .select()
+        .from(organizationAuditEvents)
+        .where(eq(organizationAuditEvents.organizationId, organizationId))
+        .orderBy(desc(organizationAuditEvents.createdAt))
+        .limit(50)
+    : [];
 
   const grantsByKey = new Map<string, typeof grants>();
   for (const grant of grants) {

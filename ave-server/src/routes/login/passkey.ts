@@ -5,9 +5,10 @@ import { Hono } from "hono";
 import { z } from "zod";
 import { db, identities, passkeys, sessions } from "../../db";
 import { recordActivityLog } from "../../lib/background-events";
+import { runInBackground } from "../../lib/background";
 import { deleteChallenge, getChallenge } from "../../lib/challenge-store";
 import { generateSessionToken, hashSessionToken } from "../../lib/crypto";
-import { serializeIdentityForOwner } from "../../lib/identity-serialization";
+import { listIdentitiesForOwner } from "../../lib/identity-serialization";
 import { enforceRateLimits, ipRateLimit, subjectRateLimit } from "../../lib/rate-limit";
 import { setSessionCookie } from "../../lib/session-cookie";
 import { getOrCreateDevice, notifyAccountLoginEvent, type Bindings } from "./shared";
@@ -130,21 +131,18 @@ app.post("/passkey", zValidator("json", z.object({
       severity: "info",
     });
 
-    await notifyAccountLoginEvent(
+    runInBackground(c, notifyAccountLoginEvent(
       storedChallenge.userId,
       {
         method: "passkey",
         deviceName: deviceRecord.name,
         deviceType: deviceRecord.type,
       },
-      deviceRecord.id
-    );
+      deviceRecord.id,
+    ), "Account login notifications");
 
     // Get user's identities
-    const userIdentities = await db
-      .select()
-      .from(identities)
-      .where(eq(identities.userId, storedChallenge.userId));
+    const userIdentities = await listIdentitiesForOwner(storedChallenge.userId);
 
     return c.json({
       success: true,
@@ -154,7 +152,7 @@ app.post("/passkey", zValidator("json", z.object({
         type: deviceRecord.type,
         isNew: deviceRecord.isNew,
       },
-      identities: userIdentities.map(serializeIdentityForOwner),
+      identities: userIdentities,
       // PRF-encrypted master key (if this passkey has one stored)
       // Client can use this to decrypt master key if PRF output is available
       prfEncryptedMasterKey: passkey.prfEncryptedMasterKey,

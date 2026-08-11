@@ -72,10 +72,6 @@ export function createAuthorizationCodeWrite(id: string, value: AuthorizationCod
     });
 }
 
-export async function setAuthorizationCode(id: string, value: AuthorizationCodeRecord): Promise<void> {
-  await createAuthorizationCodeWrite(id, value);
-}
-
 export async function getAuthorizationCode(id: string): Promise<{
   value: AuthorizationCodeRecord | null;
   expired: boolean;
@@ -174,7 +170,7 @@ export async function deleteAccessToken(id: string): Promise<void> {
 
 export async function cleanupExpiredOAuthStorage(): Promise<{ expiredOAuthRecordsRemoved: number | null }> {
   const now = new Date();
-  await Promise.all([
+  await db.batch([
     db.delete(oauthAuthorizationCodes).where(lt(oauthAuthorizationCodes.expiresAt, now)),
     db.delete(oauthAccessTokens).where(lt(oauthAccessTokens.expiresAt, now)),
   ]);

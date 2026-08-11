@@ -1,8 +1,8 @@
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
-import { and, eq, inArray, or } from "drizzle-orm";
-import { db, identities, oauthApps, oauthAuthorizations, organizationIdentityMembers, organizations } from "../db";
+import { and, eq, inArray, or, sql } from "drizzle-orm";
+import { db, identities, oauthApps, oauthAuthorizations, oauthResources, organizationIdentityMembers, organizations } from "../db";
 import { requireAuth, requireWritableForMutation } from "../middleware/auth";
 import {
   businessRoleForOrganizationRole,
@@ -13,7 +13,7 @@ import {
   signingAuthorityForOrganizationRole,
 } from "../lib/dev-portal";
 import { scopesForRole } from "../lib/business";
-import { listAppResources, serializeApp } from "./apps";
+import { serializeApp } from "./apps";
 
 const app = new Hono();
 
@@ -109,57 +109,62 @@ app.get("/bootstrap", async (c) => {
   const user = c.get("user")!;
   const memberships = await getOrganizationMemberships(user.id);
   const organizationIds = memberships.map((membership) => membership.organization.id);
-
-  const [appRows, memberRows] = await Promise.all([
-    organizationIds.length
-      ? db
-          .select({
-            organizationId: oauthApps.organizationId,
-            appId: oauthApps.id,
-          })
-          .from(oauthApps)
-          .where(inArray(oauthApps.organizationId, organizationIds))
-      : [],
-    organizationIds.length
-      ? db
-          .select({
-            organizationId: organizationIdentityMembers.organizationId,
-            memberId: organizationIdentityMembers.id,
-            status: organizationIdentityMembers.status,
-          })
-          .from(organizationIdentityMembers)
-          .where(inArray(organizationIdentityMembers.organizationId, organizationIds))
-      : [],
-  ]);
-
-  const appCountByOrganizationId = new Map<string, number>();
-  for (const row of appRows) {
-    const organizationId = row.organizationId;
-    if (!organizationId) continue;
-    appCountByOrganizationId.set(organizationId, (appCountByOrganizationId.get(organizationId) || 0) + 1);
-  }
-
-  const memberCountByOrganizationId = new Map<string, number>();
-  for (const row of memberRows) {
-    if (row.status !== "active") continue;
-    memberCountByOrganizationId.set(row.organizationId, (memberCountByOrganizationId.get(row.organizationId) || 0) + 1);
-  }
-
   const currentOrganizationId = c.req.query("organizationId") || memberships[0]?.organization.id || null;
-  const organizationsSummary = memberships.map((membership) =>
-    mapOrganizationSummary(membership, appCountByOrganizationId, memberCountByOrganizationId),
-  );
 
-  if (!currentOrganizationId) {
+  if (!currentOrganizationId || !organizationIds.length) {
     return c.json({
-      organizations: organizationsSummary,
+      organizations: [],
       currentOrganizationId: null,
       organization: null,
       apps: [],
     });
   }
 
-  const membership = await requireOrganizationAccess(user.id, currentOrganizationId, "viewer");
+  const [appRows, memberRows, resources, authorizationCounts] = await db.batch([
+    db
+      .select()
+      .from(oauthApps)
+      .where(inArray(oauthApps.organizationId, organizationIds)),
+    db
+      .select({ member: organizationIdentityMembers, identity: identities })
+      .from(organizationIdentityMembers)
+      .innerJoin(identities, eq(identities.id, organizationIdentityMembers.identityId))
+      .where(and(
+        inArray(organizationIdentityMembers.organizationId, organizationIds),
+        eq(organizationIdentityMembers.status, "active"),
+      )),
+    db
+      .select({ resource: oauthResources })
+      .from(oauthResources)
+      .innerJoin(oauthApps, eq(oauthApps.id, oauthResources.ownerAppId))
+      .where(eq(oauthApps.organizationId, currentOrganizationId)),
+    db
+      .select({
+        appId: oauthAuthorizations.appId,
+        identityCount: sql<number>`count(*)`,
+      })
+      .from(oauthAuthorizations)
+      .innerJoin(oauthApps, eq(oauthApps.id, oauthAuthorizations.appId))
+      .where(eq(oauthApps.organizationId, currentOrganizationId))
+      .groupBy(oauthAuthorizations.appId),
+  ]);
+
+  const appCountByOrganizationId = new Map<string, number>();
+  for (const appRow of appRows) {
+    const organizationId = appRow.organizationId;
+    if (!organizationId) continue;
+    appCountByOrganizationId.set(organizationId, (appCountByOrganizationId.get(organizationId) || 0) + 1);
+  }
+
+  const memberCountByOrganizationId = new Map<string, number>();
+  for (const { member } of memberRows) {
+    memberCountByOrganizationId.set(member.organizationId, (memberCountByOrganizationId.get(member.organizationId) || 0) + 1);
+  }
+
+  const organizationsSummary = memberships.map((membership) =>
+    mapOrganizationSummary(membership, appCountByOrganizationId, memberCountByOrganizationId),
+  );
+  const membership = memberships.find((entry) => entry.organization.id === currentOrganizationId) ?? null;
   if (!membership) {
     return c.json({
       organizations: organizationsSummary,
@@ -169,44 +174,19 @@ app.get("/bootstrap", async (c) => {
     });
   }
 
-  const [members, apps] = await Promise.all([
-    db
-      .select({ member: organizationIdentityMembers, identity: identities })
-      .from(organizationIdentityMembers)
-      .innerJoin(identities, eq(identities.id, organizationIdentityMembers.identityId))
-      .where(and(eq(organizationIdentityMembers.organizationId, currentOrganizationId), eq(organizationIdentityMembers.status, "active"))),
-    db
-      .select()
-      .from(oauthApps)
-      .where(eq(oauthApps.organizationId, currentOrganizationId)),
-  ]);
+  const members = memberRows.filter(({ member }) => member.organizationId === currentOrganizationId);
+  const apps = appRows.filter((appRow) => appRow.organizationId === currentOrganizationId);
 
-  const [resources, authorizations] = await Promise.all([
-    listAppResources(apps.map((app) => app.id)),
-    apps.length
-      ? db
-          .select({
-            appId: oauthAuthorizations.appId,
-            identityId: oauthAuthorizations.identityId,
-          })
-          .from(oauthAuthorizations)
-          .where(inArray(oauthAuthorizations.appId, apps.map((app) => app.id)))
-      : [],
-  ]);
-
-  const resourcesByAppId = new Map<string, typeof resources>();
-  for (const resource of resources) {
+  const resourcesByAppId = new Map<string, Array<(typeof resources)[number]["resource"]>>();
+  for (const { resource } of resources) {
     const list = resourcesByAppId.get(resource.ownerAppId) || [];
     list.push(resource);
     resourcesByAppId.set(resource.ownerAppId, list);
   }
 
-  const identityIdsByAppId = new Map<string, Set<string>>();
-  for (const authorization of authorizations) {
-    const existing = identityIdsByAppId.get(authorization.appId) || new Set<string>();
-    existing.add(authorization.identityId);
-    identityIdsByAppId.set(authorization.appId, existing);
-  }
+  const identityCountByAppId = new Map(
+    authorizationCounts.map((row) => [row.appId, Number(row.identityCount || 0)]),
+  );
 
   return c.json({
     organizations: organizationsSummary,
@@ -227,7 +207,7 @@ app.get("/bootstrap", async (c) => {
       serializeApp(
         appRow,
         resourcesByAppId.get(appRow.id) || [],
-        identityIdsByAppId.get(appRow.id)?.size || 0,
+        identityCountByAppId.get(appRow.id) || 0,
       ),
     ),
   });

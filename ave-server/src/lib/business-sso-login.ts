@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import {
   db,
   devices,
@@ -28,16 +28,19 @@ async function createUniqueSsoHandle(email: string, organization: Organization) 
   const local = handlePart(email.split("@")[0] || "", "sso");
   const org = handlePart(organization.slug || organization.name, "org");
   const base = `${local}_${org}`.slice(0, 28).replace(/_+$/g, "") || "sso_user";
-
-  for (let counter = 0; counter < 100; counter += 1) {
+  const candidates = Array.from({ length: 100 }, (_, counter) => {
     const suffix = counter ? `_${counter}` : "";
     const candidate = `${base.slice(0, 32 - suffix.length)}${suffix}`;
-    const handle = candidate.length >= 3 ? candidate : `${candidate}_id`;
-    const [existing] = await db.select({ id: identities.id }).from(identities).where(eq(identities.handle, handle)).limit(1);
-    if (!existing) return handle;
-  }
+    return candidate.length >= 3 ? candidate : `${candidate}_id`;
+  });
+  const existingHandles = await db
+    .select({ handle: identities.handle })
+    .from(identities)
+    .where(inArray(identities.handle, candidates));
+  const occupied = new Set(existingHandles.map((identity) => identity.handle));
+  const available = candidates.find((candidate) => !occupied.has(candidate));
 
-  return `sso_${crypto.randomUUID().replace(/-/g, "").slice(0, 28)}`;
+  return available ?? `sso_${crypto.randomUUID().replace(/-/g, "").slice(0, 28)}`;
 }
 
 function isIdentityHandleUniqueViolation(error: unknown): boolean {

@@ -111,9 +111,12 @@ function normalizeMetricPath(path: string): string {
     .replace(/\/[A-Za-z0-9_-]{24,}(?=\/|$)/g, "/:id");
 }
 
-function appendServerTimingHeader(response: Response, durationMs: number): Response {
+function appendResponseMetadata(response: Response, durationMs: number, bookmark?: string | null): Response {
   const headers = new Headers(response.headers);
   headers.append("Server-Timing", `app;dur=${durationMs.toFixed(1)}`);
+  if (bookmark) {
+    headers.set(D1_BOOKMARK_HEADER, bookmark);
+  }
   return new Response(response.body, {
     status: response.status,
     statusText: response.statusText,
@@ -152,9 +155,8 @@ async function finalizeMeasuredResponse(
     return response;
   }
 
-  const withBookmark = requestDatabase ? appendBookmarkHeader(response, requestDatabase) : response;
   const durationMs = performance.now() - startedAt;
-  const finalResponse = appendServerTimingHeader(withBookmark, durationMs);
+  const finalResponse = appendResponseMetadata(response, durationMs, requestDatabase?.getBookmark());
   recordRequestMetric(env, request, finalResponse, durationMs);
   return finalResponse;
 }
@@ -203,6 +205,7 @@ function buildApp() {
   const publicOAuthCorsMiddleware = cors({
     origin: "*",
     credentials: false,
+    maxAge: 86400,
     allowMethods: ["GET", "POST", "DELETE", "OPTIONS"],
     allowHeaders: ["Content-Type", "Authorization", D1_BOOKMARK_HEADER],
     exposeHeaders: [D1_BOOKMARK_HEADER],
@@ -217,6 +220,7 @@ function buildApp() {
       return resolveCorsOrigin(origin, c.req.header("host"));
     },
     credentials: true,
+    maxAge: 86400,
     allowMethods: ["GET", "POST", "DELETE", "OPTIONS"],
     allowHeaders: ["Content-Type", "Authorization", D1_BOOKMARK_HEADER],
     exposeHeaders: [D1_BOOKMARK_HEADER],
@@ -232,6 +236,7 @@ function buildApp() {
   const publicApiCorsMiddleware = cors({
     origin: "*",
     credentials: false,
+    maxAge: 86400,
     allowMethods: ["GET", "POST", "OPTIONS"],
     allowHeaders: ["Content-Type", D1_BOOKMARK_HEADER],
     exposeHeaders: [D1_BOOKMARK_HEADER],
@@ -240,6 +245,7 @@ function buildApp() {
   app.use("/.well-known/*", cors({
     origin: "*",
     credentials: false,
+    maxAge: 86400,
     allowMethods: ["GET", "OPTIONS"],
     allowHeaders: ["Content-Type", "Authorization", D1_BOOKMARK_HEADER],
     exposeHeaders: [D1_BOOKMARK_HEADER],
@@ -257,6 +263,7 @@ function buildApp() {
     const corsMiddleware = cors({
       origin: (origin, c) => resolveCorsOrigin(origin, c.req.header("host")),
       credentials: true,
+      maxAge: 86400,
       allowMethods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
       allowHeaders: ["Content-Type", "Authorization", D1_BOOKMARK_HEADER],
       exposeHeaders: [D1_BOOKMARK_HEADER],
@@ -364,22 +371,6 @@ function createRequestDatabase(request: Request, db: D1Database): D1DatabaseSess
   }
 
   return db.withSession("first-primary");
-}
-
-function appendBookmarkHeader(response: Response, requestDatabase: D1DatabaseSession): Response {
-  const bookmark = requestDatabase.getBookmark();
-  if (!bookmark) {
-    return response;
-  }
-
-  const headers = new Headers(response.headers);
-  headers.set(D1_BOOKMARK_HEADER, bookmark);
-
-  return new Response(response.body, {
-    status: response.status,
-    statusText: response.statusText,
-    headers,
-  });
 }
 
 function createWebSocketResponse(request: Request, requestDatabase: D1Database | D1DatabaseSession): Response {

@@ -6,16 +6,16 @@ import { db, identities, oauthApps, oauthAuthorizations } from "../../db";
 import { appEffectiveSupportsE2ee } from "../../lib/e2ee-scopes";
 import { getIssuer, signJwt, verifyJwt } from "../../lib/oidc";
 import { parseOAuthPrompt, requiresAuthorizeInteractionPrompt, wantsAccountPickerPrompt } from "../../lib/oauth-prompt";
-import { consumeAuthorizationCode, getAuthorizationCode } from "../../lib/oauth-store";
-import { enforceRateLimits, ipRateLimit, subjectRateLimit } from "../../lib/rate-limit";
+import { consumeAuthorizationCode, createAuthorizationCodeWrite, getAuthorizationCode } from "../../lib/oauth-store";
+import { enforceNativeRateLimits, getClientIp, ipRateLimit, subjectRateLimit } from "../../lib/rate-limit";
 import { isOriginAllowedForApp, isRedirectUriAllowedForApp, normalizeRedirectUri } from "../../lib/redirect-uri";
 import { requireAuth } from "../../middleware/auth";
 import {
   buildTokenResponseFromAuthorizationCode,
   ensureFedCmRequest,
+  generateAuthCode,
   getApiBase,
   getWebBase,
-  issueAuthorizationCodeForApp,
   nowSeconds,
   parseScopes,
   resolveOauthAppForClient,
@@ -68,7 +68,7 @@ app.get("/fedcm/accounts", async (c) => {
 
   setLoginStatusHeader(c, "logged-in");
 
-  const [userIdentities, authorizations] = await Promise.all([
+  const [userIdentities, authorizations] = await db.batch([
     db
       .select()
       .from(identities)
@@ -120,10 +120,25 @@ app.post("/fedcm/assertion", async (c) => {
   const accountId = String(form.account_id || "");
   const origin = c.req.header("Origin") || "";
   const rawParams = String(form.params || "");
-  const rateLimitResponse = await enforceRateLimits(c, [
-    ipRateLimit(c, "oauth:fedcm-assertion:ip", 120, 60 * 1000),
-    subjectRateLimit("oauth:fedcm-assertion:user", user.id, 120, 60 * 1000),
-    subjectRateLimit("oauth:fedcm-assertion:client", clientId, 120, 60 * 1000),
+  const rateLimitResponse = await enforceNativeRateLimits(c, [
+    {
+      binding: "OAUTH_AUTHORIZE_ACTOR_RATE_LIMITER",
+      key: `fedcm:ip:${getClientIp(c)}`,
+      periodSeconds: 60,
+      fallback: ipRateLimit(c, "oauth:fedcm-assertion:ip", 120, 60 * 1000),
+    },
+    {
+      binding: "OAUTH_AUTHORIZE_ACTOR_RATE_LIMITER",
+      key: `fedcm:user:${user.id}`,
+      periodSeconds: 60,
+      fallback: subjectRateLimit("oauth:fedcm-assertion:user", user.id, 120, 60 * 1000),
+    },
+    {
+      binding: "OAUTH_AUTHORIZE_ACTOR_RATE_LIMITER",
+      key: `fedcm:client:${clientId}`,
+      periodSeconds: 60,
+      fallback: subjectRateLimit("oauth:fedcm-assertion:client", clientId, 120, 60 * 1000),
+    },
   ]);
   if (rateLimitResponse) return rateLimitResponse;
 
@@ -157,25 +172,22 @@ app.post("/fedcm/assertion", async (c) => {
     return c.json({ error: { code: "invalid_request", url: `${getWebBase()}/docs` } }, 400);
   }
 
-  const [identity] = await db
-    .select()
+  const [authorizationContext] = await db
+    .select({ identity: identities, authorization: oauthAuthorizations })
     .from(identities)
+    .leftJoin(oauthAuthorizations, and(
+      eq(oauthAuthorizations.userId, user.id),
+      eq(oauthAuthorizations.appId, oauthApp.id),
+      eq(oauthAuthorizations.identityId, identities.id),
+    ))
     .where(and(eq(identities.id, accountId), eq(identities.userId, user.id)))
     .limit(1);
+  const identity = authorizationContext?.identity;
+  const existingAuth = authorizationContext?.authorization;
 
   if (!identity) {
     return c.json({ error: { code: "access_denied", url: `${getWebBase()}/login` } }, 403);
   }
-
-  const [existingAuth] = await db
-    .select()
-    .from(oauthAuthorizations)
-    .where(and(
-      eq(oauthAuthorizations.userId, user.id),
-      eq(oauthAuthorizations.appId, oauthApp.id),
-      eq(oauthAuthorizations.identityId, identity.id),
-    ))
-    .limit(1);
 
   if (
     forceAuthorizeInteraction
@@ -198,7 +210,8 @@ app.post("/fedcm/assertion", async (c) => {
     return c.json({ continue_on: continueUrl.toString() });
   }
 
-  const code = await issueAuthorizationCodeForApp({
+  const code = generateAuthCode();
+  const authorizationCodeWrite = createAuthorizationCodeWrite(code, {
     userId: user.id,
     appId: oauthApp.id,
     identityId: identity.id,
@@ -206,21 +219,25 @@ app.post("/fedcm/assertion", async (c) => {
     scope,
     nonce,
     encryptedAppKey: existingAuth.encryptedAppKey || undefined,
+    expiresAt: Date.now() + 10 * 60 * 1000,
   });
 
-  const assertion = await signJwt({
-    iss: getIssuer(),
-    aud: clientId,
-    sub: identity.id,
-    typ: "ave_fedcm",
-    code,
-    client_id: clientId,
-    redirect_uri: redirectUri,
-    state: state || undefined,
-    nonce,
-    exp: nowSeconds() + 5 * 60,
-    iat: nowSeconds(),
-  });
+  const [assertion] = await Promise.all([
+    signJwt({
+      iss: getIssuer(),
+      aud: clientId,
+      sub: identity.id,
+      typ: "ave_fedcm",
+      code,
+      client_id: clientId,
+      redirect_uri: redirectUri,
+      state: state || undefined,
+      nonce,
+      exp: nowSeconds() + 5 * 60,
+      iat: nowSeconds(),
+    }),
+    authorizationCodeWrite,
+  ]);
 
   return c.json({ token: assertion });
 });
@@ -249,9 +266,19 @@ app.post("/fedcm/finalize", requireAuth, zValidator("json", z.object({
     appPrivateKeyOld,
     appKeyReset,
   } = c.req.valid("json");
-  const rateLimitResponse = await enforceRateLimits(c, [
-    ipRateLimit(c, "oauth:fedcm-finalize:ip", 120, 60 * 1000),
-    subjectRateLimit("oauth:fedcm-finalize:user", user.id, 120, 60 * 1000),
+  const rateLimitResponse = await enforceNativeRateLimits(c, [
+    {
+      binding: "OAUTH_AUTHORIZE_ACTOR_RATE_LIMITER",
+      key: `fedcm-finalize:ip:${getClientIp(c)}`,
+      periodSeconds: 60,
+      fallback: ipRateLimit(c, "oauth:fedcm-finalize:ip", 120, 60 * 1000),
+    },
+    {
+      binding: "OAUTH_AUTHORIZE_ACTOR_RATE_LIMITER",
+      key: `fedcm-finalize:user:${user.id}`,
+      periodSeconds: 60,
+      fallback: subjectRateLimit("oauth:fedcm-finalize:user", user.id, 120, 60 * 1000),
+    },
   ]);
   if (rateLimitResponse) return rateLimitResponse;
 
@@ -299,9 +326,19 @@ app.post("/fedcm/exchange", zValidator("json", z.object({
   clientId: z.string(),
 })), async (c) => {
   const { assertion, clientId } = c.req.valid("json");
-  const rateLimitResponse = await enforceRateLimits(c, [
-    ipRateLimit(c, "oauth:fedcm-exchange:ip", 120, 60 * 1000),
-    subjectRateLimit("oauth:fedcm-exchange:client", clientId, 120, 60 * 1000),
+  const rateLimitResponse = await enforceNativeRateLimits(c, [
+    {
+      binding: "OAUTH_AUTHORIZE_ACTOR_RATE_LIMITER",
+      key: `fedcm-exchange:ip:${getClientIp(c)}`,
+      periodSeconds: 60,
+      fallback: ipRateLimit(c, "oauth:fedcm-exchange:ip", 120, 60 * 1000),
+    },
+    {
+      binding: "OAUTH_AUTHORIZE_ACTOR_RATE_LIMITER",
+      key: `fedcm-exchange:client:${clientId}`,
+      periodSeconds: 60,
+      fallback: subjectRateLimit("oauth:fedcm-exchange:client", clientId, 120, 60 * 1000),
+    },
   ]);
   if (rateLimitResponse) return rateLimitResponse;
 

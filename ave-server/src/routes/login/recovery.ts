@@ -4,8 +4,9 @@ import { Hono } from "hono";
 import { z } from "zod";
 import { db, identities, sessions, users } from "../../db";
 import { recordActivityLog } from "../../lib/background-events";
+import { runInBackground } from "../../lib/background";
 import { generateSessionToken, hashSessionToken } from "../../lib/crypto";
-import { serializeIdentityForOwner } from "../../lib/identity-serialization";
+import { listIdentitiesForOwner } from "../../lib/identity-serialization";
 import { enforceRateLimits, ipRateLimit, subjectRateLimit } from "../../lib/rate-limit";
 import { setSessionCookie } from "../../lib/session-cookie";
 import {
@@ -118,21 +119,18 @@ app.post("/trust-code", zValidator("json", z.object({
     severity: "warning", // Trust code usage is noteworthy
   });
 
-  await notifyAccountLoginEvent(
+  runInBackground(c, notifyAccountLoginEvent(
     identity.userId,
     {
       method: "trust_code",
       deviceName: deviceRecord.name,
       deviceType: deviceRecord.type,
     },
-    deviceRecord.id
-  );
+    deviceRecord.id,
+  ), "Account login notifications");
 
   // Get user's identities
-  const userIdentities = await db
-    .select()
-    .from(identities)
-    .where(eq(identities.userId, identity.userId));
+  const userIdentities = await listIdentitiesForOwner(identity.userId);
 
   recordActivityLog(c, {
     userId: identity.userId,
@@ -154,7 +152,7 @@ app.post("/trust-code", zValidator("json", z.object({
       type: deviceRecord.type,
       isNew: deviceRecord.isNew,
     },
-    identities: userIdentities.map(serializeIdentityForOwner),
+    identities: userIdentities,
     remainingTrustCodes: remainingCodes,
     remainingRecoveryCodes: remainingCodes,
   });

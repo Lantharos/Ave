@@ -28,30 +28,15 @@ async function countUnusedTrustCodes(userId: string): Promise<number> {
     .select({ count: sql<number>`count(*)` })
     .from(trustCodes)
     .where(and(eq(trustCodes.userId, userId), isNull(trustCodes.usedAt)));
-
-  return Number(result?.count || 0);
-}
-
-async function countAllTrustCodes(userId: string): Promise<number> {
-  const [result] = await db
-    .select({ count: sql<number>`count(*)` })
-    .from(trustCodes)
-    .where(eq(trustCodes.userId, userId));
-
   return Number(result?.count || 0);
 }
 
 async function createTrustCodes(userId: string): Promise<string[]> {
-  const codes: string[] = [];
-
-  for (let i = 0; i < RECOVERY_CODE_COUNT; i++) {
-    const code = generateTrustCode();
-    codes.push(code);
-    await db.insert(trustCodes).values({
-      userId,
-      codeHash: hashTrustCode(code),
-    });
-  }
+  const codes = Array.from({ length: RECOVERY_CODE_COUNT }, generateTrustCode);
+  await db.insert(trustCodes).values(codes.map((code) => ({
+    userId,
+    codeHash: hashTrustCode(code),
+  })));
 
   return codes;
 }
@@ -64,17 +49,23 @@ app.use("*", requireWritableForMutation);
 app.get("/", async (c) => {
   const user = c.get("user")!;
   
-  // Get passkeys
-  const userPasskeys = await db
-    .select()
-    .from(passkeys)
-    .where(eq(passkeys.userId, user.id))
-    .orderBy(desc(passkeys.createdAt));
-  
-  const [trustCodesRemaining, totalTrustCodes] = await Promise.all([
-    countUnusedTrustCodes(user.id),
-    countAllTrustCodes(user.id),
+  const [userPasskeys, unusedTrustCodeRows, trustCodeRows] = await db.batch([
+    db
+      .select()
+      .from(passkeys)
+      .where(eq(passkeys.userId, user.id))
+      .orderBy(desc(passkeys.createdAt)),
+    db
+      .select({ count: sql<number>`count(*)` })
+      .from(trustCodes)
+      .where(and(eq(trustCodes.userId, user.id), isNull(trustCodes.usedAt))),
+    db
+      .select({ count: sql<number>`count(*)` })
+      .from(trustCodes)
+      .where(eq(trustCodes.userId, user.id)),
   ]);
+  const trustCodesRemaining = Number(unusedTrustCodeRows[0]?.count || 0);
+  const totalTrustCodes = Number(trustCodeRows[0]?.count || 0);
   
   return c.json({
     passkeys: userPasskeys.map((pk) => ({

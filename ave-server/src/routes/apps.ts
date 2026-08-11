@@ -15,7 +15,6 @@ import {
   syncSupportsE2eeFlag,
 } from "../lib/e2ee-scopes";
 import {
-  backfillOwnedAppsOrganization,
   ensurePersonalOrganization,
   getAccessibleApp,
   getAccessibleApps,
@@ -114,8 +113,6 @@ app.use("*", requireDevUser);
 
 app.get("/", async (c) => {
   const userId = c.get("devUserId") as string;
-  await backfillOwnedAppsOrganization(userId);
-
   const requestedOrganizationId = c.req.query("organizationId");
   const apps = await getAccessibleApps(userId, requestedOrganizationId);
   const resources = await listAppResources(apps.map((appRow) => appRow.id));
@@ -123,7 +120,7 @@ app.get("/", async (c) => {
     ? await db
         .select({
           appId: oauthAuthorizations.appId,
-          identityCount: sql<number>`count(distinct ${oauthAuthorizations.identityId})`,
+          identityCount: sql<number>`count(*)`,
         })
         .from(oauthAuthorizations)
         .where(inArray(oauthAuthorizations.appId, apps.map((appRow) => appRow.id)))

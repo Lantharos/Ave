@@ -1,4 +1,5 @@
-import { type Identity } from "../db";
+import { eq } from "drizzle-orm";
+import { db, identities, identityEncryptionKeys, type Identity } from "../db";
 
 export type SerializedIdentity = {
   id: string;
@@ -11,9 +12,10 @@ export type SerializedIdentity = {
   bannerUrl?: string | null;
   isPrimary: boolean;
   createdAt: Date;
+  hasEncryptionKey?: boolean;
 };
 
-export function serializeIdentityForOwner(identity: Identity): SerializedIdentity {
+export function serializeIdentityForOwner(identity: Identity, hasEncryptionKey?: boolean): SerializedIdentity {
   return {
     id: identity.id,
     displayName: identity.displayName,
@@ -25,7 +27,20 @@ export function serializeIdentityForOwner(identity: Identity): SerializedIdentit
     bannerUrl: identity.bannerUrl,
     isPrimary: identity.isPrimary,
     createdAt: identity.createdAt,
+    ...(hasEncryptionKey === undefined ? {} : { hasEncryptionKey }),
   };
+}
+
+export async function listIdentitiesForOwner(userId: string): Promise<SerializedIdentity[]> {
+  const rows = await db
+    .select({ identity: identities, encryptionKeyId: identityEncryptionKeys.id })
+    .from(identities)
+    .leftJoin(identityEncryptionKeys, eq(identityEncryptionKeys.identityId, identities.id))
+    .where(eq(identities.userId, userId));
+
+  return rows.map(({ identity, encryptionKeyId }) =>
+    serializeIdentityForOwner(identity, encryptionKeyId !== null)
+  );
 }
 
 export function serializeIdentityForApp(identity: Identity) {

@@ -8,7 +8,7 @@ import { recordActivityLog } from "../../lib/background-events";
 import { setChallenge } from "../../lib/challenge-store";
 import { generateSessionToken, hashSessionToken } from "../../lib/crypto";
 import { isDemoHandle, isDemoLoginEnabled, verifyDemoPassword } from "../../lib/demo-auth";
-import { serializeIdentityForOwner } from "../../lib/identity-serialization";
+import { listIdentitiesForOwner } from "../../lib/identity-serialization";
 import { enforceRateLimits, ipRateLimit, subjectRateLimit } from "../../lib/rate-limit";
 import { setSessionCookie } from "../../lib/session-cookie";
 import { getOrCreateDevice, rejectRequiredEnterpriseSso, type Bindings } from "./shared";
@@ -65,7 +65,7 @@ app.post("/start", zValidator("json", z.object({
     });
   }
 
-  const [[deviceCount], [passkeyCount]] = await Promise.all([
+  const [[deviceCount], [passkeyCount]] = await db.batch([
     db
       .select({ count: sql<number>`count(*)` })
       .from(devices)
@@ -183,10 +183,7 @@ app.post("/demo", zValidator("json", z.object({
     severity: "info",
   });
 
-  const userIdentities = await db
-    .select()
-    .from(identities)
-    .where(eq(identities.userId, identity.userId));
+  const userIdentities = await listIdentitiesForOwner(identity.userId);
 
   return c.json({
     success: true,
@@ -196,7 +193,7 @@ app.post("/demo", zValidator("json", z.object({
       type: deviceRecord.type,
       isNew: deviceRecord.isNew,
     },
-    identities: userIdentities.map(serializeIdentityForOwner),
+    identities: userIdentities,
     readOnly: true,
   });
 });

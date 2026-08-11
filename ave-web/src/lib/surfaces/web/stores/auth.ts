@@ -55,13 +55,20 @@ function createAuthStore() {
   async function ensureIdentityEncryptionKeys(identities: Identity[], masterKey: CryptoKey | null) {
     if (!masterKey) return;
 
-    for (const identity of identities) {
+    const missingKeys = identities.filter((identity) => identity.hasEncryptionKey === false);
+    for (const identity of missingKeys) {
       try {
-        const keyState = await api.encryption.getKey(identity.id);
-        if (keyState.hasKey) continue;
-
         const generated = await createStoredIdentityEncryptionKeyPair(masterKey);
         await api.encryption.createKey(identity.id, generated);
+        update((state) => ({
+          ...state,
+          identities: state.identities.map((entry) =>
+            entry.id === identity.id ? { ...entry, hasEncryptionKey: true } : entry
+          ),
+          currentIdentity: state.currentIdentity?.id === identity.id
+            ? { ...state.currentIdentity, hasEncryptionKey: true }
+            : state.currentIdentity,
+        }));
       } catch (error) {
         console.warn("[Auth] Failed to backfill encryption key for identity", identity.id, error);
       }

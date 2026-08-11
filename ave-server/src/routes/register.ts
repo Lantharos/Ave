@@ -299,7 +299,7 @@ app.post("/complete", zValidator("json", completeRegistrationSchema), async (c) 
       id: result.user.id,
     },
     identity: {
-      ...serializeIdentityForOwner(result.identity),
+      ...serializeIdentityForOwner(result.identity, Boolean(data.encryptionKey)),
     },
     device: {
       id: result.device.id,

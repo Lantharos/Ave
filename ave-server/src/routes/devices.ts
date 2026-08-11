@@ -346,26 +346,23 @@ export async function cleanupStaleDevices() {
   
   console.log(`[Cleanup] Found ${staleDevices.length} stale devices to remove`);
   
-  // For each stale device, remove the trusted device record entirely
-  for (const device of staleDevices) {
-    await db.delete(devices).where(eq(devices.id, device.id));
-    
-    // Log activity
-    await db.insert(activityLogs).values({
+  await db.batch([
+    db.insert(activityLogs).values(staleDevices.map((device) => ({
       userId: device.userId,
       action: "device_auto_removed",
-      details: { 
-        deviceId: device.id, 
+      details: {
+        deviceId: device.id,
         deviceName: device.name,
         deviceType: device.type,
         browser: device.browser,
         os: device.os,
         lastSeenAt: device.lastSeenAt,
-        reason: "inactive_14_days" 
+        reason: "inactive_14_days",
       },
       severity: "info",
-    });
-  }
+    }))),
+    db.delete(devices).where(inArray(devices.id, staleDevices.map((device) => device.id))),
+  ]);
   
   console.log(`[Cleanup] Removed ${staleDevices.length} stale devices`);
   return { removed: staleDevices.length };

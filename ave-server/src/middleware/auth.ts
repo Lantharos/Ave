@@ -33,7 +33,8 @@ declare module "hono" {
  */
 export async function authMiddleware(c: Context, next: Next) {
   const authHeader = c.req.header("Authorization");
-  const bearerToken = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null;
+  const bearerValue = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null;
+  const bearerToken = bearerValue && /^[0-9a-f]{64}$/i.test(bearerValue) ? bearerValue : null;
 
   const cookieHeader = c.req.header("Cookie") || "";
   const cookieToken = cookieHeader ? getCookieValue(cookieHeader, SESSION_COOKIE_NAME) : null;
@@ -50,8 +51,18 @@ export async function authMiddleware(c: Context, next: Next) {
   try {
     // Find valid session
     const [session] = await db
-      .select()
+      .select({
+        id: sessions.id,
+        userId: sessions.userId,
+        deviceId: sessions.deviceId,
+        expiresAt: sessions.expiresAt,
+        authMethod: sessions.authMethod,
+        enterpriseSsoOrganizationId: sessions.enterpriseSsoOrganizationId,
+        enterpriseSsoConnectionId: sessions.enterpriseSsoConnectionId,
+        deviceLastSeenAt: devices.lastSeenAt,
+      })
       .from(sessions)
+      .leftJoin(devices, eq(devices.id, sessions.deviceId))
       .where(
         and(
           eq(sessions.tokenHash, tokenHash),
@@ -73,12 +84,11 @@ export async function authMiddleware(c: Context, next: Next) {
         .where(eq(sessions.id, session.id));
 
       setSessionCookie(c, token, refreshedExpiresAt);
-      session.expiresAt = refreshedExpiresAt;
     }
     
     // Update device last seen if we have a device
-    if (session.deviceId) {
-      const staleBefore = new Date(Date.now() - DEVICE_LAST_SEEN_UPDATE_INTERVAL_MS);
+    const staleBefore = new Date(Date.now() - DEVICE_LAST_SEEN_UPDATE_INTERVAL_MS);
+    if (session.deviceId && (!session.deviceLastSeenAt || session.deviceLastSeenAt < staleBefore)) {
       runInBackground(
         c,
         db

@@ -1,11 +1,12 @@
 import { zValidator } from "@hono/zod-validator";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { Hono } from "hono";
 import { z } from "zod";
 import { db, devices, identities, loginRequests, sessions } from "../../db";
 import { recordActivityLog } from "../../lib/background-events";
+import { runInBackground } from "../../lib/background";
 import { generateSessionToken, hashSessionToken } from "../../lib/crypto";
-import { serializeIdentityForOwner } from "../../lib/identity-serialization";
+import { listIdentitiesForOwner } from "../../lib/identity-serialization";
 import { enforceRateLimits, ipRateLimit, subjectRateLimit } from "../../lib/rate-limit";
 import { setSessionCookie } from "../../lib/session-cookie";
 import { sendLoginRequestNotification, type PushSubscription } from "../../lib/webpush";
@@ -68,27 +69,26 @@ app.post("/request-approval", zValidator("json", z.object({
     })
     .returning();
 
-  // Notify user's connected devices via WebSocket
-  await notifyLoginRequestInApiApp(c, normalizedHandle, {
-    id: request.id,
-    deviceName: request.deviceName,
-    deviceType: request.deviceType,
-    browser: request.browser,
-    os: request.os,
-    ipAddress: request.ipAddress,
-  });
-
-  // Send push notifications to all user's devices with push subscriptions
-  const userDevices = await db
-    .select()
-    .from(devices)
-    .where(and(eq(devices.userId, identity.userId), eq(devices.isActive, true)));
-
-  for (const userDevice of userDevices) {
-    if (userDevice.pushSubscription) {
+  runInBackground(c, (async () => {
+    const loginRequest = {
+      id: request.id,
+      deviceName: request.deviceName,
+      deviceType: request.deviceType,
+      browser: request.browser,
+      os: request.os,
+      ipAddress: request.ipAddress,
+    };
+    const [userDevices] = await Promise.all([
+      db
+        .select({ id: devices.id, pushSubscription: devices.pushSubscription })
+        .from(devices)
+        .where(and(eq(devices.userId, identity.userId), eq(devices.isActive, true))),
+      notifyLoginRequestInApiApp(c, normalizedHandle, loginRequest),
+    ]);
+    const invalidDeviceIds = (await Promise.all(userDevices.map(async (userDevice) => {
+      if (!userDevice.pushSubscription) return null;
       try {
-        const subscription = userDevice.pushSubscription as PushSubscription;
-        const sent = await sendLoginRequestNotification(subscription, {
+        const sent = await sendLoginRequestNotification(userDevice.pushSubscription as PushSubscription, {
           requestId: request.id,
           deviceName: request.deviceName || "Unknown Device",
           deviceType: request.deviceType || "computer",
@@ -96,19 +96,20 @@ app.post("/request-approval", zValidator("json", z.object({
           os: request.os || undefined,
           ipAddress: request.ipAddress || undefined,
         });
-
-        // If push failed (subscription invalid), remove it
-        if (!sent) {
-          await db
-            .update(devices)
-            .set({ pushSubscription: null })
-            .where(eq(devices.id, userDevice.id));
-        }
-      } catch (e) {
-        console.error(`[Push] Failed to send notification to device ${userDevice.id}:`, e);
+        return sent ? null : userDevice.id;
+      } catch (error) {
+        console.error(`[Push] Failed to send notification to device ${userDevice.id}:`, error);
+        return null;
       }
+    }))).filter((deviceId): deviceId is string => deviceId !== null);
+
+    if (invalidDeviceIds.length) {
+      await db
+        .update(devices)
+        .set({ pushSubscription: null })
+        .where(inArray(devices.id, invalidDeviceIds));
     }
-  }
+  })(), "Login request notifications");
 
   return c.json({
     requestId: request.id,
@@ -206,20 +207,17 @@ app.get("/request-status/:requestId", async (c) => {
       severity: "info",
     });
 
-    await notifyAccountLoginEvent(
+    runInBackground(c, notifyAccountLoginEvent(
       identity.userId,
       {
         method: "device_approval",
         deviceName: deviceRecord.name,
         deviceType: deviceRecord.type,
       },
-      deviceRecord.id
-    );
+      deviceRecord.id,
+    ), "Account login notifications");
 
-    const userIdentities = await db
-      .select()
-      .from(identities)
-      .where(eq(identities.userId, identity.userId));
+    const userIdentities = await listIdentitiesForOwner(identity.userId);
 
     await db.delete(loginRequests).where(eq(loginRequests.id, requestId));
 
@@ -233,7 +231,7 @@ app.get("/request-status/:requestId", async (c) => {
         type: deviceRecord.type,
         isNew: deviceRecord.isNew,
       },
-      identities: userIdentities.map(serializeIdentityForOwner),
+      identities: userIdentities,
     });
 
   }

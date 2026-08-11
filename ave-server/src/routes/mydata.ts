@@ -14,98 +14,37 @@ app.use("*", requireWritableForMutation);
 app.get("/export", async (c) => {
   const user = c.get("user")!;
   
-  // Get all user's data
-  const [userData] = await db
-    .select({
-      id: users.id,
-      createdAt: users.createdAt,
-      updatedAt: users.updatedAt,
-    })
-    .from(users)
-    .where(eq(users.id, user.id))
-    .limit(1);
-  
-  const userIdentities = await db
-    .select({
-      id: identities.id,
-      displayName: identities.displayName,
-      handle: identities.handle,
-      email: identities.email,
-      pendingEmail: identities.pendingEmail,
-      birthday: identities.birthday,
-      avatarUrl: identities.avatarUrl,
-      bannerUrl: identities.bannerUrl,
-      isPrimary: identities.isPrimary,
+  const [userRows, userIdentities, userPasskeys, userDevices, userSessions, userTrustCodes, userActivityLogs, userAuthorizations] = await db.batch([
+    db.select({ id: users.id, createdAt: users.createdAt, updatedAt: users.updatedAt })
+      .from(users).where(eq(users.id, user.id)).limit(1),
+    db.select({
+      id: identities.id, displayName: identities.displayName, handle: identities.handle,
+      email: identities.email, pendingEmail: identities.pendingEmail, birthday: identities.birthday,
+      avatarUrl: identities.avatarUrl, bannerUrl: identities.bannerUrl, isPrimary: identities.isPrimary,
       createdAt: identities.createdAt,
-    })
-    .from(identities)
-    .where(eq(identities.userId, user.id));
-  
-  const userPasskeys = await db
-    .select({
-      id: passkeys.id,
-      name: passkeys.name,
-      deviceType: passkeys.deviceType,
-      createdAt: passkeys.createdAt,
-      lastUsedAt: passkeys.lastUsedAt,
-    })
-    .from(passkeys)
-    .where(eq(passkeys.userId, user.id));
-  
-  const userDevices = await db
-    .select({
-      id: devices.id,
-      name: devices.name,
-      type: devices.type,
-      browser: devices.browser,
-      os: devices.os,
-      createdAt: devices.createdAt,
-      lastSeenAt: devices.lastSeenAt,
-      isActive: devices.isActive,
-    })
-    .from(devices)
-    .where(eq(devices.userId, user.id));
-  
-  const userSessions = await db
-    .select({
-      id: sessions.id,
-      createdAt: sessions.createdAt,
-      expiresAt: sessions.expiresAt,
-      ipAddress: sessions.ipAddress,
-    })
-    .from(sessions)
-    .where(eq(sessions.userId, user.id));
-  
-  const userTrustCodes = await db
-    .select({
-      id: trustCodes.id,
-      createdAt: trustCodes.createdAt,
-      usedAt: trustCodes.usedAt,
-    })
-    .from(trustCodes)
-    .where(eq(trustCodes.userId, user.id));
-  
-  const userActivityLogs = await db
-    .select({
-      id: activityLogs.id,
-      action: activityLogs.action,
-      details: activityLogs.details,
-      severity: activityLogs.severity,
-      ipAddress: activityLogs.ipAddress,
-      createdAt: activityLogs.createdAt,
-    })
-    .from(activityLogs)
-    .where(eq(activityLogs.userId, user.id));
-  
-  const userAuthorizations = await db
-    .select({
-      id: oauthAuthorizations.id,
-      appId: oauthAuthorizations.appId,
-      identityId: oauthAuthorizations.identityId,
-      createdAt: oauthAuthorizations.createdAt,
-    })
-    .from(oauthAuthorizations)
-    .where(eq(oauthAuthorizations.userId, user.id));
+    }).from(identities).where(eq(identities.userId, user.id)),
+    db.select({
+      id: passkeys.id, name: passkeys.name, deviceType: passkeys.deviceType,
+      createdAt: passkeys.createdAt, lastUsedAt: passkeys.lastUsedAt,
+    }).from(passkeys).where(eq(passkeys.userId, user.id)),
+    db.select({
+      id: devices.id, name: devices.name, type: devices.type, browser: devices.browser, os: devices.os,
+      createdAt: devices.createdAt, lastSeenAt: devices.lastSeenAt, isActive: devices.isActive,
+    }).from(devices).where(eq(devices.userId, user.id)),
+    db.select({ id: sessions.id, createdAt: sessions.createdAt, expiresAt: sessions.expiresAt, ipAddress: sessions.ipAddress })
+      .from(sessions).where(eq(sessions.userId, user.id)),
+    db.select({ id: trustCodes.id, createdAt: trustCodes.createdAt, usedAt: trustCodes.usedAt })
+      .from(trustCodes).where(eq(trustCodes.userId, user.id)),
+    db.select({
+      id: activityLogs.id, action: activityLogs.action, details: activityLogs.details,
+      severity: activityLogs.severity, ipAddress: activityLogs.ipAddress, createdAt: activityLogs.createdAt,
+    }).from(activityLogs).where(eq(activityLogs.userId, user.id)),
+    db.select({
+      id: oauthAuthorizations.id, appId: oauthAuthorizations.appId,
+      identityId: oauthAuthorizations.identityId, createdAt: oauthAuthorizations.createdAt,
+    }).from(oauthAuthorizations).where(eq(oauthAuthorizations.userId, user.id)),
+  ]);
+  const [userData] = userRows;
   
   // Compile export data
   const exportData = {

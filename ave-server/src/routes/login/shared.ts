@@ -1,4 +1,4 @@
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, inArray, isNull } from "drizzle-orm";
 import { db, devices, trustCodes } from "../../db";
 import { verifyTrustCode } from "../../lib/crypto";
 import { getRequiredEnterpriseSsoForEmail } from "../../lib/enterprise-sso-policy";
@@ -170,19 +170,12 @@ export async function notifyAccountLoginEvent(
   excludeDeviceId?: string | null
 ): Promise<void> {
   const userDevices = await db
-    .select()
+    .select({ id: devices.id, pushSubscription: devices.pushSubscription })
     .from(devices)
     .where(and(eq(devices.userId, userId), eq(devices.isActive, true)));
 
-  for (const userDevice of userDevices) {
-    if (excludeDeviceId && userDevice.id === excludeDeviceId) {
-      continue;
-    }
-
-    if (!userDevice.pushSubscription) {
-      continue;
-    }
-
+  const invalidDeviceIds = (await Promise.all(userDevices.map(async (userDevice) => {
+    if ((excludeDeviceId && userDevice.id === excludeDeviceId) || !userDevice.pushSubscription) return null;
     try {
       const subscription = userDevice.pushSubscription as PushSubscription;
       const sent = await sendAccountEventNotification(subscription, {
@@ -196,14 +189,17 @@ export async function notifyAccountLoginEvent(
         },
       });
 
-      if (!sent) {
-        await db
-          .update(devices)
-          .set({ pushSubscription: null })
-          .where(eq(devices.id, userDevice.id));
-      }
+      return sent ? null : userDevice.id;
     } catch (error) {
       console.error(`[Push] Failed to send account event to device ${userDevice.id}:`, error);
+      return null;
     }
+  }))).filter((deviceId): deviceId is string => deviceId !== null);
+
+  if (invalidDeviceIds.length) {
+    await db
+      .update(devices)
+      .set({ pushSubscription: null })
+      .where(inArray(devices.id, invalidDeviceIds));
   }
 }

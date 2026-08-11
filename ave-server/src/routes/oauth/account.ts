@@ -16,10 +16,10 @@ import {
 import { recordActivityLog, recordAppAnalyticsEvent, recordOAuthDelegationAuditLog } from "../../lib/background-events";
 import { serializeEncryptionPolicy } from "../../lib/business-encryption";
 import { createBusinessOrganization } from "../../lib/business";
-import { serializeIdentityForOwner } from "../../lib/identity-serialization";
+import { listIdentitiesForOwner } from "../../lib/identity-serialization";
 import { getIssuer, getResourceAudience, verifyJwt } from "../../lib/oidc";
 import { getAccessToken } from "../../lib/oauth-store";
-import { enforceRateLimits, ipRateLimit, subjectRateLimit } from "../../lib/rate-limit";
+import { enforceNativeRateLimits, enforceRateLimits, getClientIp, ipRateLimit, subjectRateLimit } from "../../lib/rate-limit";
 import { requireAuth, requireWritable } from "../../middleware/auth";
 import {
   hasScope,
@@ -46,9 +46,19 @@ app.get("/userinfo", async (c) => {
   }
 
   const token = authHeader.slice(7);
-  const rateLimitResponse = await enforceRateLimits(c, [
-    ipRateLimit(c, "oauth:userinfo:ip", 300, 60 * 1000),
-    subjectRateLimit("oauth:userinfo:token", token.slice(0, 32), 180, 60 * 1000),
+  const rateLimitResponse = await enforceNativeRateLimits(c, [
+    {
+      binding: "OAUTH_TOKEN_IP_RATE_LIMITER",
+      key: `userinfo:ip:${getClientIp(c)}`,
+      periodSeconds: 60,
+      fallback: ipRateLimit(c, "oauth:userinfo:ip", 300, 60 * 1000),
+    },
+    {
+      binding: "OAUTH_CLIENT_RATE_LIMITER",
+      key: `userinfo:token:${token.slice(0, 32)}`,
+      periodSeconds: 60,
+      fallback: subjectRateLimit("oauth:userinfo:token", token.slice(0, 32), 180, 60 * 1000),
+    },
   ]);
   if (rateLimitResponse) return rateLimitResponse;
 
@@ -106,9 +116,19 @@ app.get("/organizations", async (c) => {
   }
 
   const token = authHeader.slice(7);
-  const rateLimitResponse = await enforceRateLimits(c, [
-    ipRateLimit(c, "oauth:organizations:ip", 180, 60 * 1000),
-    subjectRateLimit("oauth:organizations:token", token.slice(0, 32), 120, 60 * 1000),
+  const rateLimitResponse = await enforceNativeRateLimits(c, [
+    {
+      binding: "OAUTH_CLIENT_RATE_LIMITER",
+      key: `organizations:ip:${getClientIp(c)}`,
+      periodSeconds: 60,
+      fallback: ipRateLimit(c, "oauth:organizations:ip", 180, 60 * 1000),
+    },
+    {
+      binding: "OAUTH_AUTHORIZE_ACTOR_RATE_LIMITER",
+      key: `organizations:token:${token.slice(0, 32)}`,
+      periodSeconds: 60,
+      fallback: subjectRateLimit("oauth:organizations:token", token.slice(0, 32), 120, 60 * 1000),
+    },
   ]);
   if (rateLimitResponse) return rateLimitResponse;
 
@@ -232,39 +252,44 @@ app.post("/session/check", async (c) => {
   }
 
   const token = authHeader.slice(7);
-  const rateLimitResponse = await enforceRateLimits(c, [
-    ipRateLimit(c, "oauth:session-check:ip", 300, 60 * 1000),
-    subjectRateLimit("oauth:session-check:token", token.slice(0, 32), 120, 60 * 1000),
+  const rateLimitResponse = await enforceNativeRateLimits(c, [
+    {
+      binding: "OAUTH_TOKEN_IP_RATE_LIMITER",
+      key: `session-check:ip:${getClientIp(c)}`,
+      periodSeconds: 60,
+      fallback: ipRateLimit(c, "oauth:session-check:ip", 300, 60 * 1000),
+    },
+    {
+      binding: "OAUTH_AUTHORIZE_ACTOR_RATE_LIMITER",
+      key: `session-check:token:${token.slice(0, 32)}`,
+      periodSeconds: 60,
+      fallback: subjectRateLimit("oauth:session-check:token", token.slice(0, 32), 120, 60 * 1000),
+    },
   ]);
   if (rateLimitResponse) return rateLimitResponse;
 
-  // Check stored opaque access tokens first
+  if (token.split(".").length === 3) {
+    const jwtPayload = await verifyJwt(token, getResourceAudience());
+    return jwtPayload
+      ? c.json({ status: "active" })
+      : c.json({ error: "invalid_token", reason: "invalid_token" }, 401);
+  }
+
   const record = await getAccessToken(token);
-  if (record) {
-    return c.json({ status: "active" });
-  }
-
-  // Fall back to JWT verification
-  const jwtPayload = await verifyJwt(token, getResourceAudience());
-  if (!jwtPayload) {
-    return c.json({ error: "invalid_token", reason: "invalid_token" }, 401);
-  }
-
-  return c.json({ status: "active" });
+  return record
+    ? c.json({ status: "active" })
+    : c.json({ error: "invalid_token", reason: "invalid_token" }, 401);
 });
 app.get("/session/bootstrap", requireAuth, async (c) => {
   const user = c.get("user")!;
 
-  const userIdentities = await db
-    .select()
-    .from(identities)
-    .where(eq(identities.userId, user.id));
+  const userIdentities = await listIdentitiesForOwner(user.id);
 
   c.header("Cache-Control", "no-store");
 
   return c.json({
     readOnly: user.isReadOnly,
-    identities: userIdentities.map(serializeIdentityForOwner),
+    identities: userIdentities,
   });
 });
 

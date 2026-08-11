@@ -94,20 +94,16 @@ function slugify(value: string): string {
 
 async function createUniqueSlug(baseValue: string): Promise<string> {
   const baseSlug = slugify(baseValue);
-  let candidate = baseSlug;
-  let counter = 1;
-
-  while (true) {
-    const [existing] = await db
-      .select({ id: organizations.id })
-      .from(organizations)
-      .where(eq(organizations.slug, candidate))
-      .limit(1);
-
-    if (!existing) return candidate;
-    counter += 1;
-    candidate = `${baseSlug}-${counter}`;
-  }
+  const candidates = Array.from({ length: 100 }, (_, index) =>
+    index === 0 ? baseSlug : `${baseSlug}-${index}`
+  );
+  const existingSlugs = await db
+    .select({ slug: organizations.slug })
+    .from(organizations)
+    .where(inArray(organizations.slug, candidates));
+  const occupied = new Set(existingSlugs.map((organization) => organization.slug));
+  return candidates.find((candidate) => !occupied.has(candidate))
+    ?? `${baseSlug}-${crypto.randomUUID().slice(0, 8)}`;
 }
 
 export async function getUserBusinessIdentities(userId: string) {
@@ -157,10 +153,6 @@ export async function createBusinessOrganization(userId: string, name: string, o
 }
 
 export async function requireBusinessAccess(userId: string, organizationId: string, minimumRole: BusinessRole = "viewer") {
-  const userIdentities = await getUserBusinessIdentities(userId);
-  const identityIds = userIdentities.map((identity) => identity.id);
-  if (!identityIds.length) return null;
-
   const memberships = await db
     .select({
       member: organizationIdentityMembers,
@@ -174,7 +166,7 @@ export async function requireBusinessAccess(userId: string, organizationId: stri
       and(
         eq(organizationIdentityMembers.organizationId, organizationId),
         eq(organizationIdentityMembers.status, "active"),
-        inArray(organizationIdentityMembers.identityId, identityIds),
+        eq(identities.userId, userId),
       ),
     );
 
@@ -186,10 +178,6 @@ export async function requireBusinessAccess(userId: string, organizationId: stri
 }
 
 export async function listBusinessOrganizationsForUser(userId: string) {
-  const userIdentities = await getUserBusinessIdentities(userId);
-  const identityIds = userIdentities.map((identity) => identity.id);
-  if (!identityIds.length) return [];
-
   const rows = await db
     .select({
       member: organizationIdentityMembers,
@@ -199,7 +187,7 @@ export async function listBusinessOrganizationsForUser(userId: string) {
     .from(organizationIdentityMembers)
     .innerJoin(identities, eq(identities.id, organizationIdentityMembers.identityId))
     .innerJoin(organizations, eq(organizations.id, organizationIdentityMembers.organizationId))
-    .where(and(inArray(organizationIdentityMembers.identityId, identityIds), eq(organizationIdentityMembers.status, "active")))
+    .where(and(eq(identities.userId, userId), eq(organizationIdentityMembers.status, "active")))
     .orderBy(desc(organizationIdentityMembers.updatedAt));
 
   const byOrganization = new Map<string, (typeof rows)[number]>();

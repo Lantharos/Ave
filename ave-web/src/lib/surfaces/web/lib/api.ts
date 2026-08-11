@@ -36,10 +36,10 @@ export function clearD1Bookmark(): void {
   persistBookmark(null);
 }
 
-function mergeHeaders(base: HeadersInit | undefined, token: string | null): Headers {
+function mergeHeaders(base: HeadersInit | undefined, token: string | null, hasJsonBody: boolean): Headers {
   const headers = new Headers(base);
 
-  if (!headers.has("Content-Type")) {
+  if (hasJsonBody && !headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json");
   }
 
@@ -80,7 +80,7 @@ async function request<T>(
     token = null;
   }
   
-  const headers = mergeHeaders(options.headers, token);
+  const headers = mergeHeaders(options.headers, token, typeof options.body === "string");
   
   const { timeoutMs, ...fetchOptions } = options;
   let controller: AbortController | null = null;
@@ -154,6 +154,7 @@ export interface Identity {
   bannerUrl?: string;
   isPrimary: boolean;
   createdAt?: string;
+  hasEncryptionKey?: boolean;
 }
 
 export interface Device {

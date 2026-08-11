@@ -3,7 +3,7 @@ import { eq } from "drizzle-orm";
 import { randomUUID, timingSafeEqual } from "crypto";
 import { hashSessionToken } from "../../lib/crypto";
 import { getIssuer, getResourceAudience, signJwt, verifyJwt, hashToken } from "../../lib/oidc";
-import { createAccessTokenWrite, getAccessToken, setAuthorizationCode, type AccessTokenRecord } from "../../lib/oauth-store";
+import { createAccessTokenWrite, getAccessToken, type AccessTokenRecord } from "../../lib/oauth-store";
 import { serializeIdentityForApp } from "../../lib/identity-serialization";
 import { isOriginAllowedForApp, normalizeRedirectUri } from "../../lib/redirect-uri";
 import { scopesForRole, type BusinessRole } from "../../lib/business";
@@ -197,8 +197,9 @@ export function workspaceOrganizationResponse(
 }
 
 export async function resolveAccessTokenRecord(token: string): Promise<AccessTokenRecord | null> {
-  const stored = await getAccessToken(token);
-  if (stored) return stored;
+  if (token.split(".").length !== 3) {
+    return getAccessToken(token);
+  }
 
   const jwtPayload = await verifyJwt(token, getResourceAudience());
   if (!jwtPayload) return null;
@@ -261,57 +262,6 @@ export async function resolveOauthAppForClient(clientId: string) {
     .limit(1);
 
   return app ?? null;
-}
-
-export async function issueAuthorizationCodeForApp(params: {
-  userId: string;
-  appId: string;
-  identityId: string;
-  redirectUri: string;
-  scope: string;
-  nonce?: string;
-  encryptedAppKey?: string;
-  appPublicKey?: string;
-  encryptedAppPrivateKey?: string;
-  appEncryptionMode?: string;
-  organizationId?: string;
-  organizationName?: string;
-  organizationMemberId?: string;
-  organizationRole?: string;
-  organizationScopes?: string[];
-  organizationSigningAuthority?: boolean;
-  organizationEncryptionMode?: string;
-  organizationKeyCustody?: string;
-  organizationAuthMethod?: string;
-  organizationSsoConnectionId?: string;
-}) {
-  const code = generateAuthCode();
-
-  await setAuthorizationCode(code, {
-    userId: params.userId,
-    appId: params.appId,
-    identityId: params.identityId,
-    redirectUri: params.redirectUri,
-    scope: params.scope,
-    expiresAt: Date.now() + 10 * 60 * 1000,
-    encryptedAppKey: params.encryptedAppKey,
-    appPublicKey: params.appPublicKey,
-    encryptedAppPrivateKey: params.encryptedAppPrivateKey,
-    appEncryptionMode: params.appEncryptionMode,
-    nonce: params.nonce,
-    organizationId: params.organizationId,
-    organizationName: params.organizationName,
-    organizationMemberId: params.organizationMemberId,
-    organizationRole: params.organizationRole,
-    organizationScopes: params.organizationScopes,
-    organizationSigningAuthority: params.organizationSigningAuthority,
-    organizationEncryptionMode: params.organizationEncryptionMode,
-    organizationKeyCustody: params.organizationKeyCustody,
-    organizationAuthMethod: params.organizationAuthMethod,
-    organizationSsoConnectionId: params.organizationSsoConnectionId,
-  });
-
-  return code;
 }
 
 export async function buildTokenResponseFromAuthorizationCode(params: {

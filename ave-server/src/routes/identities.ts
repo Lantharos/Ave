@@ -12,7 +12,7 @@ import {
   getEmailVerificationCooldownSeconds,
   normalizeEmail,
 } from "../lib/email-verification";
-import { serializeIdentityForOwner } from "../lib/identity-serialization";
+import { listIdentitiesForOwner, serializeIdentityForOwner } from "../lib/identity-serialization";
 import { enforceRateLimits, ipRateLimit, subjectRateLimit } from "../lib/rate-limit";
 import { recordActivityLog } from "../lib/background-events";
 
@@ -26,14 +26,11 @@ app.use("*", requireWritableForMutation);
 app.get("/", async (c) => {
   const user = c.get("user")!;
   
-  const userIdentities = await db
-    .select()
-    .from(identities)
-    .where(eq(identities.userId, user.id));
+  const userIdentities = await listIdentitiesForOwner(user.id);
   
   return c.json({
     readOnly: user.isReadOnly,
-    identities: userIdentities.map(serializeIdentityForOwner),
+    identities: userIdentities,
   });
 });
 
@@ -139,7 +136,7 @@ app.post("/", zValidator("json", z.object({
   });
   
   return c.json({
-    identity: serializeIdentityForOwner(identity),
+    identity: serializeIdentityForOwner(identity, Boolean(identityKey)),
   }, 201);
 });
 

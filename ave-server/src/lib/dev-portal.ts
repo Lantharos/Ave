@@ -1,5 +1,5 @@
-import { and, eq, inArray, isNull } from "drizzle-orm";
-import { db, oauthApps } from "../db";
+import { and, eq, inArray } from "drizzle-orm";
+import { db, identities, oauthApps, organizationIdentityMembers, organizations } from "../db";
 import {
   createBusinessOrganization,
   getUserBusinessIdentities,
@@ -59,10 +59,7 @@ async function listOrganizationMemberships(userId: string) {
   return (await listBusinessOrganizationsForUser(userId)).map(mapBusinessMembership);
 }
 
-export async function ensurePersonalOrganization(userId: string) {
-  const existingMembership = selectHighestMembership(await listOrganizationMemberships(userId));
-  if (existingMembership) return existingMembership.organization;
-
+async function createPersonalOrganization(userId: string) {
   const primaryIdentity = await getPrimaryIdentity(userId);
   if (!primaryIdentity) {
     throw new Error("A primary identity is required before creating an organization");
@@ -77,7 +74,13 @@ export async function ensurePersonalOrganization(userId: string) {
     throw new Error("A primary identity is required before creating an organization");
   }
 
-  return created.organization;
+  return mapBusinessMembership(created);
+}
+
+export async function ensurePersonalOrganization(userId: string) {
+  const existingMembership = selectHighestMembership(await getOrganizationMemberships(userId));
+  if (existingMembership) return existingMembership.organization;
+  throw new Error("A primary identity is required before creating an organization");
 }
 
 export async function createOrganization(userId: string, name: string) {
@@ -95,18 +98,9 @@ export async function createOrganization(userId: string, name: string) {
 }
 
 export async function getOrganizationMemberships(userId: string) {
-  await ensurePersonalOrganization(userId);
-  return listOrganizationMemberships(userId);
-}
-
-export async function backfillOwnedAppsOrganization(userId: string) {
-  const organization = await ensurePersonalOrganization(userId);
-  await db
-    .update(oauthApps)
-    .set({ organizationId: organization.id })
-    .where(and(eq(oauthApps.ownerId, userId), isNull(oauthApps.organizationId)));
-
-  return organization;
+  const memberships = await listOrganizationMemberships(userId);
+  if (memberships.length) return memberships;
+  return [await createPersonalOrganization(userId)];
 }
 
 export async function requireOrganizationAccess(userId: string, organizationId: string, minimumRole: OrganizationRole = "viewer") {
@@ -116,14 +110,9 @@ export async function requireOrganizationAccess(userId: string, organizationId: 
   return mapBusinessMembership(membership);
 }
 
-export async function getAccessibleOrganizationIds(userId: string) {
-  const memberships = await getOrganizationMemberships(userId);
-  return memberships.map((entry) => entry.organization.id);
-}
-
 export async function getAccessibleApps(userId: string, organizationId?: string) {
-  await backfillOwnedAppsOrganization(userId);
-  const accessibleOrganizationIds = await getAccessibleOrganizationIds(userId);
+  const memberships = await getOrganizationMemberships(userId);
+  const accessibleOrganizationIds = memberships.map((entry) => entry.organization.id);
   if (!accessibleOrganizationIds.length) return [];
 
   const targetOrganizationId = organizationId && accessibleOrganizationIds.includes(organizationId)
@@ -141,19 +130,33 @@ export async function getAccessibleApps(userId: string, organizationId?: string)
 }
 
 export async function getAccessibleApp(userId: string, appId: string, minimumRole: OrganizationRole = "viewer") {
-  const [app] = await db
-    .select()
+  const rows = await db
+    .select({
+      app: oauthApps,
+      member: organizationIdentityMembers,
+      identity: identities,
+      organization: organizations,
+    })
     .from(oauthApps)
-    .where(eq(oauthApps.id, appId))
-    .limit(1);
-
-  if (!app?.organizationId) return null;
-
-  const membership = await requireOrganizationAccess(userId, app.organizationId, minimumRole);
-  if (!membership) return null;
+    .innerJoin(organizations, eq(organizations.id, oauthApps.organizationId))
+    .innerJoin(organizationIdentityMembers, and(
+      eq(organizationIdentityMembers.organizationId, organizations.id),
+      eq(organizationIdentityMembers.status, "active"),
+    ))
+    .innerJoin(identities, and(
+      eq(identities.id, organizationIdentityMembers.identityId),
+      eq(identities.userId, userId),
+    ))
+    .where(eq(oauthApps.id, appId));
+  const eligible = rows
+    .map((row) => ({ app: row.app, membership: mapBusinessMembership(row) }))
+    .filter((row) => roleRank[row.membership.role] >= roleRank[minimumRole])
+    .sort((left, right) => roleRank[right.membership.role] - roleRank[left.membership.role]);
+  const accessible = eligible[0];
+  if (!accessible) return null;
 
   return {
-    app,
-    membership,
+    app: accessible.app,
+    membership: accessible.membership,
   };
 }
