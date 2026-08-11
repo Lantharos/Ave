@@ -44,47 +44,49 @@ app.get("/authorize/bootstrap/:clientId", requireAuth, async (c) => {
     });
   }
 
-  const [appAuthorizationRows, resources] = await db.batch([
-    db
-      .select({
-        appId: oauthApps.id,
-        appName: oauthApps.name,
-        appDescription: oauthApps.description,
-        appIconUrl: oauthApps.iconUrl,
-        appWebsiteUrl: oauthApps.websiteUrl,
-        appSupportsE2ee: oauthApps.supportsE2ee,
-        appAllowedScopes: oauthApps.allowedScopes,
-        authorizationId: oauthAuthorizations.id,
-        authorizationIdentityId: oauthAuthorizations.identityId,
-        authorizationEncryptedAppKey: oauthAuthorizations.encryptedAppKey,
-        authorizationAppPublicKey: oauthAuthorizations.appPublicKey,
-        authorizationEncryptedAppPrivateKey: oauthAuthorizations.encryptedAppPrivateKey,
-        authorizationAppEncryptionMode: oauthAuthorizations.appEncryptionMode,
-        authorizationCreatedAt: oauthAuthorizations.createdAt,
-      })
-      .from(oauthApps)
-      .leftJoin(oauthAuthorizations, and(
-        eq(oauthAuthorizations.userId, user.id),
-        eq(oauthAuthorizations.appId, oauthApps.id),
-        identityId ? eq(oauthAuthorizations.identityId, identityId) : undefined,
-      ))
-      .where(eq(oauthApps.clientId, clientId))
-      .orderBy(desc(oauthAuthorizations.lastAuthorizedAt)),
-    db
-      .select({
-        resourceKey: oauthResources.resourceKey,
-        displayName: oauthResources.displayName,
-        description: oauthResources.description,
-        scopes: oauthResources.scopes,
-        audience: oauthResources.audience,
-        status: oauthResources.status,
-      })
-      .from(oauthResources)
-      .innerJoin(oauthApps, eq(oauthApps.id, oauthResources.ownerAppId))
-      .where(and(
-        eq(oauthApps.clientId, clientId),
-        eq(oauthResources.status, "active"),
-      )),
+  const appAuthorizationsQuery = db
+    .select({
+      appId: oauthApps.id,
+      appName: oauthApps.name,
+      appDescription: oauthApps.description,
+      appIconUrl: oauthApps.iconUrl,
+      appWebsiteUrl: oauthApps.websiteUrl,
+      appSupportsE2ee: oauthApps.supportsE2ee,
+      appAllowedScopes: oauthApps.allowedScopes,
+      authorizationId: oauthAuthorizations.id,
+      authorizationIdentityId: oauthAuthorizations.identityId,
+      authorizationEncryptedAppKey: oauthAuthorizations.encryptedAppKey,
+      authorizationAppPublicKey: oauthAuthorizations.appPublicKey,
+      authorizationEncryptedAppPrivateKey: oauthAuthorizations.encryptedAppPrivateKey,
+      authorizationAppEncryptionMode: oauthAuthorizations.appEncryptionMode,
+      authorizationCreatedAt: oauthAuthorizations.createdAt,
+    })
+    .from(oauthApps)
+    .leftJoin(oauthAuthorizations, and(
+      eq(oauthAuthorizations.userId, user.id),
+      eq(oauthAuthorizations.appId, oauthApps.id),
+      identityId ? eq(oauthAuthorizations.identityId, identityId) : undefined,
+    ))
+    .where(eq(oauthApps.clientId, clientId))
+    .orderBy(desc(oauthAuthorizations.lastAuthorizedAt));
+  const resourcesQuery = db
+    .select({
+      resourceKey: oauthResources.resourceKey,
+      displayName: oauthResources.displayName,
+      description: oauthResources.description,
+      scopes: oauthResources.scopes,
+      audience: oauthResources.audience,
+      status: oauthResources.status,
+    })
+    .from(oauthResources)
+    .innerJoin(oauthApps, eq(oauthApps.id, oauthResources.ownerAppId))
+    .where(and(
+      eq(oauthApps.clientId, clientId),
+      eq(oauthResources.status, "active"),
+    ));
+  const [appAuthorizationRows, resources] = await Promise.all([
+    appAuthorizationsQuery,
+    resourcesQuery,
   ]);
   const appRow = appAuthorizationRows[0];
 
@@ -116,17 +118,35 @@ app.get("/authorize/bootstrap/:clientId", requireAuth, async (c) => {
     }];
   });
 
-  const invalidAuthorization = authorizations.some((authorization) =>
-    typeof authorization.id !== "string" ||
-    typeof authorization.identityId !== "string" ||
-    authorization.createdAt === null ||
-    (authorization.encryptedAppKey !== null && typeof authorization.encryptedAppKey !== "string") ||
-    (authorization.appPublicKey !== null && typeof authorization.appPublicKey !== "string") ||
-    (authorization.encryptedAppPrivateKey !== null && typeof authorization.encryptedAppPrivateKey !== "string") ||
-    (authorization.appEncryptionMode !== null && typeof authorization.appEncryptionMode !== "string")
-  );
-  if (invalidAuthorization) {
-    return c.json({ error: "Invalid authorization data" }, 500);
+  const invalidFields = new Set<string>();
+  for (const authorization of authorizations) {
+    if (typeof authorization.id !== "string") invalidFields.add("id");
+    if (typeof authorization.identityId !== "string") invalidFields.add("identityId");
+    if (authorization.createdAt === null) invalidFields.add("createdAt");
+    if (authorization.encryptedAppKey !== null && typeof authorization.encryptedAppKey !== "string") {
+      invalidFields.add("encryptedAppKey");
+    }
+    if (authorization.appPublicKey !== null && typeof authorization.appPublicKey !== "string") {
+      invalidFields.add("appPublicKey");
+    }
+    if (
+      authorization.encryptedAppPrivateKey !== null &&
+      typeof authorization.encryptedAppPrivateKey !== "string"
+    ) {
+      invalidFields.add("encryptedAppPrivateKey");
+    }
+    if (authorization.appEncryptionMode !== null && typeof authorization.appEncryptionMode !== "string") {
+      invalidFields.add("appEncryptionMode");
+    }
+  }
+  if (invalidFields.size > 0) {
+    const fields = [...invalidFields];
+    console.error("Invalid OAuth authorization bootstrap fields", {
+      clientId,
+      fields,
+      authorizationCount: authorizations.length,
+    });
+    return c.json({ error: "Invalid authorization data", invalidFields: fields }, 500);
   }
 
   c.header("Cache-Control", "no-store");
