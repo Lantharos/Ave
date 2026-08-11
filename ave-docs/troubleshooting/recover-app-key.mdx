@@ -25,7 +25,7 @@ await window.aveRecoverAppKey({
 });
 ```
 
-The browser reads the key from the clipboard, validates the recovered AES-256 key, encrypts it with the locally unlocked Ave master key, and sends only that encrypted envelope to Ave. A successful result includes a SHA-256 fingerprint that you can compare with the fingerprint from the trusted app session. If clipboard access is unavailable, pass `appKey` explicitly as a function argument and clear the console history afterward.
+The browser reads the key from the clipboard, validates the recovered AES-256 key, encrypts it with the locally unlocked Ave master key, and sends only that encrypted envelope to Ave. A successful result includes a SHA-256 fingerprint that you can compare with the fingerprint from the trusted app session. If the browser blocks clipboard reads from DevTools, Ave opens a paste prompt instead so the key does not appear in console history.
 
 <Warning>
   This deliberately replaces the encrypted key envelope for that app and identity. A wrong key will make existing app data unreadable. Keep the trusted session open until old encrypted data has been successfully decrypted after recovery, and never paste the key into support messages, issue trackers, or server terminals.

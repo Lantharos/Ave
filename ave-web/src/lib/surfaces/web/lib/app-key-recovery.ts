@@ -30,6 +30,25 @@ async function fingerprintAppKey(appKey: CryptoKey): Promise<string> {
   return Array.from(digest, (byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
+function promptForRecoveredAppKey(): string {
+  const appKey = window.prompt("Paste the recovered Base64 app key");
+  if (!appKey?.trim()) throw new Error("App key recovery was cancelled");
+  return appKey;
+}
+
+async function readRecoveredAppKey(appKey?: string): Promise<string> {
+  if (appKey?.trim()) return appKey;
+
+  let clipboardAppKey: string;
+  try {
+    clipboardAppKey = await navigator.clipboard.readText();
+  } catch {
+    return promptForRecoveredAppKey();
+  }
+
+  return clipboardAppKey.trim() ? clipboardAppKey : promptForRecoveredAppKey();
+}
+
 export async function recoverAppKey({
   clientId,
   appKey,
@@ -41,10 +60,7 @@ export async function recoverAppKey({
 }> {
   if (!clientId.trim()) throw new Error("clientId is required");
 
-  const recoveredAppKey = appKey ?? await navigator.clipboard.readText();
-  if (!recoveredAppKey.trim()) {
-    throw new Error("Copy the recovered app key to the clipboard or pass appKey explicitly");
-  }
+  const recoveredAppKey = await readRecoveredAppKey(appKey);
 
   const authState = get(auth);
   if (!authState.isAuthenticated) {
