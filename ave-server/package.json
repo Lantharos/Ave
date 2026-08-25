@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "wrangler dev",
     "start": "wrangler dev",
-    "deploy": "CLOUDFLARE_ACCOUNT_ID=2e3bfcbc9512a7ab1ea3a9cb9a474b30 wrangler deploy",
+    "deploy": "CLOUDFLARE_ACCOUNT_ID=2e3bfcbc9512a7ab1ea3a9cb9a474b30 wrangler deploy --keep-vars",
     "check": "tsc --noEmit",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "npm run db:migrate:local",
