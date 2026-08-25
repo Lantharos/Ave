@@ -4,7 +4,6 @@
     type PresetName =
         | "home"
         | "login"
-        | "faq"
         | "privacy"
         | "terms"
         | "not-found"
@@ -16,7 +15,10 @@
         | "reg-codes"
         | "reg-legal"
         | "reg-finishing"
-        | "reg-enrollment";
+        | "reg-enrollment"
+        | "business-tr"
+        | "business-bl"
+        | "business-login";
 
     type Preset = {
         colorStops: [string, string, string];
@@ -30,7 +32,6 @@
     const presets: Record<PresetName, Preset> = {
         home: { colorStops: ["#7c7e88", "#63666f", "#45494d"], amplitude: 1.0, blend: 0.5, height: 420, position: "bottom", opacity: 1 },
         login: { colorStops: ["#878787", "#646464", "#3c3c3c"], amplitude: 1.0, blend: 0.5, height: 420, position: "bottom", opacity: 1 },
-        faq: { colorStops: ["#797b86", "#5a5d64", "#39393b"], amplitude: 1.05, blend: 0.5, height: 440, position: "bottom", opacity: 1 },
         privacy: { colorStops: ["#797c85", "#61656d", "#404247"], amplitude: 0.95, blend: 0.55, height: 420, position: "top", opacity: 1 },
         terms: { colorStops: ["#747780", "#63656d", "#404146"], amplitude: 0.95, blend: 0.55, height: 420, position: "top", opacity: 1 },
         "not-found": { colorStops: ["#7c7e88", "#63666f", "#45494d"], amplitude: 1.0, blend: 0.5, height: 420, position: "bottom", opacity: 1 },
@@ -43,10 +44,14 @@
         "reg-legal": { colorStops: ["#868686", "#6c6c6c", "#3e3e3e"], amplitude: 1.05, blend: 0.5, height: 420, position: "bottom", opacity: 1 },
         "reg-finishing": { colorStops: ["#858585", "#737373", "#444444"], amplitude: 1.0, blend: 0.5, height: 420, position: "bottom", opacity: 1 },
         "reg-enrollment": { colorStops: ["#858585", "#696969", "#464646"], amplitude: 1.0, blend: 0.5, height: 420, position: "bottom", opacity: 1 },
+        "business-tr": { colorStops: ["#737579", "#5a5e62", "#393b3d"], amplitude: 0.85, blend: 0.6, height: 560, position: "top", opacity: 0.9 },
+        "business-bl": { colorStops: ["#797979", "#646464", "#3c3c3c"], amplitude: 0.85, blend: 0.6, height: 560, position: "bottom", opacity: 0.9 },
+        "business-login": { colorStops: ["#878787", "#646464", "#3c3c3c"], amplitude: 1, blend: 0.5, height: 420, position: "bottom", opacity: 1 },
     };
 
     let { preset = "home", cclass = "", mobileHeight = null } = $props<{ preset?: PresetName; cclass?: string; mobileHeight?: number | null }>();
     let container: HTMLDivElement | null = null;
+    let canvas: HTMLCanvasElement | null = null;
     const activePreset = $derived(presets[preset as PresetName]);
 
     const VERT = `#version 300 es
@@ -161,15 +166,55 @@ void main() {
     let mesh: any = null;
     let raf = 0;
     let resizeObserver: ResizeObserver | null = null;
+    let disposed = false;
+
+    function colorStops(presetConfig: Preset) {
+        return presetConfig.colorStops.map((hex) => {
+            const value = Number.parseInt(hex.slice(1), 16);
+            return [((value >> 16) & 255) / 255, ((value >> 8) & 255) / 255, (value & 255) / 255];
+        });
+    }
+
+    function applyPreset(presetConfig: Preset) {
+        if (!program) return;
+        program.uniforms.uAmplitude.value = presetConfig.amplitude;
+        program.uniforms.uColorStops.value = colorStops(presetConfig);
+        program.uniforms.uBlend.value = presetConfig.blend;
+        program.uniforms.uOpacity.value = presetConfig.opacity;
+    }
+
+    function stopAnimation() {
+        cancelAnimationFrame(raf);
+        raf = 0;
+    }
+
+    function startAnimation() {
+        if (raf || document.hidden || !program || !renderer || !mesh) return;
+        raf = requestAnimationFrame(update);
+    }
+
+    function update(time: number) {
+        raf = 0;
+        if (!program || !renderer || !mesh || document.hidden) return;
+        program.uniforms.uTime.value = time * 0.0008;
+        renderer.render({ scene: mesh });
+        raf = requestAnimationFrame(update);
+    }
+
+    function handleVisibilityChange() {
+        if (document.hidden) stopAnimation();
+        else startAnimation();
+    }
 
     async function setup() {
-        if (!container) return;
+        if (!container || !canvas) return;
         const presetConfig = activePreset;
-        const { Renderer, Program, Mesh, Color, Triangle } = await import("ogl");
+        const { Renderer, Program, Mesh, Triangle } = await import("ogl");
 
-        if (!container) return;
+        if (!container || !canvas || disposed) return;
 
         renderer = new Renderer({
+            canvas,
             alpha: true,
             premultipliedAlpha: true,
             antialias: true,
@@ -187,18 +232,13 @@ void main() {
             delete (geometry as any).attributes.uv;
         }
 
-        const colorStopsArray = presetConfig.colorStops.map((hex: string) => {
-            const c = new Color(hex);
-            return [c.r, c.g, c.b];
-        });
-
         program = new Program(gl, {
             vertex: VERT,
             fragment: FRAG,
             uniforms: {
                 uTime: { value: 0 },
                 uAmplitude: { value: presetConfig.amplitude },
-                uColorStops: { value: colorStopsArray },
+                uColorStops: { value: colorStops(presetConfig) },
                 uResolution: { value: [container.offsetWidth, container.offsetHeight] },
                 uBlend: { value: presetConfig.blend },
                 uOpacity: { value: presetConfig.opacity },
@@ -206,16 +246,6 @@ void main() {
         });
 
         mesh = new Mesh(gl, { geometry, program });
-        container.appendChild(gl.canvas);
-
-        const update = (t: number) => {
-            raf = requestAnimationFrame(update);
-            if (!program || !renderer || !mesh) return;
-            program.uniforms.uTime.value = t * 0.0008;
-            renderer.render({ scene: mesh });
-        };
-        raf = requestAnimationFrame(update);
-
         const resize = () => {
             if (!container || !renderer || !program) return;
             const width = container.offsetWidth;
@@ -227,16 +257,17 @@ void main() {
         resize();
         resizeObserver = new ResizeObserver(resize);
         resizeObserver.observe(container);
+        document.addEventListener("visibilitychange", handleVisibilityChange);
+        startAnimation();
     }
 
     function teardown() {
-        cancelAnimationFrame(raf);
+        disposed = true;
+        stopAnimation();
+        document.removeEventListener("visibilitychange", handleVisibilityChange);
         if (resizeObserver) {
             resizeObserver.disconnect();
             resizeObserver = null;
-        }
-        if (renderer && renderer.gl && renderer.gl.canvas && container && renderer.gl.canvas.parentNode === container) {
-            container.removeChild(renderer.gl.canvas);
         }
         renderer?.gl.getExtension("WEBGL_lose_context")?.loseContext();
         renderer = null;
@@ -245,8 +276,14 @@ void main() {
     }
 
     onMount(() => {
+        if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+        disposed = false;
         void setup();
         return () => teardown();
+    });
+
+    $effect(() => {
+        applyPreset(activePreset);
     });
 </script>
 
@@ -254,18 +291,19 @@ void main() {
     bind:this={container}
     class={`aurora-backdrop ${cclass} ${activePreset.position === "top" ? "aurora-top" : "aurora-bottom"}`}
     style={`--aurora-height: ${activePreset.height}px; --aurora-mobile-height: ${mobileHeight ? `${mobileHeight}px` : `${activePreset.height}px`};`}
-></div>
+>
+    <canvas bind:this={canvas} aria-hidden="true"></canvas>
+</div>
 
 <style>
     .aurora-backdrop {
-        position: absolute;
+        position: fixed;
         left: 0;
         width: 100%;
         height: var(--aurora-height);
         pointer-events: none;
         user-select: none;
         z-index: 0;
-        opacity: 1;
         mix-blend-mode: normal;
     }
 
@@ -276,6 +314,12 @@ void main() {
 
     .aurora-top {
         top: 0;
+    }
+
+    canvas {
+        display: block;
+        width: 100%;
+        height: 100%;
     }
 
     @media (max-width: 768px) {

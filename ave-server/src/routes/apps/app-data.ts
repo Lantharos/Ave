@@ -69,11 +69,17 @@ function parseActivityDetails(details: AppActivityRow["details"]): Record<string
   }
 }
 
+function toDate(value: number | string | Date): Date {
+  if (value instanceof Date) return value;
+  const normalized = typeof value === "string" && /^\d+$/.test(value) ? Number(value) : value;
+  return new Date(normalized);
+}
+
 export async function getAppInsights(appId: string, redirectUris: string[]) {
   const now = Date.now();
   const nowDate = new Date(now);
   const weekAgo = new Date(now - 7 * 24 * 60 * 60 * 1000);
-  const [authorizationGroups, weeklyAuthorizations, refreshTokens, analyticsCount, delegationAuditCount, revocations, delegations, resources] = await db.batch([
+  const [authorizationGroups, weeklyAuthorizations, refreshTokens, analyticsCount, delegationAuditCount, revocations, delegations, resources] = await Promise.all([
     db
       .select({
         lastAuthMethod: oauthAuthorizations.lastAuthMethod,
@@ -139,15 +145,15 @@ export async function getAppInsights(appId: string, redirectUris: string[]) {
   return {
     totalIdentities: authorizationGroups.reduce((total, entry) => total + Number(entry.identityCount || 0), 0),
     totalAuthorizations: authorizationGroups.reduce((total, entry) => total + Number(entry.authorizationCount || 0), 0),
-    weeklyAuthorizations: weeklyAuthorizations[0]?.count || 0,
-    activeRefreshTokens: refreshTokens[0]?.count || 0,
+    weeklyAuthorizations: Number(weeklyAuthorizations[0]?.count || 0),
+    activeRefreshTokens: Number(refreshTokens[0]?.count || 0),
     instantSignInRate: instantRate,
     methodCounts,
     redirectSecurityRate: redirectUris.length ? Math.round((httpsRedirects / redirectUris.length) * 100) : 0,
-    resources: resources[0]?.count || 0,
-    activeDelegations: delegations[0]?.count || 0,
-    revocations: revocations[0]?.count || 0,
-    totalActivityEvents: (analyticsCount[0]?.count || 0) + (delegationAuditCount[0]?.count || 0),
+    resources: Number(resources[0]?.count || 0),
+    activeDelegations: Number(delegations[0]?.count || 0),
+    revocations: Number(revocations[0]?.count || 0),
+    totalActivityEvents: Number(analyticsCount[0]?.count || 0) + Number(delegationAuditCount[0]?.count || 0),
   };
 }
 
@@ -159,7 +165,7 @@ export async function getAppIdentities(appId: string, limit = 25, offset = 0) {
     ${oauthAuthorizations.lastAuthorizedAt}
   )`;
 
-  const [totalRow, rows] = await db.batch([
+  const [totalRow, rows] = await Promise.all([
     db
       .select({ count: sql<number>`count(*)` })
       .from(oauthAuthorizations)
@@ -196,9 +202,11 @@ export async function getAppIdentities(appId: string, limit = 25, offset = 0) {
       .offset(offset),
   ]);
 
-  const total = totalRow[0]?.count || 0;
+  const total = Number(totalRow[0]?.count || 0);
   const items = rows.map((row) => {
-    const lastRefresh = row.lastRefreshAt ? new Date(row.lastRefreshAt) : null;
+    const authorizationCount = Number(row.authorizationCount || 0);
+    const refreshCountValue = Number(row.refreshCount || 0);
+    const lastRefresh = row.lastRefreshAt ? toDate(row.lastRefreshAt) : null;
     return {
       id: row.id,
       displayName: row.displayName,
@@ -208,9 +216,9 @@ export async function getAppIdentities(appId: string, limit = 25, offset = 0) {
       isPrimary: row.isPrimary,
       firstSeen: row.firstSeen || row.identityCreatedAt,
       lastActive: lastRefresh || row.lastAuthorizedAt || row.identityCreatedAt,
-      signInCount: row.authorizationCount + row.refreshCount,
-      authorizationCount: row.authorizationCount,
-      refreshCount: row.refreshCount,
+      signInCount: authorizationCount + refreshCountValue,
+      authorizationCount,
+      refreshCount: refreshCountValue,
       lastMethod: row.lastMethod,
     };
   });
@@ -264,7 +272,7 @@ export async function getAppActivity(appId: string, limit = 25, cursor?: AppActi
     action: row.action,
     details: parseActivityDetails(row.details),
     severity: row.severity,
-    createdAt: new Date(row.createdAt),
+    createdAt: toDate(row.createdAt),
     source: row.source,
   }));
 
@@ -274,7 +282,7 @@ export async function getAppActivity(appId: string, limit = 25, cursor?: AppActi
     items,
     nextCursor: hasMore && lastRow
       ? encodeActivityCursor({
-          createdAt: new Date(lastRow.createdAt).getTime(),
+          createdAt: toDate(lastRow.createdAt).getTime(),
           source: lastRow.source,
           id: lastRow.id,
         })

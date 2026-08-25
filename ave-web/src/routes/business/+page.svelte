@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { Building2, ChevronDown, Fingerprint, KeyRound, LockKeyhole, Network, Plus, ScrollText, Upload } from "@lucide/svelte";
-  import AuroraBackdrop from "$lib/surfaces/business/components/AuroraBackdrop.svelte";
+  import AuroraBackdrop from "$lib/components/AuroraBackdrop.svelte";
   import Button from "$lib/surfaces/business/components/Button.svelte";
   import AuditPanel from "$lib/surfaces/business/components/AuditPanel.svelte";
   import DomainsSsoPanel from "$lib/surfaces/business/components/DomainsSsoPanel.svelte";

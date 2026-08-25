@@ -54,7 +54,6 @@
                     
                     // If PRF was supported during login, set it up now so future logins don't need trust codes
                     if (pendingPasskeyLogin.prfSupported && pendingPasskeyLogin.usedPasskeyId && pendingPasskeyLogin.authOptions) {
-                        console.log("[Login] PRF supported, setting up PRF encryption for passkey...");
                         try {
                             // Re-authenticate with the same passkey to get PRF output
                             const { prfOutput } = await authenticateWithPasskey(pendingPasskeyLogin.authOptions, true);
@@ -65,7 +64,6 @@
                                 
                                 // Update the passkey record with the encrypted master key
                                 await api.security.updatePasskeyPrf(pendingPasskeyLogin.usedPasskeyId, prfEncryptedMasterKey);
-                                console.log("[Login] PRF encryption set up successfully - future logins won't need trust codes");
                             }
                         } catch (prfError) {
                             // PRF setup failed, but login still succeeded

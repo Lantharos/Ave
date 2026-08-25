@@ -72,7 +72,7 @@ function createWebSocketStore() {
       }
     };
     
-    ws.onerror = (error) => {
+    ws.onerror = () => {
       // Only log in development, suppress in production
       if (import.meta.env.DEV) {
         console.warn("WebSocket connection failed (this is normal if not logged in)");
@@ -85,7 +85,6 @@ function createWebSocketStore() {
         
         switch (data.type) {
           case "connected":
-            console.log("WebSocket connected");
             break;
           
           case "pong":
@@ -107,7 +106,7 @@ function createWebSocketStore() {
             break;
           
           default:
-            console.log("Unknown WebSocket message:", data);
+            break;
         }
       } catch (error) {
         console.error("Failed to parse WebSocket message:", error);

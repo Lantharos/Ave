@@ -1,5 +1,5 @@
 <script lang="ts">
-  import AuroraBackdrop from "./AuroraBackdrop.svelte";
+  import AuroraBackdrop from "$lib/components/AuroraBackdrop.svelte";
   import Button from "./Button.svelte";
   import Panel from "./Panel.svelte";
 

@@ -1,6 +1,6 @@
 <script lang="ts">
     import { resolve } from "$app/paths";
-    import AuroraBackdrop from "$lib/surfaces/web/components/AuroraBackdrop.svelte";
+    import AuroraBackdrop from "$lib/components/AuroraBackdrop.svelte";
     import Text from "$lib/surfaces/web/components/Text.svelte";
 
     let mobileMenuOpen = $state(false);

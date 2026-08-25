@@ -120,7 +120,7 @@ app.get("/bootstrap", async (c) => {
     });
   }
 
-  const [appRows, memberRows, resources, authorizationCounts] = await db.batch([
+  const [appRows, memberRows, resources, authorizationCounts] = await Promise.all([
     db
       .select()
       .from(oauthApps)

@@ -1,7 +1,7 @@
 name = "ave-server"
 account_id = "2e3bfcbc9512a7ab1ea3a9cb9a474b30"
 main = "src/index.ts"
-compatibility_date = "2026-02-08"
+compatibility_date = "2026-08-25"
 compatibility_flags = ["nodejs_compat"]
 
 [placement]

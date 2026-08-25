@@ -98,7 +98,6 @@
                         prfOutput
                     );
                     await storeMasterKey(masterKey);
-                    console.log("[Login] Master key recovered via PRF");
                     
                     await auth.login(
                         result.sessionToken,

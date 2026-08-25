@@ -4,7 +4,7 @@
     import { resolve } from "$app/paths";
     import Text from "$lib/surfaces/web/components/Text.svelte";
     import SidebarButton from "./components/SidebarButton.svelte";
-    import AuroraBackdrop from "$lib/surfaces/web/components/AuroraBackdrop.svelte";
+    import AuroraBackdrop from "$lib/components/AuroraBackdrop.svelte";
     import Identity from "./sections/Identity.svelte";
     import Security from "./sections/Security.svelte";
     import MyData from "./sections/MyData.svelte";
@@ -114,7 +114,7 @@
     let selectedIdentity = $derived(identities.find(i => i.displayName === selectedPage));
 </script>
 
-<div class="bg-[#090909] relative w-full min-h-screen-fixed flex flex-col md:flex-row px-3 md:px-[120px] py-4 md:py-[100px] gap-4 md:gap-[100px]">
+<div class="bg-[#090909] relative w-full min-h-screen-fixed flex flex-col md:flex-row px-3 py-4 md:gap-10 md:px-8 md:py-12 xl:gap-[100px] xl:px-[120px] xl:py-[100px]">
     <button 
         class="mobile-menu-btn fixed top-3 right-3 z-50 p-2 bg-[#171717] rounded-full md:hidden"
         onclick={() => mobileSidebarOpen = !mobileSidebarOpen}

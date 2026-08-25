@@ -1,5 +1,5 @@
 <script lang="ts">
-  import AuroraBackdrop from "$lib/surfaces/devs/components/AuroraBackdrop.svelte";
+  import AuroraBackdrop from "$lib/components/AuroraBackdrop.svelte";
   import Button from "$lib/surfaces/devs/components/Button.svelte";
 
   interface Props {

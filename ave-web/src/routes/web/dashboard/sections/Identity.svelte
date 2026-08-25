@@ -288,13 +288,10 @@
             try {
                 uploadingBanner = true;
                 error = "";
-                const result = await api.upload.banner(identity.id, fileOrHex);
-                
-                console.log("[Banner Upload] Got R2 URL:", result.bannerUrl);
-                
+                await api.upload.banner(identity.id, fileOrHex);
+
                 // Fetch the updated identity from the API to ensure we have the latest data
                 const { identity: updatedIdentity } = await api.identities.get(identity.id);
-                console.log("[Banner Upload] Fetched updated identity:", updatedIdentity.bannerUrl);
                 
                 // Update auth store with fresh identity data
                 auth.updateIdentity(updatedIdentity);

@@ -3,7 +3,7 @@
     import LoginStart from "./components/LoginStart.svelte";
     import LoginTrustCode from "./components/LoginTrustCode.svelte";
     import LoginWaiting from "./components/LoginWaiting.svelte";
-    import AuroraBackdrop from "$lib/surfaces/web/components/AuroraBackdrop.svelte";
+    import AuroraBackdrop from "$lib/components/AuroraBackdrop.svelte";
     import { goto } from "$app/navigation";
     import { resolve } from "$app/paths";
     import { safeGoto } from "$lib/surfaces/web/util/safe-goto";

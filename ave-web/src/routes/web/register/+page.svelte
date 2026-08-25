@@ -6,7 +6,7 @@
     import RegisterLegal from "./components/RegisterLegal.svelte";
     import RegisterFinishing from "./components/RegisterFinishing.svelte";
     import RegisterEnrollment from "./components/RegisterEnrollment.svelte";
-    import AuroraBackdrop from "$lib/surfaces/web/components/AuroraBackdrop.svelte";
+    import AuroraBackdrop from "$lib/components/AuroraBackdrop.svelte";
     import { onMount } from "svelte";
     import { api } from "$lib/surfaces/web/lib/api";
     import { 
@@ -129,7 +129,6 @@
             prfSupported = result.prfSupported;
             prfOutput = result.prfOutput || null;
             
-            console.log("[Registration] Passkey registered, PRF supported:", prfSupported);
             
             // Generate master key and go to legal step (skipping security questions)
             masterKey = await generateMasterKey();
@@ -165,7 +164,6 @@
             let prfEncryptedMasterKey: string | undefined;
             if (prfSupported && prfOutput) {
                 prfEncryptedMasterKey = await encryptMasterKeyWithPrf(masterKey, prfOutput);
-                console.log("[Registration] Master key encrypted with PRF");
             }
             
             // Step 1: Complete registration

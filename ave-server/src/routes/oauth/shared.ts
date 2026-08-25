@@ -328,28 +328,30 @@ export async function buildTokenResponseFromAuthorizationCode(params: {
 
   async function persistTokenState() {
     if (refreshToken && refreshTokenId) {
-      const [identityRows] = await db.batch([
+      const [identityRows] = await Promise.all([
         identityLookup,
-        accessTokenWrite,
-        db.insert(oauthRefreshTokens).values({
-          id: refreshTokenId,
-          familyId: refreshTokenId,
-          userId: authCode.userId,
-          identityId: authCode.identityId,
-          appId: oauthApp.id,
-          tokenHash: hashToken(refreshToken),
-          scope: authCode.scope,
-          expiresAt: new Date(Date.now() + refreshTokenTtl * 1000),
-          organizationId: authCode.organizationId,
-          organizationMemberId: authCode.organizationMemberId,
-          enterpriseSsoOrganizationId: authCode.organizationAuthMethod === "enterprise_sso" ? authCode.organizationId : undefined,
-          enterpriseSsoConnectionId: authCode.organizationSsoConnectionId,
-        }),
+        db.batch([
+          accessTokenWrite,
+          db.insert(oauthRefreshTokens).values({
+            id: refreshTokenId,
+            familyId: refreshTokenId,
+            userId: authCode.userId,
+            identityId: authCode.identityId,
+            appId: oauthApp.id,
+            tokenHash: hashToken(refreshToken),
+            scope: authCode.scope,
+            expiresAt: new Date(Date.now() + refreshTokenTtl * 1000),
+            organizationId: authCode.organizationId,
+            organizationMemberId: authCode.organizationMemberId,
+            enterpriseSsoOrganizationId: authCode.organizationAuthMethod === "enterprise_sso" ? authCode.organizationId : undefined,
+            enterpriseSsoConnectionId: authCode.organizationSsoConnectionId,
+          }),
+        ]),
       ]);
       return identityRows[0];
     }
 
-    const [identityRows] = await db.batch([identityLookup, accessTokenWrite]);
+    const [identityRows] = await Promise.all([identityLookup, accessTokenWrite]);
     return identityRows[0];
   }
 

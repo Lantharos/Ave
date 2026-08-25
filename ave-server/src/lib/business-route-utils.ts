@@ -58,7 +58,7 @@ export async function getOrganizationBundle(
   } = {},
 ) {
   const memberLimit = Math.max(1, Math.min(options.memberLimit ?? 100, 100));
-  const [memberRows, membersTotalRows, keys, grants, encryptionPolicies, ssoConnections, domains] = await db.batch([
+  const [memberRows, membersTotalRows, keys, grants, encryptionPolicies, ssoConnections, domains] = await Promise.all([
     db
       .select({ member: organizationIdentityMembers, identity: identities, key: identityEncryptionKeys })
       .from(organizationIdentityMembers)

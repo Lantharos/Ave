@@ -14,7 +14,7 @@ app.use("*", requireWritableForMutation);
 app.get("/export", async (c) => {
   const user = c.get("user")!;
   
-  const [userRows, userIdentities, userPasskeys, userDevices, userSessions, userTrustCodes, userActivityLogs, userAuthorizations] = await db.batch([
+  const [userRows, userIdentities, userPasskeys, userDevices, userSessions, userTrustCodes, userActivityLogs, userAuthorizations] = await Promise.all([
     db.select({ id: users.id, createdAt: users.createdAt, updatedAt: users.updatedAt })
       .from(users).where(eq(users.id, user.id)).limit(1),
     db.select({

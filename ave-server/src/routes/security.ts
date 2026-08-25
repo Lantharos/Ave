@@ -49,7 +49,7 @@ app.use("*", requireWritableForMutation);
 app.get("/", async (c) => {
   const user = c.get("user")!;
   
-  const [userPasskeys, unusedTrustCodeRows, trustCodeRows] = await db.batch([
+  const [userPasskeys, unusedTrustCodeRows, trustCodeRows] = await Promise.all([
     db
       .select()
       .from(passkeys)

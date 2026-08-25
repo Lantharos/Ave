@@ -68,7 +68,7 @@ app.get("/fedcm/accounts", async (c) => {
 
   setLoginStatusHeader(c, "logged-in");
 
-  const [userIdentities, authorizations] = await db.batch([
+  const [userIdentities, authorizations] = await Promise.all([
     db
       .select()
       .from(identities)

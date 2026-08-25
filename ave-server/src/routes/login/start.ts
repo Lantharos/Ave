@@ -65,7 +65,7 @@ app.post("/start", zValidator("json", z.object({
     });
   }
 
-  const [[deviceCount], [passkeyCount]] = await db.batch([
+  const [[deviceCount], [passkeyCount]] = await Promise.all([
     db
       .select({ count: sql<number>`count(*)` })
       .from(devices)

@@ -95,7 +95,7 @@ export async function handleRefreshToken(c: Context, payload: RefreshTokenReques
   } = {};
 
   if (storedRefresh.organizationId && storedRefresh.organizationMemberId) {
-    const [businessContextRows, policyRows] = await db.batch([
+    const [businessContextRows, policyRows] = await Promise.all([
       db
         .select({ member: organizationIdentityMembers, organization: organizations })
         .from(organizationIdentityMembers)

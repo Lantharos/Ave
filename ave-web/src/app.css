@@ -66,7 +66,6 @@
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     background-color: #090909;
-    --vh: 1vh;
   }
 
   html,
@@ -76,7 +75,7 @@
     width: 100%;
     min-width: 100%;
     min-height: 100vh;
-    min-height: calc(var(--vh, 1vh) * 100);
+    min-height: 100dvh;
     background-color: #090909;
     color: #ffffff;
     font-family: "Poppins", sans-serif;
@@ -153,12 +152,12 @@
 
   .h-screen-fixed {
     height: 100vh;
-    height: calc(var(--vh, 1vh) * 100);
+    height: 100dvh;
   }
 
   .min-h-screen-fixed {
     min-height: 100vh;
-    min-height: calc(var(--vh, 1vh) * 100);
+    min-height: 100dvh;
   }
 
   .mobile-nav-overlay {
@@ -195,29 +194,5 @@
   .mobile-scroll-container {
     -webkit-overflow-scrolling: touch;
     overflow-y: auto;
-  }
-}
-
-/*
- * The visual system is authored against a 1600px desktop canvas. Between the
- * mobile breakpoint and that width, preserve desktop composition and scale the
- * canvas as a unit so fixed pixel type, spacing, and navigation stay in frame.
- */
-@media (min-width: 900px) and (max-width: 1599px) {
-  body {
-    overflow: hidden;
-  }
-
-  #app {
-    position: fixed;
-    inset: 0 auto auto 0;
-    width: var(--desktop-canvas-width);
-    min-width: 0;
-    height: var(--desktop-canvas-height);
-    min-height: 0;
-    overflow: auto;
-    transform: scale(var(--desktop-scale));
-    transform-origin: top left;
-    --vh: var(--desktop-canvas-vh);
   }
 }

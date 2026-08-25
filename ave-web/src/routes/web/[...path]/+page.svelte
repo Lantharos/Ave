@@ -1,17 +1,17 @@
 <script lang="ts">
     import { resolve } from "$app/paths";
-    import AuroraBackdrop from "$lib/surfaces/web/components/AuroraBackdrop.svelte";
+    import AuroraBackdrop from "$lib/components/AuroraBackdrop.svelte";
 </script>
 
-<div class="bg-[#090909] w-full h-screen-fixed flex flex-col items-center justify-center px-[200px] py-[100px] gap-[50px] relative">
-    <h1 class="font-extrabold text-[#FFFFFF]/80 text-[96px]">
+<div class="relative flex h-screen-fixed w-full flex-col items-center justify-center gap-8 bg-[#090909] px-6 py-12 md:gap-[50px] md:px-[120px] md:py-[100px]">
+    <h1 class="text-[72px] font-extrabold text-[#FFFFFF]/80 md:text-[96px]">
         404
     </h1>
-    <h2 class="font-medium text-[#B9BBBE] text-[36px]">
-        Oops! The page you're looking for doesn't exist.
+    <h2 class="text-center text-[28px] font-medium text-[#B9BBBE] md:text-[36px]">
+        This page doesn't exist.
     </h2>
-    <p class="text-[#878787] text-[24px] max-w-[80%] text-center">
-        It seems you've ventured into uncharted territory. Don't worry, you can head back to the <a href={resolve("/" as any)} class="underline hover:text-[#FFFFFF]">home page</a> or explore our <a href={resolve("/faq" as any)} class="underline hover:text-[#FFFFFF]">FAQ</a> for more information.
+    <p class="max-w-[560px] text-center text-[18px] text-[#878787] md:text-[22px]">
+        The address may be wrong or the page may have moved. Return to the <a href={resolve("/" as any)} class="underline transition-colors hover:text-[#FFFFFF]">home page</a>.
     </p>
-    <AuroraBackdrop preset="not-found" cclass="absolute bottom-0 left-0 w-full pointer-events-none select-none" />
+    <AuroraBackdrop preset="not-found" />
 </div>

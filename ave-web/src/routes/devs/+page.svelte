@@ -1,7 +1,7 @@
 <script lang="ts">
   import { setQueryClientContext } from "@tanstack/svelte-query";
   import { onMount } from "svelte";
-  import AuroraBackdrop from "$lib/surfaces/devs/components/AuroraBackdrop.svelte";
+  import AuroraBackdrop from "$lib/components/AuroraBackdrop.svelte";
   import DeleteModal from "$lib/surfaces/devs/components/DeleteModal.svelte";
   import SecretBanner from "$lib/surfaces/devs/components/SecretBanner.svelte";
   import SignInPage from "./sections/SignInPage.svelte";
@@ -161,8 +161,6 @@
         appEvents = [];
         appIdentitiesTotal = 0;
         appEventsTotal = 0;
-        appEventsCursor = null;
-        appEventsHasMore = false;
         appEventsCursor = null;
         appEventsHasMore = false;
       }

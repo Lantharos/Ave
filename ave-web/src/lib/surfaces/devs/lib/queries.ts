@@ -11,7 +11,6 @@ import {
   updateOrganization,
   updateOrganizationMemberRole,
   uploadWorkspaceLogo,
-  type AppOverviewBundle,
   type CreateAppPayload,
   type UpdateAppPayload,
 } from "./api";
@@ -40,14 +39,9 @@ export function createUpdateAppMutation() {
   return createMutation(() => ({
     mutationFn: async (payload: { appId: string; data: UpdateAppPayload }) =>
       updateApp(payload.appId, payload.data),
-    onSuccess: async (result, variables) => {
+    onSuccess: async (_, variables) => {
       await queryClient.invalidateQueries({ queryKey: queryKeys.appOverview(variables.appId) });
       await queryClient.invalidateQueries({ queryKey: ["portal"] });
-      queryClient.setQueryData(queryKeys.appOverview(variables.appId), (previous: AppOverviewBundle | undefined) => {
-        if (!previous) return previous;
-        return previous;
-      });
-      return result;
     },
   }));
 }
