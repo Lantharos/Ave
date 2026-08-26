@@ -1,7 +1,8 @@
 {
 	"$schema": "./node_modules/wrangler/config-schema.json",
 	"name": "ave-web",
-	"compatibility_date": "2026-08-25",
+	"account_id": "2e3bfcbc9512a7ab1ea3a9cb9a474b30",
+	"compatibility_date": "2026-08-26",
 	"compatibility_flags": [
 		"nodejs_als"
 	],
