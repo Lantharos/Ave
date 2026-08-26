@@ -1,0 +1,34 @@
+import { API_BASE, D1_BOOKMARK_HEADER, ApiError, captureBookmark, readStoredBookmark, request } from "./transport";
+import type { ActivityLogEntry, Device, Identity, IdentityEncryptionKey, LoginRequest, OAuthAuthorization, Passkey, SessionBootstrap, SignatureRequest } from "./types";
+
+export const devicesApi = {
+    list: () =>
+      request<{ devices: Device[] }>("/api/devices"),
+
+    getPendingRequests: () =>
+      request<{ requests: LoginRequest[] }>("/api/devices/pending-requests"),
+
+    approveRequest: (requestId: string, encryptedMasterKey: string, approverPublicKey?: string) =>
+      request<{ success: boolean }>("/api/devices/approve-request", {
+        method: "POST",
+        body: JSON.stringify({ requestId, encryptedMasterKey, approverPublicKey }),
+      }),
+
+
+    denyRequest: (requestId: string) =>
+      request<{ success: boolean }>("/api/devices/deny-request", {
+        method: "POST",
+        body: JSON.stringify({ requestId }),
+      }),
+
+    rename: (deviceId: string, name: string) =>
+      request<{ success: boolean }>(`/api/devices/${deviceId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ name }),
+      }),
+
+    revoke: (deviceId: string) =>
+      request<{ success: boolean }>(`/api/devices/${deviceId}`, {
+        method: "DELETE",
+      }),
+};

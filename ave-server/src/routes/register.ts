@@ -1,11 +1,6 @@
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
-import {
-  generateRegistrationOptions,
-  verifyRegistrationResponse,
-  type VerifiedRegistrationResponse,
-} from "@simplewebauthn/server";
 import { db, users, identities, passkeys, devices, sessions, identityEncryptionKeys } from "../db";
 import { 
   generateSessionToken, 
@@ -20,8 +15,9 @@ import { normalizeEmail } from "../lib/email-verification";
 import { serializeIdentityForOwner } from "../lib/identity-serialization";
 import { enforceRateLimits, ipRateLimit, subjectRateLimit } from "../lib/rate-limit";
 import { recordActivityLog } from "../lib/background-events";
+import { generatePasskeyRegistrationOptions, verifyPasskeyRegistration, type RegistrationVerification } from "../lib/heavy-services";
 
-const app = new Hono();
+const app = new Hono<{ Bindings: Env }>();
 
 function isIdentityHandleUniqueViolation(error: unknown): boolean {
   const message = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase();
@@ -63,17 +59,12 @@ app.post("/start", zValidator("json", startRegistrationSchema), async (c) => {
   // Generate a temporary user ID for this registration attempt
   const tempUserId = crypto.randomUUID();
   
-  const options = await generateRegistrationOptions({
+  const options = await generatePasskeyRegistrationOptions(c.env.HEAVY_SERVICES, {
     rpName,
-    rpID: rpId,
+    rpId,
     userName: handle,
     userDisplayName: handle,
-    userID: new TextEncoder().encode(tempUserId),
-    attestationType: "none",
-    authenticatorSelection: {
-      residentKey: "required",
-      userVerification: "required",
-    },
+    userId: tempUserId,
   });
   
   // Store challenge temporarily
@@ -145,13 +136,13 @@ app.post("/complete", zValidator("json", completeRegistrationSchema), async (c) 
     ? clientOrigin 
     : configuredOrigin;
   
-  let verification: VerifiedRegistrationResponse;
+  let verification: RegistrationVerification;
   try {
-    verification = await verifyRegistrationResponse({
+    verification = await verifyPasskeyRegistration(c.env.HEAVY_SERVICES, {
       response: data.credential,
       expectedChallenge: storedChallenge.challenge,
       expectedOrigin,
-      expectedRPID: rpId,
+      expectedRpId: rpId,
     });
   } catch (error) {
     console.error("WebAuthn verification failed:", error);
@@ -210,7 +201,7 @@ app.post("/complete", zValidator("json", completeRegistrationSchema), async (c) 
     await db.insert(passkeys).values({
       id: registrationInfo.credential.id,
       userId: user.id,
-      publicKey: Buffer.from(registrationInfo.credential.publicKey).toString("base64"),
+      publicKey: registrationInfo.credential.publicKeyBase64,
       counter: registrationInfo.credential.counter,
       deviceType: registrationInfo.credentialDeviceType,
       backedUp: registrationInfo.credentialBackedUp,

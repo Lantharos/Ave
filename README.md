@@ -12,6 +12,7 @@ Ave is split into a few separate packages instead of one root workspace:
 | --- | --- | --- |
 | `ave-web` | Unified frontend Worker for `aveid.net`, `devs.aveid.net`, and `business.aveid.net` | SvelteKit, Cloudflare Workers, Tailwind CSS v4 |
 | `ave-server` | OAuth/OIDC API, auth flows, app management, signing, encryption, uploads | Hono, Cloudflare Workers, Durable Objects, D1, Drizzle |
+| `ave-heavy-services` | Private passkey verification, SAML signature validation, and Web Push delivery service | Cloudflare Workers, WebAuthn, XMLDSig, Web Push |
 | `ave-docs` | Product and SDK documentation | Mintlify content |
 | `sdks/ave-sdk` | Typed JavaScript/TypeScript SDK for OAuth, OIDC, session, Convex, Expo, Svelte, and Next.js helpers | TypeScript |
 | `sdks/ave-embed` | Lightweight browser embed for iframe, sheet, popup, connector, and signing flows | Plain JS |
@@ -54,6 +55,9 @@ The API is the center of the stack. `ave-web` talks to it for the product, devel
 ```bash
 cd ave-server
 bun install
+cd ../ave-heavy-services
+bun install
+cd ../ave-server
 ```
 
 Create local environment files from the examples:
@@ -81,14 +85,19 @@ bun run db:generate
 bun run db:migrate:remote
 ```
 
-The API Worker also uses Durable Objects for realtime login approval fanout and sharded rate-limit counters, Cloudflare Queues for background audit and analytics writes, Workers Analytics Engine for request timing metrics, and Smart Placement. Create the background queues once per Cloudflare account before the first deploy that references them:
+The API Worker also uses Durable Objects for realtime login approval fanout and sharded rate-limit counters, Cloudflare Queues for background audit and analytics writes, Workers Analytics Engine for request timing metrics, and Smart Placement. Passkey verification, SAML signature validation, and Web Push delivery run in the private `ave-heavy-services` Worker so their X.509, ASN.1, XML, and notification dependencies do not slow normal API isolate startup. Deploy that service before the API Worker that binds to it.
+
+Create the background queues once per Cloudflare account, then deploy the private service and API in that order:
 
 ```bash
 cd ave-server
 bunx wrangler queues create ave-background-events
 bunx wrangler queues create ave-background-events-dlq
 bunx wrangler d1 migrations apply ave --remote
-bunx wrangler deploy
+cd ../ave-heavy-services
+bun run deploy
+cd ../ave-server
+bun run deploy
 ```
 
 Workers Analytics Engine datasets are created on first write after the binding is deployed. D1 read replication should stay enabled; Ave clients send D1 bookmarks on follow-up requests so reads can remain fast without losing read-your-writes behavior.
@@ -186,6 +195,7 @@ If you change behavior in the SDKs, auth flows, developer portal, or business or
 If you are new to the repo, these files are the quickest way to orient yourself:
 
 - `ave-server/src/index.ts` for API composition, CORS, Durable Object entrypoints, and scheduled cleanup
+- `ave-heavy-services/src/index.ts` for private passkey and SAML verification plus Web Push delivery
 - `ave-server/src/routes/oauth.ts` for OAuth/OIDC, Quick Ave, refresh rotation, and FedCM
 - `ave-server/src/routes/apps.ts` for developer portal app and resource management
 - `ave-server/src/routes/organizations.ts` for multi-workspace developer portal support
@@ -200,6 +210,7 @@ If you are new to the repo, these files are the quickest way to orient yourself:
 
 - The API uses Cloudflare D1 with Drizzle migrations stored in `ave-server/drizzle`
 - The Worker binds a Durable Object named `API_APP`
+- The API binds the private `ave-heavy-services` Worker for dependency-heavy SAML and notification operations
 - Uploads and public assets are wired through Cloudflare R2
 - The scheduled Worker task triggers daily cleanup for stale devices and expired activity data
 

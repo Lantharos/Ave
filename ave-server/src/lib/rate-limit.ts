@@ -85,14 +85,19 @@ export class RateLimitDurableObject {
     }
 
     const rule = await request.json() as Pick<RateLimitRule, "limit" | "windowMs">;
-    const result = await this.state.storage.transaction(async (txn) => {
+    const bucket = await this.state.storage.transaction(async (txn) => {
       const current = await txn.get<StoredRateLimit>("bucket");
       const { next, result } = await updateBucket(current, rule.limit, rule.windowMs);
-      await txn.put("bucket", next, { expiration: Math.ceil(next.resetAt / 1000) });
-      return result;
+      await txn.put("bucket", next);
+      return { result, resetAt: next.resetAt };
     });
+    await this.state.storage.setAlarm(bucket.resetAt);
 
-    return Response.json(result);
+    return Response.json(bucket.result);
+  }
+
+  async alarm(): Promise<void> {
+    await this.state.storage.delete("bucket");
   }
 }
 

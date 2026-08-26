@@ -1,121 +1,17 @@
-/**
- * Web Push Notifications utility
- * Uses the web-push library for VAPID authentication
- */
+import { sendPushNotification, type HeavyServicesBinding, type PushSubscription } from "./heavy-services";
 
-import webpush from "web-push";
+export type { PushSubscription } from "./heavy-services";
 
-type PushConfig = {
-  publicKey: string;
-  privateKey: string;
-  subject: string;
-};
-
-let configuredFingerprint = "";
-
-function getPushConfig(): PushConfig {
-  return {
-    publicKey: process.env.VAPID_PUBLIC_KEY || "",
-    privateKey: process.env.VAPID_PRIVATE_KEY || "",
-    subject: process.env.VAPID_SUBJECT || "mailto:support@aveid.net",
-  };
-}
-
-function isConfigured(config: PushConfig): boolean {
-  return !!(config.publicKey && config.privateKey);
-}
-
-function ensureConfigured(config: PushConfig): void {
-  if (!isConfigured(config)) return;
-
-  const fingerprint = `${config.subject}|${config.publicKey}|${config.privateKey}`;
-  if (configuredFingerprint === fingerprint) return;
-
-  webpush.setVapidDetails(config.subject, config.publicKey, config.privateKey);
-  configuredFingerprint = fingerprint;
-}
-
-export interface PushSubscription {
-  endpoint: string;
-  keys: {
-    p256dh: string;
-    auth: string;
-  };
-}
-
-export interface PushPayload {
-  title: string;
-  body: string;
-  icon?: string;
-  badge?: string;
-  data?: Record<string, unknown>;
-  actions?: Array<{
-    action: string;
-    title: string;
-    icon?: string;
-  }>;
-  tag?: string;
-  requireInteraction?: boolean;
-}
-
-/**
- * Get the public VAPID key for client subscription
- */
 export function getVapidPublicKey(): string | null {
-  const config = getPushConfig();
-  return config.publicKey || null;
+  return process.env.VAPID_PUBLIC_KEY || null;
 }
 
-/**
- * Check if push notifications are configured
- */
 export function isPushConfigured(): boolean {
-  return isConfigured(getPushConfig());
+  return Boolean(process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY);
 }
 
-/**
- * Send a push notification to a subscription
- */
-export async function sendPushNotification(
-  subscription: PushSubscription,
-  payload: PushPayload
-): Promise<boolean> {
-  const config = getPushConfig();
-  if (!isConfigured(config)) {
-    console.warn("[WebPush] Cannot send notification - VAPID not configured");
-    return false;
-  }
-  ensureConfigured(config);
-
-  try {
-    await webpush.sendNotification(
-      {
-        endpoint: subscription.endpoint,
-        keys: subscription.keys,
-      },
-      JSON.stringify(payload),
-      {
-        TTL: 60 * 60, // 1 hour TTL
-        urgency: "high",
-      }
-    );
-    console.log("[WebPush] Notification sent successfully");
-    return true;
-  } catch (error: any) {
-    // Handle subscription expiration (410 Gone) or invalid subscription (404)
-    if (error.statusCode === 410 || error.statusCode === 404) {
-      console.log("[WebPush] Subscription expired or invalid:", error.statusCode);
-      return false;
-    }
-    console.error("[WebPush] Failed to send notification:", error);
-    return false;
-  }
-}
-
-/**
- * Send login approval request notification
- */
 export async function sendLoginRequestNotification(
+  service: HeavyServicesBinding,
   subscription: PushSubscription,
   data: {
     requestId: string;
@@ -124,54 +20,31 @@ export async function sendLoginRequestNotification(
     browser?: string;
     os?: string;
     ipAddress?: string;
-  }
+  },
 ): Promise<boolean> {
-  return sendPushNotification(subscription, {
+  return sendPushNotification(service, subscription, {
     title: "Login Request",
     body: `${data.deviceName} is trying to sign in to your Ave account`,
     icon: "/icon.png",
     badge: "/icon.png",
     tag: `login-request-${data.requestId}`,
     requireInteraction: true,
-    data: {
-      type: "login_request",
-      requestId: data.requestId,
-      url: `/dashboard?section=login-requests&requestId=${data.requestId}`,
-    },
-    actions: [
-      {
-        action: "approve",
-        title: "Approve",
-      },
-      {
-        action: "deny",
-        title: "Deny",
-      },
-    ],
+    data: { type: "login_request", requestId: data.requestId, url: `/dashboard?section=login-requests&requestId=${data.requestId}` },
+    actions: [{ action: "approve", title: "Approve" }, { action: "deny", title: "Deny" }],
   });
 }
 
 export async function sendAccountEventNotification(
+  service: HeavyServicesBinding,
   subscription: PushSubscription,
-  data: {
-    title: string;
-    body: string;
-    event: string;
-    url?: string;
-    details?: Record<string, unknown>;
-  }
+  data: { title: string; body: string; event: string; url?: string; details?: Record<string, unknown> },
 ): Promise<boolean> {
-  return sendPushNotification(subscription, {
+  return sendPushNotification(service, subscription, {
     title: data.title,
     body: data.body,
     icon: "/icon.png",
     badge: "/icon.png",
     tag: `account-event-${data.event}`,
-    data: {
-      type: "account_event",
-      event: data.event,
-      url: data.url || "/dashboard?section=activity",
-      ...(data.details || {}),
-    },
+    data: { type: "account_event", event: data.event, url: data.url || "/dashboard?section=activity", ...(data.details || {}) },
   });
 }

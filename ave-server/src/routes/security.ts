@@ -9,18 +9,19 @@ import {
 } from "../lib/crypto";
 import { eq, and, desc, isNull, sql } from "drizzle-orm";
 import {
-  generateRegistrationOptions,
-  verifyRegistrationResponse,
-  generateAuthenticationOptions,
-  verifyAuthenticationResponse,
-} from "@simplewebauthn/server";
+  generatePasskeyAuthenticationOptions,
+  generatePasskeyRegistrationOptions,
+  verifyPasskeyAuthentication,
+  verifyPasskeyRegistration,
+  type AuthenticatorTransport,
+} from "../lib/heavy-services";
 import { isAllowedWebauthnOrigin } from "../lib/webauthn-origin";
 import { deleteChallenge, getChallenge, setChallenge } from "../lib/challenge-store";
 import { resolvePasskeyName } from "../lib/passkey-names";
 import { enforceRateLimits, ipRateLimit, subjectRateLimit } from "../lib/rate-limit";
 import { recordActivityLog } from "../lib/background-events";
 
-const app = new Hono();
+const app = new Hono<{ Bindings: Env }>();
 const RECOVERY_CODE_COUNT = 5;
 
 async function countUnusedTrustCodes(userId: string): Promise<number> {
@@ -99,21 +100,16 @@ app.post("/passkeys/register", async (c) => {
     .from(passkeys)
     .where(eq(passkeys.userId, user.id));
   
-  const options = await generateRegistrationOptions({
+  const options = await generatePasskeyRegistrationOptions(c.env.HEAVY_SERVICES, {
     rpName,
-    rpID: rpId,
+    rpId,
     userName: user.id,
     userDisplayName: "Ave User",
-    userID: new TextEncoder().encode(user.id),
-    attestationType: "none",
+    userId: user.id,
     excludeCredentials: existingPasskeys.map((pk) => ({
       id: pk.id,
-      transports: pk.transports as any,
+      transports: pk.transports as AuthenticatorTransport[] | undefined,
     })),
-    authenticatorSelection: {
-      residentKey: "required",
-      userVerification: "required",
-    },
   });
   
   // Store challenge
@@ -171,11 +167,11 @@ app.post("/passkeys/complete", zValidator("json", z.object({
   }
   
   try {
-    const verification = await verifyRegistrationResponse({
+    const verification = await verifyPasskeyRegistration(c.env.HEAVY_SERVICES, {
       response: credential,
       expectedChallenge: storedChallenge.challenge,
       expectedOrigin,
-      expectedRPID: rpId,
+      expectedRpId: rpId,
     });
     
     if (!verification.verified || !verification.registrationInfo) {
@@ -193,7 +189,7 @@ app.post("/passkeys/complete", zValidator("json", z.object({
       .values({
         id: registrationInfo.credential.id,
         userId: user.id,
-        publicKey: Buffer.from(registrationInfo.credential.publicKey).toString("base64"),
+        publicKey: registrationInfo.credential.publicKeyBase64,
         counter: registrationInfo.credential.counter,
         deviceType: registrationInfo.credentialDeviceType,
         backedUp: registrationInfo.credentialBackedUp,
@@ -288,12 +284,11 @@ app.post("/master-key/unlock/start", async (c) => {
     return c.json({ error: "no_prf_passkey" }, 400);
   }
 
-  const options = await generateAuthenticationOptions({
-    rpID: rpId,
-    userVerification: "required",
+  const options = await generatePasskeyAuthenticationOptions(c.env.HEAVY_SERVICES, {
+    rpId,
     allowCredentials: prfPasskeys.map((pk) => ({
       id: pk.id,
-      transports: pk.transports as any,
+      transports: pk.transports as AuthenticatorTransport[] | undefined,
     })),
   });
 
@@ -367,16 +362,16 @@ app.post(
     }
 
     try {
-      const verification = await verifyAuthenticationResponse({
+      const verification = await verifyPasskeyAuthentication(c.env.HEAVY_SERVICES, {
         response: credential,
         expectedChallenge: storedChallenge.challenge,
         expectedOrigin,
-        expectedRPID: rpId,
+        expectedRpId: rpId,
         credential: {
           id: passkey.id,
-          publicKey: Buffer.from(passkey.publicKey, "base64"),
+          publicKeyBase64: passkey.publicKey,
           counter: passkey.counter,
-          transports: passkey.transports as any,
+          transports: passkey.transports as AuthenticatorTransport[] | undefined,
         },
       });
 
@@ -384,7 +379,7 @@ app.post(
         return c.json({ error: "passkey_verification_failed" }, 400);
       }
 
-      if ((verification.authenticationInfo as { userVerified?: boolean }).userVerified === false) {
+      if (!verification.userVerified) {
         return c.json({ error: "passkey_verification_failed" }, 400);
       }
 
@@ -393,7 +388,7 @@ app.post(
       await db
         .update(passkeys)
         .set({
-          counter: verification.authenticationInfo.newCounter,
+          counter: verification.newCounter,
           lastUsedAt: new Date(),
         })
         .where(eq(passkeys.id, passkey.id));

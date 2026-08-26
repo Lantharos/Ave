@@ -1,0 +1,27 @@
+{
+  "name": "ave-heavy-services",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "check": "tsc --noEmit",
+    "deploy": "CLOUDFLARE_ACCOUNT_ID=2e3bfcbc9512a7ab1ea3a9cb9a474b30 wrangler deploy --keep-vars"
+  },
+  "dependencies": {
+    "@simplewebauthn/server": "^13.3.3",
+    "@xmldom/xmldom": "0.9.12",
+    "web-push": "^3.6.7",
+    "xml-crypto": "6.1.2"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20260826.1",
+    "@types/node": "^26.3.0",
+    "@types/web-push": "^3.6.4",
+    "typescript": "^7.0.2",
+    "wrangler": "^4.126.0"
+  },
+  "overrides": {
+    "bn.js": "4.12.3",
+    "esbuild": "0.28.2"
+  }
+}

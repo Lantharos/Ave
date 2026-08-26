@@ -1,5 +1,4 @@
 import { zValidator } from "@hono/zod-validator";
-import { verifyAuthenticationResponse, type AuthenticatorTransportFuture } from "@simplewebauthn/server";
 import { eq } from "drizzle-orm";
 import { Hono } from "hono";
 import { z } from "zod";
@@ -9,6 +8,7 @@ import { runInBackground } from "../../lib/background";
 import { deleteChallenge, getChallenge } from "../../lib/challenge-store";
 import { generateSessionToken, hashSessionToken } from "../../lib/crypto";
 import { listIdentitiesForOwner } from "../../lib/identity-serialization";
+import { verifyPasskeyAuthentication, type AuthenticatorTransport } from "../../lib/heavy-services";
 import { enforceRateLimits, ipRateLimit, subjectRateLimit } from "../../lib/rate-limit";
 import { setSessionCookie } from "../../lib/session-cookie";
 import { getOrCreateDevice, notifyAccountLoginEvent, type Bindings } from "./shared";
@@ -69,16 +69,16 @@ app.post("/passkey", zValidator("json", z.object({
     : configuredOrigin;
 
   try {
-    const verification = await verifyAuthenticationResponse({
+    const verification = await verifyPasskeyAuthentication(c.env.HEAVY_SERVICES, {
       response: credential,
       expectedChallenge: storedChallenge.challenge,
       expectedOrigin,
-      expectedRPID: rpId,
+      expectedRpId: rpId,
       credential: {
         id: passkey.id,
-        publicKey: Buffer.from(passkey.publicKey, "base64"),
+        publicKeyBase64: passkey.publicKey,
         counter: passkey.counter,
-        transports: passkey.transports as AuthenticatorTransportFuture[] | undefined,
+        transports: passkey.transports as AuthenticatorTransport[] | undefined,
       },
     });
 
@@ -86,7 +86,7 @@ app.post("/passkey", zValidator("json", z.object({
       return c.json({ error: "Passkey verification failed" }, 400);
     }
 
-    if ((verification.authenticationInfo as { userVerified?: boolean }).userVerified === false) {
+    if (!verification.userVerified) {
       return c.json({ error: "Passkey verification failed" }, 400);
     }
 
@@ -94,7 +94,7 @@ app.post("/passkey", zValidator("json", z.object({
     await db
       .update(passkeys)
       .set({
-        counter: verification.authenticationInfo.newCounter,
+        counter: verification.newCounter,
         lastUsedAt: new Date(),
       })
       .where(eq(passkeys.id, passkey.id));
@@ -132,6 +132,7 @@ app.post("/passkey", zValidator("json", z.object({
     });
 
     runInBackground(c, notifyAccountLoginEvent(
+      c.env.HEAVY_SERVICES,
       storedChallenge.userId,
       {
         method: "passkey",

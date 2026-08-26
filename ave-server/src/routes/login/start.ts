@@ -1,5 +1,4 @@
 import { zValidator } from "@hono/zod-validator";
-import { generateAuthenticationOptions } from "@simplewebauthn/server";
 import { and, eq, sql } from "drizzle-orm";
 import { Hono } from "hono";
 import { z } from "zod";
@@ -9,6 +8,7 @@ import { setChallenge } from "../../lib/challenge-store";
 import { generateSessionToken, hashSessionToken } from "../../lib/crypto";
 import { isDemoHandle, isDemoLoginEnabled, verifyDemoPassword } from "../../lib/demo-auth";
 import { listIdentitiesForOwner } from "../../lib/identity-serialization";
+import { generatePasskeyAuthenticationOptions } from "../../lib/heavy-services";
 import { enforceRateLimits, ipRateLimit, subjectRateLimit } from "../../lib/rate-limit";
 import { setSessionCookie } from "../../lib/session-cookie";
 import { getOrCreateDevice, rejectRequiredEnterpriseSso, type Bindings } from "./shared";
@@ -86,10 +86,9 @@ app.post("/start", zValidator("json", z.object({
   if (hasPasskeys) {
     authSessionId = crypto.randomUUID();
 
-    authOptions = await generateAuthenticationOptions({
-      rpID: rpId,
+    authOptions = await generatePasskeyAuthenticationOptions(c.env.HEAVY_SERVICES, {
+      rpId,
       allowCredentials: [],
-      userVerification: "required",
     });
 
     await setChallenge(

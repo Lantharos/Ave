@@ -127,7 +127,7 @@ export function generateNonce(): string {
 }
 
 export function buildAuthorizeUrl(config: AveConfig, params: {
-  scope?: Scope[];
+  scope?: string[];
   state?: string;
   nonce?: string;
   codeChallenge?: string;

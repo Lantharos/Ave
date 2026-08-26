@@ -2,7 +2,8 @@ import { Hono } from "hono";
 import { and, eq } from "drizzle-orm";
 import { db, organizations, organizationSsoConnections } from "../db";
 import { hasBusinessScope, requireBusinessAccess } from "../lib/business";
-import { buildSamlRedirectUrl, validateSamlResponse } from "../lib/business-saml";
+import { buildSamlRedirectUrl } from "../lib/business-saml";
+import { validateSamlResponse } from "../lib/heavy-services";
 import { completeEnterpriseSsoLogin, recordSsoConnectionTest } from "../lib/business-sso-login";
 import { clientIp, userAgent } from "../lib/business-route-utils";
 import { rejectWithoutRequiredSso } from "../lib/business-route-guards";
@@ -12,7 +13,7 @@ import { buildSamlServiceProviderMetadata } from "../lib/sso-metadata";
 import { businessOrigin, enterpriseSsoReturnTo } from "../lib/enterprise-sso-return";
 import { recordBusinessAuditEvent } from "../lib/background-events";
 
-const app = new Hono();
+const app = new Hono<{ Bindings: Pick<Env, "HEAVY_SERVICES"> }>();
 
 type SamlSsoState = {
   connectionId: string;
@@ -90,7 +91,11 @@ app.post("/sso/saml/:connectionId/acs", async (c) => {
 
   let assertion;
   try {
-    assertion = validateSamlResponse({ encodedResponse, connection: row.connection, expectedRequestId: stored?.requestId });
+    assertion = await validateSamlResponse(c.env.HEAVY_SERVICES, {
+      encodedResponse,
+      connection: row.connection,
+      expectedRequestId: stored?.requestId,
+    });
   } catch (err) {
     recordBusinessAuditEvent(c, {
       organizationId: row.organization.id,

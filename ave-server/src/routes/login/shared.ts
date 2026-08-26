@@ -4,8 +4,7 @@ import { verifyTrustCode } from "../../lib/crypto";
 import { getRequiredEnterpriseSsoForEmail } from "../../lib/enterprise-sso-policy";
 import { sendAccountEventNotification, type PushSubscription } from "../../lib/webpush";
 
-export type Bindings = {
-  API_APP: DurableObjectNamespace;
+export type Bindings = Pick<Env, "API_APP" | "HEAVY_SERVICES"> & {
   INTERNAL_API_TOKEN?: string;
 };
 
@@ -161,6 +160,7 @@ export async function getOrCreateDevice(
 }
 
 export async function notifyAccountLoginEvent(
+  service: Env["HEAVY_SERVICES"],
   userId: string,
   event: {
     method: "passkey" | "device_approval" | "trust_code";
@@ -178,7 +178,7 @@ export async function notifyAccountLoginEvent(
     if ((excludeDeviceId && userDevice.id === excludeDeviceId) || !userDevice.pushSubscription) return null;
     try {
       const subscription = userDevice.pushSubscription as PushSubscription;
-      const sent = await sendAccountEventNotification(subscription, {
+      const sent = await sendAccountEventNotification(service, subscription, {
         title: "New Login",
         body: `${event.deviceName} signed in to your Ave account`,
         event: "login",

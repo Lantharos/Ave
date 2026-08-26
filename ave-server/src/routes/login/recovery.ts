@@ -120,6 +120,7 @@ app.post("/trust-code", zValidator("json", z.object({
   });
 
   runInBackground(c, notifyAccountLoginEvent(
+    c.env.HEAVY_SERVICES,
     identity.userId,
     {
       method: "trust_code",

@@ -88,7 +88,7 @@ app.post("/request-approval", zValidator("json", z.object({
     const invalidDeviceIds = (await Promise.all(userDevices.map(async (userDevice) => {
       if (!userDevice.pushSubscription) return null;
       try {
-        const sent = await sendLoginRequestNotification(userDevice.pushSubscription as PushSubscription, {
+        const sent = await sendLoginRequestNotification(c.env.HEAVY_SERVICES, userDevice.pushSubscription as PushSubscription, {
           requestId: request.id,
           deviceName: request.deviceName || "Unknown Device",
           deviceType: request.deviceType || "computer",
@@ -208,6 +208,7 @@ app.get("/request-status/:requestId", async (c) => {
     });
 
     runInBackground(c, notifyAccountLoginEvent(
+      c.env.HEAVY_SERVICES,
       identity.userId,
       {
         method: "device_approval",

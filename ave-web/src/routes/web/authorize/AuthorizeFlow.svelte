@@ -1,29 +1,19 @@
 <script lang="ts">
+    import AuthSlider from "./AuthSlider.svelte";
+    import { prepareAuthorizationEncryption } from "./prepare-authorization-encryption";
     import IdentityCard from "$lib/surfaces/web/components/IdentityCard.svelte";
     import Text from "$lib/surfaces/web/components/Text.svelte";
     import { api, type Identity, type OAuthAuthorization } from "$lib/surfaces/web/lib/api";
     import {
-        generateAppKey,
-        encryptAppKey,
-        exportAppKey,
         resolveActiveMasterKey,
-        masterKeysMatch,
-        decryptAppKey,
-        generateAppKeyPair,
         generateEphemeralKeyPair,
         recoverMasterKeyFromBackup,
         storeMasterKey,
-        encryptAppPrivateKey,
-        exportAppPrivateKeyB64,
-        decryptAppPrivateKey,
-        decryptAppPrivateKeyB64,
     } from "$lib/surfaces/web/lib/crypto";
     import {
         authorizeFlowShowsE2ee,
-        authorizationHasE2eeMaterial,
         hasE2eeResetScope,
         hasUserIdScope,
-        resolveE2eeAuthorization,
         resolveRequestedE2eeMode,
     } from "$lib/surfaces/web/lib/e2ee-scopes";
     import { parseOAuthScopes } from "$lib/surfaces/web/lib/oauth-scopes";
@@ -43,6 +33,16 @@
 	import { getDeviceInfo } from "$lib/surfaces/web/lib/webauthn";
 	import LoginWaiting from "../login/components/LoginWaiting.svelte";
 	import { postMessageTargetOriginFromRedirectUri } from "$lib/surfaces/web/util/embed-post-message-origin";
+
+    type AveIdentityProvider = {
+        resolve(assertion: string): void;
+        close(): void;
+    };
+
+    function identityProvider(): AveIdentityProvider | null {
+        const provider = (window as Window & { IdentityProvider?: AveIdentityProvider }).IdentityProvider;
+        return provider || null;
+    }
 
 	function openAuthPopupHere(): boolean {
 		const width = 450;
@@ -132,9 +132,8 @@
     const wantsSelectAccount = $derived(wantsAccountPickerPrompt(oauthPrompts));
 
 	function postToEmbedHost(payload: unknown) {
-		const target = (window.opener && (window.opener as any).parent)
-			? (window.opener as any).parent
-			: (window.opener ?? window.parent);
+		const opener = window.opener as Window | null;
+		const target = opener?.parent ?? window.parent;
 		const origin = postMessageTargetOriginFromRedirectUri(params.redirectUri);
 		target?.postMessage(payload, origin);
 	}
@@ -175,8 +174,6 @@
     let emailDraft = $state("");
     let emailCode = $state("");
     let emailSubmitting = $state(false);
-    let sliderPosition = $state(0);
-    let sliderActive = $state(false);
     let needsMasterKey = $state(false);
     let unlockingMasterKey = $state(false);
     let masterKeyUnlockView = $state<"options" | "device" | "recovery">("options");
@@ -234,7 +231,6 @@
         masterKeyMismatch = syncIssue;
         needsMasterKey = true;
         authorizing = false;
-        sliderPosition = 0;
     }
 
     function appDisplayName() {
@@ -384,166 +380,44 @@
                 authData.codeChallengeMethod = params.codeChallengeMethod;
             }
 
-            const requestedScopes = authorizeRequestedScopes;
-            const wantsE2eeReset = hasE2eeResetScope(requestedScopes);
-            const e2eeAuth = appInfo
-                ? resolveE2eeAuthorization(requestedScopes, appInfo, existingAuth)
-                : { mode: null, reset: false };
-            let requestedE2eeMode = e2eeAuth.mode;
-
-            let rawAppKey: string | null = null;
-            let rawAppKeyOld: string | null = null;
-            let rawAppPublicKey: string | null = null;
-            let rawAppPublicKeyOld: string | null = null;
-            let rawAppPrivateKey: string | null = null;
-            let rawAppPrivateKeyOld: string | null = null;
-
-			if (requestedE2eeMode) {
-				const resolvedMasterKey = await resolveActiveMasterKey(get(auth).masterKey);
-				if (!resolvedMasterKey) {
-					needsMasterKey = true;
-					masterKeyError = null;
-					authorizing = false;
-					sliderPosition = 0;
-					return;
-				}
-				let masterKey: CryptoKey = resolvedMasterKey;
-
-                const sameIdentity = existingAuth?.identityId === selectedIdentity.id;
-                const hasStoredMaterial =
-                    sameIdentity &&
-                    authorizationHasE2eeMaterial(existingAuth, requestedE2eeMode);
-
-                async function loadStoredSymmetricKeysWith(activeKey: CryptoKey): Promise<"ok" | "missing" | "failed"> {
-                    if (!existingAuth?.encryptedAppKey) return "missing";
-                    try {
-                        const appKey = await decryptAppKey(existingAuth.encryptedAppKey, activeKey);
-                        rawAppKey = await exportAppKey(appKey);
-                        return "ok";
-                    } catch (keyError) {
-                        console.warn("[Authorize] Existing encrypted app key could not be decrypted.", keyError);
-                        return "failed";
-                    }
-                }
-
-                async function loadStoredAsymmetricKeysWith(activeKey: CryptoKey): Promise<"ok" | "missing" | "failed"> {
-                    if (
-                        !existingAuth?.appPublicKey ||
-                        !existingAuth?.encryptedAppPrivateKey
-                    ) {
-                        return "missing";
-                    }
-                    try {
-                        rawAppPublicKey = existingAuth.appPublicKey;
-                        rawAppPrivateKey = await decryptAppPrivateKeyB64(
-                            existingAuth.encryptedAppPrivateKey,
-                            activeKey,
-                        );
-                        return "ok";
-                    } catch (keyError) {
-                        console.warn("[Authorize] Existing app keypair could not be decrypted.", keyError);
-                        return "failed";
-                    }
-                }
-
-                async function loadStoredKeysForModeWith(activeKey: CryptoKey): Promise<"ok" | "missing" | "failed"> {
-                    if (requestedE2eeMode === "symmetric") return loadStoredSymmetricKeysWith(activeKey);
-                    if (requestedE2eeMode === "asymmetric") return loadStoredAsymmetricKeysWith(activeKey);
-                    return "missing";
-                }
-
-                async function loadStoredKeysForMode(): Promise<"ok" | "missing" | "failed"> {
-                    return loadStoredKeysForModeWith(masterKey);
-                }
-
-                async function recoverStoredKeysAfterDecryptFailure(): Promise<boolean> {
-                    const sessionKey = get(auth).masterKey;
-                    if (!sessionKey || (await masterKeysMatch(masterKey, sessionKey))) {
-                        return false;
-                    }
-                    const retry = await loadStoredKeysForModeWith(sessionKey);
-                    if (retry !== "ok") {
-                        return false;
-                    }
-                    masterKey = sessionKey;
-                    await storeMasterKey(sessionKey);
-                    return true;
-                }
-
-                async function createAsymmetricAppKeyMaterial(activeKey: CryptoKey) {
-                    const keyPair = await generateAppKeyPair();
-                    const encryptedPrivateKey = await encryptAppPrivateKey(keyPair.privateKey, activeKey);
-                    await decryptAppPrivateKey(encryptedPrivateKey, activeKey);
-                    return { keyPair, encryptedPrivateKey };
-                }
-
-                if (wantsE2eeReset) {
-                    if (hasStoredMaterial) {
-                        const prior = await loadStoredKeysForMode();
-                        if (prior === "ok") {
-                            if (requestedE2eeMode === "symmetric") {
-                                rawAppKeyOld = rawAppKey;
-                            } else if (requestedE2eeMode === "asymmetric") {
-                                rawAppPublicKeyOld = rawAppPublicKey;
-                                rawAppPrivateKeyOld = rawAppPrivateKey;
-                            }
-                        } else if (prior === "failed") {
-                            console.warn("[Authorize] Could not decrypt prior app keys for rotation export; continuing with reset.");
-                        }
-                    }
-
-                    rawAppKey = null;
-                    rawAppPublicKey = null;
-                    rawAppPrivateKey = null;
-
-                    if (requestedE2eeMode === "symmetric") {
-                        const appKey = await generateAppKey();
-                        authData.encryptedAppKey = await encryptAppKey(appKey, masterKey);
-                        rawAppKey = await exportAppKey(appKey);
-                    } else if (requestedE2eeMode === "asymmetric") {
-                        const { keyPair, encryptedPrivateKey } = await createAsymmetricAppKeyMaterial(masterKey);
-                        authData.appPublicKey = keyPair.publicKey;
-                        authData.encryptedAppPrivateKey = encryptedPrivateKey;
-                        rawAppPublicKey = keyPair.publicKey;
-                        rawAppPrivateKey = await exportAppPrivateKeyB64(keyPair.privateKey);
-                    } else {
-                        throw new Error(`Encryption mode "${requestedE2eeMode}" is not available yet.`);
-                    }
-                } else if (hasStoredMaterial) {
-                    let loaded = await loadStoredKeysForMode();
-                    if (loaded === "failed" && (await recoverStoredKeysAfterDecryptFailure())) {
-                        loaded = "ok";
-                    }
-                    if (loaded === "failed") {
-                        promptMasterKeyRecovery(true);
-                        return;
-                    }
-                    if (loaded === "missing") {
-                        error = "This app has saved encryption keys but they could not be loaded. Try again or contact support.";
-                        authorizing = false;
-                        sliderPosition = 0;
-                        return;
-                    }
-                } else if (requestedE2eeMode === "symmetric") {
-                    const appKey = await generateAppKey();
-                    authData.encryptedAppKey = await encryptAppKey(appKey, masterKey);
-                    rawAppKey = await exportAppKey(appKey);
-                } else if (requestedE2eeMode === "asymmetric") {
-                    const { keyPair, encryptedPrivateKey } = await createAsymmetricAppKeyMaterial(masterKey);
-                    authData.appPublicKey = keyPair.publicKey;
-                    authData.encryptedAppPrivateKey = encryptedPrivateKey;
-                    rawAppPublicKey = keyPair.publicKey;
-                    rawAppPrivateKey = await exportAppPrivateKeyB64(keyPair.privateKey);
-                } else {
-                    throw new Error(`Encryption mode "${requestedE2eeMode}" is not available yet.`);
-                }
-
-                await storeMasterKey(masterKey);
+            const encryption = await prepareAuthorizationEncryption({
+                requestedScopes: authorizeRequestedScopes,
+                app: appInfo,
+                existingAuthorization: existingAuth,
+                identityId: selectedIdentity.id,
+                sessionMasterKey: get(auth).masterKey,
+            });
+            if (encryption.status === "master-key-required") {
+                needsMasterKey = true;
+                masterKeyError = null;
+                authorizing = false;
+                return;
             }
+            if (encryption.status === "master-key-recovery-required") {
+                promptMasterKeyRecovery(true);
+                return;
+            }
+            if (encryption.status === "error") {
+                error = encryption.message;
+                authorizing = false;
+                return;
+            }
+
+            Object.assign(authData, encryption.authorization);
+            const {
+                appKey: rawAppKey,
+                appKeyOld: rawAppKeyOld,
+                appPublicKey: rawAppPublicKey,
+                appPublicKeyOld: rawAppPublicKeyOld,
+                appPrivateKey: rawAppPrivateKey,
+                appPrivateKeyOld: rawAppPrivateKeyOld,
+                reset: wantsE2eeReset,
+            } = encryption.redirect;
             
             const result = await api.oauth.authorize(authData);
 
-            if (params.fedcmContinue && typeof window !== "undefined" && "IdentityProvider" in window) {
+            const fedCmProvider = params.fedcmContinue ? identityProvider() : null;
+            if (fedCmProvider) {
                 const code = new URL(result.redirectUrl).searchParams.get("code");
                 if (!code) {
                     throw new Error("FedCM authorization did not return a code");
@@ -562,7 +436,7 @@
                     appKeyReset: wantsE2eeReset || undefined,
                 });
 
-                (window as any).IdentityProvider.resolve(finalized.assertion);
+                fedCmProvider.resolve(finalized.assertion);
                 completed = true;
                 authorizing = false;
                 return;
@@ -598,8 +472,8 @@
             completed = true;
             window.location.href = redirectUrl;
 
-		} catch (err: any) {
-            if (err?.message === "Request timed out") {
+			} catch (err: unknown) {
+	            if (err instanceof Error && err.message === "Request timed out") {
                 error = "Signing in is taking too long. Please try again.";
             } else if (
                 err instanceof Error &&
@@ -610,7 +484,6 @@
                 error = err instanceof Error ? err.message : "Authorization failed";
             }
             authorizing = false;
-            sliderPosition = 0;
         }
     }
 
@@ -661,138 +534,12 @@
         }
     }
 
-    let sliderPointerId: number | null = null;
-    let sliderRef = $state<HTMLElement | null>(null);
-    let sliderHandleRef = $state<HTMLElement | null>(null);
-    let sliderMaxTravel = $state(0);
-
-    function measureSlider() {
-        if (!sliderRef || !sliderHandleRef) return;
-        const inset = sliderHandleRef.offsetLeft;
-        sliderMaxTravel = Math.max(0, sliderRef.clientWidth - sliderHandleRef.offsetWidth - inset * 2);
-    }
-
-    $effect(() => {
-        if (!sliderRef) return;
-        const observer = new ResizeObserver(measureSlider);
-        observer.observe(sliderRef);
-        measureSlider();
-        return () => observer.disconnect();
-    });
-
-    function handleSliderStart(e: PointerEvent) {
-        if (authorizing) return;
-        if (!sliderHandleRef) return;
-
-        const handleRect = sliderHandleRef.getBoundingClientRect();
-        if (
-            e.clientX < handleRect.left ||
-            e.clientX > handleRect.right ||
-            e.clientY < handleRect.top ||
-            e.clientY > handleRect.bottom
-        ) return;
-
-        e.preventDefault();
-        
-        sliderActive = true;
-        sliderPointerId = e.pointerId;
-        
-        measureSlider();
-        
-        // Use pointer capture on the slider track for reliable cross-browser tracking
-        if (sliderRef) {
-            try {
-                sliderRef.setPointerCapture(e.pointerId);
-            } catch (err) {
-                // Fallback - add document listeners
-                document.addEventListener("pointermove", handleSliderMove);
-                document.addEventListener("pointerup", handleSliderEnd);
-                document.addEventListener("pointercancel", handleSliderEnd);
-            }
-        }
-    }
-
-    function handleSliderMove(e: PointerEvent) {
-        if (!sliderActive) return;
-        // Only filter by pointerId if we have one set (allows fallback to work)
-        if (sliderPointerId !== null && e.pointerId !== sliderPointerId) return;
-        
-        e.preventDefault();
-        
-        if (!sliderRef || sliderMaxTravel <= 0) return;
-        
-        const rect = sliderRef.getBoundingClientRect();
-        const visualScale = rect.width / sliderRef.offsetWidth || 1;
-        const buttonWidth = sliderHandleRef?.offsetWidth || 60;
-        const inset = sliderHandleRef?.offsetLeft || 6;
-        const logicalX = (e.clientX - rect.left) / visualScale;
-        const relativeX = logicalX - inset - buttonWidth / 2;
-        const position = Math.max(0, Math.min(1, relativeX / sliderMaxTravel));
-        sliderPosition = position;
-        
-        // Auto-authorize when fully slid
-        if (position >= 0.95) {
-            sliderPosition = 1;
-            cleanupSlider();
-            void handleAuthorize();
-        }
-    }
-
-    function handleSliderEnd(e: PointerEvent) {
-        if (!sliderActive) return;
-        if (sliderPointerId !== null && e.pointerId !== sliderPointerId) return;
-        
-        cleanupSlider();
-        
-        // Snap back if not authorized
-        if (sliderPosition < 0.95) {
-            sliderPosition = 0;
-        }
-    }
-    
-    function cleanupSlider() {
-        sliderActive = false;
-        
-        // Release pointer capture
-        if (sliderRef && sliderPointerId !== null) {
-            try {
-                sliderRef.releasePointerCapture(sliderPointerId);
-            } catch (err) {
-                // Ignore - may not have been captured
-            }
-        }
-        
-        sliderPointerId = null;
-        document.removeEventListener("pointermove", handleSliderMove);
-        document.removeEventListener("pointerup", handleSliderEnd);
-        document.removeEventListener("pointercancel", handleSliderEnd);
-    }
-
-    function handleSliderKeydown(e: KeyboardEvent) {
-        if (authorizing) return;
-
-        if (e.key === "ArrowRight" || e.key === "ArrowUp") {
-            e.preventDefault();
-            sliderPosition = Math.min(1, sliderPosition + 0.1);
-        } else if (e.key === "ArrowLeft" || e.key === "ArrowDown") {
-            e.preventDefault();
-            sliderPosition = Math.max(0, sliderPosition - 0.1);
-        } else if (e.key === "Home") {
-            e.preventDefault();
-            sliderPosition = 0;
-        } else if (e.key === "End") {
-            e.preventDefault();
-            sliderPosition = 1;
-        } else if ((e.key === "Enter" || e.key === " ") && sliderPosition >= 0.95) {
-            e.preventDefault();
-            void handleAuthorize();
-        }
-    }
 
 
     function handleDeny() {
-        if (params.fedcmContinue && typeof window !== "undefined" && "IdentityProvider" in window) {
-            (window as any).IdentityProvider.close();
+        const fedCmProvider = params.fedcmContinue ? identityProvider() : null;
+        if (fedCmProvider) {
+            fedCmProvider.close();
             completed = true;
             return;
         }
@@ -1483,53 +1230,7 @@
                     </div>
                 </div>
             {:else}
-                <div class="flex flex-col gap-3 md:gap-[14px] mt-4 md:mt-0">
-                    <div 
-                        id="auth-slider"
-                        bind:this={sliderRef}
-                        class="auth-slider rounded-full w-full relative h-[50px] md:h-[72px] touch-none select-none overflow-hidden outline-none focus-visible:ring-2 focus-visible:ring-white/40 {sliderActive ? 'is-sliding' : ''} {authorizing ? 'is-success' : ''}"
-                        role="slider"
-                        tabindex="0"
-                        aria-label="Slide to sign in"
-                        aria-valuemin="0"
-                        aria-valuemax="100"
-                        aria-valuenow={Math.round(sliderPosition * 100)}
-                        aria-valuetext={authorizing ? "Signing in" : sliderPosition >= 0.95 ? "Ready to sign in" : `${Math.round(sliderPosition * 100)} percent`}
-                        aria-busy={authorizing}
-                        onpointerdown={handleSliderStart}
-                        onpointermove={handleSliderMove}
-                        onpointerup={handleSliderEnd}
-                        onpointercancel={handleSliderEnd}
-                        onkeydown={handleSliderKeydown}
-                    >
-                        <div
-                            class="auth-slider-progress absolute inset-0 pointer-events-none"
-                            style="transform: scaleX({sliderPosition});"
-                        ></div>
-
-                        <div 
-                            bind:this={sliderHandleRef}
-                            class="auth-slider-handle w-[40px] h-[40px] md:w-[60px] md:h-[60px] bg-white rounded-full cursor-grab flex items-center justify-center absolute top-[5px] left-[5px] md:top-[6px] md:left-[6px] z-10 {sliderActive ? '' : 'transition-[transform] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)]'}"
-                            style="transform: translateX({sliderMaxTravel > 0 ? sliderPosition * sliderMaxTravel : sliderPosition * 100}px);"
-                        >
-                            {#if authorizing}
-                                <div class="w-5 h-5 md:w-[24px] md:h-[24px] border-2 border-[#090909] border-t-transparent rounded-full animate-spin"></div>
-                            {:else}
-                                <svg class="w-5 h-5 md:w-[28px] md:h-[28px]" viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-                                    <path d="M7 6L15 14L7 22M13 6L21 14L13 22" stroke="#090909" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
-                                </svg>
-                            {/if}
-                        </div>
-
-                        <p
-                            class="text-[#A0A0A0] text-sm md:text-[16px] font-poppins font-medium absolute inset-0 text-center flex items-center justify-center pointer-events-none transition-all duration-200"
-                            style="opacity: {authorizing ? 1 : Math.max(0.18, 1 - sliderPosition * 1.25)}; transform: translateX({sliderPosition * 10}px);"
-                        >
-                            {authorizing ? "Signing in…" : sliderPosition > 0.72 ? "Keep going" : "Slide to sign in"}
-                        </p>
-
-                    </div>
-                </div>
+                <AuthSlider {authorizing} onauthorize={() => handleAuthorize()} />
             {/if}
         {/if}
     </div>
@@ -1550,41 +1251,3 @@
     </div>
 </div>
 {/if}
-
-<style>
-    .auth-slider {
-        background: linear-gradient(180deg, #1b1b1b 0%, #151515 100%);
-        box-shadow:
-            inset 0 1px 0 rgba(255, 255, 255, 0.04),
-            inset 0 0 0 1px rgba(255, 255, 255, 0.025);
-        cursor: default;
-    }
-
-    .auth-slider.is-sliding,
-    .auth-slider.is-sliding .auth-slider-handle {
-        cursor: grabbing;
-    }
-
-    .auth-slider-progress {
-        transform-origin: left center;
-        background: linear-gradient(90deg, rgba(255, 255, 255, 0.11), rgba(255, 255, 255, 0.035));
-        transition: opacity 180ms ease;
-    }
-
-    .auth-slider-handle {
-        box-shadow:
-            0 6px 20px rgba(0, 0, 0, 0.32),
-            0 0 0 3px rgba(255, 255, 255, 0.09);
-    }
-
-    .auth-slider.is-success .auth-slider-progress {
-        background: linear-gradient(90deg, rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0.08));
-    }
-
-    @media (prefers-reduced-motion: reduce) {
-        .auth-slider *,
-        .auth-slider-progress {
-            transition-duration: 0.01ms !important;
-        }
-    }
-</style>

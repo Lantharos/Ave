@@ -32,21 +32,10 @@ import { initMail } from "./lib/mail";
 import { cleanupExpiredChallenges } from "./lib/challenge-store";
 import { cleanupExpiredOAuthStorage } from "./lib/oauth-store";
 import { processBackgroundEventBatch, type BackgroundEvent } from "./lib/background-events";
-import type { NativeRateLimitBinding } from "./lib/rate-limit";
 
 import uploadRoutes from "./routes/upload";
 
-type Bindings = {
-  API_APP: DurableObjectNamespace;
-  RATE_LIMITER: DurableObjectNamespace;
-  OAUTH_TOKEN_IP_RATE_LIMITER: NativeRateLimitBinding;
-  OAUTH_AUTHORIZE_ACTOR_RATE_LIMITER: NativeRateLimitBinding;
-  OAUTH_CLIENT_RATE_LIMITER: NativeRateLimitBinding;
-  BACKGROUND_EVENTS?: Queue<BackgroundEvent>;
-  API_ANALYTICS?: AnalyticsEngineDataset;
-  DB: D1Database;
-  EMAIL: SendEmail;
-  UPLOADS: R2Bucket;
+type Bindings = Env & {
   INTERNAL_API_TOKEN?: string;
 };
 
@@ -546,7 +535,7 @@ export default {
 
     const requestDatabase = createRequestDatabase(request, env.DB);
     return runWithDb(requestDatabase, async () => {
-      const response = await app.fetch(request, env, ctx as any);
+      const response = await app.fetch(request, env, ctx);
       return finalizeMeasuredResponse(env, request, startedAt, response, requestDatabase);
     });
   },
