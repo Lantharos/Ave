@@ -340,11 +340,8 @@ export async function cleanupStaleDevices() {
     .where(and(eq(devices.isActive, true), lt(devices.lastSeenAt, fourteenDaysAgo)));
   
   if (staleDevices.length === 0) {
-    console.log("[Cleanup] No stale devices found");
     return { removed: 0 };
   }
-  
-  console.log(`[Cleanup] Found ${staleDevices.length} stale devices to remove`);
   
   await db.batch([
     db.insert(activityLogs).values(staleDevices.map((device) => ({
@@ -364,7 +361,6 @@ export async function cleanupStaleDevices() {
     db.delete(devices).where(inArray(devices.id, staleDevices.map((device) => device.id))),
   ]);
   
-  console.log(`[Cleanup] Removed ${staleDevices.length} stale devices`);
   return { removed: staleDevices.length };
 }
 

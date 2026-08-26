@@ -109,9 +109,6 @@ export async function handleWebSocketMessage(ws: WebSocket, message: string) {
       case "ping":
         safeSend(ws, JSON.stringify({ type: "pong" }));
         break;
-      
-      default:
-        console.log("Unknown message type:", data.type);
     }
   } catch (error) {
     console.error("WebSocket message error:", error);

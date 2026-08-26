@@ -2,23 +2,7 @@
  * Push Notifications utility for the Ave web app
  */
 
-const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:3000";
-
-function getStoredSessionToken(): string | null {
-  try {
-    return localStorage.getItem("ave_session_token");
-  } catch {
-    return null;
-  }
-}
-
-function authenticatedHeaders(includeContentType = true): Record<string, string> {
-  const token = getStoredSessionToken();
-  return {
-    ...(includeContentType ? { "Content-Type": "application/json" } : {}),
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
-  };
-}
+import { request } from "./api/transport";
 
 /**
  * Check if push notifications are supported in this browser
@@ -88,11 +72,9 @@ export async function requestNotificationPermission(): Promise<boolean> {
  */
 async function getVapidPublicKey(): Promise<string | null> {
   try {
-    const response = await fetch(`${API_BASE}/api/push/vapid-key`, { credentials: "include" });
-    const data = await response.json() as { enabled?: boolean; publicKey?: string };
+    const data = await request<{ enabled?: boolean; publicKey?: string }>("/api/push/vapid-key");
     
     if (!data.enabled || !data.publicKey) {
-      console.log("[Push] Push notifications not configured on server");
       return null;
     }
     
@@ -148,42 +130,27 @@ async function getServiceWorkerRegistration(create: boolean): Promise<ServiceWor
   if (existing) return existing;
   if (!create) return null;
 
-  const registered = await navigator.serviceWorker.register("/sw.js");
-  console.log("[Push] Service worker registered");
-  return registered;
+  return navigator.serviceWorker.register("/sw.js");
 }
 
 async function saveSubscriptionToServer(subscription: PushSubscription): Promise<boolean> {
-  const response = await fetch(`${API_BASE}/api/push/subscribe`, {
+  try {
+    await request<{ success: boolean }>("/api/push/subscribe", {
     method: "POST",
-    credentials: "include",
-    headers: authenticatedHeaders(),
     body: JSON.stringify({
       subscription: subscription.toJSON(),
     }),
-  });
-
-  if (!response.ok) {
+    });
+    return true;
+  } catch {
     console.error("[Push] Failed to save subscription to server");
     return false;
   }
-
-  console.log("[Push] Push subscription saved to server");
-  return true;
 }
 
 async function getServerPushStatus(): Promise<{ enabled: boolean; subscribed: boolean }> {
   try {
-    const response = await fetch(`${API_BASE}/api/push/status`, {
-      credentials: "include",
-      headers: authenticatedHeaders(false),
-    });
-
-    if (!response.ok) {
-      return { enabled: false, subscribed: false };
-    }
-
-    const status = await response.json() as { enabled?: boolean; subscribed?: boolean };
+    const status = await request<{ enabled?: boolean; subscribed?: boolean }>("/api/push/status");
     return {
       enabled: !!status.enabled,
       subscribed: !!status.subscribed,
@@ -211,7 +178,6 @@ async function getSyncedPushSubscription(vapidPublicKey: string, create: boolean
       userVisibleOnly: true,
       applicationServerKey,
     });
-    console.log("[Push] Push subscription created");
   }
 
   if (!subscription) return null;
@@ -231,13 +197,11 @@ export async function subscribeToPushNotifications(): Promise<boolean> {
   // Request permission first
   const hasPermission = await requestNotificationPermission();
   if (!hasPermission) {
-    console.log("[Push] Notification permission denied");
     return false;
   }
   
   const vapidPublicKey = await getVapidPublicKey();
   if (!vapidPublicKey) {
-    console.log("[Push] No VAPID key available");
     return false;
   }
   
@@ -264,13 +228,10 @@ export async function unsubscribeFromPushNotifications(): Promise<boolean> {
     
     if (subscription) {
       await subscription.unsubscribe();
-      console.log("[Push] Unsubscribed from push notifications");
     }
-    
-    await fetch(`${API_BASE}/api/push/unsubscribe`, {
+
+    await request<{ success: boolean }>("/api/push/unsubscribe", {
       method: "POST",
-      credentials: "include",
-      headers: authenticatedHeaders(),
     });
     
     return true;

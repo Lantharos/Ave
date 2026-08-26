@@ -145,7 +145,8 @@
     background: linear-gradient(180deg, #1b1b1b 0%, #151515 100%);
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04), inset 0 0 0 1px rgba(255, 255, 255, 0.025);
   }
-  .auth-slider.is-sliding, .auth-slider.is-sliding .auth-slider-handle { cursor: grabbing; }
+  .auth-slider.is-sliding,
+  .auth-slider.is-sliding .auth-slider-handle { cursor: grabbing; }
   .auth-slider-progress {
     transform-origin: left center;
     background: linear-gradient(90deg, rgba(255, 255, 255, 0.11), rgba(255, 255, 255, 0.035));

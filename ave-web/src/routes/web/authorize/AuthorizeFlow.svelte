@@ -1,6 +1,16 @@
 <script lang="ts">
-    import AuthSlider from "./AuthSlider.svelte";
-    import { prepareAuthorizationEncryption } from "./prepare-authorization-encryption";
+    import AuthSlider from "./components/AuthSlider.svelte";
+    import MasterKeyRecovery from "./components/MasterKeyRecovery.svelte";
+    import { prepareAuthorizationEncryption } from "./lib/prepare-authorization-encryption";
+    import {
+        fallbackToTopLevelAuthorize,
+        identityProvider,
+        isCustomSchemeRedirect,
+        openAuthPopupHere,
+        postToEmbedHost,
+        withTimeout,
+    } from "./lib/browser";
+    import { parseAuthorizationParams } from "./lib/params";
     import IdentityCard from "$lib/surfaces/web/components/IdentityCard.svelte";
     import Text from "$lib/surfaces/web/components/Text.svelte";
     import { api, type Identity, type OAuthAuthorization } from "$lib/surfaces/web/lib/api";
@@ -31,66 +41,6 @@
 	import { supportsStorageAccessApi, hasStorageAccess, requestStorageAccess } from "$lib/surfaces/web/lib/storage-access";
 	import { unlockMasterKeyWithPasskey } from "$lib/surfaces/web/lib/master-key-unlock";
 	import { getDeviceInfo } from "$lib/surfaces/web/lib/webauthn";
-	import LoginWaiting from "../login/components/LoginWaiting.svelte";
-	import { postMessageTargetOriginFromRedirectUri } from "$lib/surfaces/web/util/embed-post-message-origin";
-
-    type AveIdentityProvider = {
-        resolve(assertion: string): void;
-        close(): void;
-    };
-
-    function identityProvider(): AveIdentityProvider | null {
-        const provider = (window as Window & { IdentityProvider?: AveIdentityProvider }).IdentityProvider;
-        return provider || null;
-    }
-
-	function openAuthPopupHere(): boolean {
-		const width = 450;
-		const height = 650;
-		const left = (window.innerWidth - width) / 2 + window.screenX;
-		const top = (window.innerHeight - height) / 2 + window.screenY;
-		const popup = window.open(
-			window.location.href,
-			"ave_auth",
-			`width=${width},height=${height},left=${left},top=${top},menubar=no,toolbar=no,location=no,status=no`
-		);
-		popup?.focus?.();
-		return !!popup;
-	}
-
-    function fallbackToTopLevelAuthorize() {
-        const fallbackUrl = new URL(window.location.href);
-        fallbackUrl.searchParams.delete("embed");
-        window.location.assign(fallbackUrl.toString());
-    }
-
-	async function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T | null> {
-		let timer: number | undefined;
-		try {
-			return await Promise.race([
-				promise,
-				new Promise<null>((resolve) => {
-					timer = window.setTimeout(() => resolve(null), ms);
-				}),
-			]);
-		} finally {
-			if (timer !== undefined) window.clearTimeout(timer);
-		}
-	}
-
-	function isCustomSchemeRedirect(url: string): boolean {
-		try {
-			const protocol = new URL(url).protocol;
-			return protocol !== "http:" && protocol !== "https:";
-		} catch {
-			return /^[a-zA-Z][a-zA-Z\d+\-.]*:/.test(url) && !url.startsWith("http://") && !url.startsWith("https://");
-		}
-	}
-
-    function parseCodeChallengeMethod(value: string | null): "S256" | "plain" | undefined {
-        return value === "S256" || value === "plain" ? value : undefined;
-    }
-
     // Parse query params from window.location
     let querystring = $state(window.location.search.slice(1));
     
@@ -104,39 +54,12 @@
     });
 
     // Parse query params
-    let params = $derived.by(() => {
-        const searchParams = new URLSearchParams(querystring || "");
-        const codeChallenge = searchParams.get("code_challenge");
-        const codeChallengeMethod = searchParams.get("code_challenge_method");
-        
-			return {
-				clientId: searchParams.get("client_id") || "",
-				redirectUri: searchParams.get("redirect_uri") || "",
-				scope: searchParams.get("scope") || "openid profile email",
-				state: searchParams.get("state") || "",
-                nonce: searchParams.get("nonce") || "",
-                identityId: searchParams.get("identity_id") || "",
-                organizationId: searchParams.get("organization_id") || "",
-				resource: searchParams.get("resource") || "",
-				embed: searchParams.get("embed") === "1",
-                fedcmContinue: searchParams.get("fedcm_continue") === "1",
-				codeChallenge: codeChallenge || undefined,
-				codeChallengeMethod: parseCodeChallengeMethod(codeChallengeMethod),
-                prompt: searchParams.get("prompt") || "",
-			};
-
-    });
+    let params = $derived(parseAuthorizationParams(querystring || ""));
 
     const oauthPrompts = $derived.by(() => parseOAuthPrompt(params.prompt));
     const forceAuthorizePrompt = $derived(requiresAuthorizeInteractionPrompt(oauthPrompts));
     const wantsSelectAccount = $derived(wantsAccountPickerPrompt(oauthPrompts));
 
-	function postToEmbedHost(payload: unknown) {
-		const opener = window.opener as Window | null;
-		const target = opener?.parent ?? window.parent;
-		const origin = postMessageTargetOriginFromRedirectUri(params.redirectUri);
-		target?.postMessage(payload, origin);
-	}
 
     const isQuickAuth = $derived(params.clientId.startsWith("origin:"));
     const requiresEmailScope = $derived.by(() => parseOAuthScopes(params.scope).includes("email"));
@@ -457,7 +380,7 @@
                 redirectUrl = url.toString();
             }
             if (params.embed) {
-                postToEmbedHost({
+                postToEmbedHost(params.redirectUri, {
                     type: "ave:success",
                     payload: { redirectUrl },
                 });
@@ -552,7 +475,7 @@
         }
 
 		if (params.embed) {
-			postToEmbedHost({ type: "ave:error", payload: { error: "access_denied" } });
+			postToEmbedHost(params.redirectUri, { type: "ave:error", payload: { error: "access_denied" } });
 			completed = true;
 			if (window.opener) {
 				setTimeout(() => window.close(), 50);
@@ -612,7 +535,7 @@
 			setReturnUrl(window.location.pathname + window.location.search);
 			redirectingToLogin = true;
 			if (params.embed) {
-				postToEmbedHost({ type: "ave:auth_required" });
+				postToEmbedHost(params.redirectUri, { type: "ave:auth_required" });
 			}
 			safeGoto(goto, "/login");
 			return;
@@ -956,93 +879,22 @@
 
     <div class="flex-1 w-full max-w-[760px] md:max-w-none mx-auto md:mx-0 md:min-h-full px-4 md:px-[56px] z-10 py-5 md:py-[48px] flex flex-col justify-between rounded-[24px] md:rounded-[52px] bg-[#111111]/60 backdrop-blur-xl">
         {#if needsMasterKey}
-            <div class="flex flex-col gap-[30px] items-center justify-center flex-1">
-                {#if masterKeyUnlockView === "device" && masterKeyLoginRequestId}
-                    <LoginWaiting
-                        loginRequestId={masterKeyLoginRequestId}
-                        ephemeralKeyPair={masterKeyEphemeralKeyPair}
-                        masterKeyOnly
-                        onSuccess={handleMasterKeyRecovered}
-                        onError={(message) => { masterKeyError = message; masterKeyUnlockView = "options"; }}
-                        onBack={() => { masterKeyUnlockView = "options"; masterKeyLoginRequestId = null; masterKeyEphemeralKeyPair = null; }}
-                    />
-                {:else if masterKeyUnlockView === "recovery"}
-                    <div class="w-full max-w-[350px] flex flex-col gap-[20px]">
-                        <div class="text-center">
-                            <Text type="h" size={24} color="#FFFFFF">Recovery code</Text>
-                            <p class="text-[#878787] text-[16px] mt-[10px]">
-                                Enter a one-time recovery code to restore your encryption key on this device.
-                            </p>
-                        </div>
-                        {#if masterKeyError}
-                            <p class="text-[#E14747] text-[14px] text-center">{masterKeyError}</p>
-                        {/if}
-                        <input
-                            class="w-full px-4 py-3 bg-[#171717] text-white rounded-[16px] text-center tracking-widest outline-none focus:ring-1 focus:ring-white/20"
-                            placeholder="Recovery code"
-                            bind:value={recoveryCode}
-                            onkeydown={(e) => { if (e.key === "Enter") void handleRecoveryCodeSubmit(); }}
-                        />
-                        <button
-                            class="w-full py-[18px] bg-[#FFFFFF] text-[#090909] font-semibold rounded-[16px] hover:bg-[#E0E0E0] transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
-                            disabled={recoveringMasterKey || !recoveryCode.trim()}
-                            onclick={() => void handleRecoveryCodeSubmit()}
-                        >
-                            {recoveringMasterKey ? "Restoring…" : "Restore encryption key"}
-                        </button>
-                        <button
-                            class="w-full py-[14px] text-[#878787] hover:text-white transition-colors"
-                            onclick={() => { masterKeyUnlockView = "options"; masterKeyError = null; }}
-                        >
-                            Back
-                        </button>
-                    </div>
-                {:else}
-                <div class="w-[80px] h-[80px] rounded-full bg-[#E14747]/20 flex items-center justify-center">
-                    <svg width="40" height="40" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M12 2L4 7V12C4 16.4183 7.58172 20 12 20C16.4183 20 20 16.4183 20 12V7L12 2Z" stroke="#E14747" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                        <path d="M12 8V12M12 16H12.01" stroke="#E14747" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                    </svg>
-                </div>
-                <div class="text-center">
-                    <Text type="h" size={24} color="#FFFFFF">Encryption Key Required</Text>
-                    <p class="text-[#878787] text-[16px] mt-[10px] max-w-[400px]">
-                        {#if masterKeyMismatch}
-                            This app already has encryption keys saved. We couldn't read them with what's stored in this browser — restore your account encryption key to sync this device.
-                        {:else}
-                            This app uses end-to-end encryption. Your encryption key wasn't found on this device.
-                        {/if}
-                    </p>
-                </div>
-                <div class="flex flex-col gap-[15px] w-full max-w-[350px]">
-					{#if masterKeyError && !masterKeyMismatch}
-						<p class="text-[#E14747] text-[14px] text-center">{masterKeyError}</p>
-					{/if}
-					<button
-						class="w-full py-[18px] bg-[#FFFFFF] text-[#090909] font-semibold rounded-[16px] hover:bg-[#E0E0E0] transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
-						disabled={unlockingMasterKey}
-						onclick={handleUnlockMasterKey}
-					>
-						{unlockingMasterKey ? "Unlocking…" : "Unlock with Passkey"}
-					</button>
-                    {#if hasTrustedDevices}
-                        <button
-                            class="w-full py-[18px] bg-[#171717] text-[#FFFFFF] font-semibold rounded-[16px] hover:bg-[#222222] transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
-                            disabled={requestingDeviceApproval}
-                            onclick={() => void handleMasterKeyDeviceApproval()}
-                        >
-                            {requestingDeviceApproval ? "Requesting…" : "Approve on another device"}
-                        </button>
-                    {/if}
-                    <button 
-                        class="w-full py-[18px] bg-[#171717] text-[#FFFFFF] font-semibold rounded-[16px] hover:bg-[#222222] transition-colors"
-                        onclick={() => { masterKeyUnlockView = "recovery"; masterKeyError = null; }}
-                    >
-                        Use recovery code
-                    </button>
-                </div>
-                {/if}
-            </div>
+            <MasterKeyRecovery
+                bind:view={masterKeyUnlockView}
+                loginRequestId={masterKeyLoginRequestId}
+                ephemeralKeyPair={masterKeyEphemeralKeyPair}
+                bind:error={masterKeyError}
+                bind:recoveryCode
+                recovering={recoveringMasterKey}
+                mismatch={masterKeyMismatch}
+                unlocking={unlockingMasterKey}
+                {hasTrustedDevices}
+                {requestingDeviceApproval}
+                onRecovered={handleMasterKeyRecovered}
+                onUnlock={handleUnlockMasterKey}
+                onDeviceApproval={handleMasterKeyDeviceApproval}
+                onRecoverySubmit={handleRecoveryCodeSubmit}
+            />
         {:else if error}
             <div class="flex flex-col gap-[20px] items-center justify-center flex-1">
                 <Text type="h" size={24} color="#E14747">{error}</Text>

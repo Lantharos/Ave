@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
+import { bodyLimit } from "hono/body-limit";
 import { authMiddleware } from "./middleware/auth";
 import { 
   handleWebSocketOpen, 
@@ -284,6 +285,21 @@ function buildApp() {
 
     return c.json({ error: "origin_not_allowed" }, 403);
   });
+
+  const jsonBodyLimit = bodyLimit({
+    maxSize: 1024 * 1024,
+    onError: (c) => c.json({ error: "Request body too large" }, 413),
+  });
+  const uploadBodyLimit = bodyLimit({
+    maxSize: 12 * 1024 * 1024,
+    onError: (c) => c.json({ error: "Upload too large" }, 413),
+  });
+
+  app.use("/api/*", (c, next) => (
+    c.req.path.startsWith("/api/upload/")
+      ? uploadBodyLimit(c, next)
+      : jsonBodyLimit(c, next)
+  ));
 
   app.use("*", authMiddleware);
 

@@ -16,6 +16,8 @@ import { serializeIdentityForOwner } from "../lib/identity-serialization";
 import { enforceRateLimits, ipRateLimit, subjectRateLimit } from "../lib/rate-limit";
 import { recordActivityLog } from "../lib/background-events";
 import { generatePasskeyRegistrationOptions, verifyPasskeyRegistration, type RegistrationVerification } from "../lib/heavy-services";
+import { registrationCredentialSchema } from "../contracts/security/webauthn";
+import { extractAllowedWebauthnOrigin } from "../lib/webauthn-origin";
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -84,7 +86,7 @@ app.post("/start", zValidator("json", startRegistrationSchema), async (c) => {
 // Schema for completing registration
 const completeRegistrationSchema = z.object({
   tempUserId: z.string().uuid(),
-  credential: z.any(), // WebAuthn response
+  credential: registrationCredentialSchema,
   identity: z.object({
     displayName: z.string().min(1).max(64),
     handle: z.string().min(3).max(32),
@@ -125,16 +127,8 @@ app.post("/complete", zValidator("json", completeRegistrationSchema), async (c) 
   }
   
   const rpId = process.env.RP_ID || "localhost";
-  // For development, accept any localhost origin
-  const configuredOrigin = process.env.RP_ORIGIN || "http://localhost:5173";
-  const clientOrigin = data.credential.response?.clientDataJSON 
-    ? JSON.parse(Buffer.from(data.credential.response.clientDataJSON, "base64").toString()).origin
-    : configuredOrigin;
-  
-  // In development, allow any localhost port
-  const expectedOrigin = clientOrigin && clientOrigin.match(/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/)
-    ? clientOrigin 
-    : configuredOrigin;
+  const expectedOrigin = extractAllowedWebauthnOrigin(data.credential.response.clientDataJSON);
+  if (!expectedOrigin) return c.json({ error: "Invalid credential origin" }, 400);
   
   let verification: RegistrationVerification;
   try {

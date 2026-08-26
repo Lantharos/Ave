@@ -11,13 +11,15 @@ import { listIdentitiesForOwner } from "../../lib/identity-serialization";
 import { verifyPasskeyAuthentication, type AuthenticatorTransport } from "../../lib/heavy-services";
 import { enforceRateLimits, ipRateLimit, subjectRateLimit } from "../../lib/rate-limit";
 import { setSessionCookie } from "../../lib/session-cookie";
+import { authenticationCredentialSchema } from "../../contracts/security/webauthn";
+import { extractAllowedWebauthnOrigin } from "../../lib/webauthn-origin";
 import { getOrCreateDevice, notifyAccountLoginEvent, type Bindings } from "./shared";
 
 const app = new Hono<{ Bindings: Bindings }>();
 
 app.post("/passkey", zValidator("json", z.object({
   authSessionId: z.string().uuid(),
-  credential: z.any(),
+  credential: authenticationCredentialSchema,
   device: z.object({
     name: z.string().max(64),
     type: z.enum(["phone", "computer", "tablet"]),
@@ -57,16 +59,8 @@ app.post("/passkey", zValidator("json", z.object({
   }
 
   const rpId = process.env.RP_ID || "localhost";
-  // For development, accept any localhost origin
-  const configuredOrigin = process.env.RP_ORIGIN || "http://localhost:5173";
-  const clientOrigin = credential.response?.clientDataJSON
-    ? JSON.parse(Buffer.from(credential.response.clientDataJSON, "base64").toString()).origin
-    : configuredOrigin;
-
-  // In development, allow any localhost port
-  const expectedOrigin = clientOrigin && clientOrigin.match(/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/)
-    ? clientOrigin
-    : configuredOrigin;
+  const expectedOrigin = extractAllowedWebauthnOrigin(credential.response.clientDataJSON);
+  if (!expectedOrigin) return c.json({ error: "Invalid credential origin" }, 400);
 
   try {
     const verification = await verifyPasskeyAuthentication(c.env.HEAVY_SERVICES, {

@@ -80,8 +80,7 @@ export async function prepareAuthorizationEncryption(input: {
       try {
         redirect.appKey = await exportAppKey(await decryptAppKey(input.existingAuthorization.encryptedAppKey, key));
         return "ok";
-      } catch (error) {
-        console.warn("[Authorize] Existing encrypted app key could not be decrypted.", error);
+      } catch {
         return "failed";
       }
     }
@@ -91,8 +90,7 @@ export async function prepareAuthorizationEncryption(input: {
         redirect.appPublicKey = input.existingAuthorization.appPublicKey;
         redirect.appPrivateKey = await decryptAppPrivateKeyB64(input.existingAuthorization.encryptedAppPrivateKey, key);
         return "ok";
-      } catch (error) {
-        console.warn("[Authorize] Existing app keypair could not be decrypted.", error);
+      } catch {
         return "failed";
       }
     }
@@ -116,8 +114,6 @@ export async function prepareAuthorizationEncryption(input: {
         redirect.appKeyOld = redirect.appKey;
         redirect.appPublicKeyOld = redirect.appPublicKey;
         redirect.appPrivateKeyOld = redirect.appPrivateKey;
-      } else if (prior === "failed") {
-        console.warn("[Authorize] Could not decrypt prior app keys for rotation export; continuing with reset.");
       }
     }
     redirect.appKey = null;

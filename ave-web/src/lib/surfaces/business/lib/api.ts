@@ -12,98 +12,13 @@ import type {
   KmsProvider,
 } from "./types";
 import { resolveApiBase } from "./origins";
+import { createAveApiClient, ApiError } from "$lib/infrastructure/http/ave-api-client";
 
 const API_BASE = resolveApiBase();
-const D1_BOOKMARK_HEADER = "x-d1-bookmark";
-let d1Bookmark: string | null = null;
+const client = createAveApiClient({ baseUrl: API_BASE });
+const request = client.request;
 
 type SignedAction = { signedAction: { signature: string } };
-
-export class ApiError extends Error {
-  constructor(public status: number, message: string) {
-    super(message);
-    this.name = "ApiError";
-  }
-}
-
-function readBookmark() {
-  if (d1Bookmark) return d1Bookmark;
-  try {
-    d1Bookmark = sessionStorage.getItem("ave_d1_bookmark");
-  } catch {
-    d1Bookmark = null;
-  }
-  return d1Bookmark;
-}
-
-function saveBookmark(value: string | null) {
-  d1Bookmark = value;
-  try {
-    if (value) sessionStorage.setItem("ave_d1_bookmark", value);
-    else sessionStorage.removeItem("ave_d1_bookmark");
-  } catch {
-  }
-}
-
-function captureBookmark(response: Response) {
-  const nextBookmark = response.headers.get(D1_BOOKMARK_HEADER);
-  if (nextBookmark) saveBookmark(nextBookmark);
-  if (response.status === 401) saveBookmark(null);
-}
-
-async function readResponseData(response: Response): Promise<unknown> {
-  const text = await response.text();
-  return text ? JSON.parse(text) : {};
-}
-
-function errorMessage(data: unknown, fallback = "Request failed") {
-  if (data && typeof data === "object" && "error" in data && typeof data.error === "string") return data.error;
-  return fallback;
-}
-
-async function request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
-  const headers = new Headers(options.headers);
-  if (typeof options.body === "string" && !headers.has("Content-Type")) {
-    headers.set("Content-Type", "application/json");
-  }
-  const bookmark = readBookmark();
-  if (bookmark) headers.set(D1_BOOKMARK_HEADER, bookmark);
-
-  const response = await fetch(`${API_BASE}${endpoint}`, {
-    ...options,
-    credentials: "include",
-    headers,
-  });
-
-  captureBookmark(response);
-
-  const data = await readResponseData(response);
-  if (!response.ok) {
-    throw new ApiError(response.status, errorMessage(data));
-  }
-  return data as T;
-}
-
-async function upload<T>(endpoint: string, formData: FormData): Promise<T> {
-  const headers = new Headers();
-  const bookmark = readBookmark();
-  if (bookmark) headers.set(D1_BOOKMARK_HEADER, bookmark);
-
-  const response = await fetch(`${API_BASE}${endpoint}`, {
-    method: "POST",
-    credentials: "include",
-    headers,
-    body: formData,
-  });
-
-  captureBookmark(response);
-
-  const data = await readResponseData(response);
-  if (!response.ok) {
-    throw new ApiError(response.status, errorMessage(data, "Upload failed"));
-  }
-  return data as T;
-}
 
 export const api = {
   bootstrap: () =>
@@ -132,7 +47,7 @@ export const api = {
     const formData = new FormData();
     formData.set("organizationId", organizationId);
     formData.set("file", file);
-    return upload<{ logoUrl: string }>("/api/upload/workspace-logo", formData);
+    return client.upload<{ logoUrl: string }>("/api/upload/workspace-logo", formData);
   },
 
   updateEncryptionPolicy: (
@@ -263,3 +178,5 @@ export const api = {
       }),
   },
 };
+
+export { ApiError };

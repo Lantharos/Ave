@@ -15,11 +15,12 @@ import {
   verifyPasskeyRegistration,
   type AuthenticatorTransport,
 } from "../lib/heavy-services";
-import { isAllowedWebauthnOrigin } from "../lib/webauthn-origin";
+import { extractAllowedWebauthnOrigin } from "../lib/webauthn-origin";
 import { deleteChallenge, getChallenge, setChallenge } from "../lib/challenge-store";
 import { resolvePasskeyName } from "../lib/passkey-names";
 import { enforceRateLimits, ipRateLimit, subjectRateLimit } from "../lib/rate-limit";
 import { recordActivityLog } from "../lib/background-events";
+import { authenticationCredentialSchema, registrationCredentialSchema } from "../contracts/security/webauthn";
 
 const app = new Hono<{ Bindings: Env }>();
 const RECOVERY_CODE_COUNT = 5;
@@ -125,7 +126,7 @@ app.post("/passkeys/register", async (c) => {
 
 // Complete passkey registration
 app.post("/passkeys/complete", zValidator("json", z.object({
-  credential: z.any(),
+  credential: registrationCredentialSchema,
   name: z.string().max(64).optional(),
   prfEncryptedMasterKey: z.string().optional(), // PRF-encrypted master key if passkey supports PRF
 })), async (c) => {
@@ -147,24 +148,8 @@ app.post("/passkeys/complete", zValidator("json", z.object({
   
   const rpId = process.env.RP_ID || "localhost";
   
-  // Extract origin from the credential's clientDataJSON to support any localhost port
-  let expectedOrigin: string;
-  try {
-    const clientDataJSON = JSON.parse(
-      Buffer.from(credential.response.clientDataJSON, "base64url").toString("utf-8")
-    );
-    expectedOrigin = clientDataJSON.origin;
-    
-    // Validate origin is localhost (for development) or configured production origin
-    const prodOrigin = process.env.RP_ORIGIN;
-    const isValidOrigin = expectedOrigin.match(/^http:\/\/localhost(:\d+)?$/) || 
-                          expectedOrigin === prodOrigin;
-    if (!isValidOrigin) {
-      return c.json({ error: "Invalid origin" }, 400);
-    }
-  } catch {
-    return c.json({ error: "Invalid credential format" }, 400);
-  }
+  const expectedOrigin = extractAllowedWebauthnOrigin(credential.response.clientDataJSON);
+  if (!expectedOrigin) return c.json({ error: "Invalid credential origin" }, 400);
   
   try {
     const verification = await verifyPasskeyRegistration(c.env.HEAVY_SERVICES, {
@@ -312,7 +297,7 @@ app.post(
     "json",
     z.object({
       unlockSessionId: z.string().min(1),
-      credential: z.any(),
+      credential: authenticationCredentialSchema,
     })
   ),
   async (c) => {
@@ -338,18 +323,8 @@ app.post(
 
     const rpId = process.env.RP_ID || "localhost";
 
-    let expectedOrigin: string;
-    try {
-      const clientDataJSON = JSON.parse(
-        Buffer.from(credential.response.clientDataJSON, "base64url").toString("utf-8")
-      );
-      expectedOrigin = clientDataJSON.origin;
-      if (!isAllowedWebauthnOrigin(expectedOrigin)) {
-        return c.json({ error: "invalid_origin" }, 400);
-      }
-    } catch {
-      return c.json({ error: "invalid_credential_format" }, 400);
-    }
+    const expectedOrigin = extractAllowedWebauthnOrigin(credential.response.clientDataJSON);
+    if (!expectedOrigin) return c.json({ error: "invalid_credential_origin" }, 400);
 
     const [passkey] = await db
       .select()

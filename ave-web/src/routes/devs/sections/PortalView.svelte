@@ -5,14 +5,7 @@
   import Input from "$lib/surfaces/devs/components/Input.svelte";
   import TopBar from "$lib/surfaces/devs/components/TopBar.svelte";
   import Subnav from "$lib/surfaces/devs/components/Subnav.svelte";
-  import SignInPage from "./SignInPage.svelte";
-  import AppsPage from "./AppsPage.svelte";
-  import TeamPage from "./TeamPage.svelte";
-  import CreateAppPage from "./CreateAppPage.svelte";
-  import AppDetailPage from "./AppDetailPage.svelte";
-  import AppOverviewPage from "./AppOverviewPage.svelte";
-  import AppIdentitiesPage from "./AppIdentitiesPage.svelte";
-  import AppActivityPage from "./AppActivityPage.svelte";
+  import { lazyModule } from "$lib/infrastructure/ui/lazy-module";
   import type {
     AppEvent,
     AppIdentityRecord,
@@ -24,6 +17,15 @@
   type WorkspaceSection = "applications" | "organization";
   type AppSection = "overview" | "identities" | "activity" | "configure";
   type NavItem = { id: string; label: string; badge?: number };
+
+  const loadSignInPage = lazyModule(() => import("./SignInPage.svelte"));
+  const loadAppsPage = lazyModule(() => import("./AppsPage.svelte"));
+  const loadTeamPage = lazyModule(() => import("./TeamPage.svelte"));
+  const loadCreateAppPage = lazyModule(() => import("./CreateAppPage.svelte"));
+  const loadAppDetailPage = lazyModule(() => import("./AppDetailPage.svelte"));
+  const loadAppOverviewPage = lazyModule(() => import("./AppOverviewPage.svelte"));
+  const loadAppIdentitiesView = lazyModule(() => import("./AppIdentitiesPage.svelte"));
+  const loadAppActivityView = lazyModule(() => import("./AppActivityPage.svelte"));
 
   let {
     authenticated,
@@ -144,7 +146,9 @@
 </script>
 
 {#if !authenticated}
-  <SignInPage onsignin={handleSignIn} {loading} />
+  {#await loadSignInPage() then { default: SignInPage }}
+    <SignInPage onsignin={handleSignIn} {loading} />
+  {/await}
 {:else if workspace && currentOrganizationId}
   <div class="relative min-h-screen bg-[#090909]">
     <AuroraBackdrop preset="dashboard-tr" cclass="pointer-events-none absolute right-0 top-0 w-[70%] select-none" />
@@ -219,11 +223,13 @@
           }}
         >
           <div class="hide-scrollbar max-h-[calc(100vh-48px)] w-full max-w-[980px] overflow-y-auto rounded-[32px] bg-[#131313] p-6 md:p-8 shadow-[0_32px_120px_rgba(0,0,0,0.55)]">
-            <CreateAppPage
-              oncreate={handleCreate}
-              oncancel={() => (createModalOpen = false)}
-              {creating}
-            />
+            {#await loadCreateAppPage() then { default: CreateAppPage }}
+              <CreateAppPage
+                oncreate={handleCreate}
+                oncancel={() => (createModalOpen = false)}
+                {creating}
+              />
+            {/await}
           </div>
         </div>
       {/if}
@@ -316,55 +322,67 @@
             </div>
           </div>
         {:else if selectedApp && appInsights && appSection === "overview"}
-          <AppOverviewPage app={selectedApp} insights={appInsights} identities={appIdentities} events={appEvents} />
+          {#await loadAppOverviewPage() then { default: AppOverviewPage }}
+            <AppOverviewPage app={selectedApp} insights={appInsights} identities={appIdentities} events={appEvents} />
+          {/await}
         {:else if selectedApp && appSection === "identities"}
-          <AppIdentitiesPage
-            identities={appIdentities}
-            total={appIdentitiesTotal}
-            loadingmore={appIdentitiesLoadingMore}
-            hasmore={appIdentities.length < appIdentitiesTotal}
-            onloadmore={() => loadAppIdentitiesPage(selectedApp.id)}
-          />
+          {#await loadAppIdentitiesView() then { default: AppIdentitiesPage }}
+            <AppIdentitiesPage
+              identities={appIdentities}
+              total={appIdentitiesTotal}
+              loadingmore={appIdentitiesLoadingMore}
+              hasmore={appIdentities.length < appIdentitiesTotal}
+              onloadmore={() => loadAppIdentitiesPage(selectedApp.id)}
+            />
+          {/await}
         {:else if selectedApp && appInsights && appSection === "activity"}
-          <AppActivityPage
-            app={selectedApp}
-            insights={appInsights}
-            events={appEvents}
-            total={appEventsTotal}
-            loadingmore={appEventsLoadingMore}
-            hasmore={appEventsHasMore}
-            onloadmore={() => loadAppActivityPage(selectedApp.id)}
-          />
+          {#await loadAppActivityView() then { default: AppActivityPage }}
+            <AppActivityPage
+              app={selectedApp}
+              insights={appInsights}
+              events={appEvents}
+              total={appEventsTotal}
+              loadingmore={appEventsLoadingMore}
+              hasmore={appEventsHasMore}
+              onloadmore={() => loadAppActivityPage(selectedApp.id)}
+            />
+          {/await}
         {:else if selectedApp && appSection === "configure"}
-          <AppDetailPage
-            app={selectedApp}
-            {organizations}
-            onsave={handleSaveApp}
-            onrotate={handleRotateSecret}
-            ondelete={(app) => (deleteTarget = app)}
-            oncreateResource={handleCreateResource}
-            ondeleteResource={handleDeleteResource}
-            oncopy={handleCopy}
-            saving={saveState === "saving"}
-            saved={saveState === "saved"}
-            rotating={rotatingAppId === selectedApp.id}
-            rotated={rotatedAppId === selectedApp.id}
-          />
+          {#await loadAppDetailPage() then { default: AppDetailPage }}
+            <AppDetailPage
+              app={selectedApp}
+              {organizations}
+              onsave={handleSaveApp}
+              onrotate={handleRotateSecret}
+              ondelete={(app) => (deleteTarget = app)}
+              oncreateResource={handleCreateResource}
+              ondeleteResource={handleDeleteResource}
+              oncopy={handleCopy}
+              saving={saveState === "saving"}
+              saved={saveState === "saved"}
+              rotating={rotatingAppId === selectedApp.id}
+              rotated={rotatedAppId === selectedApp.id}
+            />
+          {/await}
         {:else if workspaceSection === "applications"}
-          <AppsPage
-            {apps}
-            {loading}
-            oncreate={() => (createModalOpen = true)}
-            onselect={(app) => openApp(app.id)}
-          />
+          {#await loadAppsPage() then { default: AppsPage }}
+            <AppsPage
+              {apps}
+              {loading}
+              oncreate={() => (createModalOpen = true)}
+              onselect={(app) => openApp(app.id)}
+            />
+          {/await}
         {:else if workspaceSection === "organization"}
-          <TeamPage
-            {workspace}
-            oninvite={handleInvite}
-            onchangerole={handleRoleChange}
-            onuploadlogo={handleWorkspaceLogoUpload}
-            onrename={handleWorkspaceRename}
-          />
+          {#await loadTeamPage() then { default: TeamPage }}
+            <TeamPage
+              {workspace}
+              oninvite={handleInvite}
+              onchangerole={handleRoleChange}
+              onuploadlogo={handleWorkspaceLogoUpload}
+              onrename={handleWorkspaceRename}
+            />
+          {/await}
         {/if}
       </main>
     </div>

@@ -5,13 +5,7 @@
     import Text from "$lib/surfaces/web/components/Text.svelte";
     import SidebarButton from "./components/SidebarButton.svelte";
     import AuroraBackdrop from "$lib/components/AuroraBackdrop.svelte";
-    import Identity from "./sections/Identity.svelte";
-    import Security from "./sections/Security.svelte";
-    import MyData from "./sections/MyData.svelte";
-    import Devices from "./sections/Devices.svelte";
-    import ActivityLog from "./sections/ActivityLog.svelte";
-    import LoginApproval from "./sections/LoginApproval.svelte";
-    import Connectors from "./sections/Connectors.svelte";
+    import { lazyModule } from "$lib/infrastructure/ui/lazy-module";
     import PasskeySetupPrompt from "./components/PasskeySetupPrompt.svelte";
     import { auth, identities as identitiesStore, isAuthenticated, isReadOnly } from "$lib/surfaces/web/stores/auth";
     import { websocket } from "$lib/surfaces/web/stores/websocket";
@@ -21,6 +15,14 @@
     import { clearPendingPasskeySetupPrompt, readPendingPasskeySetupPrompt, type PendingPasskeySetupPrompt } from "$lib/surfaces/web/lib/passkey-setup-prompt";
     import { isPlatformAuthenticatorAvailable } from "$lib/surfaces/web/lib/webauthn";
     import { Plus } from "@lucide/svelte";
+
+    const loadIdentity = lazyModule(() => import("./sections/Identity.svelte"));
+    const loadSecurity = lazyModule(() => import("./sections/Security.svelte"));
+    const loadMyData = lazyModule(() => import("./sections/MyData.svelte"));
+    const loadDevices = lazyModule(() => import("./sections/Devices.svelte"));
+    const loadActivityLog = lazyModule(() => import("./sections/ActivityLog.svelte"));
+    const loadLoginApproval = lazyModule(() => import("./sections/LoginApproval.svelte"));
+    const loadConnectors = lazyModule(() => import("./sections/Connectors.svelte"));
 
     let selectedPage = $state<string>("");
     let pendingApprovals = $state(0);
@@ -241,21 +243,27 @@
             </div>
         {/if}
         {#if selectedIdentity}
-            <Identity identity={selectedIdentity} />
+            {#await loadIdentity() then { default: Identity }}
+                <Identity identity={selectedIdentity} />
+            {/await}
         {:else if selectedPage === "New Identity"}
-            <Identity newIdentity={true} />
+            {#await loadIdentity() then { default: Identity }}
+                <Identity newIdentity={true} />
+            {/await}
         {:else if selectedPage === "Login Requests"}
-            <LoginApproval bind:pendingCount={pendingApprovals} />
+            {#await loadLoginApproval() then { default: LoginApproval }}
+                <LoginApproval bind:pendingCount={pendingApprovals} />
+            {/await}
         {:else if selectedPage === "Security"}
-            <Security />
+            {#await loadSecurity() then { default: Security }}<Security />{/await}
         {:else if selectedPage === "Devices"}
-            <Devices />
+            {#await loadDevices() then { default: Devices }}<Devices />{/await}
         {:else if selectedPage === "My Data"}
-            <MyData />
+            {#await loadMyData() then { default: MyData }}<MyData />{/await}
         {:else if selectedPage === "Activity Log"}
-            <ActivityLog />
+            {#await loadActivityLog() then { default: ActivityLog }}<ActivityLog />{/await}
         {:else if selectedPage === "Connectors"}
-            <Connectors />
+            {#await loadConnectors() then { default: Connectors }}<Connectors />{/await}
         {:else}
             <div class="flex items-center justify-center h-full">
                 <Text type="p" size={18} color="#878787">Select an option from the sidebar</Text>

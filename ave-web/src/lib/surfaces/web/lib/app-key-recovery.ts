@@ -93,13 +93,11 @@ export async function recoverAppKey({
     confirmRecovery: true,
   });
 
-  const result = {
+  return {
     clientId: clientId.trim(),
     identityId: identity.id,
     fingerprint: await fingerprintAppKey(recoveredKey),
   };
-  console.info("Ave app key recovered", result);
-  return result;
 }
 
 export function installAppKeyRecoveryConsole(): void {

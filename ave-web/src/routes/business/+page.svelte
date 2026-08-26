@@ -3,14 +3,8 @@
   import { Building2, ChevronDown, Fingerprint, KeyRound, LockKeyhole, Network, Plus, ScrollText, Upload } from "@lucide/svelte";
   import AuroraBackdrop from "$lib/components/AuroraBackdrop.svelte";
   import Button from "$lib/surfaces/business/components/Button.svelte";
-  import AuditPanel from "$lib/surfaces/business/components/AuditPanel.svelte";
-  import DomainsSsoPanel from "$lib/surfaces/business/components/DomainsSsoPanel.svelte";
-  import EncryptionPanel from "$lib/surfaces/business/components/EncryptionPanel.svelte";
-  import IdentitiesPanel from "$lib/surfaces/business/components/IdentitiesPanel.svelte";
   import Input from "$lib/surfaces/business/components/Input.svelte";
-  import OrganizationOverview from "$lib/surfaces/business/components/OrganizationOverview.svelte";
-  import OrgKeysPanel from "$lib/surfaces/business/components/OrgKeysPanel.svelte";
-  import SignInPanel from "$lib/surfaces/business/components/SignInPanel.svelte";
+  import { lazyModule } from "$lib/infrastructure/ui/lazy-module";
   import { ApiError, api } from "$lib/surfaces/business/lib/api";
   import { scopesForRole, signBusinessAction } from "$lib/surfaces/business/lib/business-actions";
   import { initials } from "$lib/surfaces/business/lib/format";
@@ -22,6 +16,13 @@
     BusinessOrganizationSummary,
     BusinessRole,
   } from "$lib/surfaces/business/lib/types";
+  const loadAuditPanel = lazyModule(() => import("$lib/surfaces/business/components/AuditPanel.svelte"));
+  const loadDomainsSsoPanel = lazyModule(() => import("$lib/surfaces/business/components/DomainsSsoPanel.svelte"));
+  const loadEncryptionPanel = lazyModule(() => import("$lib/surfaces/business/components/EncryptionPanel.svelte"));
+  const loadIdentitiesPanel = lazyModule(() => import("$lib/surfaces/business/components/IdentitiesPanel.svelte"));
+  const loadOrganizationOverview = lazyModule(() => import("$lib/surfaces/business/components/OrganizationOverview.svelte"));
+  const loadOrgKeysPanel = lazyModule(() => import("$lib/surfaces/business/components/OrgKeysPanel.svelte"));
+  const loadSignInPanel = lazyModule(() => import("$lib/surfaces/business/components/SignInPanel.svelte"));
   type SectionId = "overview" | "identities" | "keys" | "encryption" | "sso" | "audit";
   const roleOptions: { value: BusinessRole; label: string }[] = [
     { value: "member", label: "member" },
@@ -259,7 +260,9 @@
 </script>
 
 {#if !authenticated}
-  <SignInPanel onclick={signIn} />
+  {#await loadSignInPanel() then { default: SignInPanel }}
+    <SignInPanel onclick={signIn} />
+  {/await}
 {:else if detail}
   <main class="relative min-h-screen overflow-x-hidden bg-[#090909] px-3 py-4 text-white md:px-6 md:py-6">
     <AuroraBackdrop preset="business-tr" cclass="opacity-70" mobileHeight={320} />
@@ -414,51 +417,63 @@
 
       <section class="flex flex-col gap-5">
         {#if activeSection === "overview"}
-          <OrganizationOverview {detail} activeMembers={activeMembers.length} onSelect={(section) => void selectSection(section)} />
+          {#await loadOrganizationOverview() then { default: OrganizationOverview }}
+            <OrganizationOverview {detail} activeMembers={activeMembers.length} onSelect={(section) => void selectSection(section)} />
+          {/await}
         {:else if activeSection === "identities"}
-          <IdentitiesPanel
-            members={activeMembers}
-            bind:addHandle
-            bind:addRole
-            {roleOptions}
-            actingIdentityId={detail.organization.actingIdentityId}
-            {canManageIdentities}
-            {busy}
-            onAdd={addIdentity}
-            onRoleChange={updateRole}
-            onRemove={removeMember}
-          />
+          {#await loadIdentitiesPanel() then { default: IdentitiesPanel }}
+            <IdentitiesPanel
+              members={activeMembers}
+              bind:addHandle
+              bind:addRole
+              {roleOptions}
+              actingIdentityId={detail.organization.actingIdentityId}
+              {canManageIdentities}
+              {busy}
+              onAdd={addIdentity}
+              onRoleChange={updateRole}
+              onRemove={removeMember}
+            />
+          {/await}
         {:else if activeSection === "keys"}
-          <OrgKeysPanel
-            {detail}
-            {canManageKeys}
-            {busy}
-            setBusy={(value) => (busy = value)}
-            setError={(message) => (error = message)}
-            reload={reloadDetail}
-          />
+          {#await loadOrgKeysPanel() then { default: OrgKeysPanel }}
+            <OrgKeysPanel
+              {detail}
+              {canManageKeys}
+              {busy}
+              setBusy={(value) => (busy = value)}
+              setError={(message) => (error = message)}
+              reload={reloadDetail}
+            />
+          {/await}
         {:else if activeSection === "encryption"}
-          <EncryptionPanel
-            {detail}
-            {canManageKeys}
-            {busy}
-            setBusy={(value) => (busy = value)}
-            setError={(message) => (error = message)}
-            reload={reloadDetail}
-          />
+          {#await loadEncryptionPanel() then { default: EncryptionPanel }}
+            <EncryptionPanel
+              {detail}
+              {canManageKeys}
+              {busy}
+              setBusy={(value) => (busy = value)}
+              setError={(message) => (error = message)}
+              reload={reloadDetail}
+            />
+          {/await}
         {:else if activeSection === "sso"}
-          <DomainsSsoPanel
-            {detail}
-            {canManageSso}
-            {busy}
-            setBusy={(value) => (busy = value)}
-            setError={(message) => (error = message)}
-            {hasActiveSsoConnection}
-            onToggleSsoRequired={toggleSsoRequired}
-            reload={reloadDetail}
-          />
+          {#await loadDomainsSsoPanel() then { default: DomainsSsoPanel }}
+            <DomainsSsoPanel
+              {detail}
+              {canManageSso}
+              {busy}
+              setBusy={(value) => (busy = value)}
+              setError={(message) => (error = message)}
+              {hasActiveSsoConnection}
+              onToggleSsoRequired={toggleSsoRequired}
+              reload={reloadDetail}
+            />
+          {/await}
         {:else}
-          <AuditPanel events={detail.auditEvents} />
+          {#await loadAuditPanel() then { default: AuditPanel }}
+            <AuditPanel events={detail.auditEvents} />
+          {/await}
         {/if}
       </section>
     </div>

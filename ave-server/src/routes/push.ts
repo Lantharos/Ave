@@ -62,8 +62,6 @@ app.post("/subscribe", zValidator("json", z.object({
     return c.json({ error: "Trusted device not found" }, 404);
   }
   
-  console.log(`[Push] Subscription saved for device ${user.deviceId}`);
-  
   return c.json({ success: true });
 });
 
@@ -78,7 +76,6 @@ app.post("/unsubscribe", async (c) => {
       .set({ pushSubscription: null })
       .where(eq(devices.id, user.deviceId));
     
-    console.log(`[Push] Subscription removed for device ${user.deviceId}`);
   }
   
   return c.json({ success: true });
