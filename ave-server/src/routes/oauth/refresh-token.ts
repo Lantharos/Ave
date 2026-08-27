@@ -18,7 +18,6 @@ import {
   generateAccessToken,
   generateRefreshToken,
   hasScope,
-  isAllowedPublicClientRequest,
   isClientSecretValid,
   keyCustodyForEncryptionMode,
   markRefreshTokenFamilyReuse,
@@ -65,8 +64,6 @@ export async function handleRefreshToken(c: Context, payload: RefreshTokenReques
     if (!isClientSecretValid(oauthApp.clientSecretHash, clientSecret)) {
       return c.json({ error: "invalid_client", error_description: "Invalid client secret" }, 400);
     }
-  } else if (!isAllowedPublicClientRequest(c, oauthApp)) {
-    return c.json({ error: "invalid_client", error_description: "Request origin is not allowed for this client" }, 400);
   }
 
   if (storedRefresh.revokedAt || storedRefresh.reuseDetectedAt) {

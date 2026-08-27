@@ -5,7 +5,7 @@ import { hashSessionToken } from "../../lib/crypto";
 import { getIssuer, getResourceAudience, signJwt, verifyJwt, hashToken } from "../../lib/oidc";
 import { createAccessTokenWrite, getAccessToken, type AccessTokenRecord } from "../../lib/oauth-store";
 import { serializeIdentityForApp } from "../../lib/identity-serialization";
-import { isOriginAllowedForApp, normalizeRedirectUri } from "../../lib/redirect-uri";
+import { normalizeRedirectUri } from "../../lib/redirect-uri";
 import { scopesForRole, type BusinessRole } from "../../lib/business";
 import { serializeEncryptionPolicy } from "../../lib/business-encryption";
 import { parseOAuthScopes, normalizeScopeToken } from "../../lib/oauth-scopes";
@@ -54,11 +54,6 @@ export function timingSafeEqualString(a: string, b: string): boolean {
 
 export function isClientSecretValid(expectedHash: string, clientSecret: string): boolean {
   return timingSafeEqualString(hashSessionToken(clientSecret), expectedHash);
-}
-
-export function isAllowedPublicClientRequest(c: any, app: Pick<typeof oauthApps.$inferSelect, "redirectUris" | "developmentMode" | "websiteUrl">): boolean {
-  const origin = c.req.header("Origin");
-  return !origin || isOriginAllowedForApp(app, origin);
 }
 
 // Generate refresh token

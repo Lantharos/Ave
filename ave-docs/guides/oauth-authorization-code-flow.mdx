@@ -296,6 +296,8 @@ const newTokens = await refreshToken(
 storeRefreshToken(newTokens.refresh_token);
 ```
 
+For public PKCE clients, the rotating refresh token is the credential for this grant and remains bound to the registered `clientId`. This works for browser, desktop custom-protocol, and native application origins without a client secret.
+
 <Warning>
   Refresh tokens **rotate on every use**. Each successful refresh invalidates the old token and issues a new one. If you try to reuse an old refresh token, you will get `invalid_grant` and the server may revoke the entire token family as a security measure. Always persist the new `refresh_token` from the response before discarding the old one.
 </Warning>
