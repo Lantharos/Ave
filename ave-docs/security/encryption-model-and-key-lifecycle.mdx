@@ -9,6 +9,8 @@ Ave's E2EE model gives each (app, identity) pair a **stable, isolated encryption
 
 At consent time, the Ave UI decrypts that ciphertext **in the browser** using the user's master key, then places the plaintext app key in the fragment. The token and authorization-code responses do not carry the decrypted secret.
 
+When a passkey supports PRF, Ave uses its output in the browser to encrypt and unlock the user's master key. The PRF output is omitted from credentials sent to the API for registration, sign-in, and key unlocking. Only the encrypted master key is stored on the server.
+
 For **multi-user asymmetric** encryption, enable `e2ee:asymmetric` on your app and use per-user app keypairs with the [lookup API](/sdk/sdk-identity-keys). The old identity wrapped OAuth payload flow (`wrapped_key`) is removed.
 
 | Property | Symmetric (`e2ee:symmetric`) | Asymmetric (`e2ee:asymmetric`) |

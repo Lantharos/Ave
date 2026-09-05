@@ -1,4 +1,5 @@
 import { startAuthentication, bufferToBase64URLString, type PublicKeyCredentialRequestOptionsJSON } from "@simplewebauthn/browser";
+import { credentialForVerification } from "$lib/infrastructure/webauthn/credential";
 
 const PRF_SALT = new TextEncoder().encode("ave-master-key-prf-v1");
 
@@ -88,7 +89,7 @@ export async function authenticateWithPasskey(
   const prfResult = (response as { clientExtensionResults?: { prf?: { results?: { first?: unknown } } } }).clientExtensionResults?.prf;
   const first = prfResult?.results?.first;
   return {
-    credential: response as unknown as Credential,
+    credential: credentialForVerification(response) as unknown as Credential,
     prfOutput: first !== undefined ? readPrfOutput(first) : undefined,
   };
 }

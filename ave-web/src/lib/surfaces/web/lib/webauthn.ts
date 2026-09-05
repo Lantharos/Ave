@@ -3,6 +3,7 @@
  */
 
 import { startRegistration, startAuthentication, bufferToBase64URLString, type PublicKeyCredentialRequestOptionsJSON } from "@simplewebauthn/browser";
+import { credentialForVerification } from "$lib/infrastructure/webauthn/credential";
 
 // PRF salt for master key encryption (static, application-wide)
 // This salt is combined with the passkey's unique PRF to derive a unique key per passkey
@@ -195,7 +196,7 @@ export async function registerPasskey(
   }
   
   return {
-    credential: response as unknown as Credential,
+    credential: credentialForVerification(response) as unknown as Credential,
     prfSupported,
     prfOutput,
   };
@@ -239,7 +240,7 @@ export async function authenticateWithPasskey(
   }
   
   return {
-    credential: response as unknown as Credential,
+    credential: credentialForVerification(response) as unknown as Credential,
     prfOutput,
   };
 }

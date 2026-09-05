@@ -22,10 +22,6 @@ const credentialExtensions = z.object({
   hmacCreateSecret: z.boolean().optional(),
   prf: z.object({
     enabled: z.boolean().optional(),
-    results: z.object({
-      first: encodedBytes(4096),
-      second: encodedBytes(4096).optional(),
-    }).optional(),
   }).optional(),
 }).passthrough();
 
