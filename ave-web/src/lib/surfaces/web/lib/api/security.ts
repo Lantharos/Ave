@@ -1,5 +1,6 @@
+import type { AuthenticationResponseJSON, PublicKeyCredentialCreationOptionsJSON, PublicKeyCredentialRequestOptionsJSON, RegistrationResponseJSON } from "@simplewebauthn/browser";
 import { request } from "./transport";
-import type { ActivityLogEntry, Device, Identity, IdentityEncryptionKey, LoginRequest, OAuthAuthorization, Passkey, SessionBootstrap, SignatureRequest } from "./types";
+import type { Passkey } from "./types";
 
 export const securityApi = {
     get: () =>
@@ -8,7 +9,6 @@ export const securityApi = {
         trustCodesRemaining: number;
         recoveryCodesRemaining: number;
         hasRecoveryCodes: boolean;
-        securityQuestionIds: number[];
       }>("/api/security"),
 
     issueRecoveryCodes: () =>
@@ -18,21 +18,15 @@ export const securityApi = {
       ),
 
     registerPasskey: () =>
-      request<{ options: PublicKeyCredentialCreationOptions }>(
+      request<{ options: PublicKeyCredentialCreationOptionsJSON }>(
         "/api/security/passkeys/register",
         { method: "POST" }
       ),
 
-    completePasskeyRegistration: (credential: Credential, name?: string, prfEncryptedMasterKey?: string) =>
+    completePasskeyRegistration: (credential: RegistrationResponseJSON, name?: string, prfEncryptedMasterKey?: string) =>
       request<{ passkey: Passkey }>("/api/security/passkeys/complete", {
         method: "POST",
         body: JSON.stringify({ credential, name, prfEncryptedMasterKey }),
-      }),
-
-    renamePasskey: (passkeyId: string, name: string) =>
-      request<{ success: boolean }>(`/api/security/passkeys/${passkeyId}`, {
-        method: "PATCH",
-        body: JSON.stringify({ name }),
       }),
 
     updatePasskeyPrf: (passkeyId: string, prfEncryptedMasterKey: string) =>
@@ -54,22 +48,14 @@ export const securityApi = {
         }
       ),
 
-    updateSecurityQuestions: (
-      questions: { questionId: number; answer: string }[]
-    ) =>
-      request<{ success: boolean }>("/api/security/questions", {
-        method: "PUT",
-        body: JSON.stringify({ questions }),
-      }),
-
     unlockMasterKeyStart: () =>
-      request<{ unlockSessionId: string; options: PublicKeyCredentialRequestOptions }>(
+      request<{ unlockSessionId: string; options: PublicKeyCredentialRequestOptionsJSON }>(
         "/api/security/master-key/unlock/start",
         { method: "POST" }
       ),
 
-    unlockMasterKeyFinish: (data: { unlockSessionId: string; credential: Credential }) =>
-      request<{ prfEncryptedMasterKey: string }>(
+    unlockMasterKeyFinish: (data: { unlockSessionId: string; credential: AuthenticationResponseJSON }) =>
+      request<{ prfEncryptedMasterKey: string; identityIds: string[] }>(
         "/api/security/master-key/unlock/finish",
         {
           method: "POST",

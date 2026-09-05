@@ -1,5 +1,6 @@
+import type { PublicKeyCredentialCreationOptionsJSON, RegistrationResponseJSON } from "@simplewebauthn/browser";
 import { request } from "./transport";
-import type { ActivityLogEntry, Device, Identity, IdentityEncryptionKey, LoginRequest, OAuthAuthorization, Passkey, SessionBootstrap, SignatureRequest } from "./types";
+import type { Identity, IdentityEncryptionKey, LoginSession } from "./types";
 
 export const registerApi = {
     checkHandle: (handle: string) =>
@@ -9,7 +10,7 @@ export const registerApi = {
 
     start: (handle: string) =>
       request<{
-        options: PublicKeyCredentialCreationOptions;
+        options: PublicKeyCredentialCreationOptionsJSON;
         tempUserId: string;
       }>("/api/register/start", {
         method: "POST",
@@ -18,7 +19,7 @@ export const registerApi = {
 
     complete: (data: {
       tempUserId: string;
-      credential: Credential;
+      credential: RegistrationResponseJSON;
       identity: {
         displayName: string;
         handle: string;
@@ -39,11 +40,10 @@ export const registerApi = {
     }) =>
       request<{
         success: boolean;
-        sessionToken: string;
         trustCodes: string[];
         user: { id: string };
         identity: Identity;
-        device: Device;
+        device: LoginSession["device"];
       }>("/api/register/complete", {
         method: "POST",
         body: JSON.stringify(data),
@@ -54,7 +54,4 @@ export const registerApi = {
         method: "POST",
         body: JSON.stringify({ encryptedMasterKeyBackup }),
       }),
-
-    getSecurityQuestions: () =>
-      request<{ questions: string[] }>("/api/register/security-questions"),
 };

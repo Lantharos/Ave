@@ -1,7 +1,7 @@
 import { drizzle } from "drizzle-orm/d1";
 import { AsyncLocalStorage } from "node:async_hooks";
-import * as baseSchema from "./schema";
 import * as businessSchema from "./business-schema";
+import * as baseSchema from "./schema";
 
 const schema = { ...baseSchema, ...businessSchema };
 
@@ -44,17 +44,22 @@ function getDbInstance(): DrizzleDb {
   return baseDbInstance;
 }
 
-// Lazily initialize database connection at request/runtime, not module import time.
-export const db = new Proxy({} as ReturnType<typeof drizzle>, {
-  get(_target, prop) {
-    const instance = getDbInstance() as unknown as Record<PropertyKey, unknown>;
-    const value = instance[prop];
-    if (typeof value === "function") {
-      return (value as Function).bind(instance);
-    }
-    return value;
-  },
+function databaseProxy(resolve: () => DrizzleDb): DrizzleDb {
+  return new Proxy({} as DrizzleDb, {
+    get(_target, prop) {
+      const instance = resolve() as unknown as Record<PropertyKey, unknown>;
+      const value = instance[prop];
+      return typeof value === "function" ? value.bind(instance) : value;
+    },
+  });
+}
+
+export const db = databaseProxy(getDbInstance);
+
+export const primaryDb = databaseProxy(() => {
+  if (!baseBoundDatabase) throw new Error("DB is not initialized. Call initDb(env.DB) before using primaryDb.");
+  return createDb((baseBoundDatabase as D1Database).withSession("first-primary"));
 });
 
-export * from "./schema";
 export * from "./business-schema";
+export * from "./schema";

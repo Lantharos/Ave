@@ -1,5 +1,5 @@
 import { eq, lt } from "drizzle-orm";
-import { db, oauthAccessTokens, oauthAuthorizationCodes } from "../db";
+import { db, oauthAccessTokens, oauthAuthorizationCodes, primaryDb } from "../db";
 
 type StoredOAuthRecord<T> = {
   value: T;
@@ -7,6 +7,7 @@ type StoredOAuthRecord<T> = {
 };
 
 export type AuthorizationCodeRecord = {
+  authorizationId?: string;
   userId: string;
   appId: string;
   identityId: string;
@@ -37,6 +38,7 @@ export type AuthorizationCodeRecord = {
 };
 
 export type AccessTokenRecord = {
+  authorizationId?: string;
   userId: string;
   identityId: string;
   appId: string;
@@ -60,12 +62,14 @@ export function createAuthorizationCodeWrite(id: string, value: AuthorizationCod
   return db.insert(oauthAuthorizationCodes)
     .values({
       id,
+      authorizationId: value.authorizationId,
       value: value as unknown as Record<string, unknown>,
       expiresAt: new Date(value.expiresAt),
     })
     .onConflictDoUpdate({
       target: oauthAuthorizationCodes.id,
       set: {
+        authorizationId: value.authorizationId,
         value: value as unknown as Record<string, unknown>,
         expiresAt: new Date(value.expiresAt),
       },
@@ -83,7 +87,7 @@ export async function getAuthorizationCode(id: string): Promise<{
     .limit(1);
   const record = row
     ? {
-        value: row.value as unknown as AuthorizationCodeRecord,
+        value: { ...row.value, authorizationId: row.authorizationId ?? undefined } as AuthorizationCodeRecord,
         expiresAt: new Date(row.expiresAt).getTime(),
       } satisfies StoredOAuthRecord<AuthorizationCodeRecord>
     : null;
@@ -107,7 +111,7 @@ export async function consumeAuthorizationCode(id: string): Promise<{
     .returning();
   const record = row
     ? {
-        value: row.value as unknown as AuthorizationCodeRecord,
+        value: { ...row.value, authorizationId: row.authorizationId ?? undefined } as AuthorizationCodeRecord,
         expiresAt: new Date(row.expiresAt).getTime(),
       } satisfies StoredOAuthRecord<AuthorizationCodeRecord>
     : null;
@@ -120,7 +124,7 @@ export async function consumeAuthorizationCode(id: string): Promise<{
   return { value: record.value, expired: false };
 }
 
-export async function deleteAuthorizationCode(id: string): Promise<void> {
+async function deleteAuthorizationCode(id: string): Promise<void> {
   await db.delete(oauthAuthorizationCodes).where(eq(oauthAuthorizationCodes.id, id));
 }
 
@@ -128,35 +132,34 @@ export function createAccessTokenWrite(id: string, value: AccessTokenRecord) {
   return db.insert(oauthAccessTokens)
     .values({
       id,
+      authorizationId: value.authorizationId,
       value: value as unknown as Record<string, unknown>,
       expiresAt: new Date(value.expiresAt),
     })
     .onConflictDoUpdate({
       target: oauthAccessTokens.id,
       set: {
+        authorizationId: value.authorizationId,
         value: value as unknown as Record<string, unknown>,
         expiresAt: new Date(value.expiresAt),
       },
     });
 }
 
-export async function setAccessToken(id: string, value: AccessTokenRecord): Promise<void> {
-  await createAccessTokenWrite(id, value);
-}
-
 export async function getAccessToken(id: string): Promise<AccessTokenRecord | null> {
-  const [row] = await db
+  const [row] = await primaryDb
     .select()
     .from(oauthAccessTokens)
     .where(eq(oauthAccessTokens.id, id))
     .limit(1);
   const record = row
     ? {
-        value: row.value as unknown as AccessTokenRecord,
+        value: { ...row.value, authorizationId: row.authorizationId ?? undefined } as AccessTokenRecord,
         expiresAt: new Date(row.expiresAt).getTime(),
       } satisfies StoredOAuthRecord<AccessTokenRecord>
     : null;
   if (!record) return null;
+  if (!record.value.authorizationId && !record.value.appId.startsWith("origin:")) return null;
   if (Date.now() > record.expiresAt) {
     await deleteAccessToken(id);
     return null;
@@ -164,7 +167,7 @@ export async function getAccessToken(id: string): Promise<AccessTokenRecord | nu
   return record.value;
 }
 
-export async function deleteAccessToken(id: string): Promise<void> {
+async function deleteAccessToken(id: string): Promise<void> {
   await db.delete(oauthAccessTokens).where(eq(oauthAccessTokens.id, id));
 }
 

@@ -31,7 +31,7 @@
 
   afterNavigate(() => {
     if (!isStaticPath(page.url.pathname)) {
-      void auth.init();
+      void auth.init().catch((error) => console.warn("Could not restore the Ave session:", error));
     }
   });
 </script>

@@ -1,5 +1,5 @@
+import { authenticateWithPasskey, createLocalAuthenticationOptions, isWebAuthnSupported, registerPasskey } from "$lib/infrastructure/webauthn/passkeys";
 import { api, type Passkey } from "./api";
-import { authenticateWithPasskey, isPlatformAuthenticatorAvailable, registerPasskey } from "./webauthn";
 import { encryptMasterKeyWithPrf, loadMasterKey } from "./crypto";
 
 export class PasskeySetupUnavailableError extends Error {
@@ -9,32 +9,12 @@ export class PasskeySetupUnavailableError extends Error {
   }
 }
 
-function bytesToBase64url(bytes: Uint8Array): string {
-  const base64 = btoa(String.fromCharCode(...bytes));
-  return base64.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-}
-
-function createLocalAuthenticationOptions(credentialId: string): PublicKeyCredentialRequestOptions {
-  return {
-    challenge: bytesToBase64url(crypto.getRandomValues(new Uint8Array(32))),
-    rpId: window.location.hostname,
-    allowCredentials: [
-      {
-        id: credentialId,
-        type: "public-key",
-      },
-    ],
-    userVerification: "required",
-    timeout: 60000,
-  } as unknown as PublicKeyCredentialRequestOptions;
-}
-
 export async function setUpPasskeyForCurrentDevice(name = "New Passkey"): Promise<{
   passkey: Passkey;
   prfStored: boolean;
 }> {
-  const platformAuthenticatorAvailable = await isPlatformAuthenticatorAvailable();
-  if (!platformAuthenticatorAvailable) {
+  const passkeysAvailable = isWebAuthnSupported();
+  if (!passkeysAvailable) {
     throw new PasskeySetupUnavailableError("This device can't create a passkey right now.");
   }
 
@@ -56,7 +36,7 @@ export async function setUpPasskeyForCurrentDevice(name = "New Passkey"): Promis
   if (!prfStored && prfSupported && masterKey) {
     try {
       const authOptions = createLocalAuthenticationOptions(result.passkey.id);
-      const { prfOutput: authenticationPrfOutput } = await authenticateWithPasskey(authOptions, true);
+      const { prfOutput: authenticationPrfOutput } = await authenticateWithPasskey(authOptions);
 
       if (authenticationPrfOutput) {
         const encryptedMasterKey = await encryptMasterKeyWithPrf(masterKey, authenticationPrfOutput);

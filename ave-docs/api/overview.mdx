@@ -27,7 +27,7 @@ https://api.aveid.net
 
 ## Request conventions
 
-All request bodies are JSON. The token endpoint accepts both OAuth-standard `snake_case` fields and legacy `camelCase` fields.
+Request bodies use JSON except multipart image uploads. The token endpoint accepts both OAuth-standard `snake_case` fields and legacy `camelCase` fields.
 
 <CodeGroup>
 ```bash Token request
@@ -91,24 +91,25 @@ curl https://api.aveid.net/api/oauth/userinfo \
     - `POST /api/signing/requests/:requestId/deny` — deny a request
   </Accordion>
 
-  <Accordion title="Identity key endpoints — unified with signing">
-    Identity keys are now the same keypair concept used by signing.
+  <Accordion title="Identity encryption keys">
+    Encryption keys and Ed25519 signing keys are separate key pairs. Encryption endpoints manage each identity's encrypted private-key envelope:
 
-    Public lookup endpoints:
+    - `GET /api/encryption/public-key/:handle` — public encryption-key lookup
+    - `GET /api/encryption/keys/:identityId` — read the authenticated identity's key envelope
+    - `POST /api/encryption/keys/:identityId` — create an encryption key
+    - `PUT /api/encryption/keys/:identityId` — replace its key envelope
 
-    - `GET /api/signing/public-key/:handle` — canonical identity public key lookup
-    - `GET /api/encryption/public-key/:handle` — compatibility alias
-
-    Session-authenticated key envelope endpoints:
-
-    - `GET /api/signing/keys/:identityId`
-    - `POST /api/signing/keys/:identityId`
-    - `PUT /api/signing/keys/:identityId`
-    - `GET /api/encryption/keys/:identityId` (alias)
-    - `POST /api/encryption/keys/:identityId` (alias)
-    - `PUT /api/encryption/keys/:identityId` (alias)
+    Signing-key rotation uses `PUT /api/signing/keys/:identityId` and requires a signature from the existing signing key. Initial signing-key enrollment requires an authenticated session.
   </Accordion>
 </AccordionGroup>
+
+## Browser login sessions
+
+Ave's browser login sets an HttpOnly session cookie. Login responses contain identities and device details; they do not return a `sessionToken` field.
+
+Device approval starts with `POST /api/login/request-approval`. Keep both its `requestId` and `requestToken` in the requesting browser. Poll `POST /api/login/request-status` with those two fields. An approved response sets the cookie and delivers the encrypted key transfer once; use that response directly instead of fetching it again. Requests expire after five minutes and remain bound to the original identity if its handle changes.
+
+Notifications carry request metadata or a status change. They never include the requester secret or the encrypted key transfer.
 
 ## CORS behavior
 

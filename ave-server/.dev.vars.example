@@ -1,24 +1,28 @@
-# Core
-RP_ID=aveid.net
+# Local browser and cookie settings
+RP_ID=localhost
 RP_NAME=Ave
-RP_ORIGIN=https://aveid.net
-COOKIE_DOMAIN=.aveid.net
-COOKIE_SECURE=true
+RP_ORIGIN=http://localhost:5173
+COOKIE_DOMAIN=
+COOKIE_SECURE=false
+BUSINESS_ORIGIN=http://localhost:5173/business
 
-# Internal cron auth (optional but recommended)
+# Internal service notifications
 INTERNAL_API_TOKEN=change-me
 
-# OIDC
-OIDC_ISSUER=https://aveid.net
-OIDC_RESOURCE_AUDIENCE=https://aveid.net
-OIDC_DISCOVERY_BASE=https://api.aveid.net
+# OIDC signing and discovery
+OIDC_ISSUER=http://localhost:3000
+OIDC_RESOURCE_AUDIENCE=http://localhost:3000
+OIDC_DISCOVERY_BASE=http://localhost:3000
 OIDC_KID=ave-oidc-v1
 OIDC_PRIVATE_KEY_PEM=
 OIDC_PUBLIC_KEY_PEM=
 
+# Enterprise SSO client-secret encryption
+BUSINESS_SSO_SECRET_KEY=
+SESSION_SECRET=
+
 # Developer portal
 DEV_PORTAL_CLIENT_ID=
-VITE_DEV_PORTAL_CLIENT_ID=
 
 # Demo account
 DEMO_HANDLE=demo
@@ -29,14 +33,7 @@ VAPID_PUBLIC_KEY=
 VAPID_PRIVATE_KEY=
 VAPID_SUBJECT=mailto:support@aveid.net
 
-# Resend
-RESEND_API_KEY=
-RESEND_FROM_EMAIL=
-RESEND_FROM_NAME=Ave
-
-# Cloudflare R2
-R2_ACCOUNT_ID=
-R2_ACCESS_KEY_ID=
-R2_SECRET_ACCESS_KEY=
-R2_BUCKET_NAME=ave-uploads
+# Cloudflare email and R2 bindings are configured in wrangler.toml
+EMAIL_FROM_ADDRESS=no-reply@aveid.net
+EMAIL_FROM_NAME=Ave
 R2_PUBLIC_URL=

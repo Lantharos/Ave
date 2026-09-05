@@ -3,24 +3,25 @@ import { and, eq } from "drizzle-orm";
 import { Hono } from "hono";
 import { z } from "zod";
 import { db, identities, oauthApps, oauthAuthorizations } from "../../db";
-import { appEffectiveSupportsE2ee } from "../../lib/e2ee-scopes";
-import { getIssuer, signJwt, verifyJwt } from "../../lib/oidc";
+import { appEffectiveSupportsE2ee, isScopeAllowedForApp } from "../../lib/e2ee-scopes";
 import { parseOAuthPrompt, requiresAuthorizeInteractionPrompt, wantsAccountPickerPrompt } from "../../lib/oauth-prompt";
 import { consumeAuthorizationCode, createAuthorizationCodeWrite, getAuthorizationCode } from "../../lib/oauth-store";
+import { getIssuer, signJwt, verifyJwt } from "../../lib/oidc";
 import { enforceNativeRateLimits, getClientIp, ipRateLimit, subjectRateLimit } from "../../lib/rate-limit";
 import { isOriginAllowedForApp, isRedirectUriAllowedForApp, normalizeRedirectUri } from "../../lib/redirect-uri";
 import { requireAuth } from "../../middleware/auth";
 import {
-  buildTokenResponseFromAuthorizationCode,
   ensureFedCmRequest,
   generateAuthCode,
   getApiBase,
   getWebBase,
+  hasAllScopes,
   nowSeconds,
   parseScopes,
   resolveOauthAppForClient,
   setLoginStatusHeader,
 } from "./shared";
+import { buildTokenResponseFromAuthorizationCode } from "./token-response";
 
 const app = new Hono();
 
@@ -172,6 +173,11 @@ app.post("/fedcm/assertion", async (c) => {
     return c.json({ error: { code: "invalid_request", url: `${getWebBase()}/docs` } }, 400);
   }
 
+  const requestedScopes = parseScopes(scope);
+  if (requestedScopes.some((requested) => !isScopeAllowedForApp(requested, oauthApp.allowedScopes || []))) {
+    return c.json({ error: { code: "invalid_scope", url: `${getWebBase()}/docs` } }, 400);
+  }
+
   const [authorizationContext] = await db
     .select({ identity: identities, authorization: oauthAuthorizations })
     .from(identities)
@@ -189,11 +195,13 @@ app.post("/fedcm/assertion", async (c) => {
     return c.json({ error: { code: "access_denied", url: `${getWebBase()}/login` } }, 403);
   }
 
+  const requiresScopeConsent = !existingAuth || !hasAllScopes(existingAuth.scope, scope);
+
   if (
     forceAuthorizeInteraction
     || (parseScopes(scope).includes("email") && !identity.email)
     || appEffectiveSupportsE2ee(oauthApp)
-    || !existingAuth
+    || requiresScopeConsent
   ) {
     const continueUrl = new URL(`${getWebBase()}/signin`);
     continueUrl.searchParams.set("client_id", clientId);
@@ -201,7 +209,11 @@ app.post("/fedcm/assertion", async (c) => {
     continueUrl.searchParams.set("scope", scope);
     if (state) continueUrl.searchParams.set("state", state);
     if (nonce) continueUrl.searchParams.set("nonce", nonce);
-    if (promptRaw) continueUrl.searchParams.set("prompt", promptRaw);
+    if (requiresScopeConsent) {
+      continueUrl.searchParams.set("prompt", [...new Set([...oauthPrompts.filter((value) => value !== "none"), "consent"])].join(" "));
+    } else if (promptRaw) {
+      continueUrl.searchParams.set("prompt", promptRaw);
+    }
     if (!wantsAccountPickerPrompt(oauthPrompts)) {
       continueUrl.searchParams.set("identity_id", identity.id);
     }
@@ -212,6 +224,7 @@ app.post("/fedcm/assertion", async (c) => {
 
   const code = generateAuthCode();
   const authorizationCodeWrite = createAuthorizationCodeWrite(code, {
+    authorizationId: existingAuth.id,
     userId: user.id,
     appId: oauthApp.id,
     identityId: identity.id,
@@ -288,6 +301,7 @@ app.post("/fedcm/finalize", requireAuth, zValidator("json", z.object({
   }
 
   const authCode = authCodeResult.value;
+  if (!authCode.authorizationId) return c.json({ error: "invalid_grant" }, 400);
   if (authCode.userId !== user.id) {
     return c.json({ error: "access_denied" }, 403);
   }
@@ -374,6 +388,10 @@ app.post("/fedcm/exchange", zValidator("json", z.object({
   const authCode = authCodeResult.value;
   if (authCode.redirectUri !== redirectUri || authCode.appId !== oauthApp.id) {
     return c.json({ error: "invalid_grant", error_description: "FedCM assertion does not match authorization" }, 400);
+  }
+  if (!authCode.authorizationId) return c.json({ error: "invalid_grant" }, 400);
+  if (parseScopes(authCode.scope).some((scope) => !isScopeAllowedForApp(scope, oauthApp.allowedScopes || []))) {
+    return c.json({ error: "invalid_scope" }, 400);
   }
 
   const response = await buildTokenResponseFromAuthorizationCode({

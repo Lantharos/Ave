@@ -1,21 +1,20 @@
 <script lang="ts">
     import Button from "$lib/surfaces/web/components/Button.svelte";
     import Text from "$lib/surfaces/web/components/Text.svelte";
-    import { api, type Identity, type Device } from "$lib/surfaces/web/lib/api";
-    import { recoverMasterKeyFromBackup, storeMasterKey, encryptMasterKeyWithPrf } from "$lib/surfaces/web/lib/crypto";
-    import { getDeviceInfo, authenticateWithPasskey } from "$lib/surfaces/web/lib/webauthn";
+    import { api, type Identity, type LoginSession } from "$lib/surfaces/web/lib/api";
+    import { recoverMasterKeyFromBackup, encryptMasterKeyWithPrf } from "$lib/surfaces/web/lib/crypto";
+    import { getDeviceInfo } from "$lib/infrastructure/browser/device";
+    import { authenticateWithPasskey, createLocalAuthenticationOptions } from "$lib/infrastructure/webauthn/passkeys";
     import { auth } from "$lib/surfaces/web/stores/auth";
     import { ChevronRight } from "@lucide/svelte";
 
     let { handle, pendingPasskeyLogin, onSuccess, onError, onBack } = $props<{
         handle: string;
         pendingPasskeyLogin?: { 
-            sessionToken: string; 
             identities: Identity[]; 
-            device: Device;
+            device: LoginSession["device"];
             prfSupported?: boolean;
             usedPasskeyId?: string;
-            authOptions?: PublicKeyCredentialRequestOptions;
         } | null;
         onSuccess?: () => void;
         onError?: (error: string) => void;
@@ -34,36 +33,40 @@
             return;
         }
 
+        const pendingLogin = pendingPasskeyLogin;
+        const recoveryCode = code.trim();
         isLoading = true;
         try {
-            if (isRecoveryMode && pendingPasskeyLogin) {
+            if (pendingLogin) {
                 // We already logged in via passkey, just need to recover master key
                 // Use the dedicated recover-key endpoint (doesn't create new session/device)
                 const result = await api.login.recoverKey({
                     handle,
-                    code: code.trim(),
+                    code: recoveryCode,
                 });
 
+                if (!pendingLogin.identities.some((identity: Identity) => identity.id === result.identityId)) {
+                    throw new Error("This recovery code belongs to a different account. Sign in again.");
+                }
                 const masterKey = await recoverMasterKeyFromBackup(
                     result.encryptedMasterKeyBackup,
-                    code.trim()
+                    recoveryCode
                 );
                 
                 if (masterKey) {
-                    await storeMasterKey(masterKey);
                     
                     // If PRF was supported during login, set it up now so future logins don't need trust codes
-                    if (pendingPasskeyLogin.prfSupported && pendingPasskeyLogin.usedPasskeyId && pendingPasskeyLogin.authOptions) {
+                    if (pendingLogin.prfSupported && pendingLogin.usedPasskeyId) {
                         try {
                             // Re-authenticate with the same passkey to get PRF output
-                            const { prfOutput } = await authenticateWithPasskey(pendingPasskeyLogin.authOptions, true);
+                            const { prfOutput } = await authenticateWithPasskey(createLocalAuthenticationOptions(pendingLogin.usedPasskeyId));
                             
                             if (prfOutput) {
                                 // Encrypt the master key with PRF
                                 const prfEncryptedMasterKey = await encryptMasterKeyWithPrf(masterKey, prfOutput);
                                 
                                 // Update the passkey record with the encrypted master key
-                                await api.security.updatePasskeyPrf(pendingPasskeyLogin.usedPasskeyId, prfEncryptedMasterKey);
+                                await api.security.updatePasskeyPrf(pendingLogin.usedPasskeyId, prfEncryptedMasterKey);
                             }
                         } catch (prfError) {
                             // PRF setup failed, but login still succeeded
@@ -73,9 +76,7 @@
                     
                     // Use the existing passkey login session
                     await auth.login(
-                        pendingPasskeyLogin.sessionToken,
-                        pendingPasskeyLogin.identities,
-                        pendingPasskeyLogin.device,
+                        pendingLogin,
                         masterKey
                     );
                     onSuccess?.();
@@ -87,7 +88,7 @@
                 const deviceInfo = getDeviceInfo();
                 const result = await api.login.trustCode({
                     handle,
-                    code: code.trim(),
+                    code: recoveryCode,
                     device: deviceInfo,
                 });
 
@@ -95,32 +96,25 @@
                 if (result.encryptedMasterKeyBackup) {
                     const masterKey = await recoverMasterKeyFromBackup(
                         result.encryptedMasterKeyBackup,
-                        code.trim()
+                        recoveryCode
                     );
                     
                     if (masterKey) {
                         // Store the recovered master key locally
-                        await storeMasterKey(masterKey);
-                        await auth.login(
-                            result.sessionToken,
-                            result.identities,
-                            result.device,
+                            await auth.login(
+                        result,
                             masterKey,
                             { offerPasskeySetup: Boolean(result.device.isNew) }
                         );
                     } else {
                         // Login succeeded but couldn't recover master key
                         await auth.login(
-                            result.sessionToken,
-                            result.identities,
-                            result.device
+                        result,
                         );
                     }
                 } else {
                     await auth.login(
-                        result.sessionToken,
-                        result.identities,
-                        result.device
+                        result,
                     );
                 }
 

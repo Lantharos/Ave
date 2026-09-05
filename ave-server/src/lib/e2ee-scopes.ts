@@ -1,39 +1,39 @@
 import { normalizeScopeToken } from "./oauth-scopes";
 
-export const E2EE_SCOPES = {
+const E2EE_SCOPES = {
   SYMMETRIC: "e2ee:symmetric",
   ASYMMETRIC: "e2ee:asymmetric",
   PQC_KYBER: "e2ee:pqc:kyber",
   PQC_DILITHIUM: "e2ee:pqc:dilithium",
 } as const;
 
-export const E2EE_RESET_SCOPE = "e2ee:reset" as const;
+const E2EE_RESET_SCOPE = "e2ee:reset" as const;
 
-export const E2EE_SCOPE_VALUES = Object.values(E2EE_SCOPES);
+const E2EE_SCOPE_VALUES = Object.values(E2EE_SCOPES);
 
 export type E2eeMode = "symmetric" | "asymmetric" | "pqc_kyber" | "pqc_dilithium";
 
-export type E2eeScope = (typeof E2EE_SCOPES)[keyof typeof E2EE_SCOPES];
+type E2eeScope = (typeof E2EE_SCOPES)[keyof typeof E2EE_SCOPES];
 
 const IMPLEMENTED_E2EE_MODES = new Set<E2eeMode>(["symmetric", "asymmetric"]);
 
-export function isE2eeResetScope(scope: string): boolean {
+function isE2eeResetScope(scope: string): boolean {
   return normalizeScopeToken(scope) === E2EE_RESET_SCOPE;
 }
 
-export function isE2eeModeScope(scope: string): boolean {
+function isE2eeModeScope(scope: string): boolean {
   return (E2EE_SCOPE_VALUES as readonly string[]).includes(normalizeScopeToken(scope));
 }
 
-export function isE2eeScope(scope: string): boolean {
+function isE2eeScope(scope: string): boolean {
   return isE2eeModeScope(scope) || isE2eeResetScope(scope);
 }
 
-export function hasAnyE2eeScope(scopes: string[] | null | undefined): boolean {
+function hasAnyE2eeScope(scopes: string[] | null | undefined): boolean {
   return (scopes ?? []).some(isE2eeScope);
 }
 
-export function hasE2eeResetScope(scopes: string[] | null | undefined): boolean {
+function hasE2eeResetScope(scopes: string[] | null | undefined): boolean {
   return (scopes ?? []).some(isE2eeResetScope);
 }
 
@@ -48,7 +48,7 @@ export function appEffectiveSupportsE2ee(app: {
   return !!app.supportsE2ee || hasAnyE2eeScope(app.allowedScopes);
 }
 
-export function e2eeModeForScope(scope: E2eeScope): E2eeMode {
+function e2eeModeForScope(scope: E2eeScope): E2eeMode {
   switch (scope) {
     case E2EE_SCOPES.SYMMETRIC:
       return "symmetric";
@@ -67,7 +67,7 @@ export function isImplementedE2eeMode(mode: E2eeMode): boolean {
   return IMPLEMENTED_E2EE_MODES.has(mode);
 }
 
-export function storedModeToE2eeMode(
+function storedModeToE2eeMode(
   stored: string | null | undefined,
 ): E2eeMode | null {
   if (stored === "symmetric" || stored === "asymmetric") return stored;
@@ -75,13 +75,13 @@ export function storedModeToE2eeMode(
   return null;
 }
 
-export const USER_ID_SCOPE = "user_id" as const;
+const USER_ID_SCOPE = "user_id" as const;
 
-export function isUserIdScope(scope: string): boolean {
+function isUserIdScope(scope: string): boolean {
   return normalizeScopeToken(scope) === USER_ID_SCOPE;
 }
 
-export function isDynamicOAuthScope(scope: string): boolean {
+function isDynamicOAuthScope(scope: string): boolean {
   return isE2eeScope(scope) || isUserIdScope(scope);
 }
 
@@ -122,13 +122,13 @@ function collectRequestedE2eeModes(
   return matched;
 }
 
-export type E2eeAuthorizationResolution = {
+type E2eeAuthorizationResolution = {
   mode: E2eeMode | null;
   conflict: boolean;
   reset: boolean;
 };
 
-export function resolveE2eeAuthorization(
+function resolveE2eeAuthorization(
   requestedScopes: string[],
   app: { supportsE2ee?: boolean | null; allowedScopes?: string[] | null },
   existing?: { appEncryptionMode?: string | null } | null,
@@ -150,17 +150,6 @@ export function resolveE2eeAuthorization(
   return { mode, conflict: false, reset };
 }
 
-/**
- * Resolve which E2EE mode applies for this authorization.
- * Legacy apps with supports_e2ee and no e2ee:* scopes default to symmetric.
- */
-export function resolveRequestedE2eeMode(
-  requestedScopes: string[],
-  app: { supportsE2ee?: boolean | null; allowedScopes?: string[] | null },
-): E2eeMode | null {
-  return resolveE2eeAuthorization(requestedScopes, app).mode;
-}
-
 export function resolveRequestedE2eeModeConflict(
   requestedScopes: string[],
   app: { supportsE2ee?: boolean | null; allowedScopes?: string[] | null },
@@ -174,9 +163,4 @@ export const PORTAL_APP_SCOPES = [
   "profile",
   "email",
   "offline_access",
-] as const;
-
-export const STANDARD_OAUTH_SCOPES = [
-  ...PORTAL_APP_SCOPES,
-  USER_ID_SCOPE,
 ] as const;

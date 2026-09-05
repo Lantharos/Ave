@@ -3,7 +3,7 @@ const BOOKMARK_STORAGE_KEY = "ave_d1_bookmark";
 
 let currentBookmark: string | null = null;
 
-export function readBookmark(): string | null {
+function readBookmark(): string | null {
   if (currentBookmark) return currentBookmark;
   try {
     currentBookmark = sessionStorage.getItem(BOOKMARK_STORAGE_KEY);

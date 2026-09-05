@@ -1,33 +1,33 @@
 import { normalizeScopeToken } from "./oauth-scopes";
 
-export const E2EE_SCOPES = {
+const E2EE_SCOPES = {
   SYMMETRIC: "e2ee:symmetric",
   ASYMMETRIC: "e2ee:asymmetric",
   PQC_KYBER: "e2ee:pqc:kyber",
   PQC_DILITHIUM: "e2ee:pqc:dilithium",
 } as const;
 
-export const E2EE_RESET_SCOPE = "e2ee:reset" as const;
+const E2EE_RESET_SCOPE = "e2ee:reset" as const;
 
-export const E2EE_SCOPE_VALUES = Object.values(E2EE_SCOPES);
+const E2EE_SCOPE_VALUES = Object.values(E2EE_SCOPES);
 
 export type E2eeMode = "symmetric" | "asymmetric" | "pqc_kyber" | "pqc_dilithium";
 
-export type E2eeScope = (typeof E2EE_SCOPES)[keyof typeof E2EE_SCOPES];
+type E2eeScope = (typeof E2EE_SCOPES)[keyof typeof E2EE_SCOPES];
 
-export function isE2eeResetScope(scope: string): boolean {
+function isE2eeResetScope(scope: string): boolean {
   return normalizeScopeToken(scope) === E2EE_RESET_SCOPE;
 }
 
-export function isE2eeModeScope(scope: string): boolean {
+function isE2eeModeScope(scope: string): boolean {
   return (E2EE_SCOPE_VALUES as readonly string[]).includes(normalizeScopeToken(scope));
 }
 
-export function isE2eeScope(scope: string): boolean {
+function isE2eeScope(scope: string): boolean {
   return isE2eeModeScope(scope) || isE2eeResetScope(scope);
 }
 
-export function hasAnyE2eeScope(scopes: string[] | null | undefined): boolean {
+function hasAnyE2eeScope(scopes: string[] | null | undefined): boolean {
   return (scopes ?? []).some(isE2eeScope);
 }
 
@@ -39,7 +39,7 @@ export function hasUserIdScope(scopes: string[] | null | undefined): boolean {
   return (scopes ?? []).some((scope) => normalizeScopeToken(scope) === "user_id");
 }
 
-export function appEffectiveSupportsE2ee(app: {
+function appEffectiveSupportsE2ee(app: {
   supportsE2ee?: boolean;
   allowedScopes?: string[] | null;
 }): boolean {
@@ -136,19 +136,4 @@ export function authorizationHasE2eeMaterial(
     return !!auth.appPublicKey && !!auth.encryptedAppPrivateKey;
   }
   return !!auth.encryptedAppKey || !!auth.appPublicKey;
-}
-
-export function e2eeModeLabel(mode: E2eeMode): string {
-  switch (mode) {
-    case "symmetric":
-      return "symmetric AES";
-    case "asymmetric":
-      return "asymmetric keypair";
-    case "pqc_kyber":
-      return "post-quantum Kyber";
-    case "pqc_dilithium":
-      return "post-quantum Dilithium";
-    default:
-      return mode;
-  }
 }

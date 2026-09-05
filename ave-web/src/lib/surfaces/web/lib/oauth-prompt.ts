@@ -1,4 +1,4 @@
-export const OAUTH_PROMPT_VALUES = [
+const OAUTH_PROMPT_VALUES = [
   "none",
   "login",
   "consent",
@@ -21,15 +21,6 @@ export function parseOAuthPrompt(value: string | null | undefined): OAuthPrompt[
   return prompts.filter((part): part is OAuthPrompt =>
     (OAUTH_PROMPT_VALUES as readonly string[]).includes(part),
   );
-}
-
-export function formatOAuthPrompt(
-  prompt: OAuthPrompt | OAuthPrompt[] | string,
-): string {
-  if (Array.isArray(prompt)) {
-    return prompt.join(" ");
-  }
-  return prompt.trim();
 }
 
 export function requiresAuthorizeInteractionPrompt(

@@ -54,6 +54,7 @@ app.get("/authorize/bootstrap/:clientId", requireAuth, async (c) => {
       appSupportsE2ee: oauthApps.supportsE2ee,
       appAllowedScopes: oauthApps.allowedScopes,
       authorizationId: oauthAuthorizations.id,
+      authorizationScope: oauthAuthorizations.scope,
       authorizationIdentityId: oauthAuthorizations.identityId,
       authorizationEncryptedAppKey: oauthAuthorizations.encryptedAppKey,
       authorizationAppPublicKey: oauthAuthorizations.appPublicKey,
@@ -110,6 +111,7 @@ app.get("/authorize/bootstrap/:clientId", requireAuth, async (c) => {
     return [{
       id: row.authorizationId,
       identityId: row.authorizationIdentityId,
+      scope: row.authorizationScope,
       encryptedAppKey: row.authorizationEncryptedAppKey,
       appPublicKey: row.authorizationAppPublicKey,
       encryptedAppPrivateKey: row.authorizationEncryptedAppPrivateKey,

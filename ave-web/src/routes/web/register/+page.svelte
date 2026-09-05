@@ -1,4 +1,5 @@
 <script lang="ts">
+    import type { PublicKeyCredentialCreationOptionsJSON, RegistrationResponseJSON } from "@simplewebauthn/browser";
     import RegisterWelcome from "./components/RegisterWelcome.svelte";
     import RegisterIdentity from "./components/RegisterIdentity.svelte";
     import RegisterPasskey from "./components/RegisterPasskey.svelte";
@@ -15,7 +16,8 @@
         encryptMasterKeyWithPrf,
         createStoredIdentityEncryptionKeyPair,
     } from "$lib/surfaces/web/lib/crypto";
-    import { registerPasskey, getDeviceInfo, isPlatformAuthenticatorAvailable } from "$lib/surfaces/web/lib/webauthn";
+    import { getDeviceInfo } from "$lib/infrastructure/browser/device";
+    import { registerPasskey, isWebAuthnSupported } from "$lib/infrastructure/webauthn/passkeys";
     import { auth, isAuthenticated } from "$lib/surfaces/web/stores/auth";
     import { getReturnUrl, clearReturnUrl } from "$lib/surfaces/web/util/return-url";
     import { goto } from "$app/navigation";
@@ -40,8 +42,8 @@
     });
 
     let tempUserId = "";
-    let webauthnOptions: PublicKeyCredentialCreationOptions | null = null;
-    let webauthnCredential: Credential | null = null;
+    let webauthnOptions: PublicKeyCredentialCreationOptionsJSON | null = null;
+    let webauthnCredential: RegistrationResponseJSON | null = null;
     let masterKey: CryptoKey | null = null;
     let trustCodes = $state<string[]>([]);
     let isCompletingRegistration = $state(false);
@@ -118,8 +120,8 @@
         }
         
         try {
-            const platformAuthenticatorAvailable = await isPlatformAuthenticatorAvailable();
-            if (!platformAuthenticatorAvailable) {
+            const passkeysAvailable = isWebAuthnSupported();
+            if (!passkeysAvailable) {
                 error = "This device can't create a passkey right now. Sign in on another device with Windows Hello or another passkey-capable device, then set up recovery codes from Security.";
                 return;
             }
@@ -130,7 +132,6 @@
             prfOutput = result.prfOutput || null;
             
             
-            // Generate master key and go to legal step (skipping security questions)
             masterKey = await generateMasterKey();
             setPage("legal");
         } catch (e: any) {
@@ -186,9 +187,7 @@
             
             // Store master key and login
             await auth.login(
-                result.sessionToken,
-                [result.identity],
-                result.device,
+                { identities: [result.identity], device: result.device },
                 masterKey
             );
             

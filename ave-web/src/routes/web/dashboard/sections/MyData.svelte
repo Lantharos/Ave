@@ -105,7 +105,7 @@
         <div class="bg-[#171717] rounded-[24px] md:rounded-[36px] p-6 md:p-[40px] max-w-[500px] w-full">
             <Text type="h" size={24} weight="bold" color="#E14747">Delete Account</Text>
             <p class="text-[#878787] text-sm md:text-[16px] mt-2 md:mt-[10px]">
-                This deletes your Ave account records, active sessions, identities, passkeys, recovery-code records, and Ave authorization records. It cannot remove data already copied by connected apps, and public image caches may expire later.
+                This deletes your Ave account records, active sessions, identities, passkeys, recovery-code records, Ave authorization records, and organizations you own with their apps. Apps in another owner’s organization remain with that organization. It cannot remove data already copied by connected apps, and public image caches may expire later.
             </p>
             <p class="text-[#FFFFFF] text-sm md:text-[16px] mt-4 md:mt-[20px]">
                 Type <span class="font-bold text-[#E14747]">DELETE MY ACCOUNT</span> to confirm:

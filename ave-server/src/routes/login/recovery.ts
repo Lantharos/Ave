@@ -3,8 +3,8 @@ import { eq } from "drizzle-orm";
 import { Hono } from "hono";
 import { z } from "zod";
 import { db, identities, sessions, users } from "../../db";
-import { recordActivityLog } from "../../lib/background-events";
 import { runInBackground } from "../../lib/background";
+import { recordActivityLog } from "../../lib/background-events";
 import { generateSessionToken, hashSessionToken } from "../../lib/crypto";
 import { listIdentitiesForOwner } from "../../lib/identity-serialization";
 import { enforceRateLimits, ipRateLimit, subjectRateLimit } from "../../lib/rate-limit";
@@ -208,13 +208,6 @@ app.post("/recover-key", zValidator("json", z.object({
     return c.json({ error: `That recovery code is invalid or already used. ${availableCodes} recovery code(s) remaining.` }, 400);
   }
 
-  const remainingCodes = await claimTrustCode(identity.userId, matchedCode.id);
-  if (remainingCodes === null) {
-    return c.json({
-      error: `That recovery code is invalid or already used. ${Math.max(availableCodes - 1, 0)} recovery code(s) remaining.`,
-    }, 400);
-  }
-
   // Get user for encrypted master key backup
   const [user] = await db
     .select({ encryptedMasterKeyBackup: users.encryptedMasterKeyBackup })
@@ -224,6 +217,13 @@ app.post("/recover-key", zValidator("json", z.object({
 
   if (!user?.encryptedMasterKeyBackup) {
     return c.json({ error: "No encryption backup found." }, 400);
+  }
+
+  const remainingCodes = await claimTrustCode(identity.userId, matchedCode.id);
+  if (remainingCodes === null) {
+    return c.json({
+      error: `That recovery code is invalid or already used. ${Math.max(availableCodes - 1, 0)} recovery code(s) remaining.`,
+    }, 400);
   }
 
   // Log successful key recovery
@@ -247,6 +247,7 @@ app.post("/recover-key", zValidator("json", z.object({
 
   return c.json({
     success: true,
+    identityId: identity.id,
     encryptedMasterKeyBackup: user.encryptedMasterKeyBackup,
     remainingTrustCodes: remainingCodes,
     remainingRecoveryCodes: remainingCodes,

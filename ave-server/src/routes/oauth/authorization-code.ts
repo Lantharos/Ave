@@ -1,11 +1,10 @@
-import type { Context } from "hono";
 import { eq } from "drizzle-orm";
+import type { Context } from "hono";
 import { db, oauthApps } from "../../db";
 import { isScopeAllowedForApp } from "../../lib/e2ee-scopes";
 import { consumeAuthorizationCode } from "../../lib/oauth-store";
 import {
   buildQuickApp,
-  buildTokenResponseFromAuthorizationCode,
   getQuickOrigin,
   isClientSecretValid,
   isQuickClient,
@@ -13,6 +12,7 @@ import {
   parseScopes,
   timingSafeEqualString,
 } from "./shared";
+import { buildTokenResponseFromAuthorizationCode } from "./token-response";
 import type { AuthorizationCodeRequest } from "./token-schema";
 
 export async function handleAuthorizationCode(c: Context, payload: AuthorizationCodeRequest) {
@@ -28,6 +28,9 @@ export async function handleAuthorizationCode(c: Context, payload: Authorization
     }, 400);
   }
   const authCode = authCodeResult.value;
+  if (!isQuickClient(clientId) && !authCode.authorizationId) {
+    return c.json({ error: "invalid_grant", error_description: "App authorization was revoked" }, 400);
+  }
 
   if (authCode.redirectUri !== redirectUri) {
     return c.json({ error: "invalid_grant", error_description: "Redirect URI mismatch" }, 400);

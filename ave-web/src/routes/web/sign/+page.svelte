@@ -9,28 +9,15 @@
     import StorageAccessGate from "$lib/surfaces/web/components/StorageAccessGate.svelte";
     import { supportsStorageAccessApi, hasStorageAccess, requestStorageAccess } from "$lib/surfaces/web/lib/storage-access";
     import { unlockMasterKeyWithPasskey } from "$lib/surfaces/web/lib/master-key-unlock";
+    import { openEmbedPopup, postToEmbedParent } from "$lib/surfaces/web/util/embed-popup";
     import { postMessageTargetOriginForSigning } from "$lib/surfaces/web/util/embed-post-message-origin";
 
     function postToEmbedHost(payload: unknown, redirectUri: string | undefined, parentOriginParam: string | null) {
-        const target = (window.opener && (window.opener as any).parent)
-            ? (window.opener as any).parent
-            : (window.opener ?? window.parent);
-        const origin = postMessageTargetOriginForSigning(redirectUri, parentOriginParam);
-        target?.postMessage(payload, origin);
+        postToEmbedParent(payload, postMessageTargetOriginForSigning(redirectUri, parentOriginParam));
     }
 
     function openSigningPopupHere(): boolean {
-        const width = 500;
-        const height = 600;
-        const left = (window.innerWidth - width) / 2 + window.screenX;
-        const top = (window.innerHeight - height) / 2 + window.screenY;
-        const popup = window.open(
-            window.location.href,
-            "ave_signing",
-            `width=${width},height=${height},left=${left},top=${top},menubar=no,toolbar=no,location=no,status=no`
-        );
-        popup?.focus?.();
-        return !!popup;
+        return openEmbedPopup(postMessageTargetOriginForSigning(embedRedirectUri, embedParentOrigin), 500, 600);
     }
 
     async function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T | null> {
@@ -283,7 +270,7 @@
                 return;
             }
 
-            const initOk = (await withTimeout(auth.init({ allowCookieSession: true, timeoutMs: 1200 }), 1500)) !== null;
+            const initOk = (await withTimeout(auth.init({ timeoutMs: 1200 }), 1500)) !== null;
             if (initOk && $isAuthenticated) {
                 needsStorageAccess = false;
                 return;
@@ -328,7 +315,7 @@
                 return;
             }
 
-            const initOk = (await withTimeout(auth.init({ allowCookieSession: true, timeoutMs: 1200 }), 1500)) !== null;
+            const initOk = (await withTimeout(auth.init({ timeoutMs: 1200 }), 1500)) !== null;
             if (!initOk) {
                 const opened = openSigningPopupHere();
                 if (!opened) {
@@ -364,6 +351,10 @@
     }
 
     function fallbackToTopLevelSigning() {
+        if (window.parent !== window) {
+            postToEmbedHost({ type: "ave:auth_required" }, embedRedirectUri, embedParentOrigin);
+            return;
+        }
         const fallbackUrl = new URL(window.location.href);
         fallbackUrl.searchParams.delete("embed");
         window.location.assign(fallbackUrl.toString());

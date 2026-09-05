@@ -42,7 +42,7 @@ Common verification commands:
 - `ave-server`: `bun run check`
 - `ave-web`: `bun run check`, `bun run build`
 - `sdks/ave-sdk`: `bun run build`
-- `sdks/ave-embed`: `bun run build:windows`
+- `sdks/ave-embed`: `bun run build`
 
 If you work on the API locally, copy the example env files in `ave-server` first and run the local D1 migrations:
 

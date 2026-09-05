@@ -49,7 +49,7 @@ export async function rejectRequiredEnterpriseSso(c: any, identity: { email: str
   }, 403);
 }
 
-export async function getUnusedTrustCodes(userId: string) {
+async function getUnusedTrustCodes(userId: string) {
   return db
     .select()
     .from(trustCodes)

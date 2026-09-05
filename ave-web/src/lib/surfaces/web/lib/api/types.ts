@@ -14,6 +14,7 @@ export interface Identity {
 }
 
 export interface OAuthAuthorization {
+  scope: string;
   id: string;
   identityId: string;
   encryptedAppKey?: string;
@@ -39,6 +40,19 @@ export interface SessionBootstrap {
   identities: Identity[];
   readOnly?: boolean;
 }
+
+export interface LoginSession {
+  identities: Identity[];
+  device: Pick<Device, "id" | "name" | "type" | "isNew">;
+}
+
+export type LoginRequestStatus = {
+  status: "pending" | "denied" | "expired";
+} | (LoginSession & {
+  status: "approved";
+  encryptedMasterKey: string;
+  approverPublicKey: string;
+});
 
 export interface Passkey {
   id: string;

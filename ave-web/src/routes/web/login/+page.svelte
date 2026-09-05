@@ -1,4 +1,5 @@
 <script lang="ts">
+    import type { PublicKeyCredentialRequestOptionsJSON } from "@simplewebauthn/browser";
     import LoginMethods from "./components/LoginMethods.svelte";
     import LoginStart from "./components/LoginStart.svelte";
     import LoginTrustCode from "./components/LoginTrustCode.svelte";
@@ -9,7 +10,7 @@
     import { safeGoto } from "$lib/surfaces/web/util/safe-goto";
     import { auth, isAuthenticated, isLoading } from "$lib/surfaces/web/stores/auth";
     import { getReturnUrl, clearReturnUrl } from "$lib/surfaces/web/util/return-url";
-    import type { Identity, Device } from "$lib/surfaces/web/lib/api";
+    import type { Identity, LoginSession } from "$lib/surfaces/web/lib/api";
     import { onMount } from "svelte";
     import { hasPendingAuthRequest, loadPendingAuthContext, type PendingAuthContext } from "$lib/surfaces/web/util/auth-context";
 
@@ -70,19 +71,18 @@
     let hasDevices = $state(false);
     let hasPasskeys = $state(false);
     let demoPasswordEnabled = $state(false);
-    let authOptions = $state<PublicKeyCredentialRequestOptions | null>(null);
+    let authOptions = $state<PublicKeyCredentialRequestOptionsJSON | null>(null);
     let authSessionId = $state<string | null>(null);
     let loginRequestId = $state<string | null>(null);
+    let loginRequestToken = $state<string | null>(null);
     let ephemeralKeyPair = $state<{ publicKey: string; privateKey: CryptoKey } | null>(null);
     
     // For passkey login without master key - we already authenticated but need the master key
     let pendingPasskeyLogin = $state<{ 
-        sessionToken: string; 
         identities: Identity[]; 
-        device: Device;
+        device: LoginSession["device"];
         prfSupported?: boolean;
         usedPasskeyId?: string;
-        authOptions?: PublicKeyCredentialRequestOptions;
     } | null>(null);
 
     function handleLoginStart(data: {
@@ -91,7 +91,7 @@
         hasDevices: boolean;
         hasPasskeys: boolean;
         demoPasswordEnabled?: boolean;
-        authOptions: PublicKeyCredentialRequestOptions | null;
+        authOptions: PublicKeyCredentialRequestOptionsJSON | null;
         authSessionId: string | null;
     }) {
         handle = data.handle;
@@ -194,6 +194,7 @@
             onSuccess={handleLoginSuccess}
             onError={setError}
             bind:loginRequestId
+            bind:loginRequestToken
             bind:ephemeralKeyPair
             bind:pendingPasskeyLogin
         />
@@ -208,6 +209,7 @@
     {:else if currentPage === "waiting"}
         <LoginWaiting 
             {loginRequestId}
+            {loginRequestToken}
             {ephemeralKeyPair}
             onSuccess={handleLoginSuccess}
             onError={setError}

@@ -30,7 +30,7 @@ type AuthorizationEncryption = {
   encryptedAppPrivateKey?: string;
 };
 
-export type RedirectEncryptionMaterial = {
+type RedirectEncryptionMaterial = {
   appKey: string | null;
   appKeyOld: string | null;
   appPublicKey: string | null;

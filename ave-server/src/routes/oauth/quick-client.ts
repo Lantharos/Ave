@@ -1,5 +1,5 @@
-export const QUICK_AUTH_ACCESS_TOKEN_TTL_SECONDS = 3600;
-export const QUICK_AUTH_SCOPES = ["openid", "profile", "email"];
+const QUICK_AUTH_ACCESS_TOKEN_TTL_SECONDS = 3600;
+const QUICK_AUTH_SCOPES = ["openid", "profile", "email"];
 
 export function isQuickClient(clientId: string): boolean {
   return typeof clientId === "string" && clientId.startsWith("origin:");

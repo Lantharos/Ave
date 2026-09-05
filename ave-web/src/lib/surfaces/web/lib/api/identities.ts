@@ -1,5 +1,5 @@
 import { request } from "./transport";
-import type { ActivityLogEntry, Device, Identity, IdentityEncryptionKey, LoginRequest, OAuthAuthorization, Passkey, SessionBootstrap, SignatureRequest } from "./types";
+import type { Identity, IdentityEncryptionKey, SessionBootstrap } from "./types";
 
 export const identitiesApi = {
     list: () =>
@@ -54,11 +54,6 @@ export const identitiesApi = {
     clearEmail: (identityId: string) =>
       request<{ success: boolean; identity: Identity }>(`/api/identities/${identityId}/email`, {
         method: "DELETE",
-      }),
-
-    setPrimary: (identityId: string) =>
-      request<{ success: boolean }>(`/api/identities/${identityId}/set-primary`, {
-        method: "POST",
       }),
 
     delete: (identityId: string) =>

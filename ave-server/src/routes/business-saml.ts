@@ -1,17 +1,18 @@
-import { Hono } from "hono";
 import { and, eq } from "drizzle-orm";
+import { Hono } from "hono";
 import { db, organizations, organizationSsoConnections } from "../db";
-import { hasBusinessScope, requireBusinessAccess } from "../lib/business";
-import { buildSamlRedirectUrl } from "../lib/business-saml";
-import { validateSamlResponse } from "../lib/heavy-services";
-import { completeEnterpriseSsoLogin, recordSsoConnectionTest } from "../lib/business-sso-login";
-import { clientIp, userAgent } from "../lib/business-route-utils";
-import { rejectWithoutRequiredSso } from "../lib/business-route-guards";
-import { deleteChallenge, getChallenge, setChallenge } from "../lib/challenge-store";
-import { randomBase64Url } from "../lib/business-oidc";
-import { buildSamlServiceProviderMetadata } from "../lib/sso-metadata";
-import { businessOrigin, enterpriseSsoReturnTo } from "../lib/enterprise-sso-return";
 import { recordBusinessAuditEvent } from "../lib/background-events";
+import { requireBusinessAccess } from "../lib/business";
+import { randomBase64Url } from "../lib/business-oidc";
+import { rejectSsoTestAccess } from "../lib/business-route-guards";
+import { clientIp, userAgent } from "../lib/business-route-utils";
+import { buildSamlRedirectUrl } from "../lib/business-saml";
+import { completeEnterpriseSsoLogin, recordSsoConnectionTest } from "../lib/business-sso-login";
+import { deleteChallenge, getChallenge, setChallenge } from "../lib/challenge-store";
+import { requireVerifiedSsoDomain } from "../lib/enterprise-sso-policy";
+import { businessOrigin, enterpriseSsoReturnTo } from "../lib/enterprise-sso-return";
+import { validateSamlResponse } from "../lib/heavy-services";
+import { buildSamlServiceProviderMetadata } from "../lib/sso-metadata";
 
 const app = new Hono<{ Bindings: Pick<Env, "HEAVY_SERVICES"> }>();
 
@@ -22,14 +23,6 @@ type SamlSsoState = {
   returnTo?: string;
 };
 
-async function rejectSsoTestAccess(c: any, organizationId: string) {
-  const user = c.get("user");
-  if (!user) return c.text("Sign in to Ave before testing SSO", 401);
-  if (user.isReadOnly) return c.text("Demo account is read-only", 403);
-  const access = await requireBusinessAccess(user.id, organizationId, "admin");
-  if (!access || !hasBusinessScope(access.member, "manage_sso")) return c.text("Organization not found", 404);
-  return rejectWithoutRequiredSso(c, access);
-}
 
 app.get("/sso/saml/:connectionId/metadata.xml", async (c) => {
   const connectionId = c.req.param("connectionId");
@@ -58,6 +51,7 @@ app.get("/sso/saml/:connectionId/start", async (c) => {
     .limit(1);
 
   if (!row) return c.text("SAML connection not found", 404);
+  await requireVerifiedSsoDomain(row.connection);
   if (mode === "login" && row.connection.status !== "active") return c.text("SAML connection is not active", 409);
   if (mode === "test") {
     const accessError = await rejectSsoTestAccess(c, row.organization.id);
@@ -106,9 +100,6 @@ app.post("/sso/saml/:connectionId/acs", async (c) => {
     });
     return c.text("SAML response validation failed", 400);
   }
-
-  const emailDomain = assertion.email.split("@").pop() || "";
-  if (row.connection.domain && emailDomain !== row.connection.domain) return c.text("SAML email domain is not allowed for this organization", 403);
 
   if (stored?.mode === "test" || (!stored && row.connection.status !== "active")) {
     const accessError = await rejectSsoTestAccess(c, row.organization.id);

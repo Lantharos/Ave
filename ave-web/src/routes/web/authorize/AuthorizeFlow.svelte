@@ -18,7 +18,6 @@
         resolveActiveMasterKey,
         generateEphemeralKeyPair,
         recoverMasterKeyFromBackup,
-        storeMasterKey,
     } from "$lib/surfaces/web/lib/crypto";
     import {
         authorizeFlowShowsE2ee,
@@ -40,7 +39,7 @@
 	import StorageAccessGate from "$lib/surfaces/web/components/StorageAccessGate.svelte";
 	import { supportsStorageAccessApi, hasStorageAccess, requestStorageAccess } from "$lib/surfaces/web/lib/storage-access";
 	import { unlockMasterKeyWithPasskey } from "$lib/surfaces/web/lib/master-key-unlock";
-	import { getDeviceInfo } from "$lib/surfaces/web/lib/webauthn";
+	import { getDeviceInfo } from "$lib/infrastructure/browser/device";
     // Parse query params from window.location
     let querystring = $state(window.location.search.slice(1));
     
@@ -103,6 +102,7 @@
     let hasTrustedDevices = $state(false);
     let loadingTrustedDevices = $state(false);
     let masterKeyLoginRequestId = $state<string | null>(null);
+    let masterKeyLoginRequestToken = $state<string | null>(null);
     let masterKeyEphemeralKeyPair = $state<{ publicKey: string; privateKey: CryptoKey } | null>(null);
     let requestingDeviceApproval = $state(false);
     let recoveringMasterKey = $state(false);
@@ -250,8 +250,11 @@
                 : null;
             emailDraft = selectedIdentity?.pendingEmail || selectedIdentity?.email || "";
 
+            const grantedScopes = new Set(parseOAuthScopes(existingAuth?.scope ?? ""));
             const shouldAutoAuthorize = !forceAuthorizePrompt
+                && !hasE2eeResetScope(authorizeRequestedScopes)
                 && !!existingAuth
+                && authorizeRequestedScopes.every((scope) => grantedScopes.has(scope))
                 && !!existingIdentity
                 && (!authorizeFlowShowsE2ee(bootstrap.app, authorizeRequestedScopes) || hasLocalMasterKey);
 
@@ -491,7 +494,7 @@
         attemptedCookieSessionRetry = true;
         retryingCookieSession = true;
         try {
-            await auth.init({ allowCookieSession: true, timeoutMs: 7000 });
+            await auth.init({ timeoutMs: 7000 });
         } finally {
             retryingCookieSession = false;
         }
@@ -561,7 +564,7 @@
                 return;
             }
 
-            const initOk = (await withTimeout(auth.init({ allowCookieSession: true, timeoutMs: 1200 }), 1500)) !== null;
+            const initOk = (await withTimeout(auth.init({ timeoutMs: 1200 }), 1500)) !== null;
             if (initOk) {
                 const authState = get(auth);
                 if (authState.isAuthenticated) {
@@ -609,7 +612,7 @@
 				return;
 			}
 
-			const initOk = (await withTimeout(auth.init({ allowCookieSession: true, timeoutMs: 1200 }), 1500)) !== null;
+			const initOk = (await withTimeout(auth.init({ timeoutMs: 1200 }), 1500)) !== null;
 			if (!initOk) {
 				const opened = openAuthPopupHere();
 				if (!opened) {
@@ -675,6 +678,7 @@
                 device: getDeviceInfo(),
             });
             masterKeyLoginRequestId = result.requestId;
+            masterKeyLoginRequestToken = result.requestToken;
             masterKeyUnlockView = "device";
         } catch (err) {
             masterKeyError = err instanceof Error ? err.message : "Failed to request device approval";
@@ -707,7 +711,7 @@
                 masterKeyError = "That recovery code didn't work. Check it and try again.";
                 return;
             }
-            await storeMasterKey(masterKey);
+            await auth.setMasterKey(masterKey, [result.identityId]);
             await handleMasterKeyRecovered();
         } catch (err) {
             masterKeyError = err instanceof Error ? err.message : "Invalid recovery code";
@@ -882,6 +886,7 @@
             <MasterKeyRecovery
                 bind:view={masterKeyUnlockView}
                 loginRequestId={masterKeyLoginRequestId}
+                loginRequestToken={masterKeyLoginRequestToken}
                 ephemeralKeyPair={masterKeyEphemeralKeyPair}
                 bind:error={masterKeyError}
                 bind:recoveryCode

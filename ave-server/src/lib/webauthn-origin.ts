@@ -1,4 +1,4 @@
-export function isAllowedWebauthnOrigin(origin: string): boolean {
+function isAllowedWebauthnOrigin(origin: string): boolean {
   const prodOrigin = process.env.RP_ORIGIN;
   const developmentOrigin = /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin);
   if (developmentOrigin && (!prodOrigin || /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(prodOrigin))) return true;

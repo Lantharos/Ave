@@ -5,11 +5,13 @@ description: "How Ave delivers per-app, per-identity encryption keys — and how
 
 ## How it works
 
-Ave's E2EE model gives each (app, identity) pair a **stable, isolated encryption context**. The server stores an *encrypted* form of your app key — it's encrypted with the user's passkey during the first authorization. From then on, Ave delivers the key back to you on the post-authorization redirect via URL fragment.
+Ave's E2EE model gives each (app, identity) pair a **stable, isolated encryption context**. The server stores an *encrypted* form of your app key, protected by the user's master key during the first authorization. From then on, Ave delivers the key back to you on the post-authorization redirect via URL fragment.
 
 At consent time, the Ave UI decrypts that ciphertext **in the browser** using the user's master key, then places the plaintext app key in the fragment. The token and authorization-code responses do not carry the decrypted secret.
 
 When a passkey supports PRF, Ave uses its output in the browser to encrypt and unlock the user's master key. The PRF output is omitted from credentials sent to the API for registration, sign-in, and key unlocking. Only the encrypted master key is stored on the server.
+
+Saved browser master keys are associated with the account's authenticated identities. Sign-in prefers the key unlocked by the verified passkey; a key from another account cannot substitute for it. Previously saved keys without an account association are reused only after they successfully decrypt an existing key for the current identity. Unmatched keys remain available for recovery. Passkey and recovery-code responses identify the account that owns the recovered key; Ave checks that association before saving it. Device approval applies the session returned with the transferred key. When persistent browser storage is unavailable, an unlocked key remains available for the current page session.
 
 For **multi-user asymmetric** encryption, enable `e2ee:asymmetric` on your app and use per-user app keypairs with the [lookup API](/sdk/sdk-identity-keys). The old identity wrapped OAuth payload flow (`wrapped_key`) is removed.
 

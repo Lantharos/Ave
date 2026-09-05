@@ -1,23 +1,23 @@
-import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
+import { eq } from "drizzle-orm";
+import { Hono } from "hono";
 import { z } from "zod";
-import { db, users, identities, passkeys, devices, sessions, identityEncryptionKeys } from "../db";
-import { 
-  generateSessionToken, 
+import { registrationCredentialSchema } from "../contracts/security/webauthn";
+import { db, devices, identities, identityEncryptionKeys, passkeys, sessions, users } from "../db";
+import { recordActivityLog } from "../lib/background-events";
+import { deleteChallenge, getChallenge, setChallenge } from "../lib/challenge-store";
+import {
+  generateSessionToken,
   hashSessionToken,
 } from "../lib/crypto";
-import { setSessionCookie } from "../lib/session-cookie";
-import { eq } from "drizzle-orm";
-import { requireAuth } from "../middleware/auth";
-import { deleteChallenge, getChallenge, setChallenge } from "../lib/challenge-store";
-import { resolvePasskeyName } from "../lib/passkey-names";
 import { normalizeEmail } from "../lib/email-verification";
-import { serializeIdentityForOwner } from "../lib/identity-serialization";
-import { enforceRateLimits, ipRateLimit, subjectRateLimit } from "../lib/rate-limit";
-import { recordActivityLog } from "../lib/background-events";
 import { generatePasskeyRegistrationOptions, verifyPasskeyRegistration, type RegistrationVerification } from "../lib/heavy-services";
-import { registrationCredentialSchema } from "../contracts/security/webauthn";
+import { serializeIdentityForOwner } from "../lib/identity-serialization";
+import { resolvePasskeyName } from "../lib/passkey-names";
+import { enforceRateLimits, ipRateLimit, subjectRateLimit } from "../lib/rate-limit";
+import { setSessionCookie } from "../lib/session-cookie";
 import { extractAllowedWebauthnOrigin } from "../lib/webauthn-origin";
+import { requireAuth, requireWritable } from "../middleware/auth";
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -29,9 +29,10 @@ function isIdentityHandleUniqueViolation(error: unknown): boolean {
   );
 }
 
-// Schema for starting registration
+const handleSchema = z.string().min(3).max(32).regex(/^[a-zA-Z0-9_]+$/, "Handle can only contain letters, numbers, and underscores");
+
 const startRegistrationSchema = z.object({
-  handle: z.string().min(3).max(32).regex(/^[a-zA-Z0-9_]+$/, "Handle can only contain letters, numbers, and underscores"),
+  handle: handleSchema,
 });
 
 // Start registration - returns WebAuthn options
@@ -89,7 +90,7 @@ const completeRegistrationSchema = z.object({
   credential: registrationCredentialSchema,
   identity: z.object({
     displayName: z.string().min(1).max(64),
-    handle: z.string().min(3).max(32),
+    handle: handleSchema,
     email: z.string().email().optional(),
     birthday: z.string().optional(),
     avatarUrl: z.string().url().optional(),
@@ -324,7 +325,7 @@ app.get("/check-handle/:handle", async (c) => {
 // Finalize master key backup (called after client encrypts with real trust codes)
 app.post("/finalize-backup", zValidator("json", z.object({
   encryptedMasterKeyBackup: z.string(),
-})), requireAuth, async (c) => {
+})), requireAuth, requireWritable, async (c) => {
   const user = c.get("user")!;
   
   const { encryptedMasterKeyBackup } = c.req.valid("json");

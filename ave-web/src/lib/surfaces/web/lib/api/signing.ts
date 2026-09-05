@@ -1,19 +1,6 @@
 import { request } from "./transport";
-import type { ActivityLogEntry, Device, Identity, IdentityEncryptionKey, LoginRequest, OAuthAuthorization, Passkey, SessionBootstrap, SignatureRequest } from "./types";
 
 export const signingApi = {
-    // Get signing keys for all user's identities
-    getKeys: () =>
-      request<{
-        keys: {
-          identityId: string;
-          handle: string;
-          displayName: string;
-          hasSigningKey: boolean;
-          publicKey: string | null;
-          createdAt: string | null;
-        }[];
-      }>("/api/signing/keys"),
 
     // Get signing key for a specific identity
     getKey: (identityId: string) =>
@@ -34,23 +21,6 @@ export const signingApi = {
         method: "POST",
         body: JSON.stringify({ publicKey, encryptedPrivateKey }),
       }),
-
-    // Rotate signing key
-    rotateKey: (identityId: string, publicKey: string, encryptedPrivateKey: string) =>
-      request<{
-        success: boolean;
-        publicKey: string;
-        createdAt: string;
-      }>(`/api/signing/keys/${identityId}`, {
-        method: "PUT",
-        body: JSON.stringify({ publicKey, encryptedPrivateKey }),
-      }),
-
-    // Get pending signature requests
-    getRequests: () =>
-      request<{
-        requests: SignatureRequest[];
-      }>("/api/signing/requests"),
 
     // Get a specific signature request
     getRequest: (requestId: string) =>

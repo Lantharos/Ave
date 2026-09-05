@@ -1,26 +1,27 @@
+import { authenticateWithPasskey } from "$lib/infrastructure/webauthn/passkeys";
+import { auth } from "../stores/auth";
 import { api } from "./api";
-import { decryptMasterKeyWithPrf, storeMasterKey } from "./crypto";
-import { authenticateWithPasskey } from "./webauthn";
+import { decryptMasterKeyWithPrf } from "./crypto";
 
 export async function unlockMasterKeyWithPasskey(): Promise<{ ok: true } | { ok: false; error: string }> {
   try {
     const { unlockSessionId, options } = await api.security.unlockMasterKeyStart();
-    const { credential, prfOutput } = await authenticateWithPasskey(options, true);
+    const { credential, prfOutput } = await authenticateWithPasskey(options);
 
     if (!prfOutput) {
       return { ok: false, error: "Passkey PRF isn't available on this device/browser." };
     }
 
-    const { prfEncryptedMasterKey } = await api.security.unlockMasterKeyFinish({
+    const { prfEncryptedMasterKey, identityIds } = await api.security.unlockMasterKeyFinish({
       unlockSessionId,
       credential,
     });
 
     const masterKey = await decryptMasterKeyWithPrf(prfEncryptedMasterKey, prfOutput);
     try {
-      await storeMasterKey(masterKey);
-    } catch {
-      return { ok: false, error: "Couldn't store the encryption key in this context." };
+      await auth.setMasterKey(masterKey, identityIds);
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : "Couldn't store the encryption key in this context." };
     }
 
     return { ok: true };

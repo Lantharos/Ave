@@ -1,4 +1,4 @@
-import type { Device } from "./api";
+import type { LoginSession } from "./api";
 
 const STORAGE_KEY = "ave_pending_passkey_setup";
 
@@ -8,7 +8,7 @@ export interface PendingPasskeySetupPrompt {
   queuedAt: number;
 }
 
-export function queuePasskeySetupPrompt(device: Device): void {
+export function queuePasskeySetupPrompt(device: LoginSession["device"]): void {
   if (!device.isNew) return;
 
   try {

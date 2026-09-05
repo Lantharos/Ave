@@ -10,7 +10,7 @@ scope=openid profile email offline_access
 ```
 
 <Note>
-  If a scope is not in the list above, or if your app is not configured to request it, the server silently excludes the corresponding claims. Always check the returned `scope` string in the token response to know exactly what was granted.
+  Ave rejects unsupported scopes and standard scopes outside your app’s configured allowlist with `invalid_scope`. Dynamic scopes such as `user_id` and encryption scopes still require user consent. Check the returned `scope` string to see what was granted.
 </Note>
 
 ## Standard scopes
@@ -23,18 +23,17 @@ These are available to all OAuth apps without any special configuration.
   **Adds to `id_token`:**
   ```json
   {
-    "iss": "https://aveid.net",,
+    "iss": "https://aveid.net",
     "sub": "identity-uuid",
     "aud": "your_client_id",
     "exp": 1712345678,
     "iat": 1712342078,
     "auth_time": 1712342078,
-    "azp": "your_client_id",
-    "sid": "user-uuid"
+    "azp": "your_client_id"
   }
   ```
 
-  The `sub` is the Ave **identity UUID**. The `sid` is the permanent **user UUID** (stable across all identities for the same user).
+  The `sub` is the Ave **identity UUID**. The permanent user UUID is shared only when the separate `user_id` scope is granted.
 
   **You almost always want this.** Without `openid`, you cannot use Convex auth, validate identity server-side, or get an `id_token`.
 </ParamField>
@@ -156,11 +155,15 @@ Requested dynamically at sign-in — not configured in the developer portal. Req
 
 | Scope | id_token claims added | access_token_jwt claims added | token response fields |
 |---|---|---|---|
-| `openid` | `iss`, `sub`, `aud`, `exp`, `iat`, `auth_time`, `azp`, `sid` | `iss`, `sub`, `aud`, `exp`, `iat`, `scope`, `cid`, `sid` | (enables `id_token`) |
-| `profile` | `name`, `preferred_username`, `picture` | — | — |
-| `email` | `email` | — | — |
+| `openid` | `iss`, `sub`, `aud`, `exp`, `iat`, `auth_time`, `azp` | — | enables `id_token` |
+| `profile` | `name`, `preferred_username`, `picture` | — | `user.displayName`, `user.handle`, `user.avatarUrl` |
+| `email` | `email` | — | `user.email` |
 | `offline_access` | — | — | `refresh_token` |
 | `user_id` | — | `uid` | `user_id` |
+
+The access JWT always carries `iss`, `sub`, `aud`, `exp`, `iat`, `jti`, `scope`, and `cid`. Ave checks its stored authorization when accepting it at Ave APIs.
+
+Authorization-code and FedCM responses include `user.id` for the selected identity. Other `user` fields follow the scopes above; account-owner fields such as `isPrimary` are never shared with apps. Refresh responses do not include a `user` object.
 
 ## Organization context claims
 
@@ -199,7 +202,7 @@ See [Connector app-to-app](/guides/connector-app-to-app) for details.
     Begin with `openid profile` (or just `openid` if you do not need display names). Add scopes when a specific feature requires them.
   </Step>
   <Step title="Check what was actually granted">
-    Read the `scope` field in the token response. It contains the actual granted scopes, which may differ from what you requested if some were rejected.
+    Read the `scope` field in the token response. It contains the actual granted scopes. Requests containing disallowed scopes fail with `invalid_scope`.
 
     ```ts
     const grantedScopes = tokens.scope.split(" ");

@@ -1,10 +1,10 @@
-import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
+import { and, desc, eq, gt, inArray, lt } from "drizzle-orm";
+import { Hono } from "hono";
 import { z } from "zod";
-import { db, devices, identities, loginRequests, activityLogs } from "../db";
-import { requireAuth, requireWritableForMutation } from "../middleware/auth";
-import { eq, and, desc, gt, inArray, lt } from "drizzle-orm";
+import { activityLogs, db, devices, identities, loginRequests } from "../db";
 import { recordActivityLog } from "../lib/background-events";
+import { requireAuth, requireWritableForMutation } from "../middleware/auth";
 
 type Bindings = {
   API_APP: DurableObjectNamespace;
@@ -17,10 +17,6 @@ async function notifyLoginRequestStatusInApiApp(
   c: { env: Bindings },
   requestId: string,
   status: "approved" | "denied",
-  data?: {
-    encryptedMasterKey?: string;
-    approverPublicKey?: string;
-  },
 ) {
   const id = c.env.API_APP.idFromName("primary");
   const stub = c.env.API_APP.get(id);
@@ -32,7 +28,7 @@ async function notifyLoginRequestStatusInApiApp(
   const response = await stub.fetch("https://internal.aveid.net/__internal/login-request-status", {
     method: "POST",
     headers,
-    body: JSON.stringify({ requestId, status, data }),
+    body: JSON.stringify({ requestId, status }),
   });
 
   if (!response.ok) {
@@ -72,28 +68,19 @@ app.get("/", async (c) => {
 app.get("/pending-requests", async (c) => {
   const user = c.get("user")!;
   
-  const userIdentities = await db
-    .select()
-    .from(identities)
-    .where(eq(identities.userId, user.id));
-  
-  const handles = userIdentities.map((i) => i.handle);
-  if (handles.length === 0) {
-    return c.json({ requests: [] });
-  }
-  
   const pendingRequests = await db
-    .select()
+    .select({ request: loginRequests })
     .from(loginRequests)
+    .innerJoin(identities, eq(identities.id, loginRequests.identityId))
     .where(and(
       eq(loginRequests.status, "pending"),
       gt(loginRequests.expiresAt, new Date()),
-      inArray(loginRequests.handle, handles),
+      eq(identities.userId, user.id),
     ))
     .orderBy(desc(loginRequests.createdAt));
-  
+
   return c.json({
-    requests: pendingRequests.map((r) => ({
+    requests: pendingRequests.map(({ request: r }) => ({
       id: r.id,
       deviceName: r.deviceName,
       deviceType: r.deviceType,
@@ -118,11 +105,13 @@ app.post("/approve-request", zValidator("json", z.object({
 
   
   // Find the request
-  const [request] = await db
-    .select()
+  const [result] = await db
+    .select({ request: loginRequests })
     .from(loginRequests)
-    .where(eq(loginRequests.id, requestId))
+    .innerJoin(identities, eq(identities.id, loginRequests.identityId))
+    .where(and(eq(loginRequests.id, requestId), eq(identities.userId, user.id)))
     .limit(1);
+  const request = result?.request;
   
   if (!request) {
     return c.json({ error: "Request not found" }, 404);
@@ -134,18 +123,6 @@ app.post("/approve-request", zValidator("json", z.object({
   
   if (new Date() > request.expiresAt) {
     return c.json({ error: "Request expired" }, 400);
-  }
-  
-  // Verify this request is for the current user
-  const { identities } = await import("../db");
-  const userIdentities = await db
-    .select()
-    .from(identities)
-    .where(eq(identities.userId, user.id));
-  
-  const handles = userIdentities.map((i) => i.handle);
-  if (!handles.includes(request.handle)) {
-    return c.json({ error: "Unauthorized" }, 403);
   }
   
   // Update request with encrypted master key
@@ -184,10 +161,7 @@ app.post("/approve-request", zValidator("json", z.object({
     severity: "info",
   });
   
-  await notifyLoginRequestStatusInApiApp(c, requestId, "approved", {
-    encryptedMasterKey,
-    approverPublicKey,
-  });
+  await notifyLoginRequestStatusInApiApp(c, requestId, "approved");
 
   
   return c.json({ success: true });
@@ -201,26 +175,16 @@ app.post("/deny-request", zValidator("json", z.object({
   const { requestId } = c.req.valid("json");
   
   // Find the request
-  const [request] = await db
-    .select()
+  const [result] = await db
+    .select({ request: loginRequests })
     .from(loginRequests)
-    .where(eq(loginRequests.id, requestId))
+    .innerJoin(identities, eq(identities.id, loginRequests.identityId))
+    .where(and(eq(loginRequests.id, requestId), eq(identities.userId, user.id)))
     .limit(1);
+  const request = result?.request;
   
   if (!request) {
     return c.json({ error: "Request not found" }, 404);
-  }
-  
-  // Verify this request is for the current user
-  const { identities } = await import("../db");
-  const userIdentities = await db
-    .select()
-    .from(identities)
-    .where(eq(identities.userId, user.id));
-  
-  const handles = userIdentities.map((i) => i.handle);
-  if (!handles.includes(request.handle)) {
-    return c.json({ error: "Unauthorized" }, 403);
   }
   
   // Update request status

@@ -1,191 +1,84 @@
-/**
- * WebSocket store for real-time communication
- */
+import { resolveApiBase } from "$lib/infrastructure/http/origins";
 
-import { writable, get } from "svelte/store";
-import type { LoginRequest } from "../lib/api";
+function webSocketUrl(): URL {
+  const configured = import.meta.env.VITE_WS_URL?.trim();
+  const url = new URL(configured || `${resolveApiBase()}/ws`);
+  url.protocol = url.protocol === "https:" || url.protocol === "wss:" ? "wss:" : "ws:";
+  return url;
+}
 
-const WS_URL = import.meta.env.VITE_WS_URL || "wss://api.aveid.net/ws";
-
-interface WebSocketState {
-  connected: boolean;
-  pendingLoginRequests: LoginRequest[];
+export function watchLoginRequest(requestId: string, requestToken: string, onStatus: () => void): () => void {
+  const url = webSocketUrl();
+  url.searchParams.set("requestId", requestId);
+  const socket = new WebSocket(url);
+  socket.onopen = () => socket.send(JSON.stringify({ type: "subscribe", requestToken }));
+  socket.onmessage = (event) => {
+    try {
+      const message = JSON.parse(event.data);
+      if (message.type === "login_request_status") onStatus();
+    } catch { }
+  };
+  return () => {
+    socket.onopen = null;
+    socket.onmessage = null;
+    socket.close();
+  };
 }
 
 function createWebSocketStore() {
-  const { subscribe, set, update } = writable<WebSocketState>({
-    connected: false,
-    pendingLoginRequests: [],
-  });
-  
-  let ws: WebSocket | null = null;
-  let reconnectTimeout: number | null = null;
-  let pingInterval: number | null = null;
-  let reconnectConfig: { token?: string; requestId?: string } | null = null;
-  
-  // Event handlers that can be registered
-  const eventHandlers: {
-    loginRequest?: (request: LoginRequest) => void;
-    loginRequestStatus?: (data: { status: string; [key: string]: any }) => void;
-  } = {};
-  
-  function connect(token?: string, requestId?: string, shouldReconnect = false) {
-    if (ws?.readyState === WebSocket.OPEN) {
-      return;
-    }
+  let socket: WebSocket | null = null;
+  let reconnectTimer: ReturnType<typeof setTimeout> | undefined;
+  let pingTimer: ReturnType<typeof setInterval> | undefined;
+  let reconnectDelay = 1000;
+  const loginRequestHandlers = new Set<() => void>();
 
-    reconnectConfig = shouldReconnect ? { token, requestId } : null;
-    
-    const params = new URLSearchParams();
-    if (token) params.set("token", token);
-    if (requestId) params.set("requestId", requestId);
-    
-    const query = params.toString();
-    const url = query ? `${WS_URL}?${query}` : WS_URL;
-    ws = new WebSocket(url);
-    
-    ws.onopen = () => {
-      update((s) => ({ ...s, connected: true }));
-      
-      // Start ping interval
-      pingInterval = window.setInterval(() => {
-        if (ws?.readyState === WebSocket.OPEN) {
-          ws.send(JSON.stringify({ type: "ping" }));
-        }
+  function connectAsUser() {
+    if (socket && (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING)) return;
+    clearTimeout(reconnectTimer);
+    const connection = new WebSocket(webSocketUrl());
+    socket = connection;
+
+    connection.onopen = () => {
+      if (socket !== connection) return;
+      reconnectDelay = 1000;
+      clearInterval(pingTimer);
+      pingTimer = setInterval(() => {
+        if (connection.readyState === WebSocket.OPEN) connection.send(JSON.stringify({ type: "ping" }));
       }, 30000);
     };
-    
-    ws.onclose = () => {
-      update((s) => ({ ...s, connected: false }));
-      
-      if (pingInterval) {
-        clearInterval(pingInterval);
-        pingInterval = null;
-      }
-      
-      if (reconnectConfig && !reconnectTimeout) {
-        const nextConfig = reconnectConfig;
-        reconnectTimeout = window.setTimeout(() => {
-          reconnectTimeout = null;
-          connect(nextConfig.token, nextConfig.requestId, true);
-        }, 5000);
-      }
-    };
-    
-    ws.onerror = () => {
-      // Only log in development, suppress in production
-      if (import.meta.env.DEV) {
-        console.warn("WebSocket connection failed (this is normal if not logged in)");
-      }
-    };
-    
-    ws.onmessage = (event) => {
+    connection.onmessage = (event) => {
+      if (socket !== connection) return;
       try {
-        const data = JSON.parse(event.data);
-        
-        switch (data.type) {
-          case "connected":
-            break;
-          
-          case "pong":
-            // Ping response, ignore
-            break;
-          
-          case "login_request":
-            // New login request from another device
-            update((s) => ({
-              ...s,
-              pendingLoginRequests: [...s.pendingLoginRequests, data.request],
-            }));
-            eventHandlers.loginRequest?.(data.request);
-            break;
-          
-          case "login_request_status":
-            // Login request status update (for the requesting device)
-            eventHandlers.loginRequestStatus?.(data);
-            break;
-          
-          default:
-            break;
+        const message = JSON.parse(event.data);
+        if (message.type === "login_request") {
+          for (const handler of loginRequestHandlers) handler();
         }
-      } catch (error) {
-        console.error("Failed to parse WebSocket message:", error);
-      }
+      } catch { }
+    };
+    connection.onclose = (event) => {
+      if (socket !== connection) return;
+      socket = null;
+      clearInterval(pingTimer);
+      if (event.code === 1008) return;
+      reconnectTimer = setTimeout(connectAsUser, reconnectDelay);
+      reconnectDelay = Math.min(reconnectDelay * 2, 30000);
     };
   }
-  
+
   function disconnect() {
-    if (reconnectTimeout) {
-      clearTimeout(reconnectTimeout);
-      reconnectTimeout = null;
-    }
-    reconnectConfig = null;
-    
-    if (pingInterval) {
-      clearInterval(pingInterval);
-      pingInterval = null;
-    }
-    
-    if (ws) {
-      ws.close();
-      ws = null;
-    }
-    
-    set({ connected: false, pendingLoginRequests: [] });
+    clearTimeout(reconnectTimer);
+    clearInterval(pingTimer);
+    const connection = socket;
+    socket = null;
+    connection?.close();
   }
-  
+
   return {
-    subscribe,
-    
-    /**
-     * Connect as an authenticated user (to receive login requests)
-     */
-    connectAsUser(token?: string) {
-      connect(token, undefined, true);
-    },
-    
-    /**
-     * Connect to subscribe to a login request status
-     */
-    subscribeToLoginRequest(requestId: string) {
-      connect(undefined, requestId, false);
-    },
-    
-    /**
-     * Disconnect
-     */
+    connectAsUser,
     disconnect,
-    
-    /**
-     * Remove a login request from the list
-     */
-    removeLoginRequest(requestId: string) {
-      update((s) => ({
-        ...s,
-        pendingLoginRequests: s.pendingLoginRequests.filter((r) => r.id !== requestId),
-      }));
-    },
-    
-    /**
-     * Register event handler for login requests
-     */
-    onLoginRequest(handler: (request: LoginRequest) => void) {
-      eventHandlers.loginRequest = handler;
-    },
-    
-    /**
-     * Register event handler for login request status updates
-     */
-    onLoginRequestStatus(handler: (data: { status: string; [key: string]: any }) => void) {
-      eventHandlers.loginRequestStatus = handler;
-    },
-    
-    /**
-     * Clear event handlers
-     */
-    clearHandlers() {
-      delete eventHandlers.loginRequest;
-      delete eventHandlers.loginRequestStatus;
+    onLoginRequest(handler: () => void) {
+      loginRequestHandlers.add(handler);
+      return () => { loginRequestHandlers.delete(handler); };
     },
   };
 }

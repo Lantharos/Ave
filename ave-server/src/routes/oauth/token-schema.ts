@@ -30,7 +30,8 @@ export const oauthTokenRequestSchema = z.preprocess(
   ]),
 );
 
-export type OAuthTokenRequest = z.infer<typeof oauthTokenRequestSchema>;
+type OAuthTokenRequest = z.infer<typeof oauthTokenRequestSchema>;
+
 export type AuthorizationCodeRequest = Extract<OAuthTokenRequest, { grantType: "authorization_code" }>;
 export type RefreshTokenRequest = Extract<OAuthTokenRequest, { grantType: "refresh_token" }>;
 export type TokenExchangeRequest = Extract<

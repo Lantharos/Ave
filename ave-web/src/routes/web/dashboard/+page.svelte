@@ -13,7 +13,7 @@
     import { createPendingRequestsQuery, queryKeys } from "$lib/surfaces/web/lib/queries";
     import { queryClient } from "$lib/surfaces/web/lib/query-client";
     import { clearPendingPasskeySetupPrompt, readPendingPasskeySetupPrompt, type PendingPasskeySetupPrompt } from "$lib/surfaces/web/lib/passkey-setup-prompt";
-    import { isPlatformAuthenticatorAvailable } from "$lib/surfaces/web/lib/webauthn";
+    import { isPlatformAuthenticatorAvailable } from "$lib/infrastructure/webauthn/passkeys";
     import { Plus } from "@lucide/svelte";
 
     const loadIdentity = lazyModule(() => import("./sections/Identity.svelte"));
@@ -25,7 +25,6 @@
     const loadConnectors = lazyModule(() => import("./sections/Connectors.svelte"));
 
     let selectedPage = $state<string>("");
-    let pendingApprovals = $state(0);
     let mobileSidebarOpen = $state(false);
     let isLoggingOut = $state(false);
     let passkeySetupPrompt = $state<PendingPasskeySetupPrompt | null>(null);
@@ -33,12 +32,9 @@
     let identities = $derived($identitiesStore);
     let readOnly = $derived($isReadOnly);
     const pendingRequestsQuery = createPendingRequestsQuery();
+    let pendingApprovals = $derived(pendingRequestsQuery.data?.length ?? 0);
 
-    $effect(() => {
-        pendingApprovals = pendingRequestsQuery.data?.length ?? 0;
-    });
-
-    onMount(async () => {
+    onMount(() => {
         if (!$isAuthenticated) {
             goto(resolve("/login" as any));
             return;
@@ -51,11 +47,12 @@
             selectedPage = identities[0].displayName;
         }
 
-        websocket.onLoginRequest(() => {
+        const unsubscribe = websocket.onLoginRequest(() => {
             queryClient.invalidateQueries({ queryKey: queryKeys.pendingRequests });
         });
 
-        await preparePasskeySetupPrompt();
+        void preparePasskeySetupPrompt();
+        return unsubscribe;
     });
 
     async function preparePasskeySetupPrompt() {

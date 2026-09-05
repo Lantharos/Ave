@@ -111,7 +111,7 @@ Validates code, expiry, redirect URI, and either:
 - PKCE verifier (if code challenge present), or
 - client secret
 
-Returns tokens and user profile payload.
+Returns tokens and a scope-filtered `user` payload: `id` is always present, display name/handle/avatar require `profile`, and email requires `email`.
 
 <ResponseField name="access_token" type="string">
 	Opaque bearer token accepted by Ave APIs.
@@ -128,7 +128,7 @@ Returns tokens and user profile payload.
 
 ### Refresh token grant
 
-Validates token hash record, client ownership, and revoked/reuse/expiry state, then rotates refresh token and returns new access+refresh. Reuse detection is scoped to the rotated token lineage that was reused, not unrelated refresh tokens held by the same app on other devices.
+Validates the token hash record, client ownership, active app authorization, and revoked/reuse/expiry state, then rotates the refresh token and returns new access and refresh tokens with the granted `scope`. An `id_token` is included only with `openid`. Reuse detection is scoped to the rotated token lineage that was reused, not unrelated refresh tokens held by the same app on other devices. Disconnecting an app removes its authorization codes, Ave access tokens, refresh tokens, and connector grants for that identity; reconnecting does not restore old tokens.
 
 ### Token exchange grant (Connector)
 
@@ -152,6 +152,8 @@ Returns either:
 
 - a short-lived Ave FedCM assertion token, or
 - a `continue_on` URL when consent or E2EE setup must finish in a dialog
+
+Direct completion requires an existing authorization covering every requested scope. New scopes, including `user_id`, require consent. Older authorizations without recorded consent scopes also require consent. Standard scopes must be in the app’s current allowlist at assertion and exchange time.
 
 ### `POST /api/oauth/fedcm/finalize`
 

@@ -1,14 +1,15 @@
 <script lang="ts">
-    import { onMount, onDestroy } from "svelte";
+    import { onMount } from "svelte";
     import Text from "$lib/surfaces/web/components/Text.svelte";
     import Spinner from "$lib/surfaces/web/components/Spinner.svelte";
-    import { api } from "$lib/surfaces/web/lib/api";
+    import { api, ApiError } from "$lib/surfaces/web/lib/api";
     import { decryptMasterKeyFromDevice } from "$lib/surfaces/web/lib/crypto";
     import { auth } from "$lib/surfaces/web/stores/auth";
-    import { websocket } from "$lib/surfaces/web/stores/websocket";
+    import { watchLoginRequest } from "$lib/surfaces/web/stores/websocket";
 
-    let { loginRequestId, ephemeralKeyPair, masterKeyOnly = false, onSuccess, onError, onBack } = $props<{
+    let { loginRequestId, loginRequestToken, ephemeralKeyPair, masterKeyOnly = false, onSuccess, onError, onBack } = $props<{
         loginRequestId: string | null;
+        loginRequestToken: string | null;
         ephemeralKeyPair: { publicKey: string; privateKey: CryptoKey } | null;
         masterKeyOnly?: boolean;
         onSuccess?: () => void;
@@ -17,178 +18,72 @@
     }>();
 
     let status = $state<"waiting" | "approved" | "denied" | "expired">("waiting");
-    let pollInterval: number | null = null;
+    let stopWatching = () => {};
 
     onMount(() => {
-        if (!loginRequestId) {
-            onError?.("No login request ID");
+        if (!loginRequestId || !loginRequestToken || !ephemeralKeyPair) {
+            onError?.("No login request available");
             return;
         }
+        const requestId = loginRequestId;
+        const requestToken = loginRequestToken;
+        const privateKey = ephemeralKeyPair.privateKey;
+        let active = true;
+        let checking = false;
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        let unsubscribe = () => {};
 
-        // Start polling for status updates
-        pollInterval = window.setInterval(checkStatus, 2000);
-        
-        // Also connect to WebSocket for real-time updates
-        websocket.subscribeToLoginRequest(loginRequestId);
-        websocket.onLoginRequestStatus(handleStatusUpdate);
-    });
+        stopWatching = () => {
+            active = false;
+            clearTimeout(timer);
+            unsubscribe();
+        };
 
-    onDestroy(() => {
-        if (pollInterval) {
-            clearInterval(pollInterval);
-        }
-        websocket.disconnect();
-        websocket.clearHandlers();
-    });
-
-    async function checkStatus() {
-        if (!loginRequestId) return;
-        
-        try {
-            const result = await api.login.checkRequestStatus(loginRequestId);
-            await handleStatusUpdate(result);
-        } catch (e: any) {
-            console.error("Failed to check status:", e);
-        }
-    }
-
-    async function handleStatusUpdate(data: {
-        status: string;
-        sessionToken?: string;
-        encryptedMasterKey?: string;
-        approverPublicKey?: string;
-        device?: any;
-        identities?: any[];
-    }) {
-        if (data.status === "approved") {
-
-            status = "approved";
-            if (pollInterval) {
-                clearInterval(pollInterval);
-                pollInterval = null;
-            }
-            
-            if (masterKeyOnly) {
-                await completeMasterKeyUnlock(data);
-            } else if (data.sessionToken && data.identities && data.device) {
-                await completeLogin(data);
-            } else {
-                await fetchSessionAndLogin();
-            }
-        } else if (data.status === "denied") {
-            status = "denied";
-            if (pollInterval) {
-                clearInterval(pollInterval);
-                pollInterval = null;
-            }
-            onError?.("Login request was denied");
-        } else if (data.status === "expired") {
-            status = "expired";
-            if (pollInterval) {
-                clearInterval(pollInterval);
-                pollInterval = null;
-            }
-            onError?.("Login request expired");
-        }
-    }
-
-    async function fetchSessionAndLogin() {
-        if (!loginRequestId) return;
-        
-        try {
-            const result = await api.login.checkRequestStatus(loginRequestId);
-            if (result.status === "approved") {
-                if (masterKeyOnly) {
-                    await completeMasterKeyUnlock(result);
-                } else if (result.sessionToken && result.identities && result.device) {
-                    await completeLogin(result);
-                } else {
-                    console.error("Failed to get session data after approval:", result);
-                    onError?.("Failed to complete login after approval");
-                }
-            }
-        } catch (e: any) {
-            console.error("Failed to fetch session:", e);
-            onError?.(masterKeyOnly ? "Failed to receive encryption key" : "Failed to complete login");
-        }
-    }
-
-    async function completeMasterKeyUnlock(data: {
-        encryptedMasterKey?: string;
-        approverPublicKey?: string;
-    }) {
-        let payload = data;
-
-        if ((!payload.encryptedMasterKey || !payload.approverPublicKey) && loginRequestId) {
-            const result = await api.login.checkRequestStatus(loginRequestId);
-            if (result.status === "approved") {
-                payload = result;
-            }
-        }
-
-        if (!payload.encryptedMasterKey || !ephemeralKeyPair || !payload.approverPublicKey) {
-            onError?.("Failed to receive encryption key from your other device");
-            return;
-        }
-
-        try {
-            const masterKey = await decryptMasterKeyFromDevice(
-                payload.encryptedMasterKey,
-                payload.approverPublicKey,
-                ephemeralKeyPair.privateKey,
-            );
-            await auth.setMasterKey(masterKey);
-            await new Promise((resolve) => setTimeout(resolve, 100));
-            onSuccess?.();
-        } catch (e) {
-            console.error("Failed to decrypt master key:", e);
-            onError?.("Failed to decrypt encryption key");
-        }
-    }
-
-    async function completeLogin(data: {
-        sessionToken?: string;
-        encryptedMasterKey?: string;
-        approverPublicKey?: string;
-        device?: any;
-        identities?: any[];
-    }) {
-        if (!data.sessionToken || !data.identities || !data.device) return;
-        
-        // Try to decrypt the master key
-        let masterKey = undefined;
-        
-        if (data.encryptedMasterKey && ephemeralKeyPair && data.approverPublicKey) {
+        async function checkStatus() {
+            if (!active || checking) return;
+            checking = true;
+            clearTimeout(timer);
             try {
-                masterKey = await decryptMasterKeyFromDevice(
-                    data.encryptedMasterKey,
-                    data.approverPublicKey,
-                    ephemeralKeyPair.privateKey
+                const result = await api.login.checkRequestStatus(requestId, requestToken);
+                if (!active) return;
+                if (result.status === "pending") return;
+                stopWatching();
+                status = result.status;
+                if (result.status !== "approved") {
+                    onError?.(result.status === "denied" ? "Login request was denied" : "Login request expired");
+                    return;
+                }
+                const masterKey = await decryptMasterKeyFromDevice(
+                    result.encryptedMasterKey, result.approverPublicKey, privateKey,
                 );
-            } catch (e) {
-                console.error("Failed to decrypt master key:", e);
+                await auth.login(result, masterKey, {
+                    offerPasskeySetup: !masterKeyOnly && Boolean(result.device.isNew),
+                    preserveCurrentIdentity: masterKeyOnly,
+                });
+                onSuccess?.();
+            } catch (error) {
+                if (!active && status !== "approved") return;
+                if (error instanceof ApiError && (error.status === 404 || error.status === 410)) {
+                    stopWatching();
+                    status = "expired";
+                    onError?.("Login request expired");
+                } else if (status === "approved") {
+                    status = "expired";
+                    onError?.("Could not restore the encryption key. Please try again.");
+                }
+            } finally {
+                checking = false;
+                if (active) timer = setTimeout(checkStatus, 2000);
             }
         }
-        
-        await auth.login(
-            data.sessionToken,
-            data.identities,
-            data.device,
-            masterKey,
-            { offerPasskeySetup: Boolean(data.device?.isNew && masterKey) }
-        );
 
-        // Small delay to let auth state propagate before redirect
-        await new Promise(resolve => setTimeout(resolve, 100));
-        
-        onSuccess?.();
-    }
+        unsubscribe = watchLoginRequest(requestId, requestToken, () => void checkStatus());
+        void checkStatus();
+        return () => stopWatching();
+    });
 
     function handleCancel() {
-        if (pollInterval) {
-            clearInterval(pollInterval);
-            pollInterval = null;
-        }
+        stopWatching();
         onBack?.();
     }
 </script>

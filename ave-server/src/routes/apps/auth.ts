@@ -1,10 +1,11 @@
 import type { MiddlewareHandler } from "hono";
+import { getAccessToken } from "../../lib/oauth-store";
 import { getResourceAudience, verifyJwt } from "../../lib/oidc";
+import type { AuthUser } from "../../middleware/auth";
 
 declare module "hono" {
   interface ContextVariableMap {
-    devUserId: string;
-    devAuthMethod?: string | null;
+    devUser: AuthUser;
   }
 }
 
@@ -22,9 +23,18 @@ export const requireDevUser: MiddlewareHandler = async (c, next) => {
         const tokenClientId = typeof payload.cid === "string" ? payload.cid : "";
         const tokenScopes = typeof payload.scope === "string" ? payload.scope.split(/\s+/).filter(Boolean) : [];
         if (devPortalClientId && tokenClientId === devPortalClientId && userId && tokenScopes.includes("user_id") && payload.quick !== true) {
-          c.set("devUserId", userId);
-          c.set("devAuthMethod", null);
-          return next();
+          const access = typeof payload.jti === "string" ? await getAccessToken(payload.jti) : null;
+          if (access?.userId === userId && access.identityId === payload.sub) {
+            c.set("devUser", {
+              id: userId,
+              deviceId: null,
+              isReadOnly: false,
+              authMethod: typeof payload.auth_method === "string" ? payload.auth_method : null,
+              enterpriseSsoOrganizationId: typeof payload.org_id === "string" ? payload.org_id : null,
+              enterpriseSsoConnectionId: typeof payload.sso_connection_id === "string" ? payload.sso_connection_id : null,
+            });
+            return next();
+          }
         }
       }
     } catch {}
@@ -32,8 +42,7 @@ export const requireDevUser: MiddlewareHandler = async (c, next) => {
 
   const sessionUser = c.get("user");
   if (sessionUser?.id) {
-    c.set("devUserId", sessionUser.id);
-    c.set("devAuthMethod", sessionUser.authMethod || null);
+    c.set("devUser", sessionUser);
     return next();
   }
 
@@ -42,7 +51,7 @@ export const requireDevUser: MiddlewareHandler = async (c, next) => {
 
 export const requireWritableDevUser: MiddlewareHandler = async (c, next) => {
   const sessionUser = c.get("user");
-  if (sessionUser?.isReadOnly) {
+  if (sessionUser?.isReadOnly || c.get("devUser").isReadOnly) {
     return c.json({ error: "Demo account is read-only" }, 403);
   }
 

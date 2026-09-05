@@ -123,7 +123,7 @@
   async function init() {
     loading = true;
     authenticated = true;
-    await loadPortal();
+    await loadPortal(new URL(window.location.href).searchParams.get("organizationId") || undefined);
 
     loading = false;
   }
@@ -558,7 +558,7 @@
     const organizationId = workspace.id;
 
     try {
-      await inviteMemberMutation.mutateAsync({ organizationId, email, role });
+      await inviteMemberMutation.mutateAsync({ organizationId, actingIdentityId: workspace.actingIdentityId, email, role });
       const refreshedWorkspace = await queryClient.fetchQuery({
         queryKey: queryKeys.workspace(organizationId),
         queryFn: () => fetchOrganization(organizationId),
@@ -579,7 +579,7 @@
     const organizationId = workspace.id;
 
     try {
-      await updateMemberRoleMutation.mutateAsync({ organizationId, memberId, role });
+      await updateMemberRoleMutation.mutateAsync({ organizationId, actingIdentityId: workspace.actingIdentityId, memberId, role });
       workspace = await queryClient.fetchQuery({
         queryKey: queryKeys.workspace(organizationId),
         queryFn: () => fetchOrganization(organizationId),
@@ -595,6 +595,7 @@
     try {
       const updated = await updateOrganizationMutation.mutateAsync({
         organizationId: workspace.id,
+        actingIdentityId: workspace.actingIdentityId,
         data: { name },
       });
       workspace = {
@@ -609,30 +610,6 @@
       );
     } catch (err) {
       error = err instanceof Error ? err.message : "Failed to update workspace";
-    }
-  }
-
-  async function handleDomainAdd(domain: string) {
-    if (!workspace) return;
-
-    try {
-      const verifiedDomains = [...workspace.verifiedDomains, domain];
-      const updated = await updateOrganizationMutation.mutateAsync({
-        organizationId: workspace.id,
-        data: { verifiedDomains },
-      });
-      workspace = {
-        ...workspace,
-        logoUrl: updated.logoUrl,
-        verifiedDomains: updated.verifiedDomains,
-      };
-      organizations = organizations.map((organization) =>
-        organization.id === workspace?.id
-          ? { ...organization, verifiedDomains: updated.verifiedDomains, logoUrl: updated.logoUrl }
-          : organization,
-      );
-    } catch (err) {
-      error = err instanceof Error ? err.message : "Failed to add domain";
     }
   }
 

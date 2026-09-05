@@ -85,6 +85,125 @@
       "when": 1775000000000,
       "tag": "0011_identity_encryption_wrap_modes",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "6",
+      "when": 1775732194000,
+      "tag": "0012_identity_email_verification",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "6",
+      "when": 1775830013000,
+      "tag": "0013_remove_shared_secret_model",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "6",
+      "when": 1777375625000,
+      "tag": "0014_oauth_app_development_mode",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "6",
+      "when": 1778846601000,
+      "tag": "0015_ave_for_businesses",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "6",
+      "when": 1778846601001,
+      "tag": "0016_identity_encryption_keys",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "6",
+      "when": 1778846601002,
+      "tag": "0017_enterprise_sso_session_context",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "6",
+      "when": 1778846601003,
+      "tag": "0018_business_encryption_modes",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "6",
+      "when": 1778904037000,
+      "tag": "0019_api_performance_storage",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "6",
+      "when": 1779550537000,
+      "tag": "0020_merge_developer_and_business_organizations",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "6",
+      "when": 1782424881000,
+      "tag": "0021_app_encryption_keypairs",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "6",
+      "when": 1782509238000,
+      "tag": "0022_drop_allow_user_id_scope",
+      "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "6",
+      "when": 1785266782000,
+      "tag": "0023_activity_query_indexes",
+      "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "6",
+      "when": 1786426517000,
+      "tag": "0024_unique_oauth_authorizations",
+      "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "6",
+      "when": 1786426517001,
+      "tag": "0025_refresh_token_families",
+      "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "6",
+      "when": 1788617472355,
+      "tag": "0026_login_request_proof",
+      "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "6",
+      "when": 1788617472358,
+      "tag": "0027_oauth_grant_capabilities",
+      "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "6",
+      "when": 1788617472362,
+      "tag": "0028_login_request_identity",
+      "breakpoints": true
     }
   ]
 }

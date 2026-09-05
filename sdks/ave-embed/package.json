@@ -19,8 +19,7 @@
     "access": "public"
   },
   "scripts": {
-    "build": "mkdir -p dist && cp src/embed.js dist/embed.js && cp src/embed.d.ts dist/embed.d.ts",
-    "build:windows": "mkdir dist && copy src\\embed.js dist\\embed.js && copy src\\embed.d.ts dist\\embed.d.ts"
+    "build": "bun run build.ts"
   },
   "repository": {
     "type": "git",

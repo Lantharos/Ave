@@ -1,32 +1,38 @@
-import { resolve } from "$app/paths";
+let navigationRevision = 0;
+let pendingDestination: string | null = null;
 
-function resolveInternalPath(path: string) {
-  return path.startsWith("/") && !path.startsWith("//") ? resolve(path as any) : path;
-}
+export function safeGoto(gotoFn: (path: string) => void | Promise<void>, path: string) {
+  if (!path || path !== path.trim() || /[\\\u0000-\u001f\u007f]/.test(path)) return;
 
-export function safeGoto(gotoFn: (path: string) => void, path: string) {
-  const now = Date.now();
-  const last = safeGoto.lastNavAt ?? 0;
-  if (now - last < 500) return;
-  safeGoto.lastNavAt = now;
-
+  let target: URL;
   try {
-    const target = new URL(path, window.location.href);
-    if (target.origin !== window.location.origin) {
-      window.location.assign(target.toString());
-      return;
-    }
+    target = new URL(path, window.location.href);
   } catch {
+    return;
+  }
+  if (!/^https?:$/.test(target.protocol) || target.username || target.password) return;
+
+  if (target.origin !== window.location.origin || target.pathname.startsWith("//")) {
+    navigationRevision++;
+    pendingDestination = null;
+    window.location.assign(target.href);
+    return;
   }
 
+  const destination = `${target.pathname}${target.search}${target.hash}`;
+  if (pendingDestination === destination) return;
+  const revision = ++navigationRevision;
+  pendingDestination = destination;
+  const recover = () => {
+    if (revision !== navigationRevision) return;
+    pendingDestination = null;
+    window.location.assign(destination);
+  };
   try {
-    gotoFn(resolveInternalPath(path));
+    Promise.resolve(gotoFn(destination)).then(() => {
+      if (revision === navigationRevision) pendingDestination = null;
+    }, recover);
   } catch {
-    try {
-      window.location.assign(path);
-    } catch {
-    }
+    recover();
   }
 }
-
-safeGoto.lastNavAt = 0 as number;

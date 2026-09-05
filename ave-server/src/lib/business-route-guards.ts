@@ -1,6 +1,7 @@
 import type { Context } from "hono";
 import {
   buildAuditPayload,
+  hasBusinessScope,
   requireBusinessAccess,
   shouldRequireEnterpriseSsoForBusinessAccess,
   verifySignedBusinessAction,
@@ -42,4 +43,15 @@ export async function rejectWithoutRequiredSso(
     loginUrl: policy?.loginUrl,
     organization: { id: access.organization.id, name: access.organization.name },
   }, 403);
+}
+
+export async function rejectSsoTestAccess(c: Context, organizationId: string) {
+  const user = c.get("user");
+  if (!user) return c.text("Sign in to Ave before testing SSO", 401);
+  if (user.isReadOnly) return c.text("Demo account is read-only", 403);
+  const access = await requireBusinessAccess(user.id, organizationId, "admin");
+  if (!access || !hasBusinessScope(access.member, "manage_sso")) return c.text("Organization not found", 404);
+  const ssoError = await rejectWithoutRequiredSso(c, access);
+  if (ssoError) return ssoError;
+  return rejectWithoutSigningAuthority(c, access.member);
 }

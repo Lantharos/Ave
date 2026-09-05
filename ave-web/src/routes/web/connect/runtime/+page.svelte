@@ -16,8 +16,7 @@
   let trustedParentOrigin: string | null = null;
 
   function post(type: string, payload?: unknown) {
-    const target = trustedParentOrigin ?? "*";
-    window.parent?.postMessage({ type, payload }, target);
+    if (trustedParentOrigin) window.parent.postMessage({ type, payload }, trustedParentOrigin);
   }
 
   async function handleRequest(payload: RequestPayload) {
@@ -104,10 +103,14 @@
   }
 
   function handleMessage(event: MessageEvent) {
-    const data = event.data || {};
+    if (window.parent === window || event.source !== window.parent || event.origin === "null") return;
+    if (trustedParentOrigin && event.origin !== trustedParentOrigin) return;
+    const data = event.data;
+    if (!data || typeof data !== "object") return;
     if (data.type === "ave:connector:init") {
+      const payload = data.payload as InitPayload | undefined;
+      if (!payload || typeof payload.delegatedToken !== "string" || !payload.delegatedToken) return;
       trustedParentOrigin = event.origin;
-      const payload = (data.payload || {}) as InitPayload;
       delegatedToken = payload.delegatedToken;
       initialized = true;
       status = "Connector runtime ready";
@@ -115,9 +118,7 @@
       return;
     }
 
-    if (trustedParentOrigin && event.origin !== trustedParentOrigin) {
-      return;
-    }
+    if (!initialized) return;
 
     if (data.type === "ave:connector:request") {
       handleRequest(data.payload as RequestPayload).catch((error) => {
@@ -126,11 +127,9 @@
     }
   }
 
-  $effect(() => {
-    window.addEventListener("message", handleMessage);
-    return () => window.removeEventListener("message", handleMessage);
-  });
 </script>
+
+<svelte:window onmessage={handleMessage} />
 
 <div class="h-full min-h-screen-fixed w-full bg-[#090909] text-[#B9BBBE] grid place-items-center p-6">
   <div class="text-center max-w-xl">

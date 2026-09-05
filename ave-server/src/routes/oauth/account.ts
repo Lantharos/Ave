@@ -14,11 +14,10 @@ import {
   organizations,
 } from "../../db";
 import { recordActivityLog, recordAppAnalyticsEvent, recordOAuthDelegationAuditLog } from "../../lib/background-events";
-import { serializeEncryptionPolicy } from "../../lib/business-encryption";
 import { createBusinessOrganization } from "../../lib/business";
-import { listIdentitiesForOwner } from "../../lib/identity-serialization";
-import { getIssuer, getResourceAudience, verifyJwt } from "../../lib/oidc";
-import { getAccessToken } from "../../lib/oauth-store";
+import { serializeEncryptionPolicy } from "../../lib/business-encryption";
+import { identityClaimsForApp, listIdentitiesForOwner } from "../../lib/identity-serialization";
+import { getIssuer } from "../../lib/oidc";
 import { enforceNativeRateLimits, enforceRateLimits, getClientIp, ipRateLimit, subjectRateLimit } from "../../lib/rate-limit";
 import { requireAuth, requireWritable } from "../../middleware/auth";
 import {
@@ -77,19 +76,7 @@ app.get("/userinfo", async (c) => {
     return c.json({ error: "invalid_token" }, 401);
   }
 
-  const response: Record<string, unknown> = {
-    sub: identity.id,
-  };
-
-  if (hasScope(record.scope, "profile")) {
-    response.name = identity.displayName;
-    response.preferred_username = identity.handle;
-    response.picture = identity.avatarUrl;
-  }
-
-  if (hasScope(record.scope, "email")) {
-    response.email = identity.email;
-  }
+  const response: Record<string, unknown> = identityClaimsForApp(identity, record.scope);
 
   if (hasScope(record.scope, "user_id") && record.userId) {
     response.user_id = record.userId;
@@ -268,14 +255,7 @@ app.post("/session/check", async (c) => {
   ]);
   if (rateLimitResponse) return rateLimitResponse;
 
-  if (token.split(".").length === 3) {
-    const jwtPayload = await verifyJwt(token, getResourceAudience());
-    return jwtPayload
-      ? c.json({ status: "active" })
-      : c.json({ error: "invalid_token", reason: "invalid_token" }, 401);
-  }
-
-  const record = await getAccessToken(token);
+  const record = await resolveAccessTokenRecord(token);
   return record
     ? c.json({ status: "active" })
     : c.json({ error: "invalid_token", reason: "invalid_token" }, 401);
@@ -354,6 +334,7 @@ app.get("/authorization/:clientId", requireAuth, async (c) => {
   return c.json({
     authorization: {
       id: authorization.id,
+      scope: authorization.scope,
       identityId: authorization.identityId,
       encryptedAppKey: authorization.encryptedAppKey,
       appPublicKey: authorization.appPublicKey,

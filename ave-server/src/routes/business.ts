@@ -1,16 +1,15 @@
-import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
-import { z } from "zod";
 import { and, eq, inArray } from "drizzle-orm";
+import { Hono } from "hono";
+import { z } from "zod";
 import {
   db,
   identities,
   organizationIdentityMembers,
   organizationKeyGrants,
-  organizationSsoConnections,
   organizations,
 } from "../db";
-import { requireAuth, requireWritableForMutation } from "../middleware/auth";
+import { recordBusinessAuditEvent } from "../lib/background-events";
 import {
   businessScopes,
   canManageRole,
@@ -21,16 +20,17 @@ import {
   type BusinessRole,
 } from "../lib/business";
 import {
-  clientIp,
-  getOrganizationBundle,
-  userAgent,
-} from "../lib/business-route-utils";
-import {
   rejectWithoutRequiredSso,
   rejectWithoutSigningAuthority,
   requireSignedAction,
 } from "../lib/business-route-guards";
-import { recordBusinessAuditEvent } from "../lib/background-events";
+import {
+  clientIp,
+  getOrganizationBundle,
+  userAgent,
+} from "../lib/business-route-utils";
+import { getRequiredEnterpriseSsoForOrganization } from "../lib/enterprise-sso-policy";
+import { requireAuth, requireWritableForMutation } from "../middleware/auth";
 import businessKeyRoutes from "./business-keys";
 import businessSsoRoutes from "./business-sso";
 
@@ -182,14 +182,9 @@ app.patch("/organizations/:organizationId", zValidator("json", z.object({
   if (signatureError) return signatureError;
 
   if (body.ssoRequired === true && !access.organization.ssoRequired) {
-    const [activeConnection] = await db.select({ id: organizationSsoConnections.id }).from(organizationSsoConnections)
-      .where(and(
-        eq(organizationSsoConnections.organizationId, organizationId),
-        eq(organizationSsoConnections.status, "active"),
-      ))
-      .limit(1);
+    const activeConnection = await getRequiredEnterpriseSsoForOrganization({ ...access.organization, ssoRequired: true });
     if (!activeConnection) {
-      return c.json({ error: "SSO cannot be required until an SSO connection has passed runtime validation" }, 409);
+      return c.json({ error: "SSO cannot be required until a connection on a DNS-verified domain has passed runtime validation" }, 409);
     }
   }
 

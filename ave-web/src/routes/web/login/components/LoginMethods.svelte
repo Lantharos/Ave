@@ -1,15 +1,14 @@
 <script lang="ts">
+    import type { PublicKeyCredentialRequestOptionsJSON } from "@simplewebauthn/browser";
     import ActionCard from "$lib/surfaces/web/components/ActionCard.svelte";
-    import IdentityCard from "$lib/surfaces/web/components/IdentityCard.svelte";
-    import Text from "$lib/surfaces/web/components/Text.svelte";
-    import { api, type Identity } from "$lib/surfaces/web/lib/api";
+    import { api, type Identity, type LoginSession } from "$lib/surfaces/web/lib/api";
     import { 
         generateEphemeralKeyPair, 
-        hasMasterKey, 
         decryptMasterKeyWithPrf, 
-        storeMasterKey 
     } from "$lib/surfaces/web/lib/crypto";
-    import { authenticateWithPasskey, getDeviceInfo } from "$lib/surfaces/web/lib/webauthn";
+    import { getDeviceInfo } from "$lib/infrastructure/browser/device";
+    import { authenticateWithPasskey } from "$lib/infrastructure/webauthn/passkeys";
+    import { resolveSessionMasterKey } from "$lib/surfaces/web/lib/session-master-key";
     import { auth } from "$lib/surfaces/web/stores/auth";
     import { ChevronRight } from "@lucide/svelte";
 
@@ -25,6 +24,7 @@
         onSuccess,
         onError,
         loginRequestId = $bindable(null),
+        loginRequestToken = $bindable(null),
         ephemeralKeyPair = $bindable(null),
         pendingPasskeyLogin = $bindable(null),
     } = $props<{
@@ -32,21 +32,20 @@
         hasDevices: boolean;
         hasPasskeys: boolean;
         demoPasswordEnabled?: boolean;
-        authOptions: PublicKeyCredentialRequestOptions | null;
+        authOptions: PublicKeyCredentialRequestOptionsJSON | null;
         authSessionId: string | null;
         handle: string;
         onSelect?: (method: "device" | "trust-code" | "passkey") => void;
         onSuccess?: () => void;
         onError?: (error: string) => void;
         loginRequestId?: string | null;
+        loginRequestToken?: string | null;
         ephemeralKeyPair?: { publicKey: string; privateKey: CryptoKey } | null;
         pendingPasskeyLogin?: { 
-            sessionToken: string; 
             identities: Identity[]; 
-            device: any;
+            device: LoginSession["device"];
             prfSupported?: boolean;
             usedPasskeyId?: string;
-            authOptions?: PublicKeyCredentialRequestOptions;
         } | null;
     }>();
 
@@ -65,14 +64,14 @@
         loadingMethod = "passkey";
         try {
             // Request PRF extension during authentication to potentially decrypt master key
-            const { credential, prfOutput } = await authenticateWithPasskey(authOptions, true);
+            const { credential, prfOutput } = await authenticateWithPasskey(authOptions);
             const deviceInfo = getDeviceInfo();
             
             // PRF is supported if we got prfOutput (even if server doesn't have encrypted key yet)
             const prfSupported = !!prfOutput;
             
             // Extract the passkey ID from the credential response
-            const usedPasskeyId = (credential as any).id as string;
+            const usedPasskeyId = credential.id;
             
             const result = await api.login.passkey({
                 authSessionId,
@@ -80,56 +79,22 @@
                 device: deviceInfo,
             });
 
-            // Check if we have the master key locally
-            if (hasMasterKey()) {
-                // Great, we have the master key - complete login normally
-                await auth.login(
-                    result.sessionToken,
-                    result.identities,
-                    result.device
-                );
-                onSuccess?.();
-            } else if (prfOutput && result.prfEncryptedMasterKey) {
-                // PRF is available and we have the encrypted master key from server
-                // Decrypt and store the master key
+            let recoveredKey: CryptoKey | undefined;
+            if (prfOutput && result.prfEncryptedMasterKey) {
                 try {
-                    const masterKey = await decryptMasterKeyWithPrf(
-                        result.prfEncryptedMasterKey,
-                        prfOutput
-                    );
-                    await storeMasterKey(masterKey);
-                    
-                    await auth.login(
-                        result.sessionToken,
-                        result.identities,
-                        result.device,
-                        masterKey
-                    );
-                    onSuccess?.();
-                } catch (prfError) {
-                    console.error("[Login] PRF decryption failed:", prfError);
-                    // PRF decryption failed, fall back to trust codes
-                    // Include PRF info so we can set it up after trust code recovery
-                    pendingPasskeyLogin = {
-                        sessionToken: result.sessionToken,
-                        identities: result.identities,
-                        device: result.device,
-                        prfSupported,
-                        usedPasskeyId,
-                        authOptions,
-                    };
-                    onSelect?.("trust-code");
-                }
+                    recoveredKey = await decryptMasterKeyWithPrf(result.prfEncryptedMasterKey, prfOutput);
+                } catch {}
+            }
+            const masterKey = await resolveSessionMasterKey(result.identities, recoveredKey);
+            if (masterKey) {
+                await auth.login(result, masterKey);
+                onSuccess?.();
             } else {
-                // No master key and no PRF encrypted key on server - need to recover via trust code
-                // Include PRF info so we can set it up after trust code recovery
                 pendingPasskeyLogin = {
-                    sessionToken: result.sessionToken,
                     identities: result.identities,
                     device: result.device,
                     prfSupported,
                     usedPasskeyId,
-                    authOptions,
                 };
                 onSelect?.("trust-code");
             }
@@ -157,6 +122,7 @@
             });
 
             loginRequestId = result.requestId;
+            loginRequestToken = result.requestToken;
             onSelect?.("device");
         } catch (e: any) {
             onError?.(e.message || "Failed to request device approval");
@@ -186,9 +152,7 @@
             });
 
             await auth.login(
-                result.sessionToken,
-                result.identities,
-                result.device,
+                        result,
                 undefined,
                 { isReadOnly: result.readOnly },
             );

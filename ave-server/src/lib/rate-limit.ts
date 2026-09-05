@@ -21,7 +21,7 @@ export type NativeRateLimitRule = {
   fallback: RateLimitRule;
 };
 
-export type NativeRateLimitBinding = {
+type NativeRateLimitBinding = {
   limit(options: { key: string }): Promise<{ success: boolean }>;
 };
 

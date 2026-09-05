@@ -20,10 +20,17 @@ export type AveTokenResponse = {
   expires_in: number;
   scope: string;
   user_id?: string;
+  app_key?: string;
+  app_key_old?: string;
+  app_public_key?: string;
+  app_public_key_old?: string;
+  app_private_key?: string;
+  app_private_key_old?: string;
+  app_key_reset?: boolean;
   user?: {
     id: string;
-    handle: string;
-    displayName: string;
+    handle?: string;
+    displayName?: string;
     email?: string;
     avatarUrl?: string;
   } | null;
@@ -44,11 +51,14 @@ export type MountAveEmbedOptions = {
   scope?: string;
   issuer?: string;
   theme?: AveTheme;
-  width?: string;
+  codeChallenge?: string;
+  codeChallengeMethod?: string;
+  extraParams?: Record<string, string>;
+  width?: number | string;
   height?: number | string;
   /** Receive tokens directly — PKCE is handled automatically. Use instead of onSuccess. */
   onTokens?: (tokens: AveTokenResponse) => void;
-  /** Legacy: receives { redirectUrl } — exchange the code manually. Use onTokens for the simpler path. */
+  /** Receives the callback URL for an application-managed code exchange. */
   onSuccess?: (payload: AveAuthSuccessPayload) => void;
   onError?: (payload: AveAuthErrorPayload) => void;
   onClose?: () => void;
@@ -73,7 +83,7 @@ export type OpenAveSheetOptions = {
   extraParams?: Record<string, string>;
   /** Receive tokens directly — PKCE is handled automatically. Use instead of onSuccess. */
   onTokens?: (tokens: AveTokenResponse) => void;
-  /** Legacy: receives { redirectUrl } — exchange the code manually. Use onTokens for the simpler path. */
+  /** Receives the callback URL for an application-managed code exchange. */
   onSuccess?: (payload: AveAuthSuccessPayload) => void;
   onError?: (payload: AveAuthErrorPayload) => void;
   onClose?: () => void;
@@ -94,11 +104,12 @@ export type OpenAvePopupOptions = {
   codeChallenge?: string;
   /** Only used when onTokens is not provided. */
   codeChallengeMethod?: string;
+  extraParams?: Record<string, string>;
   width?: number;
   height?: number;
   /** Receive tokens directly — PKCE is handled automatically. Use instead of onSuccess. */
   onTokens?: (tokens: AveTokenResponse) => void;
-  /** Legacy: receives { redirectUrl } — exchange the code manually. Use onTokens for the simpler path. */
+  /** Receives the callback URL for an application-managed code exchange. */
   onSuccess?: (payload: AveAuthSuccessPayload) => void;
   onError?: (payload: AveAuthErrorPayload) => void;
   onClose?: () => void;
@@ -153,7 +164,7 @@ export type OpenAveConnectorRuntimeOptions = {
   targetOrigin?: string;
   delegatedToken: string;
   mode?: "user_present" | "background";
-  width?: string;
+  width?: number | string;
   height?: number | string;
   container?: HTMLElement;
   onReady?: () => void;
@@ -200,7 +211,7 @@ export type OpenIrisDelegatedRuntimeOptions = {
   targetOrigin?: string;
   delegatedToken: string;
   mode?: "user_present" | "background";
-  width?: string;
+  width?: number | string;
   height?: number | string;
   container?: HTMLElement;
   onReady?: () => void;

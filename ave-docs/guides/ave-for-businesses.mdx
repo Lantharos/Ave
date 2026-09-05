@@ -49,6 +49,12 @@ Business administration actions require an Ave identity signature from the actin
 
 The server verifies the signature against the canonical audit payload before applying the mutation. Audit events store the payload, verified signature, public key, and signature status.
 
+The developer portal uses the same organization permissions. Member invitations and role changes require `manage_identities`, signing authority, and a signature from the acting identity. Administrators can manage members below their own role; they cannot restore their own permissions or change another administrator. Workspace name and logo changes require `manage_org` and signing authority, and profile updates are signed. App administration requires an administrator or owner with signing authority.
+
+When SSO is required, opening organization member and app data or administering the organization in either console requires that organization's SSO session. An owner with signing authority retains recovery access.
+
+Deleting an Ave account also deletes organizations it owns and their apps. Apps in another owner's organization remain with that organization when the account of their original creator is deleted.
+
 ## Encrypted org keys
 
 Business organizations have an explicit encryption mode:
@@ -65,7 +71,9 @@ Identity encryption keys are separate from Ed25519 signing keys. Signing proves 
 
 Enterprise SSO does not grant encrypted key access by itself. SSO can authenticate a company user, but encrypted data access still requires Ave identity key grants.
 
-When an enterprise SSO login succeeds for a verified organization domain, Ave links the login to an existing verified Ave identity by email or creates a limited SSO identity for that email. Newly provisioned SSO identities can access normal organization context, but they do not receive encrypted org keys until an Ave identity encryption key exists and a grant is issued.
+When an enterprise SSO login succeeds, the provider email must belong to the connection's exact DNS-verified organization domain. Ave then links an existing Ave identity with that email or creates a limited SSO identity. Newly provisioned SSO identities can access normal organization context, but they do not receive encrypted org keys until an Ave identity encryption key exists and a grant is issued.
+
+SSO does not reactivate suspended or removed organization memberships. An authorized administrator must restore membership before that identity can sign in to the organization again.
 
 Removing an identity from an organization revokes its active org-key grants. For hard revocation, rotate the org key: Ave creates a new key epoch and rewraps access only for the remaining active identities. Data already decrypted on a device cannot be erased retroactively.
 
@@ -77,6 +85,8 @@ Business organizations can save SAML/OIDC connection configuration and generate 
 _ave-challenge.example.com TXT ave-domain-verification=...
 ```
 
-OIDC and SAML connections can be tested from the business console. A successful callback activates the connection, and only active connections can satisfy SSO enforcement.
+Every OIDC or SAML connection requires a domain verified through this DNS challenge. Listing a domain in workspace profile data does not verify it. Ave checks the domain verification record when configuring a connection, starting SSO, testing it, and completing sign-in.
+
+OIDC and SAML connections can be tested from the business console by an administrator with `manage_sso` and signing authority. A successful callback for the verified domain activates the connection. Only active connections with a current domain verification can satisfy SSO enforcement.
 
 SAML assertion login validates the posted response signature against the stored IdP certificate, then checks issuer, audience, recipient, expiration, and email domain before creating an enterprise SSO session. The SSO endpoints do not claim E2EE support, and apps should not treat SSO as an encrypted key delivery path.

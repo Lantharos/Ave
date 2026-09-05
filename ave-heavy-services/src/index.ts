@@ -1,11 +1,11 @@
-import { DOMParser, type Element as XmlElement, type Node as XmlNode } from "@xmldom/xmldom";
 import {
   generateAuthenticationOptions,
   generateRegistrationOptions,
   verifyAuthenticationResponse,
   verifyRegistrationResponse,
-  type AuthenticatorTransportFuture,
+  type AuthenticatorTransport,
 } from "@simplewebauthn/server";
+import { DOMParser, type Element as XmlElement, type Node as XmlNode } from "@xmldom/xmldom";
 import webpush from "web-push";
 import { SignedXml } from "xml-crypto";
 
@@ -42,7 +42,7 @@ type PushPayload = Record<string, unknown>;
 
 type CredentialDescriptor = {
   id: string;
-  transports?: AuthenticatorTransportFuture[];
+  transports?: AuthenticatorTransport[];
 };
 
 type RegistrationOptionsInput = {
@@ -75,7 +75,7 @@ type AuthenticationVerificationInput = {
     id: string;
     publicKeyBase64: string;
     counter: number;
-    transports?: AuthenticatorTransportFuture[];
+    transports?: AuthenticatorTransport[];
   };
 };
 

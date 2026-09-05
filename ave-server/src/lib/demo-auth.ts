@@ -2,11 +2,11 @@ import { timingSafeEqual } from "node:crypto";
 
 const DEFAULT_DEMO_HANDLE = "demo";
 
-export function getDemoHandle(): string {
+function getDemoHandle(): string {
   return (process.env.DEMO_HANDLE || DEFAULT_DEMO_HANDLE).trim().toLowerCase();
 }
 
-export function getDemoPassword(): string | null {
+function getDemoPassword(): string | null {
   const password = process.env.DEMO_PASSWORD?.trim();
   return password ? password : null;
 }

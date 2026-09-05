@@ -1,55 +1,50 @@
 const STORAGE_KEY = "ave:return_url";
-const allowedAbsoluteReturnHosts = new Set(["aveid.net", "business.aveid.net", "devs.aveid.net"]);
+const allowedReturnOrigins = new Set([
+  "https://aveid.net",
+  "https://business.aveid.net",
+  "https://devs.aveid.net",
+]);
 
 function isLocalHostname(hostname: string) {
-  return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1" || hostname === "[::1]";
+  return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "[::1]";
 }
 
-function isLocalLoginHost() {
-  if (typeof window === "undefined") return false;
-  return isLocalHostname(window.location.hostname);
-}
+function normalizeReturnUrl(value: string | null): string | null {
+  if (!value || value !== value.trim() || /[\\\u0000-\u001f\u007f]/.test(value)) return null;
 
-function isValidAbsoluteReturnUrl(value: string) {
   try {
-    const url = new URL(value);
-    if (url.username || url.password) return false;
-    if (url.pathname.startsWith("/login")) return false;
-    if (url.protocol === "https:" && allowedAbsoluteReturnHosts.has(url.hostname)) return true;
-    if (isLocalLoginHost() && url.protocol === "http:" && isLocalHostname(url.hostname)) return true;
-  } catch {
-  }
+    const origin = typeof window === "undefined" ? "https://aveid.net" : window.location.origin;
+    const relative = value.startsWith("/") && !value.startsWith("//");
+    const url = relative ? new URL(value, origin) : new URL(value);
+    if (url.username || url.password || /^\/(?:web\/)?login(?:\/|$)/.test(url.pathname)) return null;
 
-  return false;
-}
+    if (relative) {
+      return url.origin === origin && !url.pathname.startsWith("//") ? `${url.pathname}${url.search}${url.hash}` : null;
+    }
 
-function isValidReturnUrl(value: string | null): value is string {
-  if (!value) return false;
-  if (value.startsWith("/") && !value.startsWith("//")) {
-    return !value.startsWith("/login");
-  }
+    if (allowedReturnOrigins.has(url.origin)) return url.href;
+    if (
+      typeof window !== "undefined" &&
+      isLocalHostname(window.location.hostname) &&
+      url.protocol === "http:" &&
+      isLocalHostname(url.hostname)
+    ) return url.href;
+  } catch {}
 
-  return isValidAbsoluteReturnUrl(value);
+  return null;
 }
 
 function getQueryReturnUrl() {
   if (typeof window === "undefined") return null;
-
-  try {
-    const value = new URL(window.location.href).searchParams.get("return_to");
-    return isValidReturnUrl(value) ? value : null;
-  } catch {
-    return null;
-  }
+  return normalizeReturnUrl(new URL(window.location.href).searchParams.get("return_to"));
 }
 
 export function setReturnUrl(pathWithSearch: string) {
-  if (!isValidReturnUrl(pathWithSearch)) return;
+  const url = normalizeReturnUrl(pathWithSearch);
+  if (!url) return;
   try {
-    sessionStorage.setItem(STORAGE_KEY, pathWithSearch);
-  } catch {
-    // Ignore storage errors
-  }
+    sessionStorage.setItem(STORAGE_KEY, url);
+  } catch {}
 }
 
 export function getReturnUrl(): string | null {
@@ -57,8 +52,7 @@ export function getReturnUrl(): string | null {
   if (queryReturnUrl) return queryReturnUrl;
 
   try {
-    const value = sessionStorage.getItem(STORAGE_KEY);
-    return isValidReturnUrl(value) ? value : null;
+    return normalizeReturnUrl(sessionStorage.getItem(STORAGE_KEY));
   } catch {
     return null;
   }
@@ -67,7 +61,5 @@ export function getReturnUrl(): string | null {
 export function clearReturnUrl() {
   try {
     sessionStorage.removeItem(STORAGE_KEY);
-  } catch {
-    // Ignore storage errors
-  }
+  } catch {}
 }

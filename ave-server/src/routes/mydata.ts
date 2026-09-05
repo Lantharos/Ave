@@ -1,8 +1,9 @@
+import { and, eq, isNotNull, sql } from "drizzle-orm";
 import { Hono } from "hono";
-import { db, users, identities, passkeys, devices, sessions, trustCodes, activityLogs, oauthAuthorizations } from "../db";
-import { requireAuth, requireWritableForMutation } from "../middleware/auth";
-import { eq } from "drizzle-orm";
+import { activityLogs, db, devices, identities, oauthApps, oauthAuthorizations, organizations, passkeys, sessions, trustCodes, users } from "../db";
 import { recordActivityLog } from "../lib/background-events";
+import { clearSessionCookie } from "../lib/session-cookie";
+import { requireAuth, requireWritableForMutation } from "../middleware/auth";
 
 const app = new Hono();
 
@@ -53,16 +54,12 @@ app.get("/export", async (c) => {
       id: userData.id,
       createdAt: userData.createdAt,
       updatedAt: userData.updatedAt,
-      hasSecurityQuestions: false,
     },
     identities: userIdentities,
     passkeys: userPasskeys,
     devices: userDevices,
     sessions: userSessions,
-    trustCodes: userTrustCodes.map(tc => ({
-      ...tc,
-      // Don't expose actual codes, just metadata
-    })),
+    trustCodes: userTrustCodes,
     activityLog: userActivityLogs,
     authorizedApps: userAuthorizations,
   };
@@ -89,21 +86,16 @@ app.get("/export", async (c) => {
 app.delete("/", async (c) => {
   const user = c.get("user")!;
   
-  // Log the deletion attempt first (will be deleted with user)
-  recordActivityLog(c, {
-    userId: user.id,
-    action: "account_deleted",
-    details: {},
-    deviceId: user.deviceId,
-    ipAddress: c.req.header("x-forwarded-for") || c.req.header("x-real-ip"),
-    userAgent: c.req.header("user-agent"),
-    severity: "danger",
-  });
-  
-  // Delete user - cascade will delete all related data
-  // (identities, passkeys, devices, sessions, trust codes, activity logs, oauth authorizations)
-  await db.delete(users).where(eq(users.id, user.id));
-  
+  await db.batch([
+    db.update(oauthApps)
+      .set({ ownerId: sql`(select ${organizations.ownerUserId} from ${organizations} where ${organizations.id} = ${oauthApps.organizationId})` })
+      .where(and(eq(oauthApps.ownerId, user.id), isNotNull(oauthApps.organizationId))),
+    db.delete(oauthApps).where(eq(oauthApps.ownerId, user.id)),
+    db.delete(users).where(eq(users.id, user.id)),
+  ]);
+  clearSessionCookie(c);
+  c.header("Set-Login", "logged-out");
+
   return c.json({ 
     success: true,
     message: "Your Ave account records have been deleted. Data already copied by connected apps and cached public image copies may remain outside Ave's direct control.",

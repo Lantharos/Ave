@@ -1,4 +1,4 @@
-import { request, upload } from "./transport";
+import { upload } from "./transport";
 
 export const uploadApi = {
     avatar: async (identityId: string, file: File) => {
@@ -16,14 +16,4 @@ export const uploadApi = {
 
       return upload<{ bannerUrl: string }>("/api/upload/banner", formData);
     },
-
-    deleteAvatar: (identityId: string) =>
-      request<{ success: boolean }>(`/api/upload/avatar/${identityId}`, {
-        method: "DELETE",
-      }),
-
-    deleteBanner: (identityId: string) =>
-      request<{ success: boolean }>(`/api/upload/banner/${identityId}`, {
-        method: "DELETE",
-      }),
 };

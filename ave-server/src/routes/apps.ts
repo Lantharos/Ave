@@ -1,7 +1,7 @@
-import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
-import { z } from "zod";
 import { and, eq, inArray, sql } from "drizzle-orm";
+import { Hono } from "hono";
+import { z } from "zod";
 import {
   db,
   oauthApps,
@@ -10,16 +10,16 @@ import {
 } from "../db";
 import { generateRandomId, hashSessionToken } from "../lib/crypto";
 import {
-  PORTAL_APP_SCOPES,
-  stripE2eeScopes,
-  syncSupportsE2eeFlag,
-} from "../lib/e2ee-scopes";
-import {
   ensurePersonalOrganization,
   getAccessibleApp,
   getAccessibleApps,
   requireOrganizationAccess,
 } from "../lib/dev-portal";
+import {
+  PORTAL_APP_SCOPES,
+  stripE2eeScopes,
+  syncSupportsE2eeFlag,
+} from "../lib/e2ee-scopes";
 import {
   activityPaginationQuerySchema,
   decodeActivityCursor,
@@ -100,7 +100,7 @@ function isResourceKeyUniqueViolation(error: unknown): boolean {
   return message.includes("unique") && message.includes("oauth_resources.resource_key");
 }
 
-export async function listAppResources(appIds: string[]) {
+async function listAppResources(appIds: string[]) {
   if (!appIds.length) return [];
   return db
     .select()
@@ -112,9 +112,9 @@ export async function listAppResources(appIds: string[]) {
 app.use("*", requireDevUser);
 
 app.get("/", async (c) => {
-  const userId = c.get("devUserId") as string;
+  const user = c.get("devUser");
   const requestedOrganizationId = c.req.query("organizationId");
-  const apps = await getAccessibleApps(userId, requestedOrganizationId);
+  const apps = await getAccessibleApps(user, requestedOrganizationId);
   const resources = await listAppResources(apps.map((appRow) => appRow.id));
   const authorizationCounts = apps.length
     ? await db
@@ -151,12 +151,12 @@ app.get("/", async (c) => {
 });
 
 app.post("/", requireWritableDevUser, zValidator("json", baseAppSchema), async (c) => {
-  const userId = c.get("devUserId") as string;
+  const user = c.get("devUser");
   const data = c.req.valid("json");
-  const personalOrganization = await ensurePersonalOrganization(userId);
+  const personalOrganization = await ensurePersonalOrganization(user.id);
   const organizationId = data.organizationId || personalOrganization.id;
 
-  const membership = await requireOrganizationAccess(userId, organizationId, "admin");
+  const membership = await requireOrganizationAccess(user, organizationId, "admin");
   if (!membership) {
     return c.json({ error: "Organization not found" }, 404);
   }
@@ -180,7 +180,7 @@ app.post("/", requireWritableDevUser, zValidator("json", baseAppSchema), async (
       refreshTokenTtlSeconds: data.refreshTokenTtlSeconds || 30 * 24 * 60 * 60,
       clientId,
       clientSecretHash,
-      ownerId: userId,
+      ownerId: membership.organization.ownerUserId,
       organizationId,
     })
     .returning();
@@ -192,10 +192,10 @@ app.post("/", requireWritableDevUser, zValidator("json", baseAppSchema), async (
 });
 
 app.get("/:appId/insights", async (c) => {
-  const userId = c.get("devUserId") as string;
+  const user = c.get("devUser");
   const appId = c.req.param("appId");
 
-  const accessible = await getAccessibleApp(userId, appId, "viewer");
+  const accessible = await getAccessibleApp(user, appId, "viewer");
   if (!accessible) {
     return c.json({ error: "App not found" }, 404);
   }
@@ -205,11 +205,11 @@ app.get("/:appId/insights", async (c) => {
 });
 
 app.get("/:appId/identities", zValidator("query", paginationQuerySchema), async (c) => {
-  const userId = c.get("devUserId") as string;
+  const user = c.get("devUser");
   const appId = c.req.param("appId");
   const { limit = 25, offset = 0 } = c.req.valid("query");
 
-  const accessible = await getAccessibleApp(userId, appId, "viewer");
+  const accessible = await getAccessibleApp(user, appId, "viewer");
   if (!accessible) {
     return c.json({ error: "App not found" }, 404);
   }
@@ -217,7 +217,7 @@ app.get("/:appId/identities", zValidator("query", paginationQuerySchema), async 
 });
 
 app.get("/:appId/activity", zValidator("query", activityPaginationQuerySchema), async (c) => {
-  const userId = c.get("devUserId") as string;
+  const user = c.get("devUser");
   const appId = c.req.param("appId");
   const { limit = 25, cursor: encodedCursor } = c.req.valid("query");
   const cursor = decodeActivityCursor(encodedCursor);
@@ -226,7 +226,7 @@ app.get("/:appId/activity", zValidator("query", activityPaginationQuerySchema), 
     return c.json({ error: "Invalid activity cursor" }, 400);
   }
 
-  const accessible = await getAccessibleApp(userId, appId, "viewer");
+  const accessible = await getAccessibleApp(user, appId, "viewer");
   if (!accessible) {
     return c.json({ error: "App not found" }, 404);
   }
@@ -234,10 +234,10 @@ app.get("/:appId/activity", zValidator("query", activityPaginationQuerySchema), 
 });
 
 app.get("/:appId/overview", async (c) => {
-  const userId = c.get("devUserId") as string;
+  const user = c.get("devUser");
   const appId = c.req.param("appId");
 
-  const accessible = await getAccessibleApp(userId, appId, "viewer");
+  const accessible = await getAccessibleApp(user, appId, "viewer");
   if (!accessible) {
     return c.json({ error: "App not found" }, 404);
   }
@@ -252,18 +252,18 @@ app.get("/:appId/overview", async (c) => {
 });
 
 app.patch("/:appId", requireWritableDevUser, zValidator("json", baseAppSchema.partial()), async (c) => {
-  const userId = c.get("devUserId") as string;
+  const user = c.get("devUser");
   const appId = c.req.param("appId");
   const data = c.req.valid("json");
 
-  const accessible = await getAccessibleApp(userId, appId, "admin");
+  const accessible = await getAccessibleApp(user, appId, "admin");
   if (!accessible) {
     return c.json({ error: "App not found" }, 404);
   }
 
   let nextOrganizationId = accessible.app.organizationId;
   if (data.organizationId && data.organizationId !== accessible.app.organizationId) {
-    const destination = await requireOrganizationAccess(userId, data.organizationId, "admin");
+    const destination = await requireOrganizationAccess(user, data.organizationId, "admin");
     if (!destination) {
       return c.json({ error: "Organization not found" }, 404);
     }
@@ -300,10 +300,10 @@ app.patch("/:appId", requireWritableDevUser, zValidator("json", baseAppSchema.pa
 });
 
 app.delete("/:appId", requireWritableDevUser, async (c) => {
-  const userId = c.get("devUserId") as string;
+  const user = c.get("devUser");
   const appId = c.req.param("appId");
 
-  const accessible = await getAccessibleApp(userId, appId, "admin");
+  const accessible = await getAccessibleApp(user, appId, "admin");
   if (!accessible) {
     return c.json({ error: "App not found" }, 404);
   }
@@ -313,10 +313,10 @@ app.delete("/:appId", requireWritableDevUser, async (c) => {
 });
 
 app.post("/:appId/rotate-secret", requireWritableDevUser, async (c) => {
-  const userId = c.get("devUserId") as string;
+  const user = c.get("devUser");
   const appId = c.req.param("appId");
 
-  const accessible = await getAccessibleApp(userId, appId, "admin");
+  const accessible = await getAccessibleApp(user, appId, "admin");
   if (!accessible) {
     return c.json({ error: "App not found" }, 404);
   }
@@ -333,10 +333,10 @@ app.post("/:appId/rotate-secret", requireWritableDevUser, async (c) => {
 });
 
 app.get("/:appId/resources", async (c) => {
-  const userId = c.get("devUserId") as string;
+  const user = c.get("devUser");
   const appId = c.req.param("appId");
 
-  const accessible = await getAccessibleApp(userId, appId, "viewer");
+  const accessible = await getAccessibleApp(user, appId, "viewer");
   if (!accessible) {
     return c.json({ error: "App not found" }, 404);
   }
@@ -350,11 +350,11 @@ app.get("/:appId/resources", async (c) => {
 });
 
 app.post("/:appId/resources", requireWritableDevUser, zValidator("json", resourceSchema), async (c) => {
-  const userId = c.get("devUserId") as string;
+  const user = c.get("devUser");
   const appId = c.req.param("appId");
   const data = c.req.valid("json");
 
-  const accessible = await getAccessibleApp(userId, appId, "admin");
+  const accessible = await getAccessibleApp(user, appId, "admin");
   if (!accessible) {
     return c.json({ error: "App not found" }, 404);
   }
@@ -394,12 +394,12 @@ app.post("/:appId/resources", requireWritableDevUser, zValidator("json", resourc
 });
 
 app.patch("/:appId/resources/:resourceId", requireWritableDevUser, zValidator("json", resourceSchema.partial()), async (c) => {
-  const userId = c.get("devUserId") as string;
+  const user = c.get("devUser");
   const appId = c.req.param("appId");
   const resourceId = c.req.param("resourceId");
   const data = c.req.valid("json");
 
-  const accessible = await getAccessibleApp(userId, appId, "admin");
+  const accessible = await getAccessibleApp(user, appId, "admin");
   if (!accessible) {
     return c.json({ error: "App not found" }, 404);
   }
@@ -451,11 +451,11 @@ app.patch("/:appId/resources/:resourceId", requireWritableDevUser, zValidator("j
 });
 
 app.delete("/:appId/resources/:resourceId", requireWritableDevUser, async (c) => {
-  const userId = c.get("devUserId") as string;
+  const user = c.get("devUser");
   const appId = c.req.param("appId");
   const resourceId = c.req.param("resourceId");
 
-  const accessible = await getAccessibleApp(userId, appId, "admin");
+  const accessible = await getAccessibleApp(user, appId, "admin");
   if (!accessible) {
     return c.json({ error: "App not found" }, 404);
   }

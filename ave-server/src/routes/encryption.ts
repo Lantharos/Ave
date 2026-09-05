@@ -1,18 +1,18 @@
-import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
-import { z } from "zod";
 import { and, eq } from "drizzle-orm";
+import { Hono } from "hono";
+import { z } from "zod";
 import {
   db,
-  identityEncryptionKeys,
   identities,
+  identityEncryptionKeys,
   oauthApps,
   oauthAuthorizations,
 } from "../db";
-import { validateOpaqueKeyEnvelope, validatePublicKeyBlob } from "../lib/encryption-key-payload";
-import { requireAuth, requireWritableForMutation } from "../middleware/auth";
 import { recordActivityLog } from "../lib/background-events";
+import { validateOpaqueKeyEnvelope, validatePublicKeyBlob } from "../lib/encryption-key-payload";
 import { enforceRateLimits, ipRateLimit } from "../lib/rate-limit";
+import { requireAuth, requireWritableForMutation } from "../middleware/auth";
 
 const app = new Hono();
 
@@ -282,21 +282,14 @@ app.put("/keys/:identityId", zValidator("json", putKeySchema), async (c) => {
     .where(eq(identityEncryptionKeys.identityId, identityId))
     .limit(1);
 
-  if (existing) {
-    await db
-      .update(identityEncryptionKeys)
-      .set({
-        publicKey: body.publicKey,
-        encryptedPrivateKey: body.encryptedPrivateKey,
-      })
-      .where(eq(identityEncryptionKeys.id, existing.id));
-  } else {
-    await db.insert(identityEncryptionKeys).values({
-      identityId,
-      publicKey: body.publicKey,
-      encryptedPrivateKey: body.encryptedPrivateKey,
-    });
-  }
+  await db.insert(identityEncryptionKeys).values({
+    identityId,
+    publicKey: body.publicKey,
+    encryptedPrivateKey: body.encryptedPrivateKey,
+  }).onConflictDoUpdate({
+    target: identityEncryptionKeys.identityId,
+    set: { publicKey: body.publicKey, encryptedPrivateKey: body.encryptedPrivateKey, updatedAt: new Date() },
+  });
 
   recordActivityLog(c, {
     userId: user.id,

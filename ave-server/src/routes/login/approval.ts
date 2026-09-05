@@ -3,8 +3,8 @@ import { and, eq, inArray } from "drizzle-orm";
 import { Hono } from "hono";
 import { z } from "zod";
 import { db, devices, identities, loginRequests, sessions } from "../../db";
-import { recordActivityLog } from "../../lib/background-events";
 import { runInBackground } from "../../lib/background";
+import { recordActivityLog } from "../../lib/background-events";
 import { generateSessionToken, hashSessionToken } from "../../lib/crypto";
 import { listIdentitiesForOwner } from "../../lib/identity-serialization";
 import { enforceRateLimits, ipRateLimit, subjectRateLimit } from "../../lib/rate-limit";
@@ -53,11 +53,11 @@ app.post("/request-approval", zValidator("json", z.object({
   const ssoRequired = await rejectRequiredEnterpriseSso(c, identity);
   if (ssoRequired) return ssoRequired;
 
-  // Create login request
+  const requestToken = generateSessionToken();
   const [request] = await db
     .insert(loginRequests)
     .values({
-      handle: normalizedHandle,
+      identityId: identity.id,
       deviceName: device.name,
       deviceType: device.type,
       browser: device.browser,
@@ -65,6 +65,7 @@ app.post("/request-approval", zValidator("json", z.object({
       fingerprint: device.fingerprint,
       ipAddress: c.req.header("x-forwarded-for") || c.req.header("x-real-ip"),
       requesterPublicKey,
+      requesterTokenHash: hashSessionToken(requestToken),
       expiresAt: new Date(Date.now() + 5 * 60 * 1000), // 5 minutes
     })
     .returning();
@@ -113,13 +114,16 @@ app.post("/request-approval", zValidator("json", z.object({
 
   return c.json({
     requestId: request.id,
+    requestToken,
     expiresAt: request.expiresAt,
   });
 });
 
-// Check login request status (polling endpoint)
-app.get("/request-status/:requestId", async (c) => {
-  const requestId = c.req.param("requestId");
+app.post("/request-status", zValidator("json", z.object({
+  requestId: z.string().uuid(),
+  requestToken: z.string().regex(/^[a-f0-9]{64}$/),
+})), async (c) => {
+  const { requestId, requestToken } = c.req.valid("json");
   const rateLimitResponse = await enforceRateLimits(c, [
     ipRateLimit(c, "login:status:ip", 180, 60 * 1000, { failClosed: true }),
     subjectRateLimit("login:status:request", requestId, 180, 60 * 1000, { failClosed: true }),
@@ -129,7 +133,10 @@ app.get("/request-status/:requestId", async (c) => {
   const [request] = await db
     .select()
     .from(loginRequests)
-    .where(eq(loginRequests.id, requestId))
+    .where(and(
+      eq(loginRequests.id, requestId),
+      eq(loginRequests.requesterTokenHash, hashSessionToken(requestToken)),
+    ))
     .limit(1);
 
   if (!request) {
@@ -165,7 +172,7 @@ app.get("/request-status/:requestId", async (c) => {
     const [identity] = await db
       .select()
       .from(identities)
-      .where(eq(identities.handle, claimed.handle))
+      .where(eq(identities.id, claimed.identityId))
       .limit(1);
 
     if (!identity) {

@@ -1,5 +1,5 @@
 import { request } from "./transport";
-import type { ActivityLogEntry, Device, Identity, IdentityEncryptionKey, LoginRequest, OAuthAuthorization, Passkey, SessionBootstrap, SignatureRequest } from "./types";
+import type { Device, LoginRequest } from "./types";
 
 export const devicesApi = {
     list: () =>
@@ -19,12 +19,6 @@ export const devicesApi = {
       request<{ success: boolean }>("/api/devices/deny-request", {
         method: "POST",
         body: JSON.stringify({ requestId }),
-      }),
-
-    rename: (deviceId: string, name: string) =>
-      request<{ success: boolean }>(`/api/devices/${deviceId}`, {
-        method: "PATCH",
-        body: JSON.stringify({ name }),
       }),
 
     revoke: (deviceId: string) =>

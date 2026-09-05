@@ -1,10 +1,9 @@
-import type { Context } from "hono";
 import { and, eq, isNull } from "drizzle-orm";
-import { db, oauthApps, oauthDelegationGrants, oauthResources } from "../../db";
+import type { Context } from "hono";
+import { db, oauthApps, oauthDelegationGrants, oauthResources, primaryDb } from "../../db";
 import { recordOAuthDelegationAuditLog } from "../../lib/background-events";
-import { getIssuer, getResourceAudience, signJwt, verifyJwt } from "../../lib/oidc";
-import { getAccessToken } from "../../lib/oauth-store";
-import { hasAllScopes, isClientSecretValid, nowSeconds, parseScopes } from "./shared";
+import { getIssuer, signJwt } from "../../lib/oidc";
+import { hasAllScopes, isClientSecretValid, nowSeconds, parseScopes, resolveAccessTokenRecord } from "./shared";
 import type { TokenExchangeRequest } from "./token-schema";
 
 export async function handleTokenExchange(c: Context, payload: TokenExchangeRequest) {
@@ -24,56 +23,31 @@ export async function handleTokenExchange(c: Context, payload: TokenExchangeRequ
     return c.json({ error: "invalid_client", error_description: "Invalid client secret" }, 400);
   }
 
-  let subject: {
-    userId: string;
-    identityId: string;
-    sourceAppId: string;
-    scope: string;
-  } | null = null;
-
-  const storedOpaqueSubject = await getAccessToken(subjectToken);
-  if (storedOpaqueSubject) {
-    subject = {
-      userId: storedOpaqueSubject.userId,
-      identityId: storedOpaqueSubject.identityId,
-      sourceAppId: storedOpaqueSubject.appId,
-      scope: storedOpaqueSubject.scope,
-    };
-  } else {
-    const jwtPayload = await verifyJwt(subjectToken, getResourceAudience());
-    if (jwtPayload) {
-      const tokenClientId = String(jwtPayload.cid || "");
-      const [tokenApp] = await db
-        .select()
-        .from(oauthApps)
-        .where(eq(oauthApps.clientId, tokenClientId))
-        .limit(1);
-
-      if (tokenApp) {
-        const userId = typeof jwtPayload.uid === "string" ? jwtPayload.uid : "";
-        subject = {
-          userId,
-          identityId: String(jwtPayload.sub || ""),
-          sourceAppId: tokenApp.id,
-          scope: String(jwtPayload.scope || ""),
-        };
-      }
-    }
-  }
+  const subject = await resolveAccessTokenRecord(subjectToken);
 
   if (!subject?.userId) {
     return c.json({ error: "invalid_grant", error_description: "Subject token is invalid" }, 400);
   }
 
-  if (subject.sourceAppId !== sourceApp.id) {
+  if (subject.appId !== sourceApp.id) {
     return c.json({ error: "invalid_grant", error_description: "Subject token does not belong to client" }, 400);
   }
 
-  const [resource] = await db
-    .select()
+  const [resourceContext] = await primaryDb
+    .select({ resource: oauthResources, grant: oauthDelegationGrants })
     .from(oauthResources)
+    .leftJoin(oauthDelegationGrants, and(
+      eq(oauthDelegationGrants.authorizationId, subject.authorizationId || ""),
+      eq(oauthDelegationGrants.userId, subject.userId),
+      eq(oauthDelegationGrants.identityId, subject.identityId),
+      eq(oauthDelegationGrants.sourceAppId, sourceApp.id),
+      eq(oauthDelegationGrants.targetResourceId, oauthResources.id),
+      isNull(oauthDelegationGrants.revokedAt),
+    ))
     .where(and(eq(oauthResources.resourceKey, requestedResource), eq(oauthResources.status, "active")))
     .limit(1);
+  const resource = resourceContext?.resource;
+  const grant = resourceContext?.grant;
 
   if (!resource) {
     return c.json({ error: "invalid_target", error_description: "Requested resource not found" }, 400);
@@ -84,18 +58,6 @@ export async function handleTokenExchange(c: Context, payload: TokenExchangeRequ
   if (invalidScopes.length > 0) {
     return c.json({ error: "invalid_scope", error_description: `Invalid connector scopes: ${invalidScopes.join(", ")}` }, 400);
   }
-
-  const [grant] = await db
-    .select()
-    .from(oauthDelegationGrants)
-    .where(and(
-      eq(oauthDelegationGrants.userId, subject.userId),
-      eq(oauthDelegationGrants.identityId, subject.identityId),
-      eq(oauthDelegationGrants.sourceAppId, sourceApp.id),
-      eq(oauthDelegationGrants.targetResourceId, resource.id),
-      isNull(oauthDelegationGrants.revokedAt),
-    ))
-    .limit(1);
 
   if (!grant) {
     return c.json({ error: "access_denied", error_description: "No active connector grant found" }, 403);

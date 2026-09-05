@@ -1,5 +1,6 @@
+import type { AuthenticationResponseJSON, PublicKeyCredentialRequestOptionsJSON } from "@simplewebauthn/browser";
 import { API_BASE, request } from "./transport";
-import type { ActivityLogEntry, Device, Identity, IdentityEncryptionKey, LoginRequest, OAuthAuthorization, Passkey, SessionBootstrap, SignatureRequest } from "./types";
+import type { Identity, LoginRequestStatus, LoginSession } from "./types";
 
 export const loginApi = {
     discoverSso: (email: string) =>
@@ -26,7 +27,7 @@ export const loginApi = {
         hasDevices: boolean;
         hasPasskeys: boolean;
         demoPasswordEnabled?: boolean;
-        authOptions?: PublicKeyCredentialRequestOptions;
+        authOptions?: PublicKeyCredentialRequestOptionsJSON;
         authSessionId?: string;
       }>("/api/login/start", {
         method: "POST",
@@ -46,8 +47,7 @@ export const loginApi = {
     }) =>
       request<{
         success: boolean;
-        sessionToken: string;
-        device: Device;
+        device: LoginSession["device"];
         identities: Identity[];
         readOnly: boolean;
       }>("/api/login/demo", {
@@ -57,7 +57,7 @@ export const loginApi = {
 
     passkey: (data: {
       authSessionId: string;
-      credential: Credential;
+      credential: AuthenticationResponseJSON;
       device: {
         name: string;
         type: "phone" | "computer" | "tablet";
@@ -68,8 +68,7 @@ export const loginApi = {
     }) =>
       request<{
         success: boolean;
-        sessionToken: string;
-        device: Device;
+        device: LoginSession["device"];
         identities: Identity[];
         needsMasterKey: boolean;
         prfEncryptedMasterKey?: string; // PRF-encrypted master key (if passkey has PRF support)
@@ -91,21 +90,18 @@ export const loginApi = {
     }) =>
       request<{
         requestId: string;
+        requestToken: string;
         expiresAt: string;
       }>("/api/login/request-approval", {
         method: "POST",
         body: JSON.stringify(data),
       }),
 
-    checkRequestStatus: (requestId: string) =>
-      request<{
-        status: "pending" | "approved" | "denied" | "expired";
-        sessionToken?: string;
-        encryptedMasterKey?: string;
-        approverPublicKey?: string;
-        device?: Device;
-        identities?: Identity[];
-      }>(`/api/login/request-status/${requestId}`),
+    checkRequestStatus: (requestId: string, requestToken: string) =>
+      request<LoginRequestStatus>("/api/login/request-status", {
+        method: "POST",
+        body: JSON.stringify({ requestId, requestToken }),
+      }),
 
 
     trustCode: (data: {
@@ -121,9 +117,8 @@ export const loginApi = {
     }) =>
       request<{
         success: boolean;
-        sessionToken: string;
         encryptedMasterKeyBackup?: string;
-        device: Device;
+        device: LoginSession["device"];
         identities: Identity[];
         remainingTrustCodes: number;
         remainingRecoveryCodes: number;
@@ -140,6 +135,7 @@ export const loginApi = {
     recoverKey: (data: { handle: string; code: string }) =>
       request<{
         success: boolean;
+        identityId: string;
         encryptedMasterKeyBackup: string;
         remainingTrustCodes: number;
         remainingRecoveryCodes: number;

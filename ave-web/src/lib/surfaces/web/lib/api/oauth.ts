@@ -1,5 +1,5 @@
 import { request } from "./transport";
-import type { ActivityLogEntry, Device, Identity, IdentityEncryptionKey, LoginRequest, OAuthAuthorization, Passkey, SessionBootstrap, SignatureRequest } from "./types";
+import type { OAuthAuthorization, SessionBootstrap } from "./types";
 
 export const oauthApi = {
     getSessionBootstrap: (timeoutMs = 5000) =>
@@ -114,12 +114,6 @@ export const oauthApi = {
         timeoutMs: 45000,
       }),
 
-
-    getAuthorization: (clientId: string) =>
-      request<{
-        authorization: OAuthAuthorization | null;
-      }>(`/api/oauth/authorization/${encodeURIComponent(clientId)}`),
-
     recoverSymmetricAppKey: (data: {
       clientId: string;
       identityId: string;
@@ -137,24 +131,6 @@ export const oauthApi = {
           }),
         },
       ),
-
-    getAuthorizations: () =>
-      request<{
-        authorizations: {
-          id: string;
-          appId: string;
-          identityId: string;
-          createdAt: string;
-          appName: string;
-          appIcon?: string;
-          appWebsite?: string;
-        }[];
-      }>("/api/oauth/authorizations"),
-
-    revokeAuthorization: (authId: string) =>
-      request<{ success: boolean }>(`/api/oauth/authorizations/${authId}`, {
-        method: "DELETE",
-      }),
 
     getDelegations: () =>
       request<{

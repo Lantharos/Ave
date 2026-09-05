@@ -72,8 +72,8 @@ export function createCreateOrganizationMutation() {
 
 export function createInviteMemberMutation() {
   return createMutation(() => ({
-    mutationFn: async (payload: { organizationId: string; email: string; role: WorkspaceRole }) =>
-      inviteOrganizationMember(payload.organizationId, { email: payload.email, role: payload.role }),
+    mutationFn: async (payload: { organizationId: string; actingIdentityId: string; email: string; role: WorkspaceRole }) =>
+      inviteOrganizationMember(payload.organizationId, payload.actingIdentityId, { email: payload.email, role: payload.role }),
     onSuccess: async (_, variables) => {
       await queryClient.invalidateQueries({ queryKey: queryKeys.workspace(variables.organizationId) });
       await queryClient.invalidateQueries({ queryKey: ["portal"] });
@@ -83,8 +83,8 @@ export function createInviteMemberMutation() {
 
 export function createUpdateMemberRoleMutation() {
   return createMutation(() => ({
-    mutationFn: async (payload: { organizationId: string; memberId: string; role: WorkspaceRole }) =>
-      updateOrganizationMemberRole(payload.organizationId, payload.memberId, payload.role),
+    mutationFn: async (payload: { organizationId: string; actingIdentityId: string; memberId: string; role: WorkspaceRole }) =>
+      updateOrganizationMemberRole(payload.organizationId, payload.actingIdentityId, payload.memberId, payload.role),
     onSuccess: async (_, variables) => {
       await queryClient.invalidateQueries({ queryKey: queryKeys.workspace(variables.organizationId) });
       await queryClient.invalidateQueries({ queryKey: ["portal"] });
@@ -96,8 +96,9 @@ export function createUpdateOrganizationMutation() {
   return createMutation(() => ({
     mutationFn: async (payload: {
       organizationId: string;
-      data: { name?: string; logoUrl?: string | null; verifiedDomains?: string[] };
-    }) => updateOrganization(payload.organizationId, payload.data),
+      actingIdentityId: string;
+      data: { name?: string; logoUrl?: string | null };
+    }) => updateOrganization(payload.organizationId, payload.actingIdentityId, payload.data),
     onSuccess: async (_, variables) => {
       await queryClient.invalidateQueries({ queryKey: queryKeys.workspace(variables.organizationId) });
       await queryClient.invalidateQueries({ queryKey: ["portal"] });

@@ -1,7 +1,7 @@
 import { applyBookmark, captureBookmark } from "./bookmark-store";
 
 export class ApiError extends Error {
-  constructor(public status: number, message: string) {
+  constructor(public status: number, message: string, public readonly data?: unknown) {
     super(message);
     this.name = "ApiError";
   }
@@ -82,7 +82,7 @@ export function createAveApiClient(options: ApiClientOptions) {
   async function request<T>(endpoint: string, requestOptions: ApiRequestOptions = {}): Promise<T> {
     const response = await raw(endpoint, requestOptions);
     const data = await readResponse(response);
-    if (!response.ok) throw new ApiError(response.status, errorMessage(data));
+    if (!response.ok) throw new ApiError(response.status, errorMessage(data), data);
     return data as T;
   }
 

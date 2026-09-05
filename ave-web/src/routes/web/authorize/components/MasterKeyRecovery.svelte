@@ -6,6 +6,7 @@
   let {
     view = $bindable(),
     loginRequestId,
+    loginRequestToken,
     ephemeralKeyPair,
     error = $bindable(),
     recoveryCode = $bindable(),
@@ -21,6 +22,7 @@
   }: {
     view: "options" | "device" | "recovery";
     loginRequestId: string | null;
+    loginRequestToken: string | null;
     ephemeralKeyPair: { publicKey: string; privateKey: CryptoKey } | null;
     error: string | null;
     recoveryCode: string;
@@ -45,6 +47,7 @@
   {#if view === "device" && loginRequestId}
     <LoginWaiting
       {loginRequestId}
+      {loginRequestToken}
       {ephemeralKeyPair}
       masterKeyOnly
       onSuccess={onRecovered}

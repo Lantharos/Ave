@@ -6,13 +6,13 @@
  */
 
 import * as ed from "@noble/ed25519";
-import { encrypt, decrypt, loadMasterKey } from "./crypto";
+import { decrypt, encrypt, loadMasterKey } from "./crypto";
 
 /**
  * Generate a new Ed25519 signing keypair
  * Returns both keys as base64 strings
  */
-export async function generateSigningKeyPair(): Promise<{
+async function generateSigningKeyPair(): Promise<{
   publicKey: string;
   privateKey: string;
 }> {
@@ -32,7 +32,7 @@ export async function generateSigningKeyPair(): Promise<{
 /**
  * Sign a message with an Ed25519 private key
  */
-export async function signMessage(
+async function signMessage(
   message: string,
   privateKeyB64: string
 ): Promise<string> {
@@ -45,28 +45,9 @@ export async function signMessage(
 }
 
 /**
- * Verify an Ed25519 signature
- */
-export async function verifySignature(
-  message: string,
-  signatureB64: string,
-  publicKeyB64: string
-): Promise<boolean> {
-  try {
-    const publicKey = base64ToBytes(publicKeyB64);
-    const signature = base64ToBytes(signatureB64);
-    const messageBytes = new TextEncoder().encode(message);
-    
-    return await ed.verifyAsync(signature, messageBytes, publicKey);
-  } catch {
-    return false;
-  }
-}
-
-/**
  * Encrypt a signing private key with the user's master key
  */
-export async function encryptSigningKey(
+async function encryptSigningKey(
   privateKeyB64: string,
   masterKey: CryptoKey
 ): Promise<string> {
@@ -76,7 +57,7 @@ export async function encryptSigningKey(
 /**
  * Decrypt a signing private key with the user's master key
  */
-export async function decryptSigningKey(
+async function decryptSigningKey(
   encryptedPrivateKey: string,
   masterKey: CryptoKey
 ): Promise<string> {
@@ -132,6 +113,3 @@ function bytesToBase64(bytes: Uint8Array): string {
 function base64ToBytes(base64: string): Uint8Array {
   return Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
 }
-
-// Re-export for convenience
-export { verifySignature as verify };

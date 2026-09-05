@@ -24,6 +24,7 @@ export interface JwtHeader {
 }
 
 export interface JwtPayload {
+  jti?: string;
   sub?: string;
   iss?: string;
   aud?: string | string[];
@@ -122,10 +123,10 @@ export interface TokenResponse {
   scope: string;
   user?: {
     id: string;
-    handle: string;
-    displayName: string;
+    handle?: string;
+    displayName?: string;
     email?: string;
-    avatarUrl?: string;
+    avatarUrl?: string | null;
   } | null;
   user_id?: string;
   organization?: {
@@ -242,11 +243,3 @@ export interface IdentityKeyEnvelope {
   encryptedPrivateKey?: string | null;
   createdAt?: string | null;
 }
-
-export interface WrappedIdentityPayload {
-  encryptedPayload: string;
-  senderPublicKey: string;
-}
-
-/** @deprecated Identity wrapped OAuth payloads are removed. Use app encryption keypairs instead. */
-export type DeprecatedWrappedIdentityPayload = WrappedIdentityPayload;

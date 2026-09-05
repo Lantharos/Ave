@@ -1,38 +1,39 @@
 import { Hono } from "hono";
-import { cors } from "hono/cors";
 import { bodyLimit } from "hono/body-limit";
-import { authMiddleware } from "./middleware/auth";
-import { 
-  handleWebSocketOpen, 
-  handleWebSocketClose, 
+import { cors } from "hono/cors";
+import { HTTPException } from "hono/http-exception";
+import {
+  handleWebSocketClose,
   handleWebSocketMessage,
+  handleWebSocketOpen,
   notifyLoginRequest,
   notifyLoginRequestStatus,
 } from "./lib/websocket";
+import { authMiddleware } from "./middleware/auth";
 
 // Routes
-import registerRoutes from "./routes/register";
-import loginRoutes from "./routes/login";
-import devicesRoutes, { cleanupStaleDevices } from "./routes/devices";
-import identitiesRoutes from "./routes/identities";
-import securityRoutes from "./routes/security";
 import activityRoutes, { cleanupExpiredActivityLogs } from "./routes/activity";
+import appsRoutes from "./routes/apps";
+import businessRoutes from "./routes/business";
+import businessSamlRoutes from "./routes/business-saml";
+import devicesRoutes, { cleanupStaleDevices } from "./routes/devices";
+import encryptionRoutes from "./routes/encryption";
+import identitiesRoutes from "./routes/identities";
+import loginRoutes from "./routes/login";
 import mydataRoutes from "./routes/mydata";
 import oauthRoutes, { oidcRoutes } from "./routes/oauth";
-import appsRoutes from "./routes/apps";
 import organizationsRoutes from "./routes/organizations";
-import businessSamlRoutes from "./routes/business-saml";
-import businessRoutes from "./routes/business";
 import pushRoutes from "./routes/push";
+import registerRoutes from "./routes/register";
+import securityRoutes from "./routes/security";
 import signingRoutes from "./routes/signing";
-import encryptionRoutes from "./routes/encryption";
 
-import { getCookieValue, SESSION_COOKIE_NAME } from "./lib/session-cookie";
 import { initDb, runWithDb } from "./db";
-import { initMail } from "./lib/mail";
-import { cleanupExpiredChallenges } from "./lib/challenge-store";
-import { cleanupExpiredOAuthStorage } from "./lib/oauth-store";
 import { processBackgroundEventBatch, type BackgroundEvent } from "./lib/background-events";
+import { cleanupExpiredChallenges } from "./lib/challenge-store";
+import { initMail } from "./lib/mail";
+import { cleanupExpiredOAuthStorage } from "./lib/oauth-store";
+import { getCookieValue, SESSION_COOKIE_NAME } from "./lib/session-cookie";
 
 import uploadRoutes from "./routes/upload";
 
@@ -338,6 +339,7 @@ function buildApp() {
 
   // Error handler
   app.onError((err, c) => {
+    if (err instanceof HTTPException) return err.getResponse();
     if (err instanceof SyntaxError && /JSON|Unexpected end of JSON input/i.test(err.message)) {
       console.warn("Invalid JSON body", {
         path: c.req.path,
@@ -385,7 +387,7 @@ function createWebSocketResponse(request: Request, requestDatabase: D1Database |
   }
 
   const url = new URL(request.url);
-  const authToken = url.searchParams.get("token") || getCookieValue(request.headers.get("Cookie") || "", SESSION_COOKIE_NAME) || undefined;
+  const authToken = getCookieValue(request.headers.get("Cookie") || "", SESSION_COOKIE_NAME) || undefined;
   const requestId = url.searchParams.get("requestId") || undefined;
 
   const webSocketPair = new WebSocketPair();
@@ -455,17 +457,13 @@ export class ApiAppDurableObject {
         const payload = await request.json() as {
           requestId?: string;
           status?: "approved" | "denied";
-          data?: {
-            encryptedMasterKey?: string;
-            approverPublicKey?: string;
-          };
         };
 
         if (!payload.requestId || (payload.status !== "approved" && payload.status !== "denied")) {
           return Response.json({ error: "Invalid login request status payload" }, { status: 400 });
         }
 
-        notifyLoginRequestStatus(payload.requestId, payload.status, payload.data);
+        notifyLoginRequestStatus(payload.requestId, payload.status);
         return Response.json({ success: true });
       }
 

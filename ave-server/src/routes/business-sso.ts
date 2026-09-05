@@ -1,14 +1,14 @@
-import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
+import { and, eq, isNotNull } from "drizzle-orm";
+import { Hono } from "hono";
 import { z } from "zod";
-import { and, eq } from "drizzle-orm";
 import {
   db,
   organizationDomainVerifications,
   organizations,
   organizationSsoConnections,
 } from "../db";
-import { requireAuth, requireWritableForMutation } from "../middleware/auth";
+import { recordBusinessAuditEvent } from "../lib/background-events";
 import {
   hasBusinessScope,
   requireBusinessAccess,
@@ -23,20 +23,21 @@ import {
   verifyOidcIdToken,
 } from "../lib/business-oidc";
 import {
-  buildSamlServiceProviderUrls,
-  serializeSsoConnection,
-} from "../lib/sso-metadata";
-import { completeEnterpriseSsoLogin, recordSsoConnectionTest } from "../lib/business-sso-login";
-import { clientIp, userAgent, verificationToken, verifyDnsTxt } from "../lib/business-route-utils";
-import {
+  rejectSsoTestAccess,
   rejectWithoutRequiredSso,
   rejectWithoutSigningAuthority,
   requireSignedAction,
 } from "../lib/business-route-guards";
+import { clientIp, userAgent, verificationToken, verifyDnsTxt } from "../lib/business-route-utils";
+import { completeEnterpriseSsoLogin, recordSsoConnectionTest } from "../lib/business-sso-login";
 import { deleteChallenge, getChallenge, setChallenge } from "../lib/challenge-store";
+import { getRequiredEnterpriseSsoForEmail, hasVerifiedOrganizationDomain, requireVerifiedSsoDomain } from "../lib/enterprise-sso-policy";
 import { businessOrigin, enterpriseSsoReturnTo } from "../lib/enterprise-sso-return";
-import { getRequiredEnterpriseSsoForEmail } from "../lib/enterprise-sso-policy";
-import { recordBusinessAuditEvent } from "../lib/background-events";
+import {
+  buildSamlServiceProviderUrls,
+  serializeSsoConnection,
+} from "../lib/sso-metadata";
+import { requireAuth, requireWritableForMutation } from "../middleware/auth";
 
 const app = new Hono();
 
@@ -54,16 +55,6 @@ type EnterpriseSsoState = {
   returnTo?: string;
 };
 
-async function rejectSsoTestAccess(c: any, organizationId: string) {
-  const user = c.get("user");
-  if (!user) return c.text("Sign in to Ave before testing SSO", 401);
-  if (user.isReadOnly) return c.text("Demo account is read-only", 403);
-  const access = await requireBusinessAccess(user.id, organizationId, "admin");
-  if (!access || !hasBusinessScope(access.member, "manage_sso")) return c.text("Organization not found", 404);
-  const ssoError = await rejectWithoutRequiredSso(c, access);
-  if (ssoError) return ssoError;
-  return null;
-}
 
 app.post("/sso/discover", zValidator("json", z.object({ email: z.string().email() })), async (c) => {
   const sso = await getRequiredEnterpriseSsoForEmail(c.req.valid("json").email);
@@ -91,6 +82,7 @@ app.get("/sso/oidc/:connectionId/start", async (c) => {
     .limit(1);
 
   if (!row) return c.text("OIDC connection not found", 404);
+  await requireVerifiedSsoDomain(row.connection);
   if (mode === "login" && row.connection.status !== "active") return c.text("OIDC connection is not active", 409);
   if (mode === "test") {
     const accessError = await rejectSsoTestAccess(c, row.organization.id);
@@ -157,8 +149,6 @@ app.get("/sso/oidc/:connectionId/callback", async (c) => {
   const claims = await verifyOidcIdToken({ idToken: tokenSet.id_token, config, nonce: stored.nonce });
   const email = typeof claims.email === "string" ? claims.email.trim().toLowerCase() : "";
   if (!email || claims.email_verified === false) return c.text("OIDC email is missing or unverified", 400);
-  const emailDomain = email.split("@").pop() || "";
-  if (row.connection.domain && emailDomain !== row.connection.domain) return c.text("OIDC email domain is not allowed for this organization", 403);
 
   if (stored.mode === "test") {
     const accessError = await rejectSsoTestAccess(c, row.organization.id);
@@ -251,7 +241,14 @@ app.post("/organizations/:organizationId/domains/:domainId/verify", zValidator("
   if (!(await verifyDnsTxt(domain.domain, domain.token))) return c.json({ error: "DNS TXT record not found" }, 409);
 
   await db.update(organizationDomainVerifications).set({ status: "verified", verifiedAt: new Date(), updatedAt: new Date() }).where(eq(organizationDomainVerifications.id, domain.id));
-  const verifiedDomains = Array.from(new Set([...(access.organization.verifiedDomains || []), domain.domain]));
+  const verifiedRows = await db.select({ domain: organizationDomainVerifications.domain })
+    .from(organizationDomainVerifications)
+    .where(and(
+      eq(organizationDomainVerifications.organizationId, organizationId),
+      eq(organizationDomainVerifications.status, "verified"),
+      isNotNull(organizationDomainVerifications.verifiedAt),
+    ));
+  const verifiedDomains = verifiedRows.map((row) => row.domain);
   await db.update(organizations).set({ verifiedDomains, updatedAt: new Date() }).where(eq(organizations.id, organizationId));
   recordBusinessAuditEvent(c, {
     organizationId,
@@ -271,7 +268,7 @@ app.post("/organizations/:organizationId/sso-connections", zValidator("json", z.
   type: z.enum(["saml", "oidc"]),
   provider: z.string().min(2).max(40).default("generic"),
   name: z.string().min(2).max(80),
-  domain: domainSchema.optional(),
+  domain: domainSchema,
   metadataUrl: z.string().url().optional(),
   entityId: z.string().max(400).optional(),
   ssoUrl: z.string().url().optional(),
@@ -294,7 +291,7 @@ app.post("/organizations/:organizationId/sso-connections", zValidator("json", z.
   if (ssoError) return ssoError;
   const authorityError = rejectWithoutSigningAuthority(c, access.member);
   if (authorityError) return authorityError;
-  if (body.domain && !(access.organization.verifiedDomains || []).includes(body.domain)) {
+  if (!await hasVerifiedOrganizationDomain(organizationId, body.domain)) {
     return c.json({ error: "Verify this domain before attaching SSO" }, 400);
   }
   if (body.type === "oidc" && (!body.issuer || !body.clientId)) {
@@ -377,7 +374,7 @@ app.patch("/organizations/:organizationId/sso-connections/:connectionId", zValid
     .limit(1);
   if (!connection) return c.json({ error: "SSO connection not found" }, 404);
   if (body.status === "active") return c.json({ error: "Run a successful SSO test before activating this connection" }, 409);
-  if (body.domain && !(access.organization.verifiedDomains || []).includes(body.domain)) {
+  if (body.status !== "disabled" && !await hasVerifiedOrganizationDomain(organizationId, body.domain ?? connection.domain)) {
     return c.json({ error: "Verify this domain before attaching SSO" }, 400);
   }
   const auditDetails = {

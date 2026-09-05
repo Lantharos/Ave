@@ -2,45 +2,43 @@
  * Auth store - manages authentication state
  */
 
-import { writable, derived, get } from "svelte/store";
-import { api, clearD1Bookmark, type Identity, type Device } from "../lib/api";
-import { 
-  loadMasterKey, 
-  storeMasterKey, 
-  clearMasterKey, 
-  hasMasterKey,
+import { derived, get, writable } from "svelte/store";
+import { api, ApiError, clearD1Bookmark, type Identity, type LoginSession } from "../lib/api";
+import {
+  clearMasterKey,
   createStoredIdentityEncryptionKeyPair,
+  selectMasterKeyAccount,
+  storeMasterKey,
 } from "../lib/crypto";
-import { websocket } from "./websocket";
 import { queuePasskeySetupPrompt } from "../lib/passkey-setup-prompt";
+import { resolveSessionMasterKey } from "../lib/session-master-key";
+import { websocket } from "./websocket";
 
 interface AuthState {
   isAuthenticated: boolean;
   isLoading: boolean;
   isReadOnly: boolean;
-  userId: string | null;
   identities: Identity[];
   currentIdentity: Identity | null;
-  device: Device | null;
+  device: LoginSession["device"] | null;
   masterKey: CryptoKey | null;
   hasMasterKey: boolean;
 }
 
 interface InitOptions {
-  allowCookieSession?: boolean;
   timeoutMs?: number;
 }
 
 interface LoginOptions {
   isReadOnly?: boolean;
   offerPasskeySetup?: boolean;
+  preserveCurrentIdentity?: boolean;
 }
 
 const initialState: AuthState = {
   isAuthenticated: false,
   isLoading: true,
   isReadOnly: false,
-  userId: null,
   identities: [],
   currentIdentity: null,
   device: null,
@@ -51,15 +49,18 @@ const initialState: AuthState = {
 function createAuthStore() {
   const { subscribe, set, update } = writable<AuthState>(initialState);
   let initPromise: Promise<void> | null = null;
+  let sessionRevision = 0;
 
-  async function ensureIdentityEncryptionKeys(identities: Identity[], masterKey: CryptoKey | null) {
+  async function ensureIdentityEncryptionKeys(identities: Identity[], masterKey: CryptoKey | null, revision: number) {
     if (!masterKey) return;
 
     const missingKeys = identities.filter((identity) => identity.hasEncryptionKey === false);
     for (const identity of missingKeys) {
       try {
         const generated = await createStoredIdentityEncryptionKeyPair(masterKey);
+        if (revision !== sessionRevision) return;
         await api.encryption.createKey(identity.id, generated);
+        if (revision !== sessionRevision) return;
         update((state) => ({
           ...state,
           identities: state.identities.map((entry) =>
@@ -75,143 +76,110 @@ function createAuthStore() {
     }
   }
 
-  async function hydrateAuthenticatedSession(identities: Identity[], isReadOnly = false) {
-    const masterKey = await loadMasterKey();
-
-    update((s) => ({
-      ...s,
+  async function hydrateAuthenticatedSession(identities: Identity[], isReadOnly: boolean, revision: number) {
+    const masterKey = isReadOnly ? null : await resolveSessionMasterKey(identities);
+    if (revision !== sessionRevision) return;
+    const previous = get({ subscribe });
+    if (previous.isAuthenticated && !identities.some((identity) => previous.identities.some((entry) => entry.id === identity.id))) {
+      websocket.disconnect();
+    }
+    selectMasterKeyAccount(isReadOnly ? [] : identities.map((identity) => identity.id));
+    update((state) => ({
+      ...state,
       isAuthenticated: true,
       isLoading: false,
       isReadOnly,
       identities,
-      currentIdentity: identities.find((i) => i.isPrimary) || identities[0] || null,
+      currentIdentity: identities.find((identity) => identity.id === state.currentIdentity?.id)
+        || identities.find((identity) => identity.isPrimary) || identities[0] || null,
       masterKey,
       hasMasterKey: masterKey !== null,
     }));
-
-    void ensureIdentityEncryptionKeys(identities, masterKey);
+    if (!isReadOnly) void ensureIdentityEncryptionKeys(identities, masterKey, revision);
+    websocket.connectAsUser();
   }
-  
+
   return {
     subscribe,
-    
-    /**
-     * Initialize auth state from storage
-     */
+
     async init(options: InitOptions = {}) {
-      if (initPromise) {
-        return initPromise;
-      }
-
-      initPromise = (async () => {
-        const allowCookieSession = options.allowCookieSession ?? true;
-        let token: string | null = null;
+      if (initPromise) return initPromise;
+      const revision = sessionRevision;
+      const pending = (async () => {
         try {
-          token = localStorage.getItem("ave_session_token");
-        } catch {
-          token = null;
-        }
-
-        if (!token && !allowCookieSession) {
-          update((s) => ({
-            ...s,
-            isAuthenticated: false,
-            isLoading: false,
-            isReadOnly: false,
-            userId: null,
-            identities: [],
-            currentIdentity: null,
-            device: null,
-            masterKey: null,
-            hasMasterKey: false,
-          }));
-          return;
-        }
-
-        try {
-          const session = token
-            ? await api.identities.list()
-            : await api.oauth.getSessionBootstrap(options.timeoutMs);
-
-          await hydrateAuthenticatedSession(session.identities, !!session.readOnly);
-
-          websocket.connectAsUser(token || undefined);
-        } catch {
-          if (token) {
-            try {
-              localStorage.removeItem("ave_session_token");
-            } catch {
-            }
+          const session = await api.oauth.getSessionBootstrap(options.timeoutMs);
+          await hydrateAuthenticatedSession(session.identities, !!session.readOnly, revision);
+        } catch (error) {
+          if (revision !== sessionRevision) return;
+          if (error instanceof ApiError && error.status === 401) {
+            websocket.disconnect();
+            selectMasterKeyAccount([]);
+            set({ ...initialState, isLoading: false });
+          } else {
+            update((state) => ({ ...state, isLoading: false }));
+            throw error;
           }
-          websocket.disconnect();
-          update((s) => ({
-            ...s,
-            isAuthenticated: false,
-            isLoading: false,
-            isReadOnly: false,
-            userId: null,
-            identities: [],
-            currentIdentity: null,
-            device: null,
-            masterKey: null,
-            hasMasterKey: false,
-          }));
         }
       })();
-
+      initPromise = pending;
       try {
-        await initPromise;
+        await pending;
       } finally {
-        initPromise = null;
+        if (initPromise === pending) initPromise = null;
       }
     },
-    
+
     /**
      * Login successfully
      */
     async login(
-      _sessionToken: string,
-      identities: Identity[],
-      device: Device,
+      { identities, device }: LoginSession,
       masterKey?: CryptoKey,
       options: LoginOptions = {}
     ) {
-      try {
-        localStorage.removeItem("ave_session_token");
-      } catch {
-      }
-      
-      if (masterKey) {
-        await storeMasterKey(masterKey);
-      }
-      
+      const revision = ++sessionRevision;
+      const activeMasterKey = options.isReadOnly ? null : await resolveSessionMasterKey(identities, masterKey);
+      if (revision !== sessionRevision) return;
+      selectMasterKeyAccount(options.isReadOnly ? [] : identities.map((identity) => identity.id));
+
       update((s) => ({
         ...s,
         isAuthenticated: true,
         isLoading: false,
         isReadOnly: !!options.isReadOnly,
         identities,
-        currentIdentity: identities.find((i) => i.isPrimary) || identities[0] || null,
+        currentIdentity: (options.preserveCurrentIdentity
+          ? identities.find((identity) => identity.id === s.currentIdentity?.id)
+          : null) || identities.find((identity) => identity.isPrimary) || identities[0] || null,
         device,
-        masterKey: masterKey || null,
-        hasMasterKey: masterKey !== null || hasMasterKey(),
+        masterKey: activeMasterKey,
+        hasMasterKey: activeMasterKey !== null,
       }));
 
-      void ensureIdentityEncryptionKeys(identities, masterKey || null);
+      if (!options.isReadOnly) void ensureIdentityEncryptionKeys(identities, activeMasterKey, revision);
 
       if (options.offerPasskeySetup && !options.isReadOnly) {
         queuePasskeySetupPrompt(device);
       }
       
-      // Connect WebSocket for real-time notifications
+      websocket.disconnect();
       websocket.connectAsUser();
     },
     
     /**
      * Set master key (after receiving from another device)
      */
-    async setMasterKey(masterKey: CryptoKey) {
-      await storeMasterKey(masterKey);
+    async setMasterKey(masterKey: CryptoKey, provenIdentityIds: string[]) {
+      const state = get({ subscribe });
+      const revision = sessionRevision;
+      if (!state.isAuthenticated || state.isReadOnly) throw new Error("Sign in before unlocking your encryption key.");
+      if (!state.identities.some((identity) => provenIdentityIds.includes(identity.id))) {
+        throw new Error("Your account changed. Reload Ave and unlock again.");
+      }
+      await storeMasterKey(masterKey, state.identities.map((identity) => identity.id));
+      if (revision !== sessionRevision || !get({ subscribe }).identities.some((identity) => provenIdentityIds.includes(identity.id))) {
+        throw new Error("Your account changed. Reload Ave and unlock again.");
+      }
       update((s) => ({
         ...s,
         masterKey,
@@ -223,32 +191,27 @@ function createAuthStore() {
      * Logout
      */
     async logout() {
-      try {
-        await api.login.logout();
-      } catch {
-        // Ignore errors during logout
-      }
-      
+      await api.login.logout();
+      sessionRevision++;
       clearD1Bookmark();
-      try {
-        localStorage.removeItem("ave_session_token");
-      } catch {
-      }
-      clearMasterKey();
       websocket.disconnect();
-      set(initialState);
-      update((s) => ({ ...s, isLoading: false }));
+      set({ ...initialState, isLoading: false });
+      await clearMasterKey();
     },
-    
+
     /**
      * Update identities
      */
     setIdentities(identities: Identity[]) {
+      const current = get({ subscribe });
+      const identityIds = identities.map((identity) => identity.id);
+      selectMasterKeyAccount(current.isReadOnly ? [] : identityIds);
+      if (current.masterKey && identityIds.length) void storeMasterKey(current.masterKey, identityIds);
       update((s) => ({
         ...s,
         identities,
         currentIdentity: s.currentIdentity 
-          ? identities.find((i) => i.id === s.currentIdentity!.id) || identities[0]
+          ? identities.find((i) => i.id === s.currentIdentity!.id) || identities.find((i) => i.isPrimary) || identities[0] || null
           : identities.find((i) => i.isPrimary) || identities[0] || null,
       }));
     },
@@ -279,26 +242,16 @@ function createAuthStore() {
      * Add a new identity
      */
     addIdentity(identity: Identity) {
-      update((s) => ({
-        ...s,
-        identities: [...s.identities, identity],
-      }));
+      const state = get({ subscribe });
+      this.setIdentities([...state.identities, identity]);
     },
     
     /**
      * Remove an identity
      */
     removeIdentity(identityId: string) {
-      update((s) => {
-        const identities = s.identities.filter((i) => i.id !== identityId);
-        return {
-          ...s,
-          identities,
-          currentIdentity: s.currentIdentity?.id === identityId
-            ? identities.find((i) => i.isPrimary) || identities[0] || null
-            : s.currentIdentity,
-        };
-      });
+      const state = get({ subscribe });
+      this.setIdentities(state.identities.filter((identity) => identity.id !== identityId));
     },
   };
 }
@@ -310,5 +263,4 @@ export const isAuthenticated = derived(auth, ($auth) => $auth.isAuthenticated);
 export const isLoading = derived(auth, ($auth) => $auth.isLoading);
 export const currentIdentity = derived(auth, ($auth) => $auth.currentIdentity);
 export const identities = derived(auth, ($auth) => $auth.identities);
-export const hasMasterKeyStore = derived(auth, ($auth) => $auth.hasMasterKey);
 export const isReadOnly = derived(auth, ($auth) => $auth.isReadOnly);

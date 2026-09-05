@@ -193,13 +193,13 @@
   }
 
   async function createSsoConnection() {
-    if (!ssoName.trim() || busy) return;
+    if (!ssoName.trim() || !ssoDomain.trim() || busy) return;
     setBusy(true);
     setError("");
     try {
       const name = ssoName.trim();
       const provider = ssoProvider.trim() || "generic";
-      const domain = ssoDomain.trim() || undefined;
+      const domain = ssoDomain.trim().toLowerCase();
       const signedAction = await signBusinessAction(detail.organization.actingIdentityId, "sso_connection.created", {
         type: ssoType,
         provider,
@@ -275,7 +275,7 @@
 
       <div class="mt-6 grid gap-3 xl:grid-cols-[1fr_0.85fr]">
         <Input bind:value={ssoName} placeholder={ssoType === "oidc" ? "OIDC connection name" : "SAML connection name"} />
-        <Input bind:value={ssoDomain} placeholder="Verified domain" />
+        <Input bind:value={ssoDomain} placeholder="DNS-verified domain (required)" />
       </div>
 
       {#if ssoType === "oidc"}
@@ -305,7 +305,7 @@
 
       <div class="mt-6 flex flex-wrap justify-end gap-3">
         <Button variant="ghost" onclick={onClose} disabled={busy}>Cancel</Button>
-        <Button onclick={createSsoConnection} disabled={busy || !ssoName.trim()}>{ssoType === "oidc" ? "Save OIDC setup" : "Save SAML setup"}</Button>
+        <Button onclick={createSsoConnection} disabled={busy || !ssoName.trim() || !ssoDomain.trim()}>{ssoType === "oidc" ? "Save OIDC setup" : "Save SAML setup"}</Button>
       </div>
     </div>
   </div>

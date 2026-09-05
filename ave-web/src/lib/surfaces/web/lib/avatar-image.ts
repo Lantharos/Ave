@@ -7,7 +7,7 @@ export type AvatarCropState = {
 export const MIN_AVATAR_CROP_SCALE = 1;
 export const MAX_AVATAR_CROP_SCALE = 3;
 
-export function clampAvatarCropScale(scale: number): number {
+function clampAvatarCropScale(scale: number): number {
   return Math.min(MAX_AVATAR_CROP_SCALE, Math.max(MIN_AVATAR_CROP_SCALE, scale));
 }
 
@@ -117,7 +117,7 @@ export async function canvasToJpegFile(
   return new File([blob], fileName, { type: "image/jpeg" });
 }
 
-export function deriveBannerColorFromCanvas(canvas: HTMLCanvasElement): string {
+function deriveBannerColorFromCanvas(canvas: HTMLCanvasElement): string {
   const sample = document.createElement("canvas");
   const size = 32;
   sample.width = size;

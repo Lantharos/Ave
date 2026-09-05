@@ -1,4 +1,4 @@
-export const OAUTH_PROMPT_VALUES = [
+const OAUTH_PROMPT_VALUES = [
   "none",
   "login",
   "consent",

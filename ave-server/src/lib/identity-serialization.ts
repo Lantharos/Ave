@@ -1,5 +1,6 @@
 import { eq } from "drizzle-orm";
 import { db, identities, identityEncryptionKeys, type Identity } from "../db";
+import { parseOAuthScopes } from "./oauth-scopes";
 
 export type SerializedIdentity = {
   id: string;
@@ -43,14 +44,27 @@ export async function listIdentitiesForOwner(userId: string): Promise<Serialized
   );
 }
 
-export function serializeIdentityForApp(identity: Identity) {
+export function identityClaimsForApp(identity: Identity, scope: string) {
+  const scopes = new Set(parseOAuthScopes(scope));
   return {
-    id: identity.id,
-    displayName: identity.displayName,
-    handle: identity.handle,
-    email: identity.email || undefined,
-    avatarUrl: identity.avatarUrl,
-    isPrimary: identity.isPrimary,
+    sub: identity.id,
+    ...(scopes.has("profile") ? {
+      name: identity.displayName,
+      preferred_username: identity.handle,
+      picture: identity.avatarUrl,
+    } : {}),
+    ...(scopes.has("email") ? { email: identity.email || undefined } : {}),
+  };
+}
+
+export function serializeIdentityForApp(identity: Identity, scope: string) {
+  const claims = identityClaimsForApp(identity, scope);
+  return {
+    id: claims.sub,
+    displayName: claims.name,
+    handle: claims.preferred_username,
+    avatarUrl: claims.picture,
+    email: claims.email,
   };
 }
 

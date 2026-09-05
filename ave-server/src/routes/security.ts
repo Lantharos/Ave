@@ -1,13 +1,15 @@
-import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
+import { and, desc, eq, isNull, sql } from "drizzle-orm";
+import { Hono } from "hono";
 import { z } from "zod";
-import { db, passkeys, trustCodes } from "../db";
-import { requireAuth, requireWritableForMutation } from "../middleware/auth";
-import { 
-  generateTrustCode, 
+import { authenticationCredentialSchema, registrationCredentialSchema } from "../contracts/security/webauthn";
+import { db, identities, passkeys, trustCodes } from "../db";
+import { recordActivityLog } from "../lib/background-events";
+import { deleteChallenge, getChallenge, setChallenge } from "../lib/challenge-store";
+import {
+  generateTrustCode,
   hashTrustCode
 } from "../lib/crypto";
-import { eq, and, desc, isNull, sql } from "drizzle-orm";
 import {
   generatePasskeyAuthenticationOptions,
   generatePasskeyRegistrationOptions,
@@ -15,12 +17,10 @@ import {
   verifyPasskeyRegistration,
   type AuthenticatorTransport,
 } from "../lib/heavy-services";
-import { extractAllowedWebauthnOrigin } from "../lib/webauthn-origin";
-import { deleteChallenge, getChallenge, setChallenge } from "../lib/challenge-store";
 import { resolvePasskeyName } from "../lib/passkey-names";
 import { enforceRateLimits, ipRateLimit, subjectRateLimit } from "../lib/rate-limit";
-import { recordActivityLog } from "../lib/background-events";
-import { authenticationCredentialSchema, registrationCredentialSchema } from "../contracts/security/webauthn";
+import { extractAllowedWebauthnOrigin } from "../lib/webauthn-origin";
+import { requireAuth, requireWritableForMutation } from "../middleware/auth";
 
 const app = new Hono<{ Bindings: Env }>();
 const RECOVERY_CODE_COUNT = 5;
@@ -372,7 +372,8 @@ app.post(
         return c.json({ error: "no_prf_master_key" }, 400);
       }
 
-      return c.json({ prfEncryptedMasterKey: passkey.prfEncryptedMasterKey });
+      const ownedIdentities = await db.select({ id: identities.id }).from(identities).where(eq(identities.userId, user.id));
+      return c.json({ prfEncryptedMasterKey: passkey.prfEncryptedMasterKey, identityIds: ownedIdentities.map((identity) => identity.id) });
     } catch (error) {
       console.error("Passkey unlock verification error:", error);
       return c.json({ error: "passkey_verification_failed" }, 400);
@@ -395,18 +396,15 @@ app.delete("/passkeys/:passkeyId", async (c) => {
     return c.json({ error: "Passkey not found" }, 404);
   }
   
-  // Check if this is the last passkey
-  const allPasskeys = await db
-    .select()
-    .from(passkeys)
-    .where(eq(passkeys.userId, user.id));
-  
-  if (allPasskeys.length === 1) {
-    return c.json({ error: "Cannot delete your only passkey" }, 400);
-  }
-  
-  await db.delete(passkeys).where(eq(passkeys.id, passkeyId));
-  
+  const [removed] = await db.delete(passkeys)
+    .where(and(
+      eq(passkeys.id, passkeyId),
+      eq(passkeys.userId, user.id),
+      sql`exists (select 1 from passkeys other where other.user_id = ${user.id} and other.id <> ${passkeyId})`,
+    ))
+    .returning({ id: passkeys.id });
+  if (!removed) return c.json({ error: "Cannot delete your only passkey" }, 400);
+
   // Log activity
   recordActivityLog(c, {
     userId: user.id,
@@ -462,8 +460,11 @@ app.post("/trust-codes/regenerate", async (c) => {
   ]);
   if (rateLimitResponse) return rateLimitResponse;
 
-  await db.delete(trustCodes).where(eq(trustCodes.userId, user.id));
-  const codes = await createTrustCodes(user.id);
+  const codes = Array.from({ length: RECOVERY_CODE_COUNT }, generateTrustCode);
+  await db.batch([
+    db.delete(trustCodes).where(eq(trustCodes.userId, user.id)),
+    db.insert(trustCodes).values(codes.map((code) => ({ userId: user.id, codeHash: hashTrustCode(code) }))),
+  ]);
 
   // Log activity
   recordActivityLog(c, {

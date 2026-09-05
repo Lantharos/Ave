@@ -1,12 +1,17 @@
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
+import { HTTPException } from "hono/http-exception";
 import { db, identities, oauthApps, organizationIdentityMembers, organizations } from "../db";
+import type { AuthUser } from "../middleware/auth";
 import {
   createBusinessOrganization,
   getUserBusinessIdentities,
+  hasBusinessScope,
   listBusinessOrganizationsForUser,
   requireBusinessAccess,
+  shouldRequireEnterpriseSsoForBusinessAccess,
   type BusinessRole,
 } from "./business";
+import { getRequiredEnterpriseSsoForOrganization } from "./enterprise-sso-policy";
 
 export type OrganizationRole = "owner" | "admin" | "viewer";
 type BusinessMembership = Awaited<ReturnType<typeof listBusinessOrganizationsForUser>>[number];
@@ -55,6 +60,29 @@ function mapBusinessMembership(row: BusinessMembership) {
   };
 }
 
+export async function enforcePortalOrganizationAccess(
+  user: AuthUser,
+  access: Pick<BusinessMembership, "member" | "organization">,
+  minimumRole: OrganizationRole = "viewer",
+) {
+  if (!hasBusinessScope(access.member, "read")) {
+    throw new HTTPException(403, { message: "Organization read access required" });
+  }
+  if (shouldRequireEnterpriseSsoForBusinessAccess(user, access)) {
+    const policy = await getRequiredEnterpriseSsoForOrganization(access.organization);
+    throw new HTTPException(403, {
+      res: Response.json({
+        error: "enterprise_sso_required",
+        loginUrl: policy?.loginUrl,
+        organization: { id: access.organization.id, name: access.organization.name },
+      }, { status: 403 }),
+    });
+  }
+  if (minimumRole !== "viewer" && !access.member.signingAuthority) {
+    throw new HTTPException(403, { message: "Signing authority required" });
+  }
+}
+
 async function listOrganizationMemberships(userId: string) {
   return (await listBusinessOrganizationsForUser(userId)).map(mapBusinessMembership);
 }
@@ -94,7 +122,7 @@ export async function createOrganization(userId: string, name: string) {
     throw new Error("A primary identity is required before creating an organization");
   }
 
-  return created.organization;
+  return mapBusinessMembership(created);
 }
 
 export async function getOrganizationMemberships(userId: string) {
@@ -103,33 +131,26 @@ export async function getOrganizationMemberships(userId: string) {
   return [await createPersonalOrganization(userId)];
 }
 
-export async function requireOrganizationAccess(userId: string, organizationId: string, minimumRole: OrganizationRole = "viewer") {
-  const membership = await requireBusinessAccess(userId, organizationId, businessRoleForOrganizationRole(minimumRole));
+export async function requireOrganizationAccess(user: AuthUser, organizationId: string, minimumRole: OrganizationRole = "viewer") {
+  const membership = await requireBusinessAccess(user.id, organizationId, businessRoleForOrganizationRole(minimumRole));
   if (!membership) return null;
 
+  await enforcePortalOrganizationAccess(user, membership, minimumRole);
   return mapBusinessMembership(membership);
 }
 
-export async function getAccessibleApps(userId: string, organizationId?: string) {
-  const memberships = await getOrganizationMemberships(userId);
-  const accessibleOrganizationIds = memberships.map((entry) => entry.organization.id);
-  if (!accessibleOrganizationIds.length) return [];
-
-  const targetOrganizationId = organizationId && accessibleOrganizationIds.includes(organizationId)
-    ? organizationId
-    : accessibleOrganizationIds[0];
-
-  return db
-    .select()
-    .from(oauthApps)
-    .where(
-      targetOrganizationId
-        ? eq(oauthApps.organizationId, targetOrganizationId)
-        : inArray(oauthApps.organizationId, accessibleOrganizationIds),
-    );
+export async function getAccessibleApps(user: AuthUser, organizationId?: string) {
+  const memberships = await getOrganizationMemberships(user.id);
+  const membership = organizationId
+    ? memberships.find((entry) => entry.organization.id === organizationId)
+    : memberships[0];
+  if (!membership) return [];
+  await enforcePortalOrganizationAccess(user, membership);
+  return db.select().from(oauthApps)
+    .where(eq(oauthApps.organizationId, membership.organization.id));
 }
 
-export async function getAccessibleApp(userId: string, appId: string, minimumRole: OrganizationRole = "viewer") {
+export async function getAccessibleApp(user: AuthUser, appId: string, minimumRole: OrganizationRole = "viewer") {
   const rows = await db
     .select({
       app: oauthApps,
@@ -145,7 +166,7 @@ export async function getAccessibleApp(userId: string, appId: string, minimumRol
     ))
     .innerJoin(identities, and(
       eq(identities.id, organizationIdentityMembers.identityId),
-      eq(identities.userId, userId),
+      eq(identities.userId, user.id),
     ))
     .where(eq(oauthApps.id, appId));
   const eligible = rows
@@ -154,6 +175,7 @@ export async function getAccessibleApp(userId: string, appId: string, minimumRol
     .sort((left, right) => roleRank[right.membership.role] - roleRank[left.membership.role]);
   const accessible = eligible[0];
   if (!accessible) return null;
+  await enforcePortalOrganizationAccess(user, accessible.membership, minimumRole);
 
   return {
     app: accessible.app,

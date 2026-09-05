@@ -1,4 +1,5 @@
 import { and, eq, inArray } from "drizzle-orm";
+import { HTTPException } from "hono/http-exception";
 import {
   db,
   devices,
@@ -10,9 +11,10 @@ import {
   type Organization,
   type OrganizationSsoConnection,
 } from "../db";
-import { clientIp, userAgent } from "./business-route-utils";
 import { recordActivityLog, recordBusinessAuditEvent } from "./background-events";
+import { clientIp, userAgent } from "./business-route-utils";
 import { generateSessionToken, hashSessionToken } from "./crypto";
+import { requireVerifiedSsoEmail } from "./enterprise-sso-policy";
 import { setSessionCookie } from "./session-cookie";
 
 function normalizeDisplayName(value: string | null | undefined, email: string) {
@@ -104,11 +106,11 @@ async function ensureOrganizationMembership(organizationId: string, identityId: 
         .limit(1);
       if (!concurrentMembership) throw error;
       if (concurrentMembership.status !== "active") {
-        await db.update(organizationIdentityMembers).set({ status: "active", updatedAt: new Date() }).where(eq(organizationIdentityMembers.id, concurrentMembership.id));
+        throw new HTTPException(403, { message: "Organization membership is inactive" });
       }
     }
   } else if (membership.status !== "active") {
-    await db.update(organizationIdentityMembers).set({ status: "active", updatedAt: new Date() }).where(eq(organizationIdentityMembers.id, membership.id));
+    throw new HTTPException(403, { message: "Organization membership is inactive" });
   }
 }
 
@@ -119,7 +121,11 @@ export async function completeEnterpriseSsoLogin(input: {
   email: string;
   displayName?: string | null;
 }) {
-  const { c, organization, connection, email } = input;
+  const { c, organization, connection } = input;
+  if (connection.status !== "active" || connection.organizationId !== organization.id) {
+    throw new HTTPException(403, { message: "SSO connection is not active for this organization" });
+  }
+  const email = await requireVerifiedSsoEmail(connection, input.email);
   const resolvedIdentity = await resolveEnterpriseIdentity(email, input.displayName, organization);
   const { identity, created } = resolvedIdentity;
   try {
@@ -183,6 +189,14 @@ export async function recordSsoConnectionTest(input: {
   email: string;
   type: "saml" | "oidc";
 }) {
+  const [connection] = await db.select().from(organizationSsoConnections)
+    .where(and(
+      eq(organizationSsoConnections.id, input.connectionId),
+      eq(organizationSsoConnections.organizationId, input.organizationId),
+    ))
+    .limit(1);
+  if (!connection) throw new HTTPException(404, { message: "SSO connection not found" });
+  await requireVerifiedSsoEmail(connection, input.email);
   await db.update(organizationSsoConnections).set({ status: "active", updatedAt: new Date() }).where(eq(organizationSsoConnections.id, input.connectionId));
   recordBusinessAuditEvent(input.c, {
     organizationId: input.organizationId,

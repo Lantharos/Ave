@@ -28,7 +28,7 @@ FedCM works with Ave's end-to-end encryption model too, but with an important de
 
 In practice:
 
-- **Non-E2EE apps** can complete directly in the initial FedCM exchange.
+- **Non-E2EE apps** can complete directly when the selected identity has already approved every requested scope. First sign-in, newly requested scopes, or missing consent history opens the continuation dialog. Requests must also satisfy the app’s current scope allowlist.
 - **E2EE apps** start with FedCM, then continue in an Ave dialog, and finally return the plaintext `app_key` through the completed FedCM assertion.
 
 ## SDK usage
@@ -72,7 +72,6 @@ FedCM exchange returns the normal token payload. For E2EE apps, the completed Fe
   "access_token": "...",
   "access_token_jwt": "...",
   "id_token": "...",
-  "refresh_token": "...",
   "expires_in": 3600,
   "scope": "openid profile email",
   "app_key": "base64..."

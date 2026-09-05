@@ -1,3 +1,4 @@
+import { openEmbedPopup, postToEmbedParent } from "$lib/surfaces/web/util/embed-popup";
 import { postMessageTargetOriginFromRedirectUri } from "$lib/surfaces/web/util/embed-post-message-origin";
 
 type AveIdentityProvider = {
@@ -11,20 +12,16 @@ export function identityProvider(): AveIdentityProvider | null {
 }
 
 export function openAuthPopupHere(): boolean {
-  const width = 450;
-  const height = 650;
-  const left = (window.innerWidth - width) / 2 + window.screenX;
-  const top = (window.innerHeight - height) / 2 + window.screenY;
-  const popup = window.open(
-    window.location.href,
-    "ave_auth",
-    `width=${width},height=${height},left=${left},top=${top},menubar=no,toolbar=no,location=no,status=no`,
-  );
-  popup?.focus?.();
-  return !!popup;
+  const redirectUri = new URL(window.location.href).searchParams.get("redirect_uri") ?? "";
+  return openEmbedPopup(postMessageTargetOriginFromRedirectUri(redirectUri), 450, 650);
 }
 
 export function fallbackToTopLevelAuthorize(): void {
+  if (window.parent !== window) {
+    const redirectUri = new URL(window.location.href).searchParams.get("redirect_uri") ?? "";
+    postToEmbedHost(redirectUri, { type: "ave:auth_required" });
+    return;
+  }
   const fallbackUrl = new URL(window.location.href);
   fallbackUrl.searchParams.delete("embed");
   window.location.assign(fallbackUrl.toString());
@@ -54,8 +51,5 @@ export function isCustomSchemeRedirect(url: string): boolean {
 }
 
 export function postToEmbedHost(redirectUri: string, payload: unknown): void {
-  const opener = window.opener as Window | null;
-  const target = opener?.parent ?? window.parent;
-  const origin = postMessageTargetOriginFromRedirectUri(redirectUri);
-  target?.postMessage(payload, origin);
+  postToEmbedParent(payload, postMessageTargetOriginFromRedirectUri(redirectUri));
 }

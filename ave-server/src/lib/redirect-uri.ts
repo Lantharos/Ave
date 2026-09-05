@@ -19,7 +19,7 @@ function isLoopbackHostname(hostname: string): boolean {
   });
 }
 
-export function isLoopbackRedirectUri(value: string): boolean {
+function isLoopbackRedirectUri(value: string): boolean {
   try {
     const url = new URL(value);
     return (url.protocol === "http:" || url.protocol === "https:") && isLoopbackHostname(url.hostname);
@@ -44,7 +44,7 @@ export function normalizeRedirectUri(value: string): string {
   }
 }
 
-export function isExpoGoRedirectUri(value: string): boolean {
+function isExpoGoRedirectUri(value: string): boolean {
   try {
     const url = new URL(value);
     return url.protocol === "exp:" && Boolean(url.hostname);

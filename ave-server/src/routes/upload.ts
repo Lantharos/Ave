@@ -1,9 +1,10 @@
+import { and, eq } from "drizzle-orm";
 import { Hono } from "hono";
 import { db, identities, organizations } from "../db";
-import { requireAuth, requireWritable } from "../middleware/auth";
-import { eq, and } from "drizzle-orm";
 import { recordActivityLog } from "../lib/background-events";
-import { requireBusinessAccess } from "../lib/business";
+import { hasBusinessScope, requireBusinessAccess } from "../lib/business";
+import { rejectWithoutRequiredSso, rejectWithoutSigningAuthority } from "../lib/business-route-guards";
+import { requireAuth, requireWritable } from "../middleware/auth";
 
 type Bindings = {
   UPLOADS: R2Bucket;
@@ -138,7 +139,7 @@ async function deleteFromR2(c: { env: Partial<Bindings> }, key: string): Promise
 }
 
 // Extract key from URL
-function getKeyFromUrl(c: { env: Partial<Bindings> }, url: string): string | null {
+function getKeyFromUrl(c: { env: Partial<Bindings> }, url: string, ownerPrefix: string): string | null {
   const publicUrl = getUploadsPublicUrl(c);
   let parsedUrl: URL;
   let parsedPublicUrl: URL;
@@ -160,7 +161,7 @@ function getKeyFromUrl(c: { env: Partial<Bindings> }, url: string): string | nul
   } catch {
     return null;
   }
-  if (!key || key.startsWith("/") || key.includes("..")) {
+  if (!key.startsWith(ownerPrefix) || key.includes("..")) {
     return null;
   }
 
@@ -201,22 +202,22 @@ app.post("/avatar", async (c) => {
     return c.json({ error: upload.error }, upload.status);
   }
 
-  const key = `avatars/${upload.filename}`;
+  const key = `avatars/${identity.id}/${upload.filename}`;
   const avatarUrl = await uploadToR2(c, upload.buffer, key, upload.contentType);
-
-  // Delete old avatar if exists
-  if (identity.avatarUrl) {
-    const oldKey = getKeyFromUrl(c, identity.avatarUrl);
-    if (oldKey) {
-      await deleteFromR2(c, oldKey);
-    }
-  }
 
   // Update identity
   await db
     .update(identities)
     .set({ avatarUrl, updatedAt: new Date() })
     .where(eq(identities.id, identityId));
+
+  // Delete old avatar if exists
+  if (identity.avatarUrl) {
+    const oldKey = getKeyFromUrl(c, identity.avatarUrl, `avatars/${identity.id}/`);
+    if (oldKey) {
+      await deleteFromR2(c, oldKey);
+    }
+  }
 
   recordActivityLog(c, {
     userId: user.id,
@@ -259,29 +260,33 @@ app.post("/workspace-logo", async (c) => {
   }
 
   const access = await requireBusinessAccess(user.id, organizationId, "admin");
-  if (!access) {
+  if (!access || !hasBusinessScope(access.member, "manage_org")) {
     return c.json({ error: "Organization not found" }, 404);
   }
+  const ssoError = await rejectWithoutRequiredSso(c, access);
+  if (ssoError) return ssoError;
+  const authorityError = rejectWithoutSigningAuthority(c, access.member);
+  if (authorityError) return authorityError;
 
   const upload = await prepareImageUpload(file, MAX_WORKSPACE_LOGO_SIZE);
   if (!upload.ok) {
     return c.json({ error: upload.error }, upload.status);
   }
 
-  const key = `workspace-logos/${upload.filename}`;
+  const key = `workspace-logos/${organization.id}/${upload.filename}`;
   const logoUrl = await uploadToR2(c, upload.buffer, key, upload.contentType);
-
-  if (organization.logoUrl) {
-    const oldKey = getKeyFromUrl(c, organization.logoUrl);
-    if (oldKey) {
-      await deleteFromR2(c, oldKey);
-    }
-  }
 
   await db
     .update(organizations)
     .set({ logoUrl, updatedAt: new Date() })
     .where(eq(organizations.id, organizationId));
+
+  if (organization.logoUrl) {
+    const oldKey = getKeyFromUrl(c, organization.logoUrl, `workspace-logos/${organization.id}/`);
+    if (oldKey) {
+      await deleteFromR2(c, oldKey);
+    }
+  }
 
   recordActivityLog(c, {
     userId: user.id,
@@ -330,22 +335,22 @@ app.post("/banner", async (c) => {
     return c.json({ error: upload.error }, upload.status);
   }
 
-  const key = `banners/${upload.filename}`;
+  const key = `banners/${identity.id}/${upload.filename}`;
   const bannerUrl = await uploadToR2(c, upload.buffer, key, upload.contentType);
-
-  // Delete old banner if exists (only if it's an R2 URL, not a color)
-  if (identity.bannerUrl && !identity.bannerUrl.startsWith("#")) {
-    const oldKey = getKeyFromUrl(c, identity.bannerUrl);
-    if (oldKey) {
-      await deleteFromR2(c, oldKey);
-    }
-  }
 
   // Update identity
   await db
     .update(identities)
     .set({ bannerUrl, updatedAt: new Date() })
     .where(eq(identities.id, identityId));
+
+  // Delete old banner if exists (only if it's an R2 URL, not a color)
+  if (identity.bannerUrl && !identity.bannerUrl.startsWith("#")) {
+    const oldKey = getKeyFromUrl(c, identity.bannerUrl, `banners/${identity.id}/`);
+    if (oldKey) {
+      await deleteFromR2(c, oldKey);
+    }
+  }
 
   recordActivityLog(c, {
     userId: user.id,
@@ -378,7 +383,7 @@ app.delete("/avatar/:identityId", async (c) => {
 
   // Delete from R2 if exists
   if (identity.avatarUrl) {
-    const key = getKeyFromUrl(c, identity.avatarUrl);
+    const key = getKeyFromUrl(c, identity.avatarUrl, `avatars/${identity.id}/`);
     if (key) {
       await deleteFromR2(c, key);
     }
@@ -411,7 +416,7 @@ app.delete("/banner/:identityId", async (c) => {
 
   // Delete from R2 if exists (only if it's an R2 URL, not a color)
   if (identity.bannerUrl && !identity.bannerUrl.startsWith("#")) {
-    const key = getKeyFromUrl(c, identity.bannerUrl);
+    const key = getKeyFromUrl(c, identity.bannerUrl, `banners/${identity.id}/`);
     if (key) {
       await deleteFromR2(c, key);
     }

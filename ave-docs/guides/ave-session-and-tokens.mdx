@@ -18,6 +18,12 @@ OAuth tokens expire on a short clock. That is separate from how long a user shou
   Quick Ave does not issue refresh tokens. Move to a registered app when you need long-lived sessions. See [Upgrading from Quick Ave](/guides/quick-ave-to-standard).
 </Note>
 
+## Disconnected apps
+
+Disconnecting an app in Ave invalidates its refresh tokens and access to Ave APIs for the selected identity. Handle a definitive `invalid_grant` by clearing the app session and starting sign-in again. Reconnecting requires consent and does not reactivate old tokens.
+
+An ID token or delegated resource JWT already accepted by another service remains subject to that service’s session policy and the token’s expiry. Signing out locally only clears the local session.
+
 ## Create a session
 
 ```ts

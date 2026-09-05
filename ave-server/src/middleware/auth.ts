@@ -1,10 +1,10 @@
+import { and, eq, gt, lt } from "drizzle-orm";
 import { Context, Next } from "hono";
-import { db, sessions, devices } from "../db";
-import { eq, and, gt, lt } from "drizzle-orm";
-import { hashSessionToken } from "../lib/crypto";
-import { getCookieValue, SESSION_COOKIE_NAME, setSessionCookie } from "../lib/session-cookie";
-import type { AccessTokenRecord } from "../lib/oauth-store";
+import { db, devices, primaryDb, sessions } from "../db";
 import { runInBackground } from "../lib/background";
+import { hashSessionToken } from "../lib/crypto";
+import type { AccessTokenRecord } from "../lib/oauth-store";
+import { getCookieValue, SESSION_COOKIE_NAME, setSessionCookie } from "../lib/session-cookie";
 
 const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 const SESSION_REFRESH_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
@@ -50,7 +50,7 @@ export async function authMiddleware(c: Context, next: Next) {
   
   try {
     // Find valid session
-    const [session] = await db
+    const [session] = await primaryDb
       .select({
         id: sessions.id,
         userId: sessions.userId,

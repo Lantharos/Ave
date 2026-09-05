@@ -1,4 +1,5 @@
 <script lang="ts">
+    import type { PublicKeyCredentialRequestOptionsJSON } from "@simplewebauthn/browser";
     import { onMount } from "svelte";
     import Button from "$lib/surfaces/web/components/Button.svelte";
     import { api, type Identity } from "$lib/surfaces/web/lib/api";
@@ -13,7 +14,7 @@
             hasDevices: boolean;
             hasPasskeys: boolean;
             demoPasswordEnabled?: boolean;
-            authOptions: PublicKeyCredentialRequestOptions | null;
+            authOptions: PublicKeyCredentialRequestOptionsJSON | null;
             authSessionId: string | null;
         }) => void;
         onError?: (error: string) => void;

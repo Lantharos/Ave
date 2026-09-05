@@ -223,13 +223,21 @@ Authorization: Bearer AVE_SESSION_TOKEN
     Returns all signing keys for the authenticated user's identities.
   </Accordion>
   <Accordion title="GET /api/signing/keys/:identityId">
-    Returns the signing key for a specific identity owned by the authenticated user. Returns `404` if the identity has no signing key or does not belong to the user.
+    Returns the signing key for a specific identity owned by the authenticated user, or `hasKey: false` if none is enrolled. Returns `404` if the identity does not belong to the user.
   </Accordion>
   <Accordion title="POST /api/signing/keys/:identityId">
     Creates a signing key for the specified identity. The identity must belong to the authenticated user and must not already have a signing key.
   </Accordion>
   <Accordion title="PUT /api/signing/keys/:identityId">
-    Rotates (replaces) the signing key for the specified identity.
+    Rotate an existing signing key. Requires an authenticated session and a base64 Ed25519 `rotationSignature` from the current key, alongside `publicKey` and `encryptedPrivateKey`.
+
+    Sign the UTF-8 JSON below with the existing private key, preserving field order. Include the new key values exactly as sent in the request:
+
+    ```json
+    {"version":1,"action":"signing_key.rotated","details":{"identityId":"IDENTITY_ID","publicKey":"NEW_PUBLIC_KEY","encryptedPrivateKey":"NEW_ENCRYPTED_PRIVATE_KEY"}}
+    ```
+
+    Rotation replaces the key atomically. An invalid signature returns `403`; a concurrent key change returns `409`. Use `POST` to enroll a first key. First-key enrollment relies on the authenticated account session.
   </Accordion>
 </AccordionGroup>
 

@@ -1,9 +1,9 @@
-import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
+import { and, eq, sql } from "drizzle-orm";
+import { Hono } from "hono";
 import { z } from "zod";
 import { db, identities, identityEncryptionKeys } from "../db";
-import { requireAuth, requireWritableForMutation } from "../middleware/auth";
-import { eq, and } from "drizzle-orm";
+import { recordActivityLog } from "../lib/background-events";
 import {
   beginEmailVerification,
   canResendEmailVerification,
@@ -12,9 +12,10 @@ import {
   getEmailVerificationCooldownSeconds,
   normalizeEmail,
 } from "../lib/email-verification";
+import { validateOpaqueKeyEnvelope, validatePublicKeyBlob } from "../lib/encryption-key-payload";
 import { listIdentitiesForOwner, serializeIdentityForOwner } from "../lib/identity-serialization";
 import { enforceRateLimits, ipRateLimit, subjectRateLimit } from "../lib/rate-limit";
-import { recordActivityLog } from "../lib/background-events";
+import { requireAuth, requireWritableForMutation } from "../middleware/auth";
 
 const app = new Hono();
 
@@ -66,11 +67,6 @@ app.post("/", zValidator("json", z.object({
     (val) => val === undefined || val.startsWith("#") || z.string().url().safeParse(val).success,
     { message: "Must be a valid URL or hex color" }
   ),
-  identityKey: z.object({
-    publicKey: z.string().min(1),
-    encryptedPrivateKey: z.string().min(1),
-  }).optional(),
-  // Backward compatible alias while clients migrate.
   encryptionKey: z.object({
     publicKey: z.string().min(1),
     encryptedPrivateKey: z.string().min(1),
@@ -100,6 +96,13 @@ app.post("/", zValidator("json", z.object({
     return c.json({ error: "Handle is already taken" }, 400);
   }
   
+  if (data.encryptionKey) {
+    const publicKey = validatePublicKeyBlob(data.encryptionKey.publicKey);
+    if (!publicKey.ok) return c.json({ error: publicKey.error }, 400);
+    const encryptedKey = validateOpaqueKeyEnvelope(data.encryptionKey.encryptedPrivateKey);
+    if (!encryptedKey.ok) return c.json({ error: encryptedKey.error }, 400);
+  }
+
   const [identity] = await db
     .insert(identities)
     .values({
@@ -114,7 +117,7 @@ app.post("/", zValidator("json", z.object({
     })
     .returning();
 
-  const identityKey = data.identityKey ?? data.encryptionKey;
+  const identityKey = data.encryptionKey;
 
   if (identityKey) {
     await db.insert(identityEncryptionKeys).values({
@@ -411,18 +414,15 @@ app.post("/:identityId/set-primary", async (c) => {
     return c.json({ error: "Identity not found" }, 404);
   }
   
-  // Remove primary from all other identities
-  await db
-    .update(identities)
-    .set({ isPrimary: false })
-    .where(eq(identities.userId, user.id));
-  
-  // Set this one as primary
-  await db
-    .update(identities)
-    .set({ isPrimary: true })
-    .where(eq(identities.id, identityId));
-  
+  const updated = await db.update(identities)
+    .set({ isPrimary: sql`${identities.id} = ${identityId}` })
+    .where(and(
+      eq(identities.userId, user.id),
+      sql`exists (select 1 from identities target where target.id = ${identityId} and target.user_id = ${user.id})`,
+    ))
+    .returning({ id: identities.id });
+  if (!updated.length) return c.json({ error: "Identity not found" }, 404);
+
   return c.json({ success: true });
 });
 
@@ -446,17 +446,15 @@ app.delete("/:identityId", async (c) => {
     return c.json({ error: "Cannot delete primary identity. Set another identity as primary first." }, 400);
   }
   
-  // Can't delete the only identity
-  const allIdentities = await db
-    .select()
-    .from(identities)
-    .where(eq(identities.userId, user.id));
-  
-  if (allIdentities.length === 1) {
-    return c.json({ error: "Cannot delete your only identity" }, 400);
-  }
-  
-  await db.delete(identities).where(eq(identities.id, identityId));
+  const [removed] = await db.delete(identities)
+    .where(and(
+      eq(identities.id, identityId),
+      eq(identities.userId, user.id),
+      eq(identities.isPrimary, false),
+      sql`exists (select 1 from identities other where other.user_id = ${user.id} and other.id <> ${identityId})`,
+    ))
+    .returning({ id: identities.id });
+  if (!removed) return c.json({ error: "Cannot delete the primary identity" }, 400);
   
   // Log activity
   recordActivityLog(c, {

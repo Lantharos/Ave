@@ -17,14 +17,10 @@
 
   let search = $state("");
   let inviteEmail = $state("");
-  let inviteRole = $state<Exclude<WorkspaceRole, "owner">>("admin");
-  let draftName = $state("");
+  let inviteRole = $state<Exclude<WorkspaceRole, "owner">>("viewer");
+  let draftName = $derived(workspace.name);
   let logoInput: HTMLInputElement | null = null;
   let uploadingLogo = $state(false);
-
-  $effect(() => {
-    draftName = workspace.name;
-  });
 
   const visibleMembers = $derived(
     search.trim()
@@ -39,6 +35,9 @@
   const activeMembers = $derived(workspace.members.filter((member) => member.status === "active"));
   const invites = $derived(workspace.members.filter((member) => member.status === "invited"));
   const workspaceAvatar = $derived(workspace.logoUrl || null);
+  const canManageProfile = $derived(workspace.signingAuthority && (workspace.role === "owner" || workspace.scopes.includes("manage_org")));
+  const canManageMembers = $derived(workspace.signingAuthority && (workspace.role === "owner" || workspace.scopes.includes("manage_identities")) && workspace.role !== "viewer");
+  const assignableRoles = $derived<Exclude<WorkspaceRole, "owner">[]>(workspace.role === "owner" ? ["admin", "viewer"] : ["viewer"]);
 </script>
 
 <div class="flex flex-col gap-8 md:gap-10">
@@ -53,7 +52,7 @@
     <Card>
       <div class="flex flex-col gap-6">
         <div class="flex items-center gap-4">
-          <button class="flex h-16 w-16 items-center justify-center overflow-hidden rounded-[22px] border-0 bg-white/[0.04] cursor-pointer transition-colors duration-300 hover:bg-white/[0.06]" onclick={() => logoInput?.click()}>
+          <button class="flex h-16 w-16 items-center justify-center overflow-hidden rounded-[22px] border-0 bg-white/[0.04] cursor-pointer transition-colors duration-300 hover:bg-white/[0.06]" onclick={() => logoInput?.click()} disabled={!canManageProfile || uploadingLogo} aria-label="Change workspace icon">
             {#if workspaceAvatar}
               <img src={workspaceAvatar} alt="" class="h-full w-full object-cover" />
             {:else}
@@ -79,10 +78,12 @@
           }
         }} />
 
+        {#if canManageProfile}
         <label class="flex flex-col gap-3">
           <span class="text-[14px] text-[#8a8a8a]">Name</span>
           <Input bind:value={draftName} placeholder="Workspace name" />
         </label>
+        {/if}
 
         <div class="grid gap-4 sm:grid-cols-2">
           <div class="rounded-[22px] bg-white/[0.03] px-5 py-5">
@@ -97,10 +98,12 @@
           </div>
         </div>
 
+        {#if canManageProfile}
         <div class="flex justify-between gap-3 flex-wrap">
           <Button variant="outline" size="sm" onclick={() => logoInput?.click()}>{uploadingLogo ? "Uploading..." : "Change icon"}</Button>
           <Button variant="primary" size="sm" onclick={() => onrename(draftName.trim() || workspace.name)}>Save</Button>
         </div>
+        {/if}
       </div>
     </Card>
 
@@ -113,12 +116,13 @@
           </div>
         </div>
 
+        {#if canManageMembers}
         <div class="grid gap-3 sm:grid-cols-[1fr_auto_auto]">
           <div class="min-w-0">
             <Input bind:value={inviteEmail} placeholder="name@company.com" />
           </div>
           <div class="flex gap-2 flex-wrap">
-            {#each ["admin", "viewer"] as role}
+            {#each assignableRoles as role (role)}
               <button
                 class="rounded-full border-0 px-4 py-2 text-[13px] cursor-pointer transition-colors duration-300 {inviteRole === role ? 'bg-white text-[#090909]' : 'bg-white/[0.05] text-[#8d8d8d] hover:text-white'}"
                 onclick={() => (inviteRole = role as Exclude<WorkspaceRole, "owner">)}
@@ -134,12 +138,13 @@
               if (!inviteEmail.trim()) return;
               oninvite(inviteEmail.trim(), inviteRole);
               inviteEmail = "";
-              inviteRole = "admin";
+              inviteRole = "viewer";
             }}
           >
             Invite
           </Button>
         </div>
+        {/if}
 
         <div class="relative">
           <svg class="absolute left-5 top-1/2 h-5 w-5 -translate-y-1/2 text-[#555]" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -159,7 +164,7 @@
             <span>Role</span>
           </div>
           <div class="flex flex-col">
-            {#each visibleMembers as member}
+            {#each visibleMembers as member (member.id)}
               <div class="grid gap-4 px-5 py-4 items-center odd:bg-white/[0.02] md:grid-cols-[1.4fr_1fr_0.8fr]">
                 <div class="flex items-center gap-3 min-w-0">
                   {#if member.avatarUrl}
@@ -176,10 +181,10 @@
                 </div>
                 <div class="text-[14px] text-[#8a8a8a]">{formatDate(member.joinedAt)}</div>
                 <div class="flex flex-wrap gap-2">
-                  {#if member.role === "owner"}
-                    <span class="rounded-full bg-white px-3 py-1.5 text-[12px] text-[#090909]">owner</span>
+                  {#if member.role === "owner" || !canManageMembers || (workspace.role !== "owner" && member.role === "admin")}
+                    <span class="rounded-full bg-white px-3 py-1.5 text-[12px] text-[#090909]">{member.role}</span>
                   {:else}
-                    {#each ["admin", "viewer"] as role}
+                    {#each assignableRoles as role (role)}
                       <button
                         class="rounded-full border-0 px-3 py-1.5 text-[12px] cursor-pointer transition-colors duration-300 {member.role === role ? 'bg-white text-[#090909]' : 'bg-white/[0.05] text-[#8d8d8d] hover:text-white'}"
                         onclick={() => onchangerole(member.id, role as WorkspaceRole)}

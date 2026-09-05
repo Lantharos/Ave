@@ -1,17 +1,16 @@
-import { db, oauthApps, oauthRefreshTokens, identities, organizationIdentityMembers, organizations } from "../../db";
-import { eq } from "drizzle-orm";
 import { randomUUID, timingSafeEqual } from "crypto";
-import { hashSessionToken } from "../../lib/crypto";
-import { getIssuer, getResourceAudience, signJwt, verifyJwt, hashToken } from "../../lib/oidc";
-import { createAccessTokenWrite, getAccessToken, type AccessTokenRecord } from "../../lib/oauth-store";
-import { serializeIdentityForApp } from "../../lib/identity-serialization";
-import { normalizeRedirectUri } from "../../lib/redirect-uri";
+import { eq } from "drizzle-orm";
+import { db, oauthApps, oauthRefreshTokens, organizationIdentityMembers, organizations } from "../../db";
 import { scopesForRole, type BusinessRole } from "../../lib/business";
 import { serializeEncryptionPolicy } from "../../lib/business-encryption";
-import { parseOAuthScopes, normalizeScopeToken } from "../../lib/oauth-scopes";
-import { buildQuickApp, isQuickClient } from "./quick-client";
+import { hashSessionToken } from "../../lib/crypto";
+import { normalizeScopeToken, parseOAuthScopes } from "../../lib/oauth-scopes";
+import { getAccessToken, type AccessTokenRecord } from "../../lib/oauth-store";
+import { getResourceAudience, verifyJwt } from "../../lib/oidc";
+import { normalizeRedirectUri } from "../../lib/redirect-uri";
+import { isQuickClient } from "./quick-client";
 
-export { buildQuickApp, getQuickOrigin, isQuickClient } from "./quick-client";
+export { buildQuickApp,getQuickOrigin,isQuickClient } from "./quick-client";
 
 export function getDiscoveryBase(): string {
   return process.env.OIDC_DISCOVERY_BASE || "https://api.aveid.net";
@@ -199,24 +198,8 @@ export async function resolveAccessTokenRecord(token: string): Promise<AccessTok
   const jwtPayload = await verifyJwt(token, getResourceAudience());
   if (!jwtPayload) return null;
 
-  return {
-    userId: typeof jwtPayload.uid === "string" ? jwtPayload.uid : "",
-    identityId: String(jwtPayload.sub || ""),
-    appId: String(jwtPayload.cid || ""),
-    scope: String(jwtPayload.scope || ""),
-    expiresAt: typeof jwtPayload.exp === "number" ? jwtPayload.exp * 1000 : 0,
-    redirectUri: "",
-    organizationId: typeof jwtPayload.org_id === "string" ? jwtPayload.org_id : undefined,
-    organizationName: typeof jwtPayload.org_name === "string" ? jwtPayload.org_name : undefined,
-    organizationMemberId: typeof jwtPayload.org_member_id === "string" ? jwtPayload.org_member_id : undefined,
-    organizationRole: typeof jwtPayload.org_role === "string" ? jwtPayload.org_role : undefined,
-    organizationScopes: Array.isArray(jwtPayload.org_scopes) ? jwtPayload.org_scopes.filter((scope): scope is string => typeof scope === "string") : undefined,
-    organizationSigningAuthority: typeof jwtPayload.org_signing_authority === "boolean" ? jwtPayload.org_signing_authority : undefined,
-    organizationEncryptionMode: typeof jwtPayload.org_encryption_mode === "string" ? jwtPayload.org_encryption_mode : undefined,
-    organizationKeyCustody: typeof jwtPayload.org_key_custody === "string" ? jwtPayload.org_key_custody : undefined,
-    organizationAuthMethod: typeof jwtPayload.auth_method === "string" ? jwtPayload.auth_method : undefined,
-    organizationSsoConnectionId: typeof jwtPayload.sso_connection_id === "string" ? jwtPayload.sso_connection_id : undefined,
-  };
+  if (typeof jwtPayload.jti !== "string") return null;
+  return getAccessToken(jwtPayload.jti);
 }
 
 export async function resolveOauthAppForAccessRecord(record: Pick<AccessTokenRecord, "appId">) {
@@ -258,167 +241,3 @@ export async function resolveOauthAppForClient(clientId: string) {
 
   return app ?? null;
 }
-
-export async function buildTokenResponseFromAuthorizationCode(params: {
-  authCode: {
-    userId: string;
-    identityId: string;
-    scope: string;
-    nonce?: string;
-    encryptedAppKey?: string;
-    organizationId?: string;
-    organizationName?: string;
-    organizationMemberId?: string;
-    organizationRole?: string;
-    organizationScopes?: string[];
-    organizationSigningAuthority?: boolean;
-    organizationEncryptionMode?: string;
-    organizationKeyCustody?: string;
-    organizationAuthMethod?: string;
-    organizationSsoConnectionId?: string;
-  };
-  oauthApp: ReturnType<typeof buildQuickApp> | typeof oauthApps.$inferSelect;
-  clientId: string;
-  redirectUri: string;
-  includeEncryptedAppKey?: boolean;
-  issueRefreshToken?: boolean;
-}) {
-  const { authCode, oauthApp, clientId, redirectUri, includeEncryptedAppKey, issueRefreshToken = false } = params;
-
-  const accessToken = generateAccessToken();
-  const accessTokenTtl = oauthApp.accessTokenTtlSeconds || 3600;
-  const refreshTokenTtl = oauthApp.refreshTokenTtlSeconds || 30 * 24 * 60 * 60;
-  const issuedAt = nowSeconds();
-  const expiresAt = issuedAt + accessTokenTtl;
-  const shouldIssueRefreshToken = issueRefreshToken
-    && hasScope(authCode.scope, "offline_access")
-    && !isQuickClient(clientId);
-  const refreshToken = shouldIssueRefreshToken ? generateRefreshToken() : null;
-  const refreshTokenId = shouldIssueRefreshToken ? randomUUID() : null;
-
-  const accessTokenWrite = createAccessTokenWrite(accessToken, {
-    userId: authCode.userId,
-    identityId: authCode.identityId,
-    appId: oauthApp.id,
-    scope: authCode.scope,
-    expiresAt: Date.now() + accessTokenTtl * 1000,
-    redirectUri,
-    organizationId: authCode.organizationId,
-    organizationName: authCode.organizationName,
-    organizationMemberId: authCode.organizationMemberId,
-    organizationRole: authCode.organizationRole,
-    organizationScopes: authCode.organizationScopes,
-    organizationSigningAuthority: authCode.organizationSigningAuthority,
-    organizationEncryptionMode: authCode.organizationEncryptionMode,
-    organizationKeyCustody: authCode.organizationKeyCustody,
-    organizationAuthMethod: authCode.organizationAuthMethod,
-    organizationSsoConnectionId: authCode.organizationSsoConnectionId,
-  });
-
-  const identityLookup = db
-    .select()
-    .from(identities)
-    .where(eq(identities.id, authCode.identityId))
-    .limit(1);
-
-  async function persistTokenState() {
-    if (refreshToken && refreshTokenId) {
-      const [identityRows] = await Promise.all([
-        identityLookup,
-        db.batch([
-          accessTokenWrite,
-          db.insert(oauthRefreshTokens).values({
-            id: refreshTokenId,
-            familyId: refreshTokenId,
-            userId: authCode.userId,
-            identityId: authCode.identityId,
-            appId: oauthApp.id,
-            tokenHash: hashToken(refreshToken),
-            scope: authCode.scope,
-            expiresAt: new Date(Date.now() + refreshTokenTtl * 1000),
-            organizationId: authCode.organizationId,
-            organizationMemberId: authCode.organizationMemberId,
-            enterpriseSsoOrganizationId: authCode.organizationAuthMethod === "enterprise_sso" ? authCode.organizationId : undefined,
-            enterpriseSsoConnectionId: authCode.organizationSsoConnectionId,
-          }),
-        ]),
-      ]);
-      return identityRows[0];
-    }
-
-    const [identityRows] = await Promise.all([identityLookup, accessTokenWrite]);
-    return identityRows[0];
-  }
-
-  const identityPromise = persistTokenState();
-  const jwtAccessTokenPromise = signJwt({
-    iss: getIssuer(),
-    sub: authCode.identityId,
-    aud: getResourceAudience(),
-    exp: expiresAt,
-    iat: issuedAt,
-    scope: authCode.scope,
-    cid: oauthApp.clientId,
-    uid: hasScope(authCode.scope, "user_id") ? authCode.userId : undefined,
-    ...(isQuickClient(clientId) ? { quick: true } : {}),
-    ...organizationClaims(authCode),
-  });
-  const identity = await identityPromise;
-
-  const response: Record<string, unknown> = {
-    access_token: accessToken,
-    token_type: "Bearer",
-    expires_in: accessTokenTtl,
-    scope: authCode.scope,
-    user: identity ? serializeIdentityForApp(identity) : null,
-  };
-
-  const idTokenPromise = hasScope(authCode.scope, "openid")
-    ? signJwt({
-      iss: getIssuer(),
-      sub: authCode.identityId,
-      aud: oauthApp.clientId,
-      exp: expiresAt,
-      iat: issuedAt,
-      auth_time: issuedAt,
-      azp: oauthApp.clientId,
-      nonce: authCode.nonce,
-      name: hasScope(authCode.scope, "profile") ? identity?.displayName : undefined,
-      preferred_username: hasScope(authCode.scope, "profile") ? identity?.handle : undefined,
-      email: hasScope(authCode.scope, "email") ? identity?.email : undefined,
-      picture: hasScope(authCode.scope, "profile") ? identity?.avatarUrl : undefined,
-      ...organizationClaims(authCode),
-    })
-    : Promise.resolve(null);
-
-  const [jwtAccessToken, idToken] = await Promise.all([jwtAccessTokenPromise, idTokenPromise]);
-  response.access_token_jwt = jwtAccessToken;
-
-  if (hasScope(authCode.scope, "user_id")) {
-    response.user_id = authCode.userId;
-  }
-
-  if (idToken) {
-    response.id_token = idToken;
-  }
-
-  if (refreshToken) {
-    response.refresh_token = refreshToken;
-  }
-
-  if (authCode.organizationId) {
-    response.organization = organizationResponse(authCode);
-  }
-
-  if (includeEncryptedAppKey && authCode.encryptedAppKey) {
-    response.encryptedAppKey = authCode.encryptedAppKey;
-  }
-
-  return response;
-}
-
-// ============================================
-// Quick Auth helpers — no app registration required.
-// clientId format: "origin:<origin>"  e.g. "origin:https://example.com"
-// Security is provided by PKCE; no client secret is needed or accepted.
-// ============================================

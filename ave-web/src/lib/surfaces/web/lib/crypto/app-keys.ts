@@ -1,8 +1,8 @@
 import {
-  bytesToBase64, decrypt, decryptToString, deriveSharedKey, encrypt,
+  bytesToBase64, decrypt, decryptToString, encrypt,
   exportIdentityEncryptionPrivateKey, generateIdentityEncryptionKeyPair,
-  importIdentityEncryptionPrivateKey, importPublicKey,
-} from "./core";
+  importIdentityEncryptionPrivateKey,
+} from "$lib/infrastructure/crypto/core";
 
 export function generateAppKey(): Promise<CryptoKey> {
   return crypto.subtle.generateKey({ name: "AES-GCM", length: 256 }, true, ["encrypt", "decrypt"]);
@@ -57,15 +57,4 @@ export async function createStoredIdentityEncryptionKeyPair(masterKey: CryptoKey
 
 export async function loadIdentityEncryptionPrivateKey(encryptedPrivateKey: string, masterKey: CryptoKey): Promise<CryptoKey> {
   return importIdentityEncryptionPrivateKey(await decrypt(encryptedPrivateKey, masterKey));
-}
-
-export async function encryptSecretForIdentity(secret: string | ArrayBuffer, recipientPublicKeyB64: string): Promise<{ encryptedSecret: string; senderPublicKey: string }> {
-  const sender = await generateIdentityEncryptionKeyPair();
-  const sharedKey = await deriveSharedKey(sender.privateKey, await importPublicKey(recipientPublicKeyB64));
-  return { encryptedSecret: await encrypt(secret, sharedKey), senderPublicKey: sender.publicKey };
-}
-
-export async function decryptSecretFromIdentity(encryptedSecret: string, senderPublicKeyB64: string, recipientPrivateKey: CryptoKey): Promise<ArrayBuffer> {
-  const sharedKey = await deriveSharedKey(recipientPrivateKey, await importPublicKey(senderPublicKeyB64));
-  return decrypt(encryptedSecret, sharedKey);
 }

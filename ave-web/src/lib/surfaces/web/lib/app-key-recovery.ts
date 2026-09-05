@@ -1,4 +1,5 @@
 import { get } from "svelte/store";
+import { auth } from "../stores/auth";
 import { api } from "./api";
 import {
   encryptAppKey,
@@ -6,9 +7,8 @@ import {
   importAppKey,
   resolveActiveMasterKey,
 } from "./crypto";
-import { auth } from "../stores/auth";
 
-export type AppKeyRecoveryInput = {
+type AppKeyRecoveryInput = {
   clientId: string;
   appKey?: string;
   identityId?: string;
@@ -49,7 +49,7 @@ async function readRecoveredAppKey(appKey?: string): Promise<string> {
   return clipboardAppKey.trim() ? clipboardAppKey : promptForRecoveredAppKey();
 }
 
-export async function recoverAppKey({
+async function recoverAppKey({
   clientId,
   appKey,
   identityId,

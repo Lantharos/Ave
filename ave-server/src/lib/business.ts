@@ -68,7 +68,7 @@ export function hasEnterpriseSsoSessionForOrganization(user: Pick<AuthUser, "aut
   return user.authMethod === "enterprise_sso" && user.enterpriseSsoOrganizationId === organizationId;
 }
 
-export function hasBusinessBreakGlassAccess(member: Pick<typeof organizationIdentityMembers.$inferSelect, "role" | "signingAuthority">) {
+function hasBusinessBreakGlassAccess(member: Pick<typeof organizationIdentityMembers.$inferSelect, "role" | "signingAuthority">) {
   return member.role === "owner" && member.signingAuthority;
 }
 

@@ -60,10 +60,7 @@ bun install
 cd ../ave-server
 ```
 
-Create local environment files from the examples:
-
-- Copy `.env.example` to `.env`
-- Copy `.dev.vars.example` to `.dev.vars`
+Copy `.dev.vars.example` to `.dev.vars` and configure the OIDC signing keys and any services you need. The example uses the local frontend and API origins. R2 and email use the bindings in `wrangler.toml`; separate R2 access keys and an external email provider are not required.
 
 Apply the D1 migrations locally:
 
@@ -153,7 +150,7 @@ bun run build
 
 ```bash
 cd sdks/ave-embed
-bun run build:windows
+bun run build
 ```
 
 ### Publishing SDK packages
@@ -211,7 +208,7 @@ If you are new to the repo, these files are the quickest way to orient yourself:
 - The API uses Cloudflare D1 with Drizzle migrations stored in `ave-server/drizzle`
 - The Worker binds a Durable Object named `API_APP`
 - The API binds the private `ave-heavy-services` Worker for dependency-heavy SAML and notification operations
-- Uploads and public assets are wired through Cloudflare R2
+- Uploads and public assets use Cloudflare R2. New image keys include their identity or workspace ID; replacement only deletes objects in that owner's prefix. Existing flat-path assets remain readable and are retained because their ownership cannot be proven from the URL alone.
 - The scheduled Worker task triggers daily cleanup for stale devices and expired activity data
 
 ## Open source

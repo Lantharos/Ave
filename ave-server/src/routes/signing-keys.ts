@@ -1,19 +1,14 @@
-import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
-import { z } from "zod";
 import { and, eq } from "drizzle-orm";
+import { Hono } from "hono";
+import { z } from "zod";
 import { db, identities, signingKeys } from "../db";
-import { requireAuth, requireWritable } from "../middleware/auth";
-import { isValidPublicKey } from "../lib/signing";
 import { recordActivityLog } from "../lib/background-events";
+import { buildAuditPayload } from "../lib/business";
+import { isValidPublicKey, verifySignature } from "../lib/signing";
+import { requireAuth, requireWritable } from "../middleware/auth";
 
 const app = new Hono();
-
-async function requireWritableSigningSession(c: any, next: any) {
-  const user = c.get("user");
-  if (!user) return c.json({ error: "Unauthorized" }, 401);
-  return requireWritable(c, next);
-}
 
 const keySchema = z.object({
   publicKey: z.string().min(1),
@@ -66,7 +61,7 @@ app.get("/keys/:identityId", requireAuth, async (c) => {
   });
 });
 
-app.post("/keys/:identityId", requireAuth, requireWritableSigningSession, zValidator("json", keySchema), async (c) => {
+app.post("/keys/:identityId", requireAuth, requireWritable, zValidator("json", keySchema), async (c) => {
   const user = c.get("user")!;
   const identityId = c.req.param("identityId") || "";
   const { publicKey, encryptedPrivateKey } = c.req.valid("json");
@@ -101,10 +96,10 @@ app.post("/keys/:identityId", requireAuth, requireWritableSigningSession, zValid
   return c.json({ success: true, publicKey: newKey.publicKey, createdAt: newKey.createdAt });
 });
 
-app.put("/keys/:identityId", requireAuth, requireWritableSigningSession, zValidator("json", keySchema), async (c) => {
+app.put("/keys/:identityId", requireAuth, requireWritable, zValidator("json", keySchema.extend({ rotationSignature: z.string().min(1).max(2000) })), async (c) => {
   const user = c.get("user")!;
   const identityId = c.req.param("identityId") || "";
-  const { publicKey, encryptedPrivateKey } = c.req.valid("json");
+  const { publicKey, encryptedPrivateKey, rotationSignature } = c.req.valid("json");
   if (!isValidPublicKey(publicKey)) return c.json({ error: "Invalid public key format" }, 400);
 
   const [identity] = await db
@@ -114,8 +109,17 @@ app.put("/keys/:identityId", requireAuth, requireWritableSigningSession, zValida
     .limit(1);
   if (!identity) return c.json({ error: "Identity not found" }, 404);
 
-  await db.delete(signingKeys).where(eq(signingKeys.identityId, identityId));
-  const [newKey] = await db.insert(signingKeys).values({ identityId, publicKey, encryptedPrivateKey }).returning();
+  const [existingKey] = await db.select().from(signingKeys).where(eq(signingKeys.identityId, identityId)).limit(1);
+  if (!existingKey) return c.json({ error: "Signing key not found" }, 404);
+  const payload = buildAuditPayload("signing_key.rotated", { identityId, publicKey, encryptedPrivateKey });
+  if (!await verifySignature(payload, rotationSignature, existingKey.publicKey)) {
+    return c.json({ error: "A signature from the current signing key is required" }, 403);
+  }
+  const [newKey] = await db.update(signingKeys)
+    .set({ publicKey, encryptedPrivateKey, createdAt: new Date() })
+    .where(and(eq(signingKeys.id, existingKey.id), eq(signingKeys.publicKey, existingKey.publicKey)))
+    .returning();
+  if (!newKey) return c.json({ error: "Signing key changed during rotation" }, 409);
   recordActivityLog(c, {
     userId: user.id,
     action: "signing_key_rotated",

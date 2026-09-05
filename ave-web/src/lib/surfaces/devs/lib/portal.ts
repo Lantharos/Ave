@@ -11,7 +11,14 @@ export interface WorkspaceMember {
   avatarUrl?: string | null;
 }
 
-export interface WorkspaceSummary {
+interface WorkspaceAccess {
+  actingIdentityId: string;
+  scopes: string[];
+  signingAuthority: boolean;
+  ssoRequired: boolean;
+}
+
+export interface WorkspaceSummary extends WorkspaceAccess {
   id: string;
   name: string;
   logoUrl?: string | null;
@@ -24,7 +31,7 @@ export interface WorkspaceSummary {
   memberCount: number;
 }
 
-export interface WorkspaceState {
+export interface WorkspaceState extends WorkspaceAccess {
   id: string;
   name: string;
   logoUrl?: string | null;

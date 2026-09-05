@@ -1,5 +1,5 @@
 import { fetchJwks, verifyJwt } from "./jwt.js";
-import type { AveIdTokenClaims, VerifyJwtOptions } from "./types.js";
+import type { AveIdTokenClaims, TokenResponse, VerifyJwtOptions } from "./types.js";
 
 export interface ServerConfig {
   issuer?: string;
@@ -8,26 +8,26 @@ export interface ServerConfig {
   redirectUri: string;
 }
 
-export { fetchJwks, verifyJwt };
-export type { VerifyJwtOptions };
 export {
-  createAveWorkspaceOrganization,
-  getAveWorkspaceContext,
-  getAveWorkspaceContextFromUserInfo,
-  hasAveWorkspaceRole,
-  hasAveWorkspaceScope,
-  listAveWorkspaceOrganizations,
-  requireAveWorkspaceContext,
+createAveWorkspaceOrganization,
+getAveWorkspaceContext,
+getAveWorkspaceContextFromUserInfo,
+hasAveWorkspaceRole,
+hasAveWorkspaceScope,
+listAveWorkspaceOrganizations,
+requireAveWorkspaceContext
 } from "./workspace.js";
 export type {
-  AveWorkspaceAuthMethod,
-  AveWorkspaceContext,
-  AveWorkspaceEncryptionMode,
-  AveWorkspaceKeyCustody,
-  AveWorkspaceOrganization,
-  AveWorkspaceRole,
-  AveWorkspaceScope,
+AveWorkspaceAuthMethod,
+AveWorkspaceContext,
+AveWorkspaceEncryptionMode,
+AveWorkspaceKeyCustody,
+AveWorkspaceOrganization,
+AveWorkspaceRole,
+AveWorkspaceScope
 } from "./workspace.js";
+export { fetchJwks,verifyJwt };
+export type { TokenResponse,VerifyJwtOptions };
 
 const DEFAULT_ISSUER = "https://aveid.net";
 
@@ -84,15 +84,6 @@ export async function verifyAveIdTokenFromAuthHeader(
   const claims = await verifyAveIdToken(raw, options);
   if (!claims?.sub) return null;
   return { subject: claims.sub, claims };
-}
-
-export interface TokenResponse {
-  access_token: string;
-  access_token_jwt: string;
-  id_token?: string;
-  refresh_token?: string;
-  expires_in: number;
-  scope: string;
 }
 
 export async function exchangeCodeServer(config: ServerConfig, payload: { code: string }): Promise<TokenResponse> {

@@ -5,6 +5,7 @@
   import { auth, isAuthenticated } from "$lib/surfaces/web/stores/auth";
   import { setReturnUrl } from "$lib/surfaces/web/util/return-url";
   import { safeGoto } from "$lib/surfaces/web/util/safe-goto";
+  import { postToEmbedParent } from "$lib/surfaces/web/util/embed-popup";
   import { postMessageTargetOriginFromRedirectUri } from "$lib/surfaces/web/util/embed-post-message-origin";
 
   type AppInfo = {
@@ -139,11 +140,9 @@
       });
 
       if (params.embed) {
-        const target = (window.opener && (window.opener as any).parent)
-          ? (window.opener as any).parent
-          : (window.opener ?? window.parent);
+
         const origin = postMessageTargetOriginFromRedirectUri(params.redirectUri);
-        target?.postMessage({ type: "ave:success", payload: { redirectUrl: response.redirectUrl } }, origin);
+        postToEmbedParent({ type: "ave:success", payload: { redirectUrl: response.redirectUrl } }, origin);
         if (window.opener) {
           setTimeout(() => window.close(), 50);
         }
@@ -161,18 +160,16 @@
     if (authProbeStarted) return;
     authProbeStarted = true;
 
-    const initOk = (await auth.init({ allowCookieSession: true, timeoutMs: 1200 }).then(() => true).catch(() => false));
+    const initOk = (await auth.init({ timeoutMs: 1200 }).then(() => true).catch(() => false));
     if (initOk && get(auth).isAuthenticated) {
       init();
       return;
     }
 
     if (params.embed) {
-      const target = (window.opener && (window.opener as any).parent)
-        ? (window.opener as any).parent
-        : (window.opener ?? window.parent);
+
       const origin = postMessageTargetOriginFromRedirectUri(params.redirectUri);
-      target?.postMessage({ type: "ave:auth_required" }, origin);
+      postToEmbedParent({ type: "ave:auth_required" }, origin);
     }
     setReturnUrl(window.location.pathname + window.location.search);
     safeGoto(goto, "/login");
@@ -180,11 +177,9 @@
 
   function handleCancel() {
     if (params.embed) {
-      const target = (window.opener && (window.opener as any).parent)
-        ? (window.opener as any).parent
-        : (window.opener ?? window.parent);
+
       const origin = postMessageTargetOriginFromRedirectUri(params.redirectUri);
-      target?.postMessage({ type: "ave:close" }, origin);
+      postToEmbedParent({ type: "ave:close" }, origin);
       if (window.opener) {
         setTimeout(() => window.close(), 50);
       }

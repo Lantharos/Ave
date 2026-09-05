@@ -5,6 +5,7 @@ export function businessOrigin() {
 function allowedReturnOrigins() {
   return new Set([
     businessOrigin(),
+    "https://devs.aveid.net",
     process.env.RP_ORIGIN || "https://aveid.net",
     process.env.OIDC_ISSUER || "https://aveid.net",
   ].map((origin) => {

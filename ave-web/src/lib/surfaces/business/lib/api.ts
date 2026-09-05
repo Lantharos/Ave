@@ -1,3 +1,6 @@
+import { ApiError, createAveApiClient } from "$lib/infrastructure/http/ave-api-client";
+import type { AuthenticationResponseJSON, PublicKeyCredentialRequestOptionsJSON } from "@simplewebauthn/browser";
+import { resolveApiBase } from "./origins";
 import type {
   BusinessDomain,
   BusinessEncryptionMode,
@@ -11,8 +14,6 @@ import type {
   BusinessSsoConnection,
   KmsProvider,
 } from "./types";
-import { resolveApiBase } from "./origins";
-import { createAveApiClient, ApiError } from "$lib/infrastructure/http/ave-api-client";
 
 const API_BASE = resolveApiBase();
 const client = createAveApiClient({ baseUrl: API_BASE });
@@ -21,6 +22,9 @@ const request = client.request;
 type SignedAction = { signedAction: { signature: string } };
 
 export const api = {
+  getIdentityEncryptionKey: (identityId: string) =>
+    request<{ encryptedPrivateKey?: string | null }>(`/api/encryption/keys/${encodeURIComponent(identityId)}`),
+
   bootstrap: () =>
     request<{ identities: BusinessIdentity[]; organizations: BusinessOrganizationSummary[] }>(
       "/api/business/organizations/bootstrap",
@@ -133,7 +137,7 @@ export const api = {
       type: "saml" | "oidc";
       name: string;
       provider: string;
-      domain?: string;
+      domain: string;
       ssoUrl?: string;
       entityId?: string;
       x509Certificate?: string;
@@ -155,12 +159,12 @@ export const api = {
 
   security: {
     unlockMasterKeyStart: () =>
-      request<{ unlockSessionId: string; options: PublicKeyCredentialRequestOptions }>(
+      request<{ unlockSessionId: string; options: PublicKeyCredentialRequestOptionsJSON }>(
         "/api/security/master-key/unlock/start",
         { method: "POST" },
       ),
-    unlockMasterKeyFinish: (data: { unlockSessionId: string; credential: Credential }) =>
-      request<{ prfEncryptedMasterKey: string }>("/api/security/master-key/unlock/finish", {
+    unlockMasterKeyFinish: (data: { unlockSessionId: string; credential: AuthenticationResponseJSON }) =>
+      request<{ prfEncryptedMasterKey: string; identityIds: string[] }>("/api/security/master-key/unlock/finish", {
         method: "POST",
         body: JSON.stringify(data),
       }),

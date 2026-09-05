@@ -15,14 +15,14 @@ import {
 } from "../../db";
 import { buildE2eeAuthUpdate, validateE2eeAuthPayload } from "../../lib/app-e2ee-auth";
 import { recordActivityLog, recordAppAnalyticsEvent, recordOAuthDelegationAuditLog } from "../../lib/background-events";
-import { serializeEncryptionPolicy } from "../../lib/business-encryption";
 import { hasEnterpriseSsoSessionForOrganization, scopesForRole, type BusinessRole } from "../../lib/business";
+import { serializeEncryptionPolicy } from "../../lib/business-encryption";
+import type { E2eeMode } from "../../lib/e2ee-scopes";
 import {
   isImplementedE2eeMode,
   isScopeAllowedForApp,
   resolveRequestedE2eeModeConflict,
 } from "../../lib/e2ee-scopes";
-import type { E2eeMode } from "../../lib/e2ee-scopes";
 import { getRequiredEnterpriseSsoForOrganization } from "../../lib/enterprise-sso-policy";
 import { hasVerifiedEmail } from "../../lib/identity-serialization";
 import { createAuthorizationCodeWrite } from "../../lib/oauth-store";
@@ -258,6 +258,7 @@ app.post("/authorize", requireAuth, zValidator("json", z.object({
 
   // Track authorization (skipped for Quick Auth — no persistent app record)
   let createdAuthorization = false;
+  let authorizationId = existingAuth?.id;
   let authorizationUpdate: {
     id: string;
     e2ee: ReturnType<typeof buildE2eeAuthUpdate>;
@@ -316,6 +317,7 @@ app.post("/authorize", requireAuth, zValidator("json", z.object({
 
     if (!existingAuth) {
       const inserted = await db.insert(oauthAuthorizations).values({
+        scope: requestedScopes.join(" "),
         userId: user.id,
         appId: oauthApp.id,
         identityId,
@@ -332,6 +334,7 @@ app.post("/authorize", requireAuth, zValidator("json", z.object({
         })
         .returning({ id: oauthAuthorizations.id });
       createdAuthorization = inserted.length > 0;
+      authorizationId = inserted[0]?.id;
 
       if (!createdAuthorization) {
         const [concurrentAuthorization] = await db
@@ -367,6 +370,7 @@ app.post("/authorize", requireAuth, zValidator("json", z.object({
         }
 
         existingAuth = concurrentAuthorization;
+        authorizationId = concurrentAuthorization.id;
         authorizationUpdate = {
           id: concurrentAuthorization.id,
           e2ee: requestedE2eeMode
@@ -429,6 +433,7 @@ app.post("/authorize", requireAuth, zValidator("json", z.object({
 
     if (!existingGrant) {
       const [newGrant] = await db.insert(oauthDelegationGrants).values({
+        authorizationId,
         userId: user.id,
         identityId,
         sourceAppId: oauthApp.id,
@@ -487,6 +492,7 @@ app.post("/authorize", requireAuth, zValidator("json", z.object({
   const finalAppEncryptionMode = authorizedE2eeMode || existingAuth?.appEncryptionMode || undefined;
 
   const authorizationCodeWrite = createAuthorizationCodeWrite(code, {
+    authorizationId,
     userId: user.id,
     appId: oauthApp.id,
     identityId,
@@ -521,6 +527,7 @@ app.post("/authorize", requireAuth, zValidator("json", z.object({
       db.update(oauthAuthorizations)
         .set({
           ...authorizationUpdate.e2ee,
+          scope: [...new Set([...parseScopes(existingAuth?.scope || ""), ...requestedScopes])].join(" "),
           lastAuthorizedAt: new Date(),
           authorizationCount: sql`${oauthAuthorizations.authorizationCount} + 1`,
           lastAuthMethod: authorizationMethod,

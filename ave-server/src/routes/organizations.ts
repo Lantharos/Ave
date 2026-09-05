@@ -1,26 +1,40 @@
-import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
+import { and, eq, inArray, sql } from "drizzle-orm";
+import { Hono } from "hono";
 import { z } from "zod";
-import { and, eq, inArray, or, sql } from "drizzle-orm";
 import { db, identities, oauthApps, oauthAuthorizations, oauthResources, organizationIdentityMembers, organizations } from "../db";
-import { requireAuth, requireWritableForMutation } from "../middleware/auth";
+import { recordBusinessAuditEvent } from "../lib/background-events";
+import { hasBusinessScope, scopesForRole, type BusinessRole } from "../lib/business";
+import { requireSignedAction } from "../lib/business-route-guards";
+import { clientIp, userAgent } from "../lib/business-route-utils";
 import {
-  businessRoleForOrganizationRole,
   createOrganization,
+  enforcePortalOrganizationAccess,
   getOrganizationMemberships,
   mapBusinessRoleToOrganizationRole,
   requireOrganizationAccess,
-  signingAuthorityForOrganizationRole,
 } from "../lib/dev-portal";
-import { scopesForRole } from "../lib/business";
+import { requireAuth, requireWritableForMutation } from "../middleware/auth";
 import { serializeApp } from "./apps";
+import organizationMemberRoutes from "./organization-members";
 
 const app = new Hono();
 
 app.use("*", requireAuth);
 app.use("*", requireWritableForMutation);
 
-const roleSchema = z.enum(["owner", "admin", "viewer"]);
+app.route("/", organizationMemberRoutes);
+
+const signedActionSchema = z.object({ signature: z.string().min(1).max(2000) });
+
+function membershipContext(membership: Awaited<ReturnType<typeof getOrganizationMemberships>>[number]) {
+  return {
+    actingIdentityId: membership.identity.id,
+    scopes: scopesForRole(membership.member.role as BusinessRole, membership.member.scopes),
+    signingAuthority: membership.member.signingAuthority,
+    ssoRequired: membership.organization.ssoRequired,
+  };
+}
 
 function mapOrganizationSummary(
   membership: Awaited<ReturnType<typeof getOrganizationMemberships>>[number],
@@ -36,6 +50,7 @@ function mapOrganizationSummary(
     verifiedDomains: (membership.organization.verifiedDomains as string[] | null) || [],
     appLimit: membership.organization.appLimit,
     role: membership.role,
+    ...membershipContext(membership),
     appCount: appCountByOrganizationId.get(membership.organization.id) || 0,
     memberCount: memberCountByOrganizationId.get(membership.organization.id) || 0,
   };
@@ -120,6 +135,10 @@ app.get("/bootstrap", async (c) => {
     });
   }
 
+  const selectedMembership = memberships.find((entry) => entry.organization.id === currentOrganizationId);
+  if (!selectedMembership) return c.json({ error: "Organization not found" }, 404);
+  await enforcePortalOrganizationAccess(user, selectedMembership);
+
   const [appRows, memberRows, resources, authorizationCounts] = await Promise.all([
     db
       .select()
@@ -200,6 +219,7 @@ app.get("/bootstrap", async (c) => {
       verifiedDomains: (membership.organization.verifiedDomains as string[] | null) || [],
       appLimit: membership.organization.appLimit,
       role: membership.role,
+      ...membershipContext(membership),
       members: mapWorkspaceMembers(members),
       appCount: apps.length,
     },
@@ -219,7 +239,8 @@ app.post("/", zValidator("json", z.object({
   const user = c.get("user")!;
   const payload = c.req.valid("json");
 
-  const organization = await createOrganization(user.id, payload.name.trim());
+  const membership = await createOrganization(user.id, payload.name.trim());
+  const { organization } = membership;
 
   return c.json({
     organization: {
@@ -230,7 +251,8 @@ app.post("/", zValidator("json", z.object({
       plan: organization.plan,
       verifiedDomains: (organization.verifiedDomains as string[] | null) || [],
       appLimit: organization.appLimit,
-      role: "owner",
+      role: membership.role,
+      ...membershipContext(membership),
       appCount: 0,
       memberCount: 1,
     },
@@ -241,7 +263,7 @@ app.get("/:organizationId", async (c) => {
   const user = c.get("user")!;
   const organizationId = c.req.param("organizationId");
 
-  const membership = await requireOrganizationAccess(user.id, organizationId, "viewer");
+  const membership = await requireOrganizationAccess(user, organizationId, "viewer");
   if (!membership) {
     return c.json({ error: "Organization not found" }, 404);
   }
@@ -269,6 +291,7 @@ app.get("/:organizationId", async (c) => {
       verifiedDomains: (membership.organization.verifiedDomains as string[] | null) || [],
       appLimit: membership.organization.appLimit,
       role: membership.role,
+      ...membershipContext(membership),
       members: mapWorkspaceMembers(members),
       appCount: apps.length,
     },
@@ -278,30 +301,46 @@ app.get("/:organizationId", async (c) => {
 app.patch("/:organizationId", zValidator("json", z.object({
   name: z.string().min(2).max(80).optional(),
   logoUrl: z.string().url().nullable().optional(),
-  verifiedDomains: z.array(z.string().min(3).max(255)).optional(),
-})), async (c) => {
+  signedAction: signedActionSchema,
+}).strict()), async (c) => {
   const user = c.get("user")!;
   const organizationId = c.req.param("organizationId");
   const payload = c.req.valid("json");
 
-  const membership = await requireOrganizationAccess(user.id, organizationId, "admin");
+  const membership = await requireOrganizationAccess(user, organizationId, "admin");
   if (!membership) {
     return c.json({ error: "Organization not found" }, 404);
   }
+
+  if (!hasBusinessScope(membership.member, "manage_org")) return c.json({ error: "Organization management permission required" }, 403);
+  const details = { organizationId, name: payload.name, logoUrl: payload.logoUrl };
+  const signatureError = await requireSignedAction(c, membership.identity.id, "workspace.updated", details, payload.signedAction.signature);
+  if (signatureError) return signatureError;
 
   const [updated] = await db
     .update(organizations)
     .set({
       name: payload.name ?? membership.organization.name,
       logoUrl: payload.logoUrl === undefined ? membership.organization.logoUrl : payload.logoUrl,
-      verifiedDomains: payload.verifiedDomains ?? ((membership.organization.verifiedDomains as string[] | null) || []),
       updatedAt: new Date(),
     })
     .where(eq(organizations.id, organizationId))
     .returning();
 
+  recordBusinessAuditEvent(c, {
+    organizationId,
+    actorUserId: user.id,
+    actorIdentityId: membership.identity.id,
+    action: "workspace.updated",
+    details,
+    signature: payload.signedAction.signature,
+    ipAddress: clientIp(c),
+    userAgent: userAgent(c),
+  });
   return c.json({
     organization: {
+      ...membershipContext(membership),
+      role: membership.role,
       id: updated.id,
       name: updated.name,
       logoUrl: updated.logoUrl,
@@ -309,142 +348,6 @@ app.patch("/:organizationId", zValidator("json", z.object({
       plan: updated.plan,
       verifiedDomains: (updated.verifiedDomains as string[] | null) || [],
       appLimit: updated.appLimit,
-    },
-  });
-});
-
-app.post("/:organizationId/invites", zValidator("json", z.object({
-  email: z.string().email(),
-  role: roleSchema.default("admin"),
-})), async (c) => {
-  const user = c.get("user")!;
-  const organizationId = c.req.param("organizationId");
-  const payload = c.req.valid("json");
-
-  const membership = await requireOrganizationAccess(user.id, organizationId, "admin");
-  if (!membership) {
-    return c.json({ error: "Organization not found" }, 404);
-  }
-
-  if (payload.role === "owner") {
-    return c.json({ error: "Workspace owner cannot be reassigned" }, 400);
-  }
-
-  const lookup = payload.email.trim();
-  const handleLookup = lookup.replace(/^@/, "").toLowerCase();
-  const [targetIdentity] = await db
-    .select()
-    .from(identities)
-    .where(or(eq(identities.handle, handleLookup), eq(identities.email, lookup.toLowerCase())))
-    .limit(1);
-
-  if (!targetIdentity) {
-    return c.json({ error: "Identity not found" }, 404);
-  }
-
-  const [existingMember] = await db
-    .select()
-    .from(organizationIdentityMembers)
-    .where(and(eq(organizationIdentityMembers.organizationId, organizationId), eq(organizationIdentityMembers.identityId, targetIdentity.id)))
-    .limit(1);
-
-  if (existingMember?.status === "active") {
-    return c.json({ error: "Member already exists" }, 409);
-  }
-
-  const role = businessRoleForOrganizationRole(payload.role);
-  const [created] = existingMember
-    ? await db
-      .update(organizationIdentityMembers)
-      .set({
-        role,
-        scopes: scopesForRole(role),
-        signingAuthority: signingAuthorityForOrganizationRole(payload.role),
-        status: "active",
-        updatedAt: new Date(),
-      })
-      .where(eq(organizationIdentityMembers.id, existingMember.id))
-      .returning()
-    : await db
-      .insert(organizationIdentityMembers)
-    .values({
-      organizationId,
-      identityId: targetIdentity.id,
-      addedByUserId: user.id,
-      addedByIdentityId: membership.identity.id,
-      role,
-      scopes: scopesForRole(role),
-      signingAuthority: signingAuthorityForOrganizationRole(payload.role),
-      status: "active",
-    })
-      .returning();
-
-  return c.json({
-    member: {
-      id: created.id,
-      userId: targetIdentity.userId,
-      name: targetIdentity.displayName || targetIdentity.handle,
-      email: targetIdentity.email,
-      avatarUrl: targetIdentity.avatarUrl,
-      role: mapBusinessRoleToOrganizationRole(created.role),
-      status: "active",
-      joinedAt: created.createdAt,
-    },
-  }, 201);
-});
-
-app.patch("/:organizationId/members/:memberId", zValidator("json", z.object({
-  role: roleSchema,
-})), async (c) => {
-  const user = c.get("user")!;
-  const { organizationId, memberId } = c.req.param();
-  const payload = c.req.valid("json");
-
-  const membership = await requireOrganizationAccess(user.id, organizationId, "admin");
-  if (!membership) {
-    return c.json({ error: "Organization not found" }, 404);
-  }
-
-  const [target] = await db
-    .select({ member: organizationIdentityMembers, identity: identities })
-    .from(organizationIdentityMembers)
-    .innerJoin(identities, eq(identities.id, organizationIdentityMembers.identityId))
-    .where(and(eq(organizationIdentityMembers.id, memberId), eq(organizationIdentityMembers.organizationId, organizationId)))
-    .limit(1);
-
-  if (!target) {
-    return c.json({ error: "Member not found" }, 404);
-  }
-
-  if (target.member.status !== "active") {
-    return c.json({ error: "Cannot change role for an inactive member" }, 400);
-  }
-
-  if (target.identity.userId === membership.organization.ownerUserId && payload.role !== "owner") {
-    return c.json({ error: "Cannot demote the workspace owner" }, 400);
-  }
-
-  if (payload.role === "owner" && target.identity.userId !== membership.organization.ownerUserId) {
-    return c.json({ error: "Workspace owner cannot be reassigned" }, 400);
-  }
-
-  const role = businessRoleForOrganizationRole(payload.role);
-  const [updated] = await db
-    .update(organizationIdentityMembers)
-    .set({
-      role,
-      scopes: scopesForRole(role),
-      signingAuthority: signingAuthorityForOrganizationRole(payload.role),
-      updatedAt: new Date(),
-    })
-    .where(eq(organizationIdentityMembers.id, memberId))
-    .returning();
-
-  return c.json({
-    member: {
-      id: updated.id,
-      role: mapBusinessRoleToOrganizationRole(updated.role),
-      status: updated.status,
     },
   });
 });

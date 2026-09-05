@@ -1,5 +1,5 @@
 import { createInfiniteQuery, createMutation, createQuery } from "@tanstack/svelte-query";
-import { api, type Device, type ActivityLogEntry, type LoginRequest, type Passkey } from "./api";
+import { api, type ActivityLogEntry, type Device, type LoginRequest, type Passkey } from "./api";
 import { queryClient } from "./query-client";
 
 const QUERY_KEYS = {
@@ -15,7 +15,6 @@ export interface SecuritySnapshot {
   trustCodesRemaining: number;
   recoveryCodesRemaining: number;
   hasRecoveryCodes: boolean;
-  securityQuestionIds: number[];
 }
 
 export function createDevicesQuery() {

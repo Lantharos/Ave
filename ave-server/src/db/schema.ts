@@ -58,15 +58,14 @@ export const identities = sqliteTable("identities", {
   createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull().$defaultFn(() => new Date()),
   updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull().$defaultFn(() => new Date()),
   
-  // Identity info (encrypted on client, stored as ciphertext)
-  displayName: text("display_name").notNull(), // encrypted
+  displayName: text("display_name").notNull(),
   handle: text("handle").notNull().unique(), // plaintext for lookup
-  email: text("email"), // encrypted
+  email: text("email"),
   pendingEmail: text("pending_email"),
   emailVerificationCodeHash: text("email_verification_code_hash"),
   emailVerificationExpiresAt: integer("email_verification_expires_at", { mode: "timestamp_ms" }),
   emailVerificationSentAt: integer("email_verification_sent_at", { mode: "timestamp_ms" }),
-  birthday: text("birthday"), // encrypted
+  birthday: text("birthday"),
   
   // Avatar and banner URLs (stored in object storage)
   avatarUrl: text("avatar_url"),
@@ -162,7 +161,7 @@ export const loginRequests = sqliteTable("login_requests", {
   expiresAt: integer("expires_at", { mode: "timestamp_ms" }).notNull(),
   
   // Who is trying to log in
-  handle: text("handle").notNull(),
+  identityId: text("identity_id").references(() => identities.id, { onDelete: "cascade" }).notNull(),
   
   // Device info of the requesting device
   deviceName: text("device_name"),
@@ -175,6 +174,7 @@ export const loginRequests = sqliteTable("login_requests", {
   // Ephemeral key exchange for E2EE key transfer
   // The requesting device generates a keypair, stores private locally, sends public here
   requesterPublicKey: text("requester_public_key").notNull(),
+  requesterTokenHash: text("requester_token_hash").notNull().default(""),
   
   // Status
   status: text("status").notNull().default("pending"), // pending, approved, denied, expired, consumed
@@ -186,7 +186,7 @@ export const loginRequests = sqliteTable("login_requests", {
   approvedByDeviceId: text("approved_by_device_id").references(() => devices.id, { onDelete: "set null" }),
   approverPublicKey: text("approver_public_key"),
 }, (table) => [
-  index("login_requests_handle_idx").on(table.handle),
+  index("login_requests_identity_id_idx").on(table.identityId),
   index("login_requests_status_idx").on(table.status),
 ]);
 
@@ -289,6 +289,7 @@ export const oauthApps = sqliteTable("oauth_apps", {
 
 export const oauthRefreshTokens = sqliteTable("oauth_refresh_tokens", {
   id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  authorizationId: text("authorization_id").references(() => oauthAuthorizations.id, { onDelete: "cascade" }),
   createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull().$defaultFn(() => new Date()),
   revokedAt: integer("revoked_at", { mode: "timestamp_ms" }),
   expiresAt: integer("expires_at", { mode: "timestamp_ms" }).notNull(),
@@ -301,7 +302,7 @@ export const oauthRefreshTokens = sqliteTable("oauth_refresh_tokens", {
   organizationMemberId: text("organization_member_id").references(() => organizationIdentityMembers.id, { onDelete: "set null" }),
   enterpriseSsoOrganizationId: text("enterprise_sso_organization_id").references(() => organizations.id, { onDelete: "set null" }),
   enterpriseSsoConnectionId: text("enterprise_sso_connection_id"),
-  familyId: text("family_id").notNull(),
+  familyId: text("family_id"),
   rotatedFromId: text("rotated_from_id"),
   reuseDetectedAt: integer("reuse_detected_at", { mode: "timestamp_ms" }),
 }, (table) => [
@@ -313,6 +314,7 @@ export const oauthRefreshTokens = sqliteTable("oauth_refresh_tokens", {
   index("oauth_refresh_tokens_token_hash_idx").on(table.tokenHash),
   index("oauth_refresh_tokens_family_id_idx").on(table.familyId),
   index("oauth_refresh_tokens_rotated_from_id_idx").on(table.rotatedFromId),
+  index("oauth_refresh_tokens_authorization_id_idx").on(table.authorizationId),
 ]);
 
 export const ephemeralChallenges = sqliteTable("ephemeral_challenges", {
@@ -328,28 +330,33 @@ export const ephemeralChallenges = sqliteTable("ephemeral_challenges", {
 
 export const oauthAuthorizationCodes = sqliteTable("oauth_authorization_codes", {
   id: text("id").primaryKey(),
+  authorizationId: text("authorization_id").references(() => oauthAuthorizations.id, { onDelete: "cascade" }),
   value: text("value", { mode: "json" }).$type<Record<string, unknown>>().notNull(),
   expiresAt: integer("expires_at", { mode: "timestamp_ms" }).notNull(),
 }, (table) => [
   index("oauth_authorization_codes_expires_at_idx").on(table.expiresAt),
+  index("oauth_authorization_codes_authorization_id_idx").on(table.authorizationId),
 ]);
 
 export const oauthAccessTokens = sqliteTable("oauth_access_tokens", {
   id: text("id").primaryKey(),
+  authorizationId: text("authorization_id").references(() => oauthAuthorizations.id, { onDelete: "cascade" }),
   value: text("value", { mode: "json" }).$type<Record<string, unknown>>().notNull(),
   expiresAt: integer("expires_at", { mode: "timestamp_ms" }).notNull(),
 }, (table) => [
   index("oauth_access_tokens_expires_at_idx").on(table.expiresAt),
+  index("oauth_access_tokens_authorization_id_idx").on(table.authorizationId),
 ]);
 
 // OAuth authorizations - which apps a user has authorized
 export const oauthAuthorizations = sqliteTable("oauth_authorizations", {
   id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  scope: text("scope").notNull().default(""),
   userId: text("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
   appId: text("app_id").references(() => oauthApps.id, { onDelete: "cascade" }).notNull(),
   identityId: text("identity_id").references(() => identities.id, { onDelete: "cascade" }).notNull(),
   createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull().$defaultFn(() => new Date()),
-  lastAuthorizedAt: integer("last_authorized_at", { mode: "timestamp_ms" }).notNull().$defaultFn(() => new Date()),
+  lastAuthorizedAt: integer("last_authorized_at", { mode: "timestamp_ms" }).$defaultFn(() => new Date()),
   authorizationCount: integer("authorization_count").notNull().default(1),
   lastAuthMethod: text("last_auth_method"),
   
@@ -389,6 +396,7 @@ export const oauthResources = sqliteTable("oauth_resources", {
 // Delegation grants - user-approved source app -> resource access
 export const oauthDelegationGrants = sqliteTable("oauth_delegation_grants", {
   id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  authorizationId: text("authorization_id").references(() => oauthAuthorizations.id, { onDelete: "cascade" }),
   createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull().$defaultFn(() => new Date()),
   updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull().$defaultFn(() => new Date()),
   revokedAt: integer("revoked_at", { mode: "timestamp_ms" }),
@@ -404,6 +412,7 @@ export const oauthDelegationGrants = sqliteTable("oauth_delegation_grants", {
   index("oauth_delegation_grants_source_app_id_idx").on(table.sourceAppId),
   index("oauth_delegation_grants_target_resource_id_idx").on(table.targetResourceId),
   index("oauth_delegation_grants_revoked_at_idx").on(table.revokedAt),
+  index("oauth_delegation_grants_authorization_id_idx").on(table.authorizationId),
   index("oauth_delegation_grants_active_lookup_idx").on(table.userId, table.identityId, table.sourceAppId, table.targetResourceId, table.revokedAt),
 ]);
 

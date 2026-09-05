@@ -1,19 +1,22 @@
-import type { Context } from "hono";
 import { and, eq, isNull } from "drizzle-orm";
+import type { Context } from "hono";
 import {
   db,
   identities,
   oauthApps,
+  oauthAuthorizations,
   oauthRefreshTokens,
   organizationEncryptionPolicies,
   organizationIdentityMembers,
   organizations,
 } from "../../db";
-import { serializeEncryptionPolicy } from "../../lib/business-encryption";
 import { scopesForRole, type BusinessRole } from "../../lib/business";
+import { serializeEncryptionPolicy } from "../../lib/business-encryption";
+import { isScopeAllowedForApp } from "../../lib/e2ee-scopes";
 import { getRequiredEnterpriseSsoForOrganization } from "../../lib/enterprise-sso-policy";
-import { getIssuer, getResourceAudience, hashToken, signJwt } from "../../lib/oidc";
+import { identityClaimsForApp } from "../../lib/identity-serialization";
 import { createAccessTokenWrite, type AccessTokenRecord } from "../../lib/oauth-store";
+import { getIssuer, getResourceAudience, hashToken, signJwt } from "../../lib/oidc";
 import {
   generateAccessToken,
   generateRefreshToken,
@@ -24,6 +27,7 @@ import {
   nowSeconds,
   organizationClaims,
   organizationResponse,
+  parseScopes,
 } from "./shared";
 import type { RefreshTokenRequest } from "./token-schema";
 
@@ -42,6 +46,12 @@ export async function handleRefreshToken(c: Context, payload: RefreshTokenReques
       eq(oauthApps.id, oauthRefreshTokens.appId),
       eq(oauthApps.clientId, clientId),
     ))
+    .innerJoin(oauthAuthorizations, and(
+      eq(oauthAuthorizations.id, oauthRefreshTokens.authorizationId),
+      eq(oauthAuthorizations.appId, oauthRefreshTokens.appId),
+      eq(oauthAuthorizations.userId, oauthRefreshTokens.userId),
+      eq(oauthAuthorizations.identityId, oauthRefreshTokens.identityId),
+    ))
     .leftJoin(identities, eq(identities.id, oauthRefreshTokens.identityId))
     .where(eq(oauthRefreshTokens.tokenHash, tokenHash))
     .limit(1);
@@ -59,6 +69,14 @@ export async function handleRefreshToken(c: Context, payload: RefreshTokenReques
   }
 
   const { oauthApp, storedRefresh, identity } = tokenContext;
+
+  if (!storedRefresh.familyId) {
+    return c.json({ error: "invalid_grant", error_description: "Refresh token has no rotation family" }, 400);
+  }
+
+  if (parseScopes(storedRefresh.scope).some((scope) => !isScopeAllowedForApp(scope, oauthApp.allowedScopes || []))) {
+    return c.json({ error: "invalid_scope", error_description: "The app no longer allows the granted scopes" }, 400);
+  }
 
   if (clientSecret) {
     if (!isClientSecretValid(oauthApp.clientSecretHash, clientSecret)) {
@@ -144,6 +162,7 @@ export async function handleRefreshToken(c: Context, payload: RefreshTokenReques
 
   const accessToken = generateAccessToken();
   const accessTokenRecord: AccessTokenRecord = {
+    authorizationId: storedRefresh.authorizationId!,
     userId: storedRefresh.userId,
     identityId: storedRefresh.identityId,
     appId: storedRefresh.appId,
@@ -173,7 +192,7 @@ export async function handleRefreshToken(c: Context, payload: RefreshTokenReques
         isNull(oauthRefreshTokens.reuseDetectedAt),
       ))
       .returning({ id: oauthRefreshTokens.id }),
-    signJwt({
+    hasScope(storedRefresh.scope, "openid") ? signJwt({
       iss: getIssuer(),
       sub: storedRefresh.identityId,
       aud: oauthApp.clientId,
@@ -181,14 +200,12 @@ export async function handleRefreshToken(c: Context, payload: RefreshTokenReques
       iat: issuedAt,
       auth_time: issuedAt,
       azp: oauthApp.clientId,
-      name: hasScope(storedRefresh.scope, "profile") ? identity?.displayName : undefined,
-      preferred_username: hasScope(storedRefresh.scope, "profile") ? identity?.handle : undefined,
-      email: hasScope(storedRefresh.scope, "email") ? identity?.email : undefined,
-      picture: hasScope(storedRefresh.scope, "profile") ? identity?.avatarUrl : undefined,
+      ...(identity ? identityClaimsForApp(identity, storedRefresh.scope) : {}),
       ...organizationClaims(refreshOrganizationContext),
-    }),
+    }) : Promise.resolve(null),
     signJwt({
       iss: getIssuer(),
+      jti: accessToken,
       sub: storedRefresh.identityId,
       aud: getResourceAudience(),
       exp: expiresAt,
@@ -208,6 +225,7 @@ export async function handleRefreshToken(c: Context, payload: RefreshTokenReques
   await db.batch([
     createAccessTokenWrite(accessToken, accessTokenRecord),
     db.insert(oauthRefreshTokens).values({
+      authorizationId: storedRefresh.authorizationId,
       userId: storedRefresh.userId,
       identityId: storedRefresh.identityId,
       appId: storedRefresh.appId,
@@ -227,10 +245,12 @@ export async function handleRefreshToken(c: Context, payload: RefreshTokenReques
     access_token: accessToken,
     token_type: "Bearer",
     expires_in: accessTokenTtl,
+    scope: storedRefresh.scope,
     refresh_token: rotatedRefreshToken,
-    id_token: idToken,
     access_token_jwt: jwtAccessToken,
   };
+
+  if (idToken) response.id_token = idToken;
 
   if (hasScope(storedRefresh.scope, "user_id")) {
     response.user_id = storedRefresh.userId;

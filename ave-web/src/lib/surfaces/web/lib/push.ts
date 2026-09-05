@@ -7,7 +7,7 @@ import { request } from "./api/transport";
 /**
  * Check if push notifications are supported in this browser
  */
-export function isPushSupported(): boolean {
+function isPushSupported(): boolean {
   if (typeof window === "undefined") return false;
 
   // Push requires secure context (https or localhost).
@@ -48,16 +48,9 @@ export function getPushSupportDetails(): {
 }
 
 /**
- * Check if notifications are enabled
- */
-export function isNotificationEnabled(): boolean {
-  return Notification.permission === "granted";
-}
-
-/**
  * Request notification permission
  */
-export async function requestNotificationPermission(): Promise<boolean> {
+async function requestNotificationPermission(): Promise<boolean> {
   if (!isPushSupported()) {
     console.warn("[Push] Push notifications not supported");
     return false;
@@ -244,7 +237,7 @@ export async function unsubscribeFromPushNotifications(): Promise<boolean> {
 /**
  * Check if currently subscribed to push notifications
  */
-export async function isPushSubscribed(): Promise<boolean> {
+async function isPushSubscribed(): Promise<boolean> {
   if (!isPushSupported()) {
     return false;
   }

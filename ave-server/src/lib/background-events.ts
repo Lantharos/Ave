@@ -6,8 +6,8 @@ import {
   oauthDelegationAuditLogs,
   type NewActivityLog,
 } from "../db";
-import { writeBusinessAuditEvent } from "./business";
 import { runInBackground } from "./background";
+import { writeBusinessAuditEvent } from "./business";
 
 type AppAnalyticsEventInsert = typeof appAnalyticsEvents.$inferInsert;
 type OAuthDelegationAuditLogInsert = typeof oauthDelegationAuditLogs.$inferInsert;
@@ -75,7 +75,7 @@ export function recordBusinessAuditEvent(c: Context, values: BusinessAuditInput)
   );
 }
 
-export async function processBackgroundEvent(event: BackgroundEvent): Promise<void> {
+async function processBackgroundEvent(event: BackgroundEvent): Promise<void> {
   switch (event.type) {
     case "activity_log":
       await db.insert(activityLogs).values(event.values);
