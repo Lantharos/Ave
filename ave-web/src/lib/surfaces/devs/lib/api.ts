@@ -1,20 +1,9 @@
-import { ApiError, createAveApiClient } from "$lib/infrastructure/http/ave-api-client";
+import { createAveApiClient } from "$lib/infrastructure/http/ave-api-client";
 import { resolveApiBase } from "$lib/infrastructure/http/origins";
-import { enterpriseSsoRedirect } from "./enterprise-sso";
 import type { WorkspaceMember, WorkspaceRole, WorkspaceState, WorkspaceSummary } from "./portal";
 
 const client = createAveApiClient({ baseUrl: resolveApiBase() });
-async function request<T>(...args: Parameters<typeof client.request>): Promise<T> {
-  try {
-    return await client.request<T>(...args);
-  } catch (error) {
-    if (error instanceof ApiError && error.status === 403 && typeof window !== "undefined") {
-      const target = enterpriseSsoRedirect(error.data, resolveApiBase(), window.location.href);
-      if (target) window.location.assign(target);
-    }
-    throw error;
-  }
-}
+const request = client.request;
 
 export interface DevApp {
   id: string;
@@ -142,11 +131,6 @@ function mapWorkspaceState(payload: WorkspaceState): WorkspaceState {
   };
 }
 
-async function signWorkspaceAction(identityId: string, action: string, details: Record<string, unknown>) {
-  const { signBusinessAction } = await import("$lib/surfaces/business/lib/business-actions");
-  return signBusinessAction(identityId, action, details);
-}
-
 export async function fetchPortalBootstrap(organizationId?: string): Promise<PortalBootstrap> {
   const query = organizationId ? `?organizationId=${encodeURIComponent(organizationId)}` : "";
   const data = await request<PortalBootstrap>(`/api/organizations/bootstrap${query}`);
@@ -170,13 +154,11 @@ export async function fetchOrganization(organizationId: string): Promise<Workspa
 
 export async function updateOrganization(
   organizationId: string,
-  actingIdentityId: string,
   payload: { name?: string; logoUrl?: string | null },
 ): Promise<WorkspaceState> {
-  const signedAction = await signWorkspaceAction(actingIdentityId, "workspace.updated", { organizationId, ...payload });
   const data = await request<{ organization: WorkspaceState }>(`/api/organizations/${organizationId}`, {
     method: "PATCH",
-    body: JSON.stringify({ ...payload, signedAction }),
+    body: JSON.stringify({ ...payload }),
   });
 
   return mapWorkspaceState({
@@ -188,27 +170,23 @@ export async function updateOrganization(
 
 export async function inviteOrganizationMember(
   organizationId: string,
-  actingIdentityId: string,
   payload: { email: string; role: WorkspaceRole },
 ): Promise<{ member: WorkspaceMember }> {
   const email = payload.email.trim().toLowerCase();
-  const signedAction = await signWorkspaceAction(actingIdentityId, "workspace.member.added", { organizationId, email, role: payload.role });
   return request(`/api/organizations/${organizationId}/invites`, {
     method: "POST",
-    body: JSON.stringify({ ...payload, email, signedAction }),
+    body: JSON.stringify({ ...payload, email }),
   });
 }
 
 export async function updateOrganizationMemberRole(
   organizationId: string,
-  actingIdentityId: string,
   memberId: string,
   role: WorkspaceRole,
 ): Promise<{ member: { id: string; role: WorkspaceRole; status: string } }> {
-  const signedAction = await signWorkspaceAction(actingIdentityId, "workspace.member.updated", { organizationId, memberId, role });
   return request(`/api/organizations/${organizationId}/members/${memberId}`, {
     method: "PATCH",
-    body: JSON.stringify({ role, signedAction }),
+    body: JSON.stringify({ role }),
   });
 }
 
@@ -298,4 +276,4 @@ export async function uploadWorkspaceLogo(organizationId: string, file: File): P
   return request<{ logoUrl: string }>("/api/upload/workspace-logo", { method: "POST", body: formData });
 }
 
-export { ApiError };
+export { ApiError } from "$lib/infrastructure/http/ave-api-client";

@@ -204,6 +204,20 @@
       "when": 1788617472362,
       "tag": "0028_login_request_identity",
       "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "6",
+      "when": 1790517340268,
+      "tag": "0029_developer_members",
+      "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "6",
+      "when": 1790517626868,
+      "tag": "0030_retire_business",
+      "breakpoints": true
     }
   ]
 }

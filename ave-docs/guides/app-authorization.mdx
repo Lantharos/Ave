@@ -1,0 +1,36 @@
+---
+title: "App workspaces and permissions"
+description: "Use Ave identity with workspaces and authorization managed by your app."
+---
+
+Ave authenticates an identity. Your app decides what that identity can access.
+
+Verify the ID token's signature, issuer, audience, expiry, and nonce before creating an app session. Use the verified `sub` as the stable identity ID. Display names, handles, and email addresses can change and should not be used as authorization keys.
+
+## Store membership in your app
+
+Maintain your own workspace and membership records:
+
+```ts
+type Membership = {
+  workspaceId: string;
+  identityId: string;
+  role: "owner" | "admin" | "member";
+};
+```
+
+For each protected request, authenticate the app session, load the membership for the requested workspace and verified identity, then check the role required by the operation. A workspace ID supplied by the browser is a selection, not proof of membership.
+
+Keep billing, invitations, project permissions, and membership changes in your app. Revoking membership should take effect in your app immediately, independently of the lifetime of an Ave token.
+
+## Choose the identity boundary
+
+One Ave account may contain multiple identities. Each identity has a different `sub`. Treat these as separate app principals unless your product explicitly supports account linking. Require authenticated proof before linking identities; do not merge accounts based on matching email or display name.
+
+## OAuth scopes
+
+Scopes authorize your app to obtain specific Ave information or capabilities. For example, `email` requests a verified email address and encryption scopes enable app-key delivery. These scopes do not grant workspace membership or product permissions.
+
+## Developer teams
+
+Teams in the Ave developer portal manage OAuth applications and their credentials. These teams are separate from your product's workspaces. Owners manage the team profile and administrators; administrators manage applications and viewer memberships; viewers have read access.

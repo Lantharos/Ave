@@ -3,32 +3,33 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "dev": "wrangler dev -c wrangler.toml -c ../ave-heavy-services/wrangler.jsonc",
-    "start": "wrangler dev -c wrangler.toml -c ../ave-heavy-services/wrangler.jsonc",
-    "deploy": "CLOUDFLARE_ACCOUNT_ID=2e3bfcbc9512a7ab1ea3a9cb9a474b30 wrangler deploy --keep-vars",
-    "check": "wrangler types src/types/worker-configuration.d.ts --env-file .dev.vars.example --strict-vars=false --check && tsc --noEmit",
+    "dev": "wrangler dev",
+    "start": "wrangler dev",
+    "deploy": "CLOUDFLARE_ACCOUNT_ID=2e3bfcbc9512a7ab1ea3a9cb9a474b30 wrangler deploy",
+    "check": "bun run build:modules && wrangler types src/types/worker-configuration.d.ts --env-file .dev.vars.example --strict-vars=false --check && tsc --noEmit",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "bun run db:migrate:local",
     "db:migrate:local": "wrangler d1 migrations apply ave --local",
     "db:migrate:remote": "CLOUDFLARE_ACCOUNT_ID=2e3bfcbc9512a7ab1ea3a9cb9a474b30 wrangler d1 migrations apply ave --remote",
-    "gen": "wrangler types src/types/worker-configuration.d.ts --env-file .dev.vars.example --strict-vars=false"
+    "gen": "wrangler types src/types/worker-configuration.d.ts --env-file .dev.vars.example --strict-vars=false",
+    "build:modules": "bun scripts/build-modules.ts"
   },
   "dependencies": {
     "@hono/zod-validator": "^0.9.1",
     "@noble/ed25519": "^3.2.0",
     "@noble/hashes": "^2.4.0",
-    "drizzle-orm": "^0.45.2",
-    "hono": "^4.13.7",
-    "zod": "^4.5.4"
+    "drizzle-orm": "^0.45.3",
+    "hono": "^4.13.9",
+    "zod": "^4.6.5",
+    "@simplewebauthn/server": "^14.0.3",
+    "@block65/webcrypto-web-push": "^2.0.0"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^5.20260905.1",
-    "@types/node": "^26.4.1",
-    "drizzle-kit": "^0.31.10",
+    "@cloudflare/workers-types": "^5.20260927.1",
+    "@types/node": "^26.6.3",
+    "drizzle-kit": "^0.31.11",
     "typescript": "^7.0.2",
-    "wrangler": "^4.129.0"
-  },
-  "overrides": {
-    "esbuild": "0.28.2"
+    "wrangler": "^4.141.0",
+    "esbuild": "^0.28.2"
   }
 }

@@ -1,10 +1,10 @@
 import { and, eq, gt, lt } from "drizzle-orm";
 import { Context, Next } from "hono";
 import { db, devices, primaryDb, sessions } from "../db";
-import { runInBackground } from "../lib/background";
-import { hashSessionToken } from "../lib/crypto";
-import type { AccessTokenRecord } from "../lib/oauth-store";
-import { getCookieValue, SESSION_COOKIE_NAME, setSessionCookie } from "../lib/session-cookie";
+import { runInBackground } from "../lib/platform/background";
+import { hashSessionToken } from "../lib/identity/crypto";
+import type { AccessTokenRecord } from "../lib/oauth/oauth-store";
+import { getCookieValue, SESSION_COOKIE_NAME, setSessionCookie } from "../lib/auth/session-cookie";
 
 const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 const SESSION_REFRESH_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
@@ -14,8 +14,6 @@ export type AuthUser = {
   id: string;
   deviceId: string | null;
   authMethod?: string | null;
-  enterpriseSsoOrganizationId?: string | null;
-  enterpriseSsoConnectionId?: string | null;
   isReadOnly: boolean;
 };
 
@@ -57,8 +55,6 @@ export async function authMiddleware(c: Context, next: Next) {
         deviceId: sessions.deviceId,
         expiresAt: sessions.expiresAt,
         authMethod: sessions.authMethod,
-        enterpriseSsoOrganizationId: sessions.enterpriseSsoOrganizationId,
-        enterpriseSsoConnectionId: sessions.enterpriseSsoConnectionId,
         deviceLastSeenAt: devices.lastSeenAt,
       })
       .from(sessions)
@@ -103,8 +99,6 @@ export async function authMiddleware(c: Context, next: Next) {
       id: session.userId,
       deviceId: session.deviceId,
       authMethod: session.authMethod,
-      enterpriseSsoOrganizationId: session.enterpriseSsoOrganizationId,
-      enterpriseSsoConnectionId: session.enterpriseSsoConnectionId,
       isReadOnly: session.authMethod === "demo",
     });
   } catch (error) {

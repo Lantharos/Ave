@@ -11,34 +11,23 @@ export interface WorkspaceMember {
   avatarUrl?: string | null;
 }
 
-interface WorkspaceAccess {
-  actingIdentityId: string;
-  scopes: string[];
-  signingAuthority: boolean;
-  ssoRequired: boolean;
-}
-
-export interface WorkspaceSummary extends WorkspaceAccess {
+export interface WorkspaceSummary {
   id: string;
   name: string;
   logoUrl?: string | null;
   slug: string;
-  plan: string;
-  verifiedDomains: string[];
   appLimit: number;
   role: WorkspaceRole;
   appCount: number;
   memberCount: number;
 }
 
-export interface WorkspaceState extends WorkspaceAccess {
+export interface WorkspaceState {
   id: string;
   name: string;
   logoUrl?: string | null;
   slug: string;
-  plan: string;
   appLimit: number;
-  verifiedDomains: string[];
   role: WorkspaceRole;
   members: WorkspaceMember[];
   appCount: number;

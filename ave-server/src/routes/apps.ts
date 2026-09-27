@@ -8,18 +8,18 @@ import {
   oauthAuthorizations,
   oauthResources,
 } from "../db";
-import { generateRandomId, hashSessionToken } from "../lib/crypto";
+import { generateRandomId, hashSessionToken } from "../lib/identity/crypto";
 import {
   ensurePersonalOrganization,
   getAccessibleApp,
   getAccessibleApps,
   requireOrganizationAccess,
-} from "../lib/dev-portal";
+} from "../lib/developer/dev-portal";
 import {
   PORTAL_APP_SCOPES,
   stripE2eeScopes,
   syncSupportsE2eeFlag,
-} from "../lib/e2ee-scopes";
+} from "../lib/identity/e2ee-scopes";
 import {
   activityPaginationQuerySchema,
   decodeActivityCursor,

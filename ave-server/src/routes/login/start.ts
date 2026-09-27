@@ -3,15 +3,15 @@ import { and, eq, sql } from "drizzle-orm";
 import { Hono } from "hono";
 import { z } from "zod";
 import { db, devices, identities, passkeys, sessions } from "../../db";
-import { recordActivityLog } from "../../lib/background-events";
-import { setChallenge } from "../../lib/challenge-store";
-import { generateSessionToken, hashSessionToken } from "../../lib/crypto";
-import { isDemoHandle, isDemoLoginEnabled, verifyDemoPassword } from "../../lib/demo-auth";
-import { listIdentitiesForOwner } from "../../lib/identity-serialization";
-import { generatePasskeyAuthenticationOptions } from "../../lib/heavy-services";
-import { enforceRateLimits, ipRateLimit, subjectRateLimit } from "../../lib/rate-limit";
-import { setSessionCookie } from "../../lib/session-cookie";
-import { getOrCreateDevice, rejectRequiredEnterpriseSso, type Bindings } from "./shared";
+import { recordActivityLog } from "../../lib/platform/background-events";
+import { setChallenge } from "../../lib/auth/challenge-store";
+import { generateSessionToken, hashSessionToken } from "../../lib/identity/crypto";
+import { isDemoHandle, isDemoLoginEnabled, verifyDemoPassword } from "../../lib/auth/demo-auth";
+import { listIdentitiesForOwner } from "../../lib/identity/identity-serialization";
+import { generatePasskeyAuthenticationOptions } from "../../lib/auth/webauthn";
+import { enforceRateLimits, ipRateLimit, subjectRateLimit } from "../../lib/platform/rate-limit";
+import { setSessionCookie } from "../../lib/auth/session-cookie";
+import { getOrCreateDevice, type Bindings } from "./shared";
 
 const app = new Hono<{ Bindings: Bindings }>();
 
@@ -43,8 +43,6 @@ app.post("/start", zValidator("json", z.object({
     return c.json({ error: "Account not found" }, 404);
   }
 
-  const ssoRequired = await rejectRequiredEnterpriseSso(c, identity);
-  if (ssoRequired) return ssoRequired;
 
   const demoPasswordEnabled = isDemoHandle(normalizedHandle) && isDemoLoginEnabled();
 
@@ -86,7 +84,7 @@ app.post("/start", zValidator("json", z.object({
   if (hasPasskeys) {
     authSessionId = crypto.randomUUID();
 
-    authOptions = await generatePasskeyAuthenticationOptions(c.env.HEAVY_SERVICES, {
+    authOptions = await generatePasskeyAuthenticationOptions({
       rpId,
       allowCredentials: [],
     });

@@ -9,32 +9,25 @@ import {
   oauthAuthorizations,
   oauthDelegationGrants,
   oauthResources,
-  organizationEncryptionPolicies,
-  organizationIdentityMembers,
-  organizations,
 } from "../../db";
-import { buildE2eeAuthUpdate, validateE2eeAuthPayload } from "../../lib/app-e2ee-auth";
-import { recordActivityLog, recordAppAnalyticsEvent, recordOAuthDelegationAuditLog } from "../../lib/background-events";
-import { hasEnterpriseSsoSessionForOrganization, scopesForRole, type BusinessRole } from "../../lib/business";
-import { serializeEncryptionPolicy } from "../../lib/business-encryption";
-import type { E2eeMode } from "../../lib/e2ee-scopes";
+import { buildE2eeAuthUpdate, validateE2eeAuthPayload } from "../../lib/identity/app-e2ee-auth";
+import { recordActivityLog, recordAppAnalyticsEvent, recordOAuthDelegationAuditLog } from "../../lib/platform/background-events";
+import type { E2eeMode } from "../../lib/identity/e2ee-scopes";
 import {
   isImplementedE2eeMode,
   isScopeAllowedForApp,
   resolveRequestedE2eeModeConflict,
-} from "../../lib/e2ee-scopes";
-import { getRequiredEnterpriseSsoForOrganization } from "../../lib/enterprise-sso-policy";
-import { hasVerifiedEmail } from "../../lib/identity-serialization";
-import { createAuthorizationCodeWrite } from "../../lib/oauth-store";
-import { enforceNativeRateLimits, getClientIp, ipRateLimit, subjectRateLimit } from "../../lib/rate-limit";
-import { isRedirectUriAllowedForApp, normalizeRedirectUri } from "../../lib/redirect-uri";
+} from "../../lib/identity/e2ee-scopes";
+import { hasVerifiedEmail } from "../../lib/identity/identity-serialization";
+import { createAuthorizationCodeWrite } from "../../lib/oauth/oauth-store";
+import { enforceNativeRateLimits, getClientIp, ipRateLimit, subjectRateLimit } from "../../lib/platform/rate-limit";
+import { isRedirectUriAllowedForApp, normalizeRedirectUri } from "../../lib/oauth/redirect-uri";
 import { requireAuth } from "../../middleware/auth";
 import {
   buildQuickApp,
   generateAuthCode,
   getQuickOrigin,
   isQuickClient,
-  keyCustodyForEncryptionMode,
   parseScopes,
 } from "./shared";
 
@@ -48,7 +41,6 @@ app.post("/authorize", requireAuth, zValidator("json", z.object({
   scope: z.string().optional().default("profile"),
   state: z.string().optional(),
   identityId: z.string().uuid(),
-  organizationId: z.string().uuid().optional(),
   codeChallenge: z.string().optional(), // PKCE
   codeChallengeMethod: z.enum(["S256", "plain"]).optional(),
   encryptedAppKey: z.string().optional(),
@@ -68,7 +60,6 @@ app.post("/authorize", requireAuth, zValidator("json", z.object({
     scope,
     state,
     identityId,
-    organizationId,
     codeChallenge,
     codeChallengeMethod,
     encryptedAppKey,
@@ -182,62 +173,6 @@ app.post("/authorize", requireAuth, zValidator("json", z.object({
 
   if (!identity) {
     return c.json({ error: "Invalid identity" }, 400);
-  }
-
-  let organizationContext: {
-    organizationId: string;
-    organizationName: string;
-    organizationMemberId: string;
-    organizationRole: string;
-    organizationScopes: string[];
-    organizationSigningAuthority: boolean;
-    organizationEncryptionMode: string;
-    organizationKeyCustody: string;
-    organizationAuthMethod: string;
-    organizationSsoConnectionId?: string;
-  } | null = null;
-
-  if (organizationId) {
-    const [businessContext] = await db
-      .select({ member: organizationIdentityMembers, organization: organizations })
-      .from(organizationIdentityMembers)
-      .innerJoin(organizations, eq(organizations.id, organizationIdentityMembers.organizationId))
-      .where(and(
-        eq(organizationIdentityMembers.organizationId, organizationId),
-        eq(organizationIdentityMembers.identityId, identityId),
-        eq(organizationIdentityMembers.status, "active"),
-      ))
-      .limit(1);
-
-    if (!businessContext) {
-      return c.json({ error: "organization_access_denied" }, 403);
-    }
-    if (businessContext.organization.ssoRequired && !hasEnterpriseSsoSessionForOrganization(user, organizationId)) {
-      const policy = await getRequiredEnterpriseSsoForOrganization(businessContext.organization);
-      return c.json({
-        error: "enterprise_sso_required",
-        error_description: "This organization requires enterprise SSO before issuing organization context.",
-        loginUrl: policy?.loginUrl,
-        organization: { id: businessContext.organization.id, name: businessContext.organization.name },
-      }, 403);
-    }
-    const [policyRow] = await db.select().from(organizationEncryptionPolicies)
-      .where(eq(organizationEncryptionPolicies.organizationId, organizationId))
-      .limit(1);
-    const encryptionPolicy = serializeEncryptionPolicy(policyRow ?? null, organizationId);
-
-    organizationContext = {
-      organizationId,
-      organizationName: businessContext.organization.name,
-      organizationMemberId: businessContext.member.id,
-      organizationRole: businessContext.member.role,
-      organizationScopes: scopesForRole(businessContext.member.role as BusinessRole, businessContext.member.scopes as string[] | null),
-      organizationSigningAuthority: businessContext.member.signingAuthority,
-      organizationEncryptionMode: encryptionPolicy.mode,
-      organizationKeyCustody: keyCustodyForEncryptionMode(encryptionPolicy.mode),
-      organizationAuthMethod: businessContext.organization.ssoRequired ? "enterprise_sso" : user.authMethod || "ave_session",
-      organizationSsoConnectionId: businessContext.organization.ssoRequired ? user.enterpriseSsoConnectionId || undefined : undefined,
-    };
   }
 
   if (requestedScopes.includes("email") && !hasVerifiedEmail(identity)) {
@@ -506,16 +441,6 @@ app.post("/authorize", requireAuth, zValidator("json", z.object({
     encryptedAppPrivateKey: finalEncryptedAppPrivateKey,
     appEncryptionMode: finalAppEncryptionMode,
     nonce: nonce || undefined,
-    organizationId: organizationContext?.organizationId,
-    organizationName: organizationContext?.organizationName,
-    organizationMemberId: organizationContext?.organizationMemberId,
-    organizationRole: organizationContext?.organizationRole,
-    organizationScopes: organizationContext?.organizationScopes,
-    organizationSigningAuthority: organizationContext?.organizationSigningAuthority,
-    organizationEncryptionMode: organizationContext?.organizationEncryptionMode,
-    organizationKeyCustody: organizationContext?.organizationKeyCustody,
-    organizationAuthMethod: organizationContext?.organizationAuthMethod,
-    organizationSsoConnectionId: organizationContext?.organizationSsoConnectionId,
     requestedResource: connector ? requestedResource : undefined,
     requestedScope: connector ? resolvedRequestedScope || requestedScope : undefined,
     communicationMode: connector ? communicationMode : undefined,
@@ -549,7 +474,6 @@ app.post("/authorize", requireAuth, zValidator("json", z.object({
       appName: oauthApp.name,
       appId: oauthApp.id,
       identityId,
-      organizationId: organizationContext?.organizationId,
       authMethod: authorizationMethod,
       scope,
     },

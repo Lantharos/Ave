@@ -1,8 +1,8 @@
 <script lang="ts">
     import { queryClient } from "$lib/surfaces/web/lib/query-client";
     import { queryKeys, type SecuritySnapshot } from "$lib/surfaces/web/lib/queries";
-    import { clearPendingPasskeySetupPrompt, type PendingPasskeySetupPrompt } from "$lib/surfaces/web/lib/passkey-setup-prompt";
-    import { PasskeySetupUnavailableError, setUpPasskeyForCurrentDevice } from "$lib/surfaces/web/lib/passkey-setup";
+    import { clearPendingPasskeySetupPrompt, type PendingPasskeySetupPrompt } from "$lib/surfaces/web/lib/passkeys/setup-prompt";
+    import { PasskeySetupUnavailableError, setUpPasskeyForCurrentDevice } from "$lib/surfaces/web/lib/passkeys/setup";
     import { Fingerprint } from "@lucide/svelte";
 
     let { prompt, onClose } = $props<{

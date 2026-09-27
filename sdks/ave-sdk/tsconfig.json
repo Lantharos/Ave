@@ -6,11 +6,15 @@
     "moduleResolution": "NodeNext",
     "jsx": "react-jsx",
     "declaration": true,
-    "rootDir": "src",
     "outDir": "dist",
     "strict": true,
     "esModuleInterop": true,
-    "lib": ["ES2020", "DOM"]
+    "lib": [
+      "ES2020",
+      "DOM"
+    ]
   },
-  "include": ["src"]
+  "include": [
+    "src"
+  ]
 }

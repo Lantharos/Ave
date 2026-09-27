@@ -1,10 +1,9 @@
 import { and, eq, inArray, isNull } from "drizzle-orm";
 import { db, devices, trustCodes } from "../../db";
-import { verifyTrustCode } from "../../lib/crypto";
-import { getRequiredEnterpriseSsoForEmail } from "../../lib/enterprise-sso-policy";
-import { sendAccountEventNotification, type PushSubscription } from "../../lib/webpush";
+import { verifyTrustCode } from "../../lib/identity/crypto";
+import { sendAccountEventNotification, type PushSubscription } from "../../lib/notifications/webpush";
 
-export type Bindings = Pick<Env, "API_APP" | "HEAVY_SERVICES"> & {
+export type Bindings = Pick<Env, "API_APP"> & {
   INTERNAL_API_TOKEN?: string;
 };
 
@@ -36,17 +35,6 @@ export async function notifyLoginRequestInApiApp(
   if (!response.ok) {
     console.warn("Login request notification failed:", response.status, await response.text());
   }
-}
-
-export async function rejectRequiredEnterpriseSso(c: any, identity: { email: string | null }) {
-  const sso = await getRequiredEnterpriseSsoForEmail(identity.email);
-  if (!sso) return null;
-  return c.json({
-    error: "Enterprise SSO is required for this identity. Sign in with your work email.",
-    ssoRequired: true,
-    loginUrl: sso.loginUrl,
-    organization: sso.organization,
-  }, 403);
 }
 
 async function getUnusedTrustCodes(userId: string) {
@@ -160,7 +148,6 @@ export async function getOrCreateDevice(
 }
 
 export async function notifyAccountLoginEvent(
-  service: Env["HEAVY_SERVICES"],
   userId: string,
   event: {
     method: "passkey" | "device_approval" | "trust_code";
@@ -178,7 +165,7 @@ export async function notifyAccountLoginEvent(
     if ((excludeDeviceId && userDevice.id === excludeDeviceId) || !userDevice.pushSubscription) return null;
     try {
       const subscription = userDevice.pushSubscription as PushSubscription;
-      const sent = await sendAccountEventNotification(service, subscription, {
+      const delivery = await sendAccountEventNotification(subscription, {
         title: "New Login",
         body: `${event.deviceName} signed in to your Ave account`,
         event: "login",
@@ -189,7 +176,7 @@ export async function notifyAccountLoginEvent(
         },
       });
 
-      return sent ? null : userDevice.id;
+      return delivery === "expired" ? userDevice.id : null;
     } catch (error) {
       console.error(`[Push] Failed to send account event to device ${userDevice.id}:`, error);
       return null;

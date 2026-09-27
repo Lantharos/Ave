@@ -41,17 +41,6 @@ export interface AveJwtClaims extends JwtPayload {
   sid?: string;
   uid?: string;
   quick?: boolean;
-  auth_context?: "organization" | string;
-  org_id?: string;
-  org_name?: string;
-  org_member_id?: string;
-  org_role?: "owner" | "admin" | "signer" | "member" | "viewer" | string;
-  org_scopes?: string[];
-  org_signing_authority?: boolean;
-  org_encryption_mode?: "standard" | "enterprise_managed" | "e2ee" | string;
-  org_key_custody?: "ave_standard" | "customer_kms" | "identity_grants" | string;
-  auth_method?: "ave_session" | "enterprise_sso" | string;
-  sso_connection_id?: string;
 }
 
 export interface AveIdTokenClaims extends JwtPayload {
@@ -62,17 +51,6 @@ export interface AveIdTokenClaims extends JwtPayload {
   preferred_username?: string;
   email?: string;
   picture?: string;
-  auth_context?: "organization" | string;
-  org_id?: string;
-  org_name?: string;
-  org_member_id?: string;
-  org_role?: "owner" | "admin" | "signer" | "member" | "viewer" | string;
-  org_scopes?: string[];
-  org_signing_authority?: boolean;
-  org_encryption_mode?: "standard" | "enterprise_managed" | "e2ee" | string;
-  org_key_custody?: "ave_standard" | "customer_kms" | "identity_grants" | string;
-  auth_method?: "ave_session" | "enterprise_sso" | string;
-  sso_connection_id?: string;
 }
 
 export interface JwkKey {
@@ -129,19 +107,6 @@ export interface TokenResponse {
     avatarUrl?: string | null;
   } | null;
   user_id?: string;
-  organization?: {
-    id: string;
-    name?: string;
-    memberId?: string;
-    role?: "owner" | "admin" | "signer" | "member" | "viewer" | string;
-    scopes: string[];
-    signingAuthority: boolean;
-    encryptionMode?: "standard" | "enterprise_managed" | "e2ee" | string;
-    keyCustody?: "ave_standard" | "customer_kms" | "identity_grants" | string;
-    authMethod?: "ave_session" | "enterprise_sso" | string;
-    ssoConnectionId?: string;
-    e2eeKeyDelivery?: "ave_identity_grants_only" | string;
-  };
 }
 
 export interface FedCmTokenResponse extends TokenResponse {
@@ -157,19 +122,6 @@ export interface UserInfo {
   picture?: string;
   iss?: string;
   user_id?: string;
-  organization?: {
-    id: string;
-    name?: string;
-    memberId?: string;
-    role?: "owner" | "admin" | "signer" | "member" | "viewer" | string;
-    scopes: string[];
-    signingAuthority: boolean;
-    encryptionMode?: "standard" | "enterprise_managed" | "e2ee" | string;
-    keyCustody?: "ave_standard" | "customer_kms" | "identity_grants" | string;
-    authMethod?: "ave_session" | "enterprise_sso" | string;
-    ssoConnectionId?: string;
-    e2eeKeyDelivery?: "ave_identity_grants_only" | string;
-  };
 }
 
 // Ave Signing types

@@ -11,7 +11,6 @@ export function parseAuthorizationParams(querystring: string) {
     state: searchParams.get("state") || "",
     nonce: searchParams.get("nonce") || "",
     identityId: searchParams.get("identity_id") || "",
-    organizationId: searchParams.get("organization_id") || "",
     resource: searchParams.get("resource") || "",
     embed: searchParams.get("embed") === "1",
     fedcmContinue: searchParams.get("fedcm_continue") === "1",

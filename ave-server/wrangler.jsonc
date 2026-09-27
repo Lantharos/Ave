@@ -1,0 +1,155 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "ave-server",
+  "account_id": "2e3bfcbc9512a7ab1ea3a9cb9a474b30",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-09-27",
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
+  "placement": {
+    "mode": "smart"
+  },
+  "observability": {
+    "logs": {
+      "enabled": true,
+      "invocation_logs": true
+    }
+  },
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "API_APP",
+        "class_name": "ApiAppDurableObject"
+      },
+      {
+        "name": "RATE_LIMITER",
+        "class_name": "RateLimitDurableObject"
+      }
+    ]
+  },
+  "ratelimits": [
+    {
+      "name": "OAUTH_TOKEN_IP_RATE_LIMITER",
+      "namespace_id": "10001",
+      "simple": {
+        "limit": 300,
+        "period": 60
+      }
+    },
+    {
+      "name": "OAUTH_AUTHORIZE_ACTOR_RATE_LIMITER",
+      "namespace_id": "10002",
+      "simple": {
+        "limit": 120,
+        "period": 60
+      }
+    },
+    {
+      "name": "OAUTH_CLIENT_RATE_LIMITER",
+      "namespace_id": "10003",
+      "simple": {
+        "limit": 180,
+        "period": 60
+      }
+    }
+  ],
+  "queues": {
+    "producers": [
+      {
+        "binding": "BACKGROUND_EVENTS",
+        "queue": "ave-background-events"
+      }
+    ],
+    "consumers": [
+      {
+        "queue": "ave-background-events",
+        "max_batch_size": 25,
+        "max_batch_timeout": 5,
+        "max_retries": 10,
+        "dead_letter_queue": "ave-background-events-dlq",
+        "retry_delay": 60
+      }
+    ]
+  },
+  "analytics_engine_datasets": [
+    {
+      "binding": "API_ANALYTICS",
+      "dataset": "ave_api_requests"
+    }
+  ],
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "ave",
+      "database_id": "bbf9cbc0-9bdd-443e-80c9-470d229bd99c",
+      "migrations_dir": "drizzle"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "UPLOADS",
+      "bucket_name": "ave-avatars"
+    }
+  ],
+  "send_email": [
+    {
+      "name": "EMAIL",
+      "allowed_sender_addresses": [
+        "no-reply@aveid.net"
+      ]
+    }
+  ],
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": [
+        "ApiAppDurableObject"
+      ]
+    },
+    {
+      "tag": "v2",
+      "new_sqlite_classes": [
+        "RateLimitDurableObject"
+      ]
+    }
+  ],
+  "triggers": {
+    "crons": [
+      "0 3 * * *"
+    ]
+  },
+  "vars": {
+    "DEV_PORTAL_CLIENT_ID": "app_baca6051065b203e594c6dc020c22c7d",
+    "OIDC_DISCOVERY_BASE": "https://api.aveid.net",
+    "OIDC_ISSUER": "https://aveid.net",
+    "OIDC_PUBLIC_KEY_PEM": "-----BEGIN PUBLIC KEY-----\nMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAwxGPnw24+LgRdFflk5/b\nvC4JiY/+wxjuWR/EQeVPh+FYqrIaQc38xHcG6Rh0FiTPuudfcKwzD1xSxzg0TPFU\nczuH2HT6ATet4A8kVcfnR+XUwMhtYBSwLUOl9lnnJUnF/4R8d3Ole8teAPN7Iz3u\nYZPsoqgJZENsqkOF57uN9E0f1MWKHpz6MVzog2xiZgd1oCteVTrgS6CYXLASMr3U\nCb5F04hLsbDhnGXKCzUD/mHWwHgqCW1Ptq/yD9CMy770FGLHbRW7ZkiDpAOXXAIg\nr8x0bddlxRJ3lbpAIOj2husbjhC+BebvJF5VhpsysuRAL+9jJoAvLkWGTkxJ2VtJ\nQwIDAQAB\n-----END PUBLIC KEY-----",
+    "OIDC_RESOURCE_AUDIENCE": "https://aveid.net",
+    "R2_PUBLIC_URL": "https://assets.aveid.net",
+    "RP_ID": "aveid.net",
+    "RP_NAME": "Ave",
+    "RP_ORIGIN": "https://aveid.net",
+    "VAPID_PUBLIC_KEY": "BHG45kIltRlb8J3fIIPnTFyAGkMIEvb94XT1kHt5pmvyEJxTen32RQx1Q3XHXGeu34S1NOa-5nk8A3oTx-ldJ3M",
+    "VAPID_SUBJECT": "mailto:hello@lantharos.com",
+    "EMAIL_FROM_ADDRESS": "no-reply@aveid.net",
+    "EMAIL_FROM_NAME": "Ave",
+    "DEMO_HANDLE": "demo"
+  },
+  "build": {
+    "command": "bun run build:modules",
+    "watch_dir": [
+      "scripts",
+      "package.json"
+    ]
+  },
+  "find_additional_modules": true,
+  "rules": [
+    {
+      "type": "ESModule",
+      "globs": [
+        "**/generated/*.mjs"
+      ],
+      "fallthrough": true
+    }
+  ]
+}

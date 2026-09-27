@@ -1,7 +1,6 @@
 const STORAGE_KEY = "ave:return_url";
 const allowedReturnOrigins = new Set([
   "https://aveid.net",
-  "https://business.aveid.net",
   "https://devs.aveid.net",
 ]);
 

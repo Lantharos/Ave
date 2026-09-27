@@ -9,9 +9,9 @@ import {
   type ReactNode,
   type ReactElement,
 } from "react";
-import type { AveSessionOptions } from "../session.js";
-import { AveSession, type AveSessionSnapshot, type AveSessionStatus } from "../session.js";
-import { wireAveSessionToConvex } from "../convex.js";
+import type { AveSessionOptions } from "../session/session.js";
+import { AveSession, type AveSessionSnapshot, type AveSessionStatus } from "../session/session.js";
+import { wireAveSessionToConvex } from "../integrations/convex.js";
 
 export interface AveSessionContextValue {
   session: AveSession;

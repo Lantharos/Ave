@@ -1,4 +1,4 @@
-import { fetchJwks, verifyJwt } from "./jwt.js";
+import { fetchJwks, verifyJwt } from "./crypto/jwt.js";
 import type { AveIdTokenClaims, TokenResponse, VerifyJwtOptions } from "./types.js";
 
 export interface ServerConfig {
@@ -8,24 +8,6 @@ export interface ServerConfig {
   redirectUri: string;
 }
 
-export {
-createAveWorkspaceOrganization,
-getAveWorkspaceContext,
-getAveWorkspaceContextFromUserInfo,
-hasAveWorkspaceRole,
-hasAveWorkspaceScope,
-listAveWorkspaceOrganizations,
-requireAveWorkspaceContext
-} from "./workspace.js";
-export type {
-AveWorkspaceAuthMethod,
-AveWorkspaceContext,
-AveWorkspaceEncryptionMode,
-AveWorkspaceKeyCustody,
-AveWorkspaceOrganization,
-AveWorkspaceRole,
-AveWorkspaceScope
-} from "./workspace.js";
 export { fetchJwks,verifyJwt };
 export type { TokenResponse,VerifyJwtOptions };
 

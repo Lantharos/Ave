@@ -1,114 +1,45 @@
 # Ave
 
-Ave is an open-source identity platform built around passkeys, OAuth 2.0, and OpenID Connect.
+Ave is an open-source identity platform built around passkeys, OAuth 2.0, and OpenID Connect. It provides hosted sign-in, account recovery, Quick Ave, app-to-app delegation, identity-backed signing, and per-app encryption key delivery.
 
-It combines the hosted sign-in experience, the OAuth/OIDC API, a developer portal, a business organization console, public SDKs, and product docs in one repository. The codebase also includes higher-level features layered on top of auth itself: Quick Ave for zero-registration sign-in, delegated app-to-app access, identity-backed signing, organization identity containers, and per-app encryption key delivery.
+Apps own their workspaces, membership, billing, and authorization. Ave supplies the verified identity and the capabilities explicitly granted by that identity.
 
-## What lives here
+## Repository
 
-Ave is split into a few separate packages instead of one root workspace:
+| Package | Purpose |
+| --- | --- |
+| `ave-server` | Hono API on Cloudflare Workers, with D1, R2, Queues, and Durable Objects |
+| `ave-web` | SvelteKit frontend for `aveid.net` and `devs.aveid.net` |
+| `ave-docs` | Public documentation at `docs.aveid.net` |
+| `sdks/ave-sdk` | TypeScript SDK and browser, server, Expo, Svelte, Next.js, and Convex integrations |
+| `sdks/ave-embed` | Browser embed for auth, Connector, and signing |
 
-| Path | Purpose | Stack |
-| --- | --- | --- |
-| `ave-web` | Unified frontend Worker for `aveid.net`, `devs.aveid.net`, and `business.aveid.net` | SvelteKit, Cloudflare Workers, Tailwind CSS v4 |
-| `ave-server` | OAuth/OIDC API, auth flows, app management, signing, encryption, uploads | Hono, Cloudflare Workers, Durable Objects, D1, Drizzle |
-| `ave-heavy-services` | Private passkey verification, SAML signature validation, and Web Push delivery service | Cloudflare Workers, WebAuthn, XMLDSig, Web Push |
-| `ave-docs` | Product and SDK documentation | Mintlify content |
-| `sdks/ave-sdk` | Typed JavaScript/TypeScript SDK for OAuth, OIDC, session, Convex, Expo, Svelte, and Next.js helpers | TypeScript |
-| `sdks/ave-embed` | Lightweight browser embed for iframe, sheet, popup, connector, and signing flows | Plain JS |
+Developer teams in `devs.aveid.net` manage OAuth apps, resources, credentials, and team access. Owners manage the team profile and administrators; administrators manage applications and viewer memberships; viewers have read access.
 
-## Core capabilities
+## Development
 
-- Passkey-first authentication and account recovery flows
-- OAuth 2.0 + OpenID Connect provider support
-- Quick Ave for zero-registration auth tied to the caller origin
-- Developer portal for app registration, redirect URIs, scopes, secrets, resources, and organizations
-- Business organizations for identity membership, roles, signed admin actions, org key grants, verified domains, and SSO setup
-- Connector delegation for app-to-app access
-- Identity-backed Ed25519 signing flows
-- Per-app encryption key delivery for end-to-end encrypted integrations
-- Public SDKs and first-party docs for browser, server, Expo, Svelte, Next.js, and Convex use cases
+Install [Bun](https://bun.sh/) and install dependencies once from the repository root:
 
-## Production surfaces
+```bash
+bun install --frozen-lockfile
+```
 
-The repository is organized around the same split used in production:
-
-- `ave-web` serves the end-user product UI on `aveid.net`
-- `ave-web` serves the developer portal on `devs.aveid.net`
-- `ave-web` serves the business organization console on `business.aveid.net`, including standard org encryption, customer KMS references, and opt-in E2EE org-key grants
-- `api.aveid.net` serves the OAuth/OIDC and product API
-- `docs.aveid.net` serves the documentation
-
-## Local development
-
-### Prerequisites
-
-- [Bun](https://bun.sh/)
-- A Cloudflare account if you want to run or deploy the Worker-backed API against real infrastructure
-
-There is currently no root `package.json` workspace. Install and run each package from its own directory.
-
-### 1. Start the API
-
-The API is the center of the stack. `ave-web` talks to it for the product, developer, and business surfaces.
+Copy `ave-server/.dev.vars.example` to `ave-server/.dev.vars` and configure local signing keys and secrets. Use local values rather than production credentials. R2 and email use Worker bindings.
 
 ```bash
 cd ave-server
-bun install
-cd ../ave-heavy-services
-bun install
-cd ../ave-server
-```
-
-Copy `.dev.vars.example` to `.dev.vars` and configure the OIDC signing keys and any services you need. The example uses the local frontend and API origins. R2 and email use the bindings in `wrangler.toml`; separate R2 access keys and an external email provider are not required.
-
-Apply the D1 migrations locally:
-
-```bash
 bun run db:migrate:local
+cd ..
+bun run dev:api
 ```
 
-Start the Worker locally:
+In another terminal:
 
 ```bash
-bun run dev
+bun run dev:web
 ```
 
-Useful API commands:
-
-```bash
-bun run check
-bun run db:generate
-bun run db:migrate:remote
-```
-
-The API Worker also uses Durable Objects for realtime login approval fanout and sharded rate-limit counters, Cloudflare Queues for background audit and analytics writes, Workers Analytics Engine for request timing metrics, and Smart Placement. Passkey verification, SAML signature validation, and Web Push delivery run in the private `ave-heavy-services` Worker so their X.509, ASN.1, XML, and notification dependencies do not slow normal API isolate startup. Deploy that service before the API Worker that binds to it.
-
-Create the background queues once per Cloudflare account, then deploy the private service and API in that order:
-
-```bash
-cd ave-server
-bunx wrangler queues create ave-background-events
-bunx wrangler queues create ave-background-events-dlq
-bunx wrangler d1 migrations apply ave --remote
-cd ../ave-heavy-services
-bun run deploy
-cd ../ave-server
-bun run deploy
-```
-
-Workers Analytics Engine datasets are created on first write after the binding is deployed. D1 read replication should stay enabled; Ave clients send D1 bookmarks on follow-up requests so reads can remain fast without losing read-your-writes behavior.
-
-The API defaults to `http://localhost:3000` in local development.
-
-### 2. Start the unified frontend
-
-```bash
-cd ave-web
-bun install
-```
-
-Set local frontend env values if you want the app to talk to your local API instead of production:
+Configure the frontend's local environment when using the local API:
 
 ```env
 VITE_API_URL="http://localhost:3000"
@@ -116,103 +47,51 @@ VITE_WS_URL="ws://localhost:3000/ws"
 VITE_AVE_ORIGIN="http://localhost:5173"
 ```
 
-Run the app:
+The local frontend serves the product at `/` and the developer portal at `/devs`. API development uses port 3000.
 
-```bash
-bun run dev
-```
+## Validation
 
-The local frontend serves all surfaces from one SvelteKit app:
-
-- `http://localhost:5173` for the main Ave UI
-- `http://localhost:5173/devs` for the developer portal surface
-- `http://localhost:5173/business` for the business organization console
-
-Useful frontend commands:
+From the repository root:
 
 ```bash
 bun run check
 bun run build
-bun run preview
 ```
 
-### 3. Work on the SDKs
+Package scripts remain available from their directories. `ave-server` generates its passkey module during checks and Worker builds. SDK builds replace their output directory so removed exports cannot survive in published packages.
 
-`sdks/ave-sdk` ships the typed integration surface used throughout the docs and examples:
+The API entrypoint is `ave-server/src/index.ts`. HTTP composition, request metadata, origins, and the login channel live in `src/runtime`; database tables are grouped under `src/db/schema`; API routes and their domain helpers live under `src/routes` and `src/lib`.
+
+## Cloudflare deployment
+
+The API and frontend each have a `wrangler.jsonc`. Cloudflare builds should install from the repository root with `bun install --frozen-lockfile`, then run the relevant package's deploy script.
+
+The API uses D1 read sessions and bookmarks, R2 uploads, Cloudflare email, login-approval and rate-limit Durable Objects, background event queues, Analytics Engine, and Smart Placement. Passkey operations load a separately bundled module within the API Worker. Push delivery runs in the same Worker.
+
+For a new account, create the queues before deploying:
 
 ```bash
-cd sdks/ave-sdk
-bun install
-bun run build
+cd ave-server
+bunx wrangler queues create ave-background-events
+bunx wrangler queues create ave-background-events-dlq
+bun run db:migrate:remote
+bun run deploy
+cd ../ave-web
+bun run deploy
 ```
 
-`sdks/ave-embed` ships the browser embed runtime:
+For an existing deployment, inspect pending migrations before applying them. Back up D1 before destructive schema changes. The developer membership migration must precede the API deployment; the subsequent retirement migration is applied after the API has switched to the new tables. See [deployment notes](ave-server/DEPLOYMENT.md).
 
-```bash
-cd sdks/ave-embed
-bun run build
-```
+Keep D1 read replication enabled. Clients send D1 bookmarks to preserve read-your-writes consistency.
 
-### Publishing SDK packages
+## SDK publication
 
-SDK packages publish through `.github/workflows/publish-npm.yml` with npm trusted publishing. The workflow is manual, only accepts the SDK package folders, writes the requested `version` into the selected package, commits the bump back to the branch, and then publishes.
+`.github/workflows/publish-npm.yml` publishes `sdks/ave-sdk` or `sdks/ave-embed` through npm trusted publishing. Configure each npm package's trusted publisher for this repository and workflow, then run the workflow from a branch with the package path, requested version, and access level. It updates the package version and root Bun lockfile, builds, commits the version bump, and publishes with provenance.
 
-Before first use, configure each npm package's trusted publisher on npmjs.com for this repository and workflow file:
+Packages must retain `repository.url` pointing to `https://github.com/Lantharos/Ave` so npm can validate provenance. No npm token is required.
 
-```txt
-.github/workflows/publish-npm.yml
-```
+## Documentation
 
-Then run the workflow with:
+Public guides cover Quick Ave, OAuth/PKCE, confidential clients, FedCM, Connector, signing, encryption, app authorization, and framework integrations. Update `ave-docs` when changing public behavior or SDK contracts.
 
-```txt
-package: sdks/ave-sdk or sdks/ave-embed
-version: the package version to write and publish
-access: public or restricted
-```
-
-Run it from a branch, not a tag, so the release commit can be pushed. No npm token is required. The workflow uses GitHub OIDC, so the npm package trusted publisher must point at this repository and workflow file before the first publish. Each published package must also keep `repository.url` set to `https://github.com/Lantharos/Ave`, because npm validates that value against the GitHub provenance bundle.
-
-## Docs
-
-The documentation source lives in `ave-docs`. It covers:
-
-- Quick Ave
-- Full OAuth authorization code flow
-- PKCE and confidential clients
-- Connector delegation
-- Signing
-- End-to-end encryption
-- Framework integrations including Expo, Next.js, Convex, SQL/Postgres, and Better Auth
-
-If you change behavior in the SDKs, auth flows, developer portal, or business organization console, the matching docs in `ave-docs` should usually move with it.
-
-## Where to look first
-
-If you are new to the repo, these files are the quickest way to orient yourself:
-
-- `ave-server/src/index.ts` for API composition, CORS, Durable Object entrypoints, and scheduled cleanup
-- `ave-heavy-services/src/index.ts` for private passkey and SAML verification plus Web Push delivery
-- `ave-server/src/routes/oauth.ts` for OAuth/OIDC, Quick Ave, refresh rotation, and FedCM
-- `ave-server/src/routes/apps.ts` for developer portal app and resource management
-- `ave-server/src/routes/organizations.ts` for multi-workspace developer portal support
-- `ave-server/src/routes/business.ts` for business organization identity containers, roles, org keys, and SSO setup
-- `ave-web/src/hooks.ts` for host-based frontend routing across Ave domains
-- `ave-web/src/routes/web` for the main product UI
-- `ave-web/src/routes/devs` for the developer portal
-- `ave-web/src/routes/business` for the business organization console
-- `ave-docs/index.mdx` and `ave-docs/quickstart.mdx` for the public product story and integration path
-
-## Database and storage notes
-
-- The API uses Cloudflare D1 with Drizzle migrations stored in `ave-server/drizzle`
-- The Worker binds a Durable Object named `API_APP`
-- The API binds the private `ave-heavy-services` Worker for dependency-heavy SAML and notification operations
-- Uploads and public assets use Cloudflare R2. New image keys include their identity or workspace ID; replacement only deletes objects in that owner's prefix. Existing flat-path assets remain readable and are retained because their ownership cannot be proven from the URL alone.
-- The scheduled Worker task triggers daily cleanup for stale devices and expired activity data
-
-## Open source
-
-Ave is licensed under the GNU Affero General Public License v3.0. See [LICENSE](./LICENSE).
-
-For contribution and disclosure guidelines, see [CONTRIBUTING.md](./CONTRIBUTING.md) and [SECURITY.md](./SECURITY.md).
+Read [CONTRIBUTING.md](CONTRIBUTING.md) for contribution guidance and [SECURITY.md](SECURITY.md) for private vulnerability reporting.

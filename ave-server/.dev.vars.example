@@ -4,7 +4,6 @@ RP_NAME=Ave
 RP_ORIGIN=http://localhost:5173
 COOKIE_DOMAIN=
 COOKIE_SECURE=false
-BUSINESS_ORIGIN=http://localhost:5173/business
 
 # Internal service notifications
 INTERNAL_API_TOKEN=change-me
@@ -16,10 +15,6 @@ OIDC_DISCOVERY_BASE=http://localhost:3000
 OIDC_KID=ave-oidc-v1
 OIDC_PRIVATE_KEY_PEM=
 OIDC_PUBLIC_KEY_PEM=
-
-# Enterprise SSO client-secret encryption
-BUSINESS_SSO_SECRET_KEY=
-SESSION_SECRET=
 
 # Developer portal
 DEV_PORTAL_CLIENT_ID=
@@ -33,7 +28,7 @@ VAPID_PUBLIC_KEY=
 VAPID_PRIVATE_KEY=
 VAPID_SUBJECT=mailto:support@aveid.net
 
-# Cloudflare email and R2 bindings are configured in wrangler.toml
+# Cloudflare email and R2 bindings are configured in wrangler.jsonc
 EMAIL_FROM_ADDRESS=no-reply@aveid.net
 EMAIL_FROM_NAME=Ave
 R2_PUBLIC_URL=

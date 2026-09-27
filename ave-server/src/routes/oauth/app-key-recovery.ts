@@ -3,9 +3,9 @@ import { and, eq } from "drizzle-orm";
 import { Hono } from "hono";
 import { z } from "zod";
 import { db, oauthApps, oauthAuthorizations } from "../../db";
-import { recordActivityLog } from "../../lib/background-events";
-import { validateOpaqueKeyEnvelope } from "../../lib/encryption-key-payload";
-import { enforceNativeRateLimits, subjectRateLimit } from "../../lib/rate-limit";
+import { recordActivityLog } from "../../lib/platform/background-events";
+import { validateOpaqueKeyEnvelope } from "../../lib/identity/encryption-key-payload";
+import { enforceNativeRateLimits, subjectRateLimit } from "../../lib/platform/rate-limit";
 import { requireAuth, requireWritable } from "../../middleware/auth";
 
 const app = new Hono();

@@ -1,743 +1,32 @@
 <script lang="ts">
-    import AuthSlider from "./components/AuthSlider.svelte";
-    import MasterKeyRecovery from "./components/MasterKeyRecovery.svelte";
-    import { prepareAuthorizationEncryption } from "./lib/prepare-authorization-encryption";
-    import {
-        fallbackToTopLevelAuthorize,
-        identityProvider,
-        isCustomSchemeRedirect,
-        openAuthPopupHere,
-        postToEmbedHost,
-        withTimeout,
-    } from "./lib/browser";
-    import { parseAuthorizationParams } from "./lib/params";
-    import IdentityCard from "$lib/surfaces/web/components/IdentityCard.svelte";
-    import Text from "$lib/surfaces/web/components/Text.svelte";
-    import { api, type Identity, type OAuthAuthorization } from "$lib/surfaces/web/lib/api";
-    import {
-        resolveActiveMasterKey,
-        generateEphemeralKeyPair,
-        recoverMasterKeyFromBackup,
-    } from "$lib/surfaces/web/lib/crypto";
-    import {
-        authorizeFlowShowsE2ee,
-        hasE2eeResetScope,
-        hasUserIdScope,
-        resolveRequestedE2eeMode,
-    } from "$lib/surfaces/web/lib/e2ee-scopes";
-    import { parseOAuthScopes } from "$lib/surfaces/web/lib/oauth-scopes";
-    import {
-        parseOAuthPrompt,
-        requiresAuthorizeInteractionPrompt,
-        wantsAccountPickerPrompt,
-    } from "$lib/surfaces/web/lib/oauth-prompt";
-	import { auth, isAuthenticated, isLoading, identities as identitiesStore, currentIdentity } from "$lib/surfaces/web/stores/auth";
-	import { setReturnUrl } from "$lib/surfaces/web/util/return-url";
-	import { goto } from "$app/navigation";
-	import { safeGoto } from "$lib/surfaces/web/util/safe-goto";
-	import { get } from "svelte/store";
-	import StorageAccessGate from "$lib/surfaces/web/components/StorageAccessGate.svelte";
-	import { supportsStorageAccessApi, hasStorageAccess, requestStorageAccess } from "$lib/surfaces/web/lib/storage-access";
-	import { unlockMasterKeyWithPasskey } from "$lib/surfaces/web/lib/master-key-unlock";
-	import { getDeviceInfo } from "$lib/infrastructure/browser/device";
-    // Parse query params from window.location
-    let querystring = $state(window.location.search.slice(1));
-    
-    // Update querystring when URL changes
-    $effect(() => {
-        const updateQuery = () => {
-            querystring = window.location.search.slice(1);
-        };
-        window.addEventListener('popstate', updateQuery);
-        return () => window.removeEventListener('popstate', updateQuery);
-    });
-
-    // Parse query params
-    let params = $derived(parseAuthorizationParams(querystring || ""));
-
-    const oauthPrompts = $derived.by(() => parseOAuthPrompt(params.prompt));
-    const forceAuthorizePrompt = $derived(requiresAuthorizeInteractionPrompt(oauthPrompts));
-    const wantsSelectAccount = $derived(wantsAccountPickerPrompt(oauthPrompts));
-
-
-    const isQuickAuth = $derived(params.clientId.startsWith("origin:"));
-    const requiresEmailScope = $derived.by(() => parseOAuthScopes(params.scope).includes("email"));
-    const selectedIdentityNeedsEmail = $derived.by(() => Boolean(selectedIdentity && requiresEmailScope && !selectedIdentity.email));
-    const quickOriginHostname = $derived.by(() => {
-        if (!isQuickAuth) return null;
-        try { return new URL(params.clientId.slice("origin:".length)).hostname; } catch { return null; }
-    });
-    const authorizeRequestedScopes = $derived.by(() => parseOAuthScopes(params.scope));
-    const wantsUserIdScope = $derived(hasUserIdScope(authorizeRequestedScopes));
-
-    let appInfo = $state<{
-        name: string;
-        description?: string;
-        iconUrl?: string;
-        websiteUrl?: string;
-        supportsE2ee: boolean;
-        allowedScopes?: string[];
-    } | null>(null);
-
-    const authorizeShowsE2ee = $derived.by(() =>
-        appInfo ? authorizeFlowShowsE2ee(appInfo, authorizeRequestedScopes) : false,
-    );
-    
-    let appAuthorizations = $state.raw<OAuthAuthorization[]>([]);
-    let existingAuth = $state.raw<OAuthAuthorization | null>(null);
-    
-    let selectedIdentity = $state<Identity | null>(null);
-    let identityDropdownOpen = $state(false);
-    let loading = $state(true);
-    let authorizing = $state(false);
-    let autoAuthorizing = $state(false);
-    let completed = $state(false);
-    let error = $state<string | null>(null);
-    let emailDraft = $state("");
-    let emailCode = $state("");
-    let emailSubmitting = $state(false);
-    let needsMasterKey = $state(false);
-    let unlockingMasterKey = $state(false);
-    let masterKeyUnlockView = $state<"options" | "device" | "recovery">("options");
-    let hasTrustedDevices = $state(false);
-    let loadingTrustedDevices = $state(false);
-    let masterKeyLoginRequestId = $state<string | null>(null);
-    let masterKeyLoginRequestToken = $state<string | null>(null);
-    let masterKeyEphemeralKeyPair = $state<{ publicKey: string; privateKey: CryptoKey } | null>(null);
-    let requestingDeviceApproval = $state(false);
-    let recoveringMasterKey = $state(false);
-    let recoveryCode = $state("");
-    let masterKeyError = $state<string | null>(null);
-    let masterKeyMismatch = $state(false);
-    let needsStorageAccess = $state(false);
-    let redirectingToLogin = $state(false);
-    let requestingStorageAccess = $state(false);
-    let storageAccessError = $state<string | null>(null);
-    let storageAccessAttempted = $state(false);
-    let launchedExternalApp = $state(false);
-    let loadingAppInfo = $state(false);
-    let resolvedAppInfo = $state(false);
-    let authorizeBootstrapClientId = $state<string | null>(null);
-    let resolvedAuthorizeBootstrapClientId = $state<string | null>(null);
-    let retryingCookieSession = $state(false);
-    let attemptedCookieSessionRetry = $state(false);
-
-    const embedPopup = $derived.by(() => params.embed && !!window.opener);
-    const embedSheet = $derived.by(() => params.embed && !embedPopup);
-
-    async function loadTrustedDevices() {
-        if (!needsMasterKey || loadingTrustedDevices) return;
-        loadingTrustedDevices = true;
-        try {
-            const { devices } = await api.devices.list();
-            hasTrustedDevices = devices.length > 0;
-        } catch {
-            hasTrustedDevices = false;
-        } finally {
-            loadingTrustedDevices = false;
-        }
-    }
-
-    $effect(() => {
-        if (!needsMasterKey) return;
-        masterKeyUnlockView = "options";
-        masterKeyLoginRequestId = null;
-        masterKeyEphemeralKeyPair = null;
-        recoveryCode = "";
-        if (!masterKeyMismatch) {
-            masterKeyError = null;
-        }
-        void loadTrustedDevices();
-    });
-
-    function promptMasterKeyRecovery(syncIssue: boolean) {
-        masterKeyMismatch = syncIssue;
-        needsMasterKey = true;
-        authorizing = false;
-    }
-
-    function appDisplayName() {
-        return appInfo?.name || quickOriginHostname || "this app";
-    }
-
-    function syncSelectedIdentity(identity: Identity) {
-        auth.updateIdentity(identity);
-        selectedIdentity = identity;
-        emailDraft = identity.pendingEmail || identity.email || "";
-    }
-
-    function selectIdentity(identity: Identity) {
-        auth.setCurrentIdentity(identity);
-        selectedIdentity = identity;
-        existingAuth = appAuthorizations.find((authorization) =>
-            authorization.identityId === identity.id
-        ) || null;
-        emailDraft = identity.pendingEmail || identity.email || "";
-        emailCode = "";
-        identityDropdownOpen = false;
-    }
-
-    async function ensureAppInfo() {
-        if (!params.clientId || appInfo || loadingAppInfo || resolvedAppInfo) {
-            return;
-        }
-
-        loadingAppInfo = true;
-        try {
-            const appData = await api.oauth.getApp(params.clientId);
-            appInfo = appData.app;
-        } catch (err) {
-            console.warn("[Authorize] Failed to load app info early.", err);
-        } finally {
-            loadingAppInfo = false;
-            resolvedAppInfo = true;
-        }
-    }
-
-    // Load app info
-    async function loadAppInfo() {
-        if (completed) return;
-        const clientId = params.clientId;
-
-        if (!clientId) {
-            error = "Missing client_id parameter";
-            loading = false;
-            return;
-        }
-
-        if (authorizeBootstrapClientId === clientId || resolvedAuthorizeBootstrapClientId === clientId) {
-            return;
-        }
-
-        authorizeBootstrapClientId = clientId;
-        loading = true;
-        error = null;
-
-        try {
-            const bootstrap = await api.oauth.getAuthorizeBootstrap(
-                clientId,
-            );
-
-            appInfo = bootstrap.app;
-            appAuthorizations = bootstrap.authorizations;
-            launchedExternalApp = false;
-
-            let hasLocalMasterKey = true;
-            if (authorizeFlowShowsE2ee(bootstrap.app, authorizeRequestedScopes)) {
-                hasLocalMasterKey = !!(await resolveActiveMasterKey(get(auth).masterKey));
-                needsMasterKey = !hasLocalMasterKey;
-                masterKeyMismatch = false;
-            }
-
-            const authState = get(auth);
-            const preferredIdentity = params.identityId
-                ? authState.identities.find((i) => i.id === params.identityId) || null
-                : null;
-            const latestAuthorization = appAuthorizations[0] || null;
-            const existingIdentity = latestAuthorization
-                ? authState.identities.find((i) => i.id === latestAuthorization.identityId)
-                : null;
-
-            selectedIdentity = preferredIdentity
-                || (!wantsSelectAccount ? existingIdentity : null)
-                || authState.currentIdentity
-                || authState.identities[0]
-                || null;
-            existingAuth = selectedIdentity
-                ? appAuthorizations.find((authorization) =>
-                    authorization.identityId === selectedIdentity!.id
-                ) || null
-                : null;
-            emailDraft = selectedIdentity?.pendingEmail || selectedIdentity?.email || "";
-
-            const grantedScopes = new Set(parseOAuthScopes(existingAuth?.scope ?? ""));
-            const shouldAutoAuthorize = !forceAuthorizePrompt
-                && !hasE2eeResetScope(authorizeRequestedScopes)
-                && !!existingAuth
-                && authorizeRequestedScopes.every((scope) => grantedScopes.has(scope))
-                && !!existingIdentity
-                && (!authorizeFlowShowsE2ee(bootstrap.app, authorizeRequestedScopes) || hasLocalMasterKey);
-
-            if (shouldAutoAuthorize && !(requiresEmailScope && !selectedIdentity?.email)) {
-                // Keep UI in loading state while we redirect.
-                autoAuthorizing = true;
-                await handleAuthorize("instant");
-                // If we got here, redirect failed (error set) or we're embedded.
-                if (!completed) {
-                    autoAuthorizing = false;
-                }
-            }
-        } catch (err) {
-            error = err instanceof Error ? err.message : "Failed to load app info";
-        } finally {
-            if (authorizeBootstrapClientId === clientId) {
-                resolvedAuthorizeBootstrapClientId = clientId;
-                authorizeBootstrapClientId = null;
-            }
-            if (!completed) {
-                loading = false;
-            }
-        }
-    }
-
-    async function handleAuthorize(interactionMode: "instant" | "prompt" = "prompt") {
-		if (!selectedIdentity || !appInfo) return;
-
-        try {
-            authorizing = true;
-            error = null;
-            
-            const authData: Parameters<typeof api.oauth.authorize>[0] = {
-                clientId: params.clientId,
-                redirectUri: params.redirectUri,
-                scope: params.scope,
-                state: params.state,
-                identityId: selectedIdentity.id,
-                organizationId: params.organizationId || undefined,
-                nonce: params.nonce || undefined,
-                interactionMode,
-            };
-            
-            // Only include PKCE params if they exist
-            if (params.codeChallenge) {
-                authData.codeChallenge = params.codeChallenge;
-            }
-            if (params.codeChallengeMethod) {
-                authData.codeChallengeMethod = params.codeChallengeMethod;
-            }
-
-            const encryption = await prepareAuthorizationEncryption({
-                requestedScopes: authorizeRequestedScopes,
-                app: appInfo,
-                existingAuthorization: existingAuth,
-                identityId: selectedIdentity.id,
-                sessionMasterKey: get(auth).masterKey,
-            });
-            if (encryption.status === "master-key-required") {
-                needsMasterKey = true;
-                masterKeyError = null;
-                authorizing = false;
-                return;
-            }
-            if (encryption.status === "master-key-recovery-required") {
-                promptMasterKeyRecovery(true);
-                return;
-            }
-            if (encryption.status === "error") {
-                error = encryption.message;
-                authorizing = false;
-                return;
-            }
-
-            Object.assign(authData, encryption.authorization);
-            const {
-                appKey: rawAppKey,
-                appKeyOld: rawAppKeyOld,
-                appPublicKey: rawAppPublicKey,
-                appPublicKeyOld: rawAppPublicKeyOld,
-                appPrivateKey: rawAppPrivateKey,
-                appPrivateKeyOld: rawAppPrivateKeyOld,
-                reset: wantsE2eeReset,
-            } = encryption.redirect;
-            
-            const result = await api.oauth.authorize(authData);
-
-            const fedCmProvider = params.fedcmContinue ? identityProvider() : null;
-            if (fedCmProvider) {
-                const code = new URL(result.redirectUrl).searchParams.get("code");
-                if (!code) {
-                    throw new Error("FedCM authorization did not return a code");
-                }
-
-                const finalized = await api.oauth.fedcmFinalize({
-                    code,
-                    clientId: params.clientId,
-                    state: params.state || undefined,
-                    appKey: rawAppKey || undefined,
-                    appPublicKey: rawAppPublicKey || undefined,
-                    appPrivateKey: rawAppPrivateKey || undefined,
-                    appKeyOld: rawAppKeyOld || undefined,
-                    appPublicKeyOld: rawAppPublicKeyOld || undefined,
-                    appPrivateKeyOld: rawAppPrivateKeyOld || undefined,
-                    appKeyReset: wantsE2eeReset || undefined,
-                });
-
-                fedCmProvider.resolve(finalized.assertion);
-                completed = true;
-                authorizing = false;
-                return;
-            }
-            
-            let redirectUrl = result.redirectUrl;
-            const hashParams = new URLSearchParams();
-            if (rawAppKey) hashParams.set("app_key", rawAppKey);
-            if (rawAppKeyOld) hashParams.set("app_key_old", rawAppKeyOld);
-            if (rawAppPublicKey) hashParams.set("app_public_key", rawAppPublicKey);
-            if (rawAppPublicKeyOld) hashParams.set("app_public_key_old", rawAppPublicKeyOld);
-            if (rawAppPrivateKey) hashParams.set("app_private_key", rawAppPrivateKey);
-            if (rawAppPrivateKeyOld) hashParams.set("app_private_key_old", rawAppPrivateKeyOld);
-            if (wantsE2eeReset) hashParams.set("app_key_reset", "true");
-            if (hashParams.toString()) {
-                const url = new URL(redirectUrl);
-                url.hash = hashParams.toString();
-                redirectUrl = url.toString();
-            }
-            if (params.embed) {
-                postToEmbedHost(params.redirectUri, {
-                    type: "ave:success",
-                    payload: { redirectUrl },
-                });
-                completed = true;
-                authorizing = false;
-                if (window.opener) {
-                    setTimeout(() => window.close(), 50);
-                }
-                return;
-            }
-            launchedExternalApp = isCustomSchemeRedirect(redirectUrl);
-            completed = true;
-            window.location.href = redirectUrl;
-
-			} catch (err: unknown) {
-	            if (err instanceof Error && err.message === "Request timed out") {
-                error = "Signing in is taking too long. Please try again.";
-            } else if (
-                err instanceof Error &&
-                /operation-specific reason|OperationError/i.test(err.message)
-            ) {
-                error = "Could not process app encryption for this sign-in. Please try again.";
-            } else {
-                error = err instanceof Error ? err.message : "Authorization failed";
-            }
-            authorizing = false;
-        }
-    }
-
-    async function handleStartEmailVerification() {
-        if (!selectedIdentity || !emailDraft.trim()) return;
-
-        emailSubmitting = true;
-        error = null;
-        try {
-            const { identity } = await api.identities.startEmailVerification(selectedIdentity.id, emailDraft.trim());
-            syncSelectedIdentity(identity);
-            emailCode = "";
-        } catch (err) {
-            error = err instanceof Error ? err.message : "Failed to send verification code";
-        } finally {
-            emailSubmitting = false;
-        }
-    }
-
-    async function handleVerifyEmail() {
-        if (!selectedIdentity || emailCode.trim().length !== 6) return;
-
-        emailSubmitting = true;
-        error = null;
-        try {
-            const { identity } = await api.identities.verifyEmail(selectedIdentity.id, emailCode.trim());
-            syncSelectedIdentity(identity);
-            emailCode = "";
-        } catch (err) {
-            error = err instanceof Error ? err.message : "Failed to verify email";
-        } finally {
-            emailSubmitting = false;
-        }
-    }
-
-    async function handleResendEmailVerification() {
-        if (!selectedIdentity) return;
-
-        emailSubmitting = true;
-        error = null;
-        try {
-            const { identity } = await api.identities.resendEmailVerification(selectedIdentity.id);
-            syncSelectedIdentity(identity);
-        } catch (err) {
-            error = err instanceof Error ? err.message : "Failed to resend verification code";
-        } finally {
-            emailSubmitting = false;
-        }
-    }
-
-
-
-    function handleDeny() {
-        const fedCmProvider = params.fedcmContinue ? identityProvider() : null;
-        if (fedCmProvider) {
-            fedCmProvider.close();
-            completed = true;
-            return;
-        }
-
-        // Redirect back with error
-        const redirectUrl = new URL(params.redirectUri);
-        redirectUrl.searchParams.set("error", "access_denied");
-        if (params.state) {
-            redirectUrl.searchParams.set("state", params.state);
-        }
-
-		if (params.embed) {
-			postToEmbedHost(params.redirectUri, { type: "ave:error", payload: { error: "access_denied" } });
-			completed = true;
-			if (window.opener) {
-				setTimeout(() => window.close(), 50);
-			}
-			return;
-		}
-		window.location.href = redirectUrl.toString();
-
-    }
-
-    async function retryCookieSessionBeforeLogin() {
-        if (retryingCookieSession || attemptedCookieSessionRetry) return;
-        attemptedCookieSessionRetry = true;
-        retryingCookieSession = true;
-        try {
-            await auth.init({ timeoutMs: 7000 });
-        } finally {
-            retryingCookieSession = false;
-        }
-    }
-
-    // Check auth and load app info
-	$effect(() => {
-        if (resolvedAuthorizeBootstrapClientId && resolvedAuthorizeBootstrapClientId !== params.clientId) {
-            resolvedAuthorizeBootstrapClientId = null;
-            authorizeBootstrapClientId = null;
-            appAuthorizations = [];
-            existingAuth = null;
-            appInfo = null;
-        }
-		if (params.resource) {
-			window.location.replace(`/connect${window.location.search}`);
-			return;
-        }
-        if (completed) return;
-		if (!$isAuthenticated) {
-            if ($isLoading || retryingCookieSession) return;
-            void ensureAppInfo();
-            if (!attemptedCookieSessionRetry && !embedSheet) {
-                void retryCookieSessionBeforeLogin();
-                return;
-            }
-			if (redirectingToLogin) return;
-            if (embedSheet) {
-                if (requestingStorageAccess) return;
-                if (!storageAccessAttempted) {
-                    tryAutoStorageAccess();
-                    return;
-                }
-                if (!resolvedAppInfo && !appInfo && !quickOriginHostname) {
-                    return;
-                }
-                needsStorageAccess = true;
-                return;
-            }
-			// Redirect to login, then come back
-			setReturnUrl(window.location.pathname + window.location.search);
-			redirectingToLogin = true;
-			if (params.embed) {
-				postToEmbedHost(params.redirectUri, { type: "ave:auth_required" });
-			}
-			safeGoto(goto, "/login");
-			return;
-		}
-
-		loadAppInfo();
-	});
-
-    async function tryAutoStorageAccess() {
-        if (requestingStorageAccess) return;
-        storageAccessAttempted = true;
-        requestingStorageAccess = true;
-        needsStorageAccess = false;
-        storageAccessError = null;
-        try {
-            const storageSupported = supportsStorageAccessApi();
-            const alreadyHasAccess = storageSupported
-                ? (await withTimeout(hasStorageAccess(), 250)) === true
-                : true;
-
-            if (!alreadyHasAccess) {
-                needsStorageAccess = true;
-                return;
-            }
-
-            const initOk = (await withTimeout(auth.init({ timeoutMs: 1200 }), 1500)) !== null;
-            if (initOk) {
-                const authState = get(auth);
-                if (authState.isAuthenticated) {
-                    needsStorageAccess = false;
-                    return;
-                }
-            }
-
-            needsStorageAccess = true;
-        } finally {
-            requestingStorageAccess = false;
-        }
-    }
-
-	async function requestStorageAccessFromUserAction() {
-		if (requestingStorageAccess) return;
-		storageAccessAttempted = true;
-		requestingStorageAccess = true;
-		needsStorageAccess = false;
-		storageAccessError = null;
-		try {
-			if (!supportsStorageAccessApi()) {
-				const opened = openAuthPopupHere();
-				if (!opened) {
-					fallbackToTopLevelAuthorize();
-					return;
-				}
-				redirectingToLogin = true;
-				needsStorageAccess = false;
-				completed = true;
-				return;
-			}
-
-			const alreadyHasAccess = (await withTimeout(hasStorageAccess(), 250)) === true;
-			const granted = alreadyHasAccess || (await withTimeout(requestStorageAccess(), 1500)) === true;
-			if (!granted) {
-				const opened = openAuthPopupHere();
-				if (!opened) {
-					fallbackToTopLevelAuthorize();
-					return;
-				}
-				redirectingToLogin = true;
-				needsStorageAccess = false;
-				completed = true;
-				return;
-			}
-
-			const initOk = (await withTimeout(auth.init({ timeoutMs: 1200 }), 1500)) !== null;
-			if (!initOk) {
-				const opened = openAuthPopupHere();
-				if (!opened) {
-					fallbackToTopLevelAuthorize();
-					return;
-				}
-				redirectingToLogin = true;
-				needsStorageAccess = false;
-				completed = true;
-				return;
-			}
-			const authState = get(auth);
-			if (!authState.isAuthenticated) {
-				const opened = openAuthPopupHere();
-				if (!opened) {
-					fallbackToTopLevelAuthorize();
-					return;
-				}
-				redirectingToLogin = true;
-				needsStorageAccess = false;
-				completed = true;
-				return;
-			}
-
-			needsStorageAccess = false;
-		} finally {
-			requestingStorageAccess = false;
-		}
-	}
-
-    function handleStorageAccessContinue() {
-        requestStorageAccessFromUserAction();
-    }
-
-	async function handleUnlockMasterKey() {
-		if (unlockingMasterKey) return;
-		unlockingMasterKey = true;
-		masterKeyError = null;
-		try {
-			const result = await unlockMasterKeyWithPasskey();
-			if (!result.ok) {
-				masterKeyError = result.error;
-				return;
-			}
-			needsMasterKey = false;
-            masterKeyMismatch = false;
-                await handleAuthorize("instant");
-		} finally {
-			unlockingMasterKey = false;
-		}
-	}
-
-    async function handleMasterKeyDeviceApproval() {
-        if (!selectedIdentity?.handle || requestingDeviceApproval) return;
-        requestingDeviceApproval = true;
-        masterKeyError = null;
-        try {
-            const keyPair = await generateEphemeralKeyPair();
-            masterKeyEphemeralKeyPair = keyPair;
-            const result = await api.login.requestApproval({
-                handle: selectedIdentity.handle,
-                requesterPublicKey: keyPair.publicKey,
-                device: getDeviceInfo(),
-            });
-            masterKeyLoginRequestId = result.requestId;
-            masterKeyLoginRequestToken = result.requestToken;
-            masterKeyUnlockView = "device";
-        } catch (err) {
-            masterKeyError = err instanceof Error ? err.message : "Failed to request device approval";
-        } finally {
-            requestingDeviceApproval = false;
-        }
-    }
-
-    async function handleMasterKeyRecovered() {
-        needsMasterKey = false;
-        masterKeyMismatch = false;
-        masterKeyUnlockView = "options";
-        await handleAuthorize("instant");
-    }
-
-    async function handleRecoveryCodeSubmit() {
-        if (!selectedIdentity?.handle || !recoveryCode.trim() || recoveringMasterKey) return;
-        recoveringMasterKey = true;
-        masterKeyError = null;
-        try {
-            const result = await api.login.recoverKey({
-                handle: selectedIdentity.handle,
-                code: recoveryCode.trim(),
-            });
-            const masterKey = await recoverMasterKeyFromBackup(
-                result.encryptedMasterKeyBackup,
-                recoveryCode.trim(),
-            );
-            if (!masterKey) {
-                masterKeyError = "That recovery code didn't work. Check it and try again.";
-                return;
-            }
-            await auth.setMasterKey(masterKey, [result.identityId]);
-            await handleMasterKeyRecovered();
-        } catch (err) {
-            masterKeyError = err instanceof Error ? err.message : "Invalid recovery code";
-        } finally {
-            recoveringMasterKey = false;
-        }
-    }
+import { hasE2eeResetScope, resolveRequestedE2eeMode } from "$lib/surfaces/web/lib/oauth/e2ee-scopes";
+import { isAuthenticated, identities as identitiesStore } from "$lib/surfaces/web/stores/auth";
+import AuthSlider from "./components/AuthSlider.svelte";
+import MasterKeyRecovery from "./components/MasterKeyRecovery.svelte";
+import IdentityCard from "$lib/surfaces/web/components/IdentityCard.svelte";
+import Text from "$lib/surfaces/web/components/Text.svelte";
+import StorageAccessGate from "$lib/surfaces/web/components/StorageAccessGate.svelte";
+import { createAuthorizationFlow } from "./authorization-flow.svelte";
+const flow = createAuthorizationFlow();
 </script>
 
-{#if embedSheet && !$isAuthenticated && !resolvedAppInfo && !appInfo && !quickOriginHostname}
+{#if flow.embedSheet && !$isAuthenticated && !flow.resolvedAppInfo && !flow.appInfo && !flow.quickOriginHostname}
     <div class="bg-[#090909] min-h-screen-fixed flex items-center justify-center p-6 md:p-[50px]">
         <div class="w-[48px] h-[48px] border-2 border-[#FFFFFF] border-t-transparent rounded-full animate-spin"></div>
     </div>
-{:else if needsStorageAccess}
+{:else if flow.embeddedSession.needsStorageAccess}
     <StorageAccessGate
-        title={`Sign in to continue to ${appDisplayName()}`}
-        message={storageAccessError || `We'll open a secure browser page so you can finish sign-in for ${appDisplayName()} and come right back.`}
+        title={`Sign in to continue to ${flow.appDisplayName()}`}
+        message={flow.embeddedSession.storageAccessError || `We'll open a secure browser page so you can finish sign-in for ${flow.appDisplayName()} and come right back.`}
         cta="Continue in browser"
-        busy={requestingStorageAccess}
-        iconUrl={appInfo?.iconUrl || null}
-        onclick={handleStorageAccessContinue}
+        busy={flow.embeddedSession.requestingStorageAccess}
+        iconUrl={flow.appInfo?.iconUrl || null}
+        onclick={flow.embeddedSession.handleStorageAccessContinue}
     />
-    {:else if autoAuthorizing}
+    {:else if flow.autoAuthorizing}
 	    <div class="bg-[#090909] min-h-screen-fixed flex items-center justify-center p-6 md:p-[50px]">
 	        <div class="flex flex-col items-center text-center gap-4">
-				{#if launchedExternalApp}
+				{#if flow.launchedExternalApp}
 					<div class="w-[52px] h-[52px] border-2 border-[#FFFFFF] rounded-full flex items-center justify-center">
 						<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
 							<path d="M20 7L9 18L4 13" stroke="#FFFFFF" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
@@ -747,14 +36,14 @@
 	            	<div class="w-[52px] h-[52px] border-2 border-[#FFFFFF] border-t-transparent rounded-full animate-spin"></div>
 				{/if}
 	            <div>
-	                <Text type="h" size={22} color="#FFFFFF">{launchedExternalApp ? "Opened your app" : "Signing you in"}</Text>
-	                <p class="text-[#7B7B7B] text-[15px] mt-[6px]">{launchedExternalApp ? "You can continue there now." : "Finishing securely…"}</p>
+	                <Text type="h" size={22} color="#FFFFFF">{flow.launchedExternalApp ? "Opened your app" : "Signing you in"}</Text>
+	                <p class="text-[#7B7B7B] text-[15px] mt-[6px]">{flow.launchedExternalApp ? "You can continue there now." : "Finishing securely…"}</p>
 	            </div>
 	        </div>
 	    </div>
-	{:else if loading || completed}
+	{:else if flow.loading || flow.completed}
 	    <div class="bg-[#090909] min-h-screen-fixed flex items-center justify-center p-6 md:p-[50px]">
-			{#if completed && launchedExternalApp}
+			{#if flow.completed && flow.launchedExternalApp}
 				<div class="flex flex-col items-center text-center gap-4">
 					<div class="w-[52px] h-[52px] border-2 border-[#FFFFFF] rounded-full flex items-center justify-center">
 						<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -775,23 +64,23 @@
     <div class="flex-1 z-10 flex flex-col items-start justify-start md:justify-between p-4 md:p-[50px] w-full max-w-[760px] md:max-w-none mx-auto md:mx-0">
         <div class="flex flex-row gap-4 md:gap-[20px] items-start">
             <!-- App icon that becomes back button on hover -->
-            <button 
+            <button
                 class="group relative w-12 h-12 md:w-[80px] md:h-[80px] overflow-hidden cursor-pointer transition-transform hover:scale-105"
-                onclick={handleDeny}
-                disabled={authorizing}
+                onclick={flow.handleDeny}
+                disabled={flow.authorizing}
                 title="Go back"
             >
-                {#if isQuickAuth}
+                {#if flow.isQuickAuth}
                     <div class="w-full h-full bg-[#1a1a2e] flex items-center justify-center transition-opacity group-hover:opacity-0">
                         <svg class="w-6 h-6 md:w-[40px] md:h-[40px]" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                             <path d="M13 2L4.5 13.5H11L10 22L19.5 10.5H13L13 2Z" fill="#6C8EFF" stroke="#6C8EFF" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
                         </svg>
                     </div>
-                {:else if appInfo?.iconUrl}
-                    <img src={appInfo.iconUrl} alt="{appInfo.name} Logo" class="w-full h-full object-cover transition-opacity group-hover:opacity-0"/>
+                {:else if flow.appInfo?.iconUrl}
+                    <img src={flow.appInfo.iconUrl} alt="{flow.appInfo.name} Logo" class="w-full h-full object-cover transition-opacity group-hover:opacity-0"/>
                 {:else}
                     <div class="w-full h-full bg-[#171717] flex items-center justify-center transition-opacity group-hover:opacity-0">
-                        <Text type="h" size={32} color="#878787">{appInfo?.name?.[0] || "?"}</Text>
+                        <Text type="h" size={32} color="#878787">{flow.appInfo?.name?.[0] || "?"}</Text>
                     </div>
                 {/if}
                 <!-- Back arrow overlay on hover -->
@@ -802,18 +91,18 @@
                 </div>
             </button>
             <div class="flex flex-col gap-1 md:gap-[10px]">
-                {#if isQuickAuth}
+                {#if flow.isQuickAuth}
                     <h1 class="font-poppins text-2xl md:text-[48px] text-white">
-                        {quickOriginHostname || appInfo?.name || "Loading..."}
+                        {flow.quickOriginHostname || flow.appInfo?.name || "Loading..."}
                     </h1>
                 {:else}
                     <h1 class="font-poppins text-2xl md:text-[48px] text-white">
-                        {appInfo?.name || "Loading..."}
+                        {flow.appInfo?.name || "Loading..."}
                     </h1>
                 {/if}
-                {#if appInfo?.websiteUrl}
-                    <a href={appInfo.websiteUrl} target="_blank" rel="noopener noreferrer" class="font-poppins text-base md:text-[24px] text-[#878787] hover:text-[#FFFFFF] transition-colors">
-                        {new URL(appInfo.websiteUrl).hostname}
+                {#if flow.appInfo?.websiteUrl}
+                    <a href={flow.appInfo.websiteUrl} target="_blank" rel="noopener noreferrer" class="font-poppins text-base md:text-[24px] text-[#878787] hover:text-[#FFFFFF] transition-colors">
+                        {new URL(flow.appInfo.websiteUrl).hostname}
                     </a>
                 {/if}
             </div>
@@ -824,7 +113,7 @@
                 Create your account or sign in securely.
             </h2>
 
-            {#if isQuickAuth}
+            {#if flow.isQuickAuth}
                 <div class="p-4 md:p-[30px] bg-[#1a1a2e]/60 flex flex-col gap-2 md:gap-[10px] border border-[#6C8EFF]/20 rounded-[20px] md:rounded-[32px]">
                     <h3 class="font-poppins flex flex-row gap-2 md:gap-[10px] text-sm md:text-[20px] text-[#6C8EFF] items-center">
                         <svg class="w-4 h-4 md:w-6 md:h-6 shrink-0" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -833,18 +122,18 @@
                         Quick Ave
                     </h3>
                     <p class="font-poppins text-xs md:text-[18px] text-[#666666]">
-                        Create your account for <span class="text-[#878787]">{quickOriginHostname}</span> without leaving the flow. Secure sign-in is powered by Ave and only shares what you approve.
+                        Create your account for <span class="text-[#878787]">{flow.quickOriginHostname}</span> without leaving the flow. Secure sign-in is powered by Ave and only shares what you approve.
                     </p>
                 </div>
-            {:else if appInfo?.description}
+            {:else if flow.appInfo?.description}
                 <p class="font-poppins text-xs md:text-[20px] text-[#666666]">
-                    {appInfo.description} Secure sign-in is powered by Ave.
+                    {flow.appInfo.description} Secure sign-in is powered by Ave.
                 </p>
             {/if}
 
-            {#if appInfo && authorizeShowsE2ee}
-                {@const activeE2eeMode = resolveRequestedE2eeMode(authorizeRequestedScopes, appInfo, existingAuth)}
-                {@const wantsE2eeReset = hasE2eeResetScope(authorizeRequestedScopes)}
+            {#if flow.appInfo && flow.authorizeShowsE2ee}
+                {@const activeE2eeMode = resolveRequestedE2eeMode(flow.authorizeRequestedScopes, flow.appInfo, flow.existingAuth)}
+                {@const wantsE2eeReset = hasE2eeResetScope(flow.authorizeRequestedScopes)}
                 <div class="p-4 md:p-[30px] bg-[#0d1f12]/60 flex flex-col gap-2 md:gap-[10px] border border-[#32A94C]/20 rounded-[20px] md:rounded-[32px]">
                     <h3 class="font-poppins flex flex-row gap-2 md:gap-[10px] text-sm md:text-[20px] text-[#32A94C] items-center">
                         <svg class="w-4 h-4 md:w-6 md:h-6 shrink-0" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -864,7 +153,7 @@
                 </div>
             {/if}
 
-            {#if wantsUserIdScope}
+            {#if flow.wantsUserIdScope}
                 <div class="p-4 md:p-[30px] bg-[#2a1f0d]/60 flex flex-col gap-2 md:gap-[10px] border border-[#E8A43A]/25 rounded-[20px] md:rounded-[32px]">
                     <h3 class="font-poppins flex flex-row gap-2 md:gap-[10px] text-sm md:text-[20px] text-[#E8A43A] items-center">
                         <svg class="w-4 h-4 md:w-6 md:h-6 shrink-0" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -882,35 +171,35 @@
     </div>
 
     <div class="flex-1 w-full max-w-[760px] md:max-w-none mx-auto md:mx-0 md:min-h-full px-4 md:px-[56px] z-10 py-5 md:py-[48px] flex flex-col justify-between rounded-[24px] md:rounded-[52px] bg-[#111111]/60 backdrop-blur-xl">
-        {#if needsMasterKey}
+        {#if flow.masterKeyRecovery.needsMasterKey}
             <MasterKeyRecovery
-                bind:view={masterKeyUnlockView}
-                loginRequestId={masterKeyLoginRequestId}
-                loginRequestToken={masterKeyLoginRequestToken}
-                ephemeralKeyPair={masterKeyEphemeralKeyPair}
-                bind:error={masterKeyError}
-                bind:recoveryCode
-                recovering={recoveringMasterKey}
-                mismatch={masterKeyMismatch}
-                unlocking={unlockingMasterKey}
-                {hasTrustedDevices}
-                {requestingDeviceApproval}
-                onRecovered={handleMasterKeyRecovered}
-                onUnlock={handleUnlockMasterKey}
-                onDeviceApproval={handleMasterKeyDeviceApproval}
-                onRecoverySubmit={handleRecoveryCodeSubmit}
+                bind:view={flow.masterKeyRecovery.masterKeyUnlockView}
+                loginRequestId={flow.masterKeyRecovery.masterKeyLoginRequestId}
+                loginRequestToken={flow.masterKeyRecovery.masterKeyLoginRequestToken}
+                ephemeralKeyPair={flow.masterKeyRecovery.masterKeyEphemeralKeyPair}
+                bind:error={flow.masterKeyRecovery.masterKeyError}
+                bind:recoveryCode={flow.masterKeyRecovery.recoveryCode}
+                recovering={flow.masterKeyRecovery.recoveringMasterKey}
+                mismatch={flow.masterKeyRecovery.masterKeyMismatch}
+                unlocking={flow.masterKeyRecovery.unlockingMasterKey}
+                hasTrustedDevices={flow.masterKeyRecovery.hasTrustedDevices}
+                requestingDeviceApproval={flow.masterKeyRecovery.requestingDeviceApproval}
+                onRecovered={flow.masterKeyRecovery.handleMasterKeyRecovered}
+                onUnlock={flow.masterKeyRecovery.handleUnlockMasterKey}
+                onDeviceApproval={flow.masterKeyRecovery.handleMasterKeyDeviceApproval}
+                onRecoverySubmit={flow.masterKeyRecovery.handleRecoveryCodeSubmit}
             />
-        {:else if error}
+        {:else if flow.error}
             <div class="flex flex-col gap-[20px] items-center justify-center flex-1">
-                <Text type="h" size={24} color="#E14747">{error}</Text>
-                <button 
+                <Text type="h" size={24} color="#E14747">{flow.error}</Text>
+                <button
                     class="px-[30px] py-[15px] bg-[#171717] hover:bg-[#222222] rounded-full text-[#FFFFFF] transition-colors"
                     onclick={() => history.back()}
                 >
                     Go Back
                 </button>
             </div>
-        {:else if selectedIdentity}
+        {:else if flow.selectedIdentity}
             <div class="flex flex-col gap-4 md:gap-[28px]">
                 <div class="flex flex-col md:flex-row gap-3 md:gap-[20px] items-start md:items-center">
                 <h1 class="text-white text-xl md:text-[48px] font-bold font-poppins">Sign in as</h1>
@@ -919,19 +208,19 @@
                     <!-- Identity selector -->
                     <div class="relative w-full md:w-auto max-w-full">
                         {#if $identitiesStore.length > 1}
-                        <button 
+                        <button
                             class="bg-[#171717] p-1.5 md:p-[10px] items-center rounded-full flex flex-row gap-2 md:gap-[15px] hover:bg-[#242424] cursor-pointer transition-colors duration-300 max-w-full"
-                            onclick={() => { identityDropdownOpen = !identityDropdownOpen; }}
+                            onclick={() => { flow.identityDropdownOpen = !flow.identityDropdownOpen; }}
                         >
-                            {#if selectedIdentity.avatarUrl}
-                                <img src={selectedIdentity.avatarUrl} alt="User Avatar" class="w-8 h-8 md:w-[50px] md:h-[50px] aspect-square rounded-full object-cover shrink-0"/>
+                            {#if flow.selectedIdentity.avatarUrl}
+                                <img src={flow.selectedIdentity.avatarUrl} alt="User Avatar" class="w-8 h-8 md:w-[50px] md:h-[50px] aspect-square rounded-full object-cover shrink-0"/>
                             {:else}
                                 <div class="w-8 h-8 md:w-[50px] md:h-[50px] rounded-full bg-[#222222] flex items-center justify-center shrink-0">
-                                    <Text type="h" size={20} mobileSize={14} color="#878787">{selectedIdentity.displayName[0]}</Text>
+                                    <Text type="h" size={20} mobileSize={14} color="#878787">{flow.selectedIdentity.displayName[0]}</Text>
                                 </div>
                             {/if}
                             <span class="text-white text-base md:text-[24px] font-poppins font-semibold whitespace-nowrap truncate min-w-0">
-                                {selectedIdentity.displayName}
+                                {flow.selectedIdentity.displayName}
                             </span>
                             <svg class="w-5 h-5 md:w-6 md:h-6 shrink-0" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                                 <path d="M6 9L12 15L18 9" stroke="#C7C7C7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
@@ -939,25 +228,25 @@
                         </button>
                         {:else}
                         <div class="bg-[#171717] p-1.5 md:p-[10px] pr-4 md:pr-[20px] items-center rounded-full flex flex-row gap-2 md:gap-[15px]">
-                            {#if selectedIdentity.avatarUrl}
-                                <img src={selectedIdentity.avatarUrl} alt="User Avatar" class="w-8 h-8 md:w-[50px] md:h-[50px] aspect-square rounded-full object-cover shrink-0"/>
+                            {#if flow.selectedIdentity.avatarUrl}
+                                <img src={flow.selectedIdentity.avatarUrl} alt="User Avatar" class="w-8 h-8 md:w-[50px] md:h-[50px] aspect-square rounded-full object-cover shrink-0"/>
                             {:else}
                                 <div class="w-8 h-8 md:w-[50px] md:h-[50px] rounded-full bg-[#222222] flex items-center justify-center">
-                                    <Text type="h" size={20} mobileSize={14} color="#878787">{selectedIdentity.displayName[0]}</Text>
+                                    <Text type="h" size={20} mobileSize={14} color="#878787">{flow.selectedIdentity.displayName[0]}</Text>
                                 </div>
                             {/if}
                             <span class="text-white text-base md:text-[24px] font-poppins font-semibold">
-                                {selectedIdentity.displayName}
+                                {flow.selectedIdentity.displayName}
                             </span>
                         </div>
                         {/if}
 
-                        {#if identityDropdownOpen && $identitiesStore.length > 1}
+                        {#if flow.identityDropdownOpen && $identitiesStore.length > 1}
                             <div class="absolute top-full left-0 mt-2 md:mt-[10px] bg-[#171717] rounded-[16px] overflow-hidden z-50 w-max min-w-full max-w-[min(100vw-2rem,28rem)]">
                                 {#each $identitiesStore as identity (identity.id)}
-                                    <button 
-                                        class="w-full flex flex-row gap-2 md:gap-[15px] items-center p-3 md:p-[15px] hover:bg-[#222222] transition-colors {identity.id === selectedIdentity.id ? 'bg-[#222222]' : ''}"
-                                        onclick={() => selectIdentity(identity)}
+                                    <button
+                                        class="w-full flex flex-row gap-2 md:gap-[15px] items-center p-3 md:p-[15px] hover:bg-[#222222] transition-colors {identity.id === flow.selectedIdentity.id ? 'bg-[#222222]' : ''}"
+                                        onclick={() => flow.selectIdentity(identity)}
                                     >
                                         {#if identity.avatarUrl}
                                             <img src={identity.avatarUrl} alt="" class="w-8 h-8 md:w-[40px] md:h-[40px] aspect-square rounded-full object-cover shrink-0"/>
@@ -974,10 +263,10 @@
                     </div>
                 </div>
 
-                <IdentityCard 
-                    avatar={selectedIdentity.avatarUrl || "/placeholder.png"} 
-                    banner={selectedIdentity.bannerUrl?.startsWith("#") ? undefined : selectedIdentity.bannerUrl || undefined} 
-                    bannerColor={selectedIdentity.bannerUrl?.startsWith("#") ? selectedIdentity.bannerUrl : "#B9BBBE"} 
+                <IdentityCard
+                    avatar={flow.selectedIdentity.avatarUrl || "/placeholder.png"}
+                    banner={flow.selectedIdentity.bannerUrl?.startsWith("#") ? undefined : flow.selectedIdentity.bannerUrl || undefined}
+                    bannerColor={flow.selectedIdentity.bannerUrl?.startsWith("#") ? flow.selectedIdentity.bannerUrl : "#B9BBBE"}
                     editable={false}
                     compact
                 >
@@ -985,38 +274,38 @@
                         <div class="flex flex-col md:flex-row gap-2 md:gap-[10px] w-full flex-1">
                             <div class="p-3 md:p-[20px] bg-[#111111] rounded-[20px] md:rounded-[24px] flex-1 min-w-0">
                                 <Text type="hd" size={14} mobileSize={12} color="#878787">NAME</Text>
-                                <Text type="h" size={22} mobileSize={18} color="#FFFFFF" cclass="truncate">{selectedIdentity.displayName}</Text>
+                                <Text type="h" size={22} mobileSize={18} color="#FFFFFF" cclass="truncate">{flow.selectedIdentity.displayName}</Text>
                             </div>
                             <div class="p-3 md:p-[20px] bg-[#111111] rounded-[20px] md:rounded-[24px] flex-1">
                                 <Text type="hd" size={14} mobileSize={12} color="#878787">HANDLE</Text>
-                                <Text type="h" size={22} mobileSize={18} color="#FFFFFF">{selectedIdentity.handle}</Text>
+                                <Text type="h" size={22} mobileSize={18} color="#FFFFFF">{flow.selectedIdentity.handle}</Text>
                             </div>
                         </div>
-                        {#if selectedIdentity.email}
+                        {#if flow.selectedIdentity.email}
                             <div class="p-3 md:p-[20px] bg-[#111111] rounded-[20px] md:rounded-[24px]">
                                 <Text type="hd" size={14} mobileSize={12} color="#878787">EMAIL</Text>
-                                <Text type="h" size={22} mobileSize={18} color="#FFFFFF">{selectedIdentity.email}</Text>
+                                <Text type="h" size={22} mobileSize={18} color="#FFFFFF">{flow.selectedIdentity.email}</Text>
                             </div>
                         {/if}
                     </div>
                 </IdentityCard>
             </div>
 
-            {#if selectedIdentityNeedsEmail}
+            {#if flow.selectedIdentityNeedsEmail}
                 <div class="flex flex-col gap-3 md:gap-[18px] mt-4 md:mt-0">
                     <div class="p-4 md:p-[30px] bg-[#111111] rounded-[20px] md:rounded-[32px] flex flex-col gap-3 md:gap-[16px]">
                         <div>
                             <Text type="h" size={22} mobileSize={18} color="#FFFFFF">Email required to continue</Text>
                             <p class="text-[#878787] text-sm md:text-[16px] mt-2 md:mt-[10px]">
-                                {appDisplayName()} requested access to your email. Add and verify it here, then continue.
+                                {flow.appDisplayName()} requested access to your email. Add and verify it here, then continue.
                             </p>
                         </div>
 
-                        {#if selectedIdentity.pendingEmail}
+                        {#if flow.selectedIdentity.pendingEmail}
                             <div class="flex flex-col gap-3 md:gap-[14px]">
                                 <div class="p-3 md:p-[22px] bg-[#171717] rounded-[18px] md:rounded-[24px]">
                                     <Text type="hd" size={14} mobileSize={12} color="#878787">PENDING EMAIL</Text>
-                                    <Text type="h" size={22} mobileSize={16} color="#FFFFFF">{selectedIdentity.pendingEmail}</Text>
+                                    <Text type="h" size={22} mobileSize={16} color="#FFFFFF">{flow.selectedIdentity.pendingEmail}</Text>
                                 </div>
                                 <div class="flex flex-col gap-3 min-w-0">
                                     <input
@@ -1024,25 +313,25 @@
                                         inputmode="numeric"
                                         maxlength="6"
                                         class="w-full min-w-0 bg-transparent border-b border-[#333333] pb-[10px] text-white text-lg md:text-[24px] focus:outline-none"
-                                        bind:value={emailCode}
+                                        bind:value={flow.emailCode}
                                         placeholder="Enter code"
                                         autocomplete="one-time-code"
                                     />
                                     <button
                                         type="button"
                                         class="w-full sm:w-auto sm:self-end shrink-0 px-5 py-3 bg-[#FFFFFF] hover:bg-[#E0E0E0] text-[#090909] rounded-full text-[16px] font-medium disabled:opacity-60"
-                                        onclick={handleVerifyEmail}
-                                        disabled={emailSubmitting || emailCode.trim().length !== 6}
+                                        onclick={flow.handleVerifyEmail}
+                                        disabled={flow.emailSubmitting || flow.emailCode.trim().length !== 6}
                                     >
-                                        {emailSubmitting ? "..." : "Verify"}
+                                        {flow.emailSubmitting ? "..." : "Verify"}
                                     </button>
                                 </div>
                                 <div class="flex flex-row gap-3">
                                     <button
                                         type="button"
                                         class="text-[#878787] hover:text-[#FFFFFF] transition-colors text-[14px] md:text-[16px]"
-                                        onclick={handleResendEmailVerification}
-                                        disabled={emailSubmitting}
+                                        onclick={flow.handleResendEmailVerification}
+                                        disabled={flow.emailSubmitting}
                                     >
                                         Resend code
                                     </button>
@@ -1051,17 +340,17 @@
                                     <input
                                         type="email"
                                         class="w-full min-w-0 bg-transparent border-b border-[#333333] pb-[10px] text-white text-lg md:text-[24px] focus:outline-none"
-                                        bind:value={emailDraft}
+                                        bind:value={flow.emailDraft}
                                         placeholder="Use another email"
                                         autocomplete="email"
                                     />
                                     <button
                                         type="button"
                                         class="w-full sm:w-auto sm:self-end shrink-0 px-5 py-3 bg-[#171717] hover:bg-[#202020] text-[#FFFFFF] rounded-full text-[16px] font-medium disabled:opacity-60"
-                                        onclick={handleStartEmailVerification}
-                                        disabled={emailSubmitting || !emailDraft.trim()}
+                                        onclick={flow.handleStartEmailVerification}
+                                        disabled={flow.emailSubmitting || !flow.emailDraft.trim()}
                                     >
-                                        {emailSubmitting ? "..." : "Change"}
+                                        {flow.emailSubmitting ? "..." : "Change"}
                                     </button>
                                 </div>
                             </div>
@@ -1070,24 +359,24 @@
                                 <input
                                     type="email"
                                     class="w-full min-w-0 bg-transparent border-b border-[#333333] pb-[10px] text-white text-lg md:text-[24px] focus:outline-none"
-                                    bind:value={emailDraft}
+                                    bind:value={flow.emailDraft}
                                     placeholder="Enter email"
                                     autocomplete="email"
                                 />
                                 <button
                                     type="button"
                                     class="w-full sm:w-auto sm:self-end shrink-0 px-5 py-3 bg-[#FFFFFF] hover:bg-[#E0E0E0] text-[#090909] rounded-full text-[16px] font-medium disabled:opacity-60"
-                                    onclick={handleStartEmailVerification}
-                                    disabled={emailSubmitting || !emailDraft.trim()}
+                                    onclick={flow.handleStartEmailVerification}
+                                    disabled={flow.emailSubmitting || !flow.emailDraft.trim()}
                                 >
-                                    {emailSubmitting ? "..." : "Send code"}
+                                    {flow.emailSubmitting ? "..." : "Send code"}
                                 </button>
                             </div>
                         {/if}
                     </div>
                 </div>
             {:else}
-                <AuthSlider {authorizing} onauthorize={() => handleAuthorize()} />
+                <AuthSlider authorizing={flow.authorizing} onauthorize={() => flow.handleAuthorize()} />
             {/if}
         {/if}
     </div>

@@ -103,7 +103,6 @@ function buildAuthorizeUrl(
     nonce?: string;
     codeChallenge?: string;
     codeChallengeMethod?: "S256" | "plain";
-    organizationId?: string;
     extraParams?: Record<string, string>;
   }
 ): string
@@ -133,9 +132,6 @@ function buildAuthorizeUrl(
   PKCE challenge from `generateCodeChallenge()`. Required for public clients.
 </ParamField>
 
-<ParamField path="params.organizationId" type="string">
-  Optional Ave Business organization ID. When present, Ave verifies that the selected identity belongs to the organization and includes `org_id`, `org_role`, `org_scopes`, `org_signing_authority`, `org_encryption_mode`, `org_key_custody`, and SSO auth metadata in issued tokens. If the organization requires SSO, the current Ave session must come from that organization's active SSO connection.
-</ParamField>
 
 <ParamField path="params.prompt" type={`"none" | "login" | "consent" | "select_account" | string`}>
   OAuth-style interaction hint. Use `select_account` when your app offers **Switch account** or **Sign out** so Ave always shows the swipe-to-authorize screen and identity picker instead of silently reusing the last authorization. Combine values with a space (for example `consent select_account`).
@@ -255,64 +251,7 @@ function fetchUserInfo(config: AveConfig, accessToken: string): Promise<UserInfo
   The opaque `access_token` (not the JWT) from the token response.
 </ParamField>
 
-Returns `UserInfo` with `sub`, `name?`, `preferred_username?`, `email?`, `picture?`, and `organization?` when the token was issued for an Ave Business workspace.
-
----
-
-### `listAveWorkspaceOrganizations(config, accessToken)`
-
-Lists Ave Business organizations that the token identity can use. Use it to build a workspace picker before requesting organization context.
-
-```ts
-function listAveWorkspaceOrganizations(
-  config: { issuer?: string; clientId?: string; fetcher?: typeof fetch },
-  accessToken: string
-): Promise<AveWorkspaceOrganization[]>
-```
-
-```ts
-import { listAveWorkspaceOrganizations } from "@ave-id/sdk";
-
-const organizations = await listAveWorkspaceOrganizations(
-  { clientId: "YOUR_CLIENT_ID" },
-  tokens.access_token
-);
-```
-
-Pass the selected organization's `id` as `organizationId` to `startPkceLogin()` or `buildAuthorizeUrl()`.
-
----
-
-### `createAveWorkspaceOrganization(config, accessToken, params)`
-
-Creates an Ave Business workspace for the token identity. Call this only after your UI tells the user that it will create an Ave-managed workspace.
-
-```ts
-function createAveWorkspaceOrganization(
-  config: { issuer?: string; clientId?: string; fetcher?: typeof fetch },
-  accessToken: string,
-  params: {
-    name: string;
-    clientId?: string;
-    userConfirmedAveWorkspaceCreation: true;
-  }
-): Promise<AveWorkspaceOrganization>
-```
-
-```ts
-import { createAveWorkspaceOrganization } from "@ave-id/sdk";
-
-const organization = await createAveWorkspaceOrganization(
-  { clientId: "YOUR_CLIENT_ID" },
-  tokens.access_token,
-  {
-    name: "Example Co",
-    userConfirmedAveWorkspaceCreation: true,
-  }
-);
-```
-
-The returned `organization.id` is the `organizationId` for the follow-up workspace sign-in.
+Returns `UserInfo` with `sub`, `name?`, `preferred_username?`, `email?`, `picture?`.
 
 ---
 
@@ -349,7 +288,6 @@ async function signInWithFedCm(params: {
 
 Ave returns the normal token payload. For E2EE apps, Ave continues in a FedCM dialog so the existing Ave authorization UI can unlock the user's master key and prepare the plaintext `app_key` handoff before resuming automatically.
 
-FedCM does not claim Ave Business organization-context support. Use `signIn()` or `startPkceLogin()` with `organizationId` when signing into a business workspace.
 
 ---
 
@@ -367,7 +305,6 @@ async function signIn(params: {
   issuer?: string;
   state?: string;
   nonce?: string;
-  organizationId?: string;
   mediation?: CredentialMediationRequirement;
   preferFedCm?: boolean;
 }): Promise<FedCmTokenResponse | null>
@@ -378,7 +315,6 @@ Returns:
 - `FedCmTokenResponse` when FedCM completes in-page
 - `null` when the helper falls back to `startPkceLogin()` and redirects the browser
 
-When `organizationId` is present, `signIn()` uses the PKCE redirect flow so Ave can verify organization membership and SSO policy before issuing tokens.
 
 ```ts
 import { finishPkceLogin, signIn } from "@ave-id/sdk/client";
@@ -414,14 +350,12 @@ async function startPkceLogin(params: {
   issuer?: string;
   state?: string;   // optional — auto-generated if omitted
   nonce?: string;   // optional — auto-generated if omitted
-  organizationId?: string;
   prompt?: "none" | "login" | "consent" | "select_account" | string;
 }): Promise<void>
 ```
 
 Automatically generates a PKCE verifier/challenge, a `nonce` for ID token replay protection, and a `state` value for CSRF protection — unless you supply your own. All three are stored in `sessionStorage` and retrieved automatically by `finishPkceLogin`.
 
-Set `organizationId` to sign into an Ave Business organization as an app workspace. Ave verifies membership before issuing tokens and includes organization claims in the returned JWTs. See [Business workspaces](/guides/business-workspaces).
 
 ---
 

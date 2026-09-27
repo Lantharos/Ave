@@ -3,18 +3,17 @@ import { eq } from "drizzle-orm";
 import { Hono } from "hono";
 import { z } from "zod";
 import { db, identities, sessions, users } from "../../db";
-import { runInBackground } from "../../lib/background";
-import { recordActivityLog } from "../../lib/background-events";
-import { generateSessionToken, hashSessionToken } from "../../lib/crypto";
-import { listIdentitiesForOwner } from "../../lib/identity-serialization";
-import { enforceRateLimits, ipRateLimit, subjectRateLimit } from "../../lib/rate-limit";
-import { setSessionCookie } from "../../lib/session-cookie";
+import { runInBackground } from "../../lib/platform/background";
+import { recordActivityLog } from "../../lib/platform/background-events";
+import { generateSessionToken, hashSessionToken } from "../../lib/identity/crypto";
+import { listIdentitiesForOwner } from "../../lib/identity/identity-serialization";
+import { enforceRateLimits, ipRateLimit, subjectRateLimit } from "../../lib/platform/rate-limit";
+import { setSessionCookie } from "../../lib/auth/session-cookie";
 import {
   claimTrustCode,
   findUnusedTrustCode,
   getOrCreateDevice,
   notifyAccountLoginEvent,
-  rejectRequiredEnterpriseSso,
   type Bindings,
 } from "./shared";
 
@@ -50,8 +49,6 @@ app.post("/trust-code", zValidator("json", z.object({
     return c.json({ error: "Account not found" }, 404);
   }
 
-  const ssoRequired = await rejectRequiredEnterpriseSso(c, identity);
-  if (ssoRequired) return ssoRequired;
 
   const { matchedCode, availableCodes } = await findUnusedTrustCode(identity.userId, code);
 
@@ -120,7 +117,6 @@ app.post("/trust-code", zValidator("json", z.object({
   });
 
   runInBackground(c, notifyAccountLoginEvent(
-    c.env.HEAVY_SERVICES,
     identity.userId,
     {
       method: "trust_code",
@@ -184,8 +180,6 @@ app.post("/recover-key", zValidator("json", z.object({
     return c.json({ error: "Account not found" }, 404);
   }
 
-  const ssoRequired = await rejectRequiredEnterpriseSso(c, identity);
-  if (ssoRequired) return ssoRequired;
 
   const { matchedCode, availableCodes } = await findUnusedTrustCode(identity.userId, code);
 

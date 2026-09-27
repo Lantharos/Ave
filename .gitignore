@@ -146,3 +146,5 @@ ave-server/tmp/
 .pnp.*
 
 *.pem
+
+ave-server/src/generated/

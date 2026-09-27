@@ -1,9 +1,8 @@
+import { requireOrganizationAccess } from "../lib/developer/dev-portal";
 import { and, eq } from "drizzle-orm";
 import { Hono } from "hono";
 import { db, identities, organizations } from "../db";
-import { recordActivityLog } from "../lib/background-events";
-import { hasBusinessScope, requireBusinessAccess } from "../lib/business";
-import { rejectWithoutRequiredSso, rejectWithoutSigningAuthority } from "../lib/business-route-guards";
+import { recordActivityLog } from "../lib/platform/background-events";
 import { requireAuth, requireWritable } from "../middleware/auth";
 
 type Bindings = {
@@ -259,14 +258,10 @@ app.post("/workspace-logo", async (c) => {
     return c.json({ error: "Organization not found" }, 404);
   }
 
-  const access = await requireBusinessAccess(user.id, organizationId, "admin");
-  if (!access || !hasBusinessScope(access.member, "manage_org")) {
+  const access = await requireOrganizationAccess(user, organizationId, "owner");
+  if (!access) {
     return c.json({ error: "Organization not found" }, 404);
   }
-  const ssoError = await rejectWithoutRequiredSso(c, access);
-  if (ssoError) return ssoError;
-  const authorityError = rejectWithoutSigningAuthority(c, access.member);
-  if (authorityError) return authorityError;
 
   const upload = await prepareImageUpload(file, MAX_WORKSPACE_LOGO_SIZE);
   if (!upload.ok) {

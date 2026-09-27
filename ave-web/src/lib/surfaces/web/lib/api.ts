@@ -2,11 +2,11 @@ import { activityApi } from "./api/activity";
 import { devicesApi } from "./api/devices";
 import { encryptionApi } from "./api/encryption";
 import { identitiesApi } from "./api/identities";
-import { loginApi } from "./api/login";
+import { loginApi } from "./api/authentication/login";
 import { mydataApi } from "./api/mydata";
 import { oauthApi } from "./api/oauth";
-import { registerApi } from "./api/register";
-import { securityApi } from "./api/security";
+import { registerApi } from "./api/authentication/register";
+import { securityApi } from "./api/authentication/security";
 import { signingApi } from "./api/signing";
 import { uploadApi } from "./api/upload";
 

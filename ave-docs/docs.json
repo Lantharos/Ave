@@ -15,7 +15,10 @@
         "groups": [
           {
             "group": "Overview",
-            "pages": ["index", "quickstart"]
+            "pages": [
+              "index",
+              "quickstart"
+            ]
           },
           {
             "group": "Core concepts",
@@ -31,7 +34,10 @@
         "groups": [
           {
             "group": "Start",
-            "pages": ["guides/quick-ave", "guides/quick-ave-to-standard"]
+            "pages": [
+              "guides/quick-ave",
+              "guides/quick-ave-to-standard"
+            ]
           },
           {
             "group": "OAuth",
@@ -41,6 +47,7 @@
               "guides/pkce-for-public-clients",
               "guides/server-side-confidential-clients",
               "guides/scopes-and-claims",
+              "guides/app-authorization",
               "guides/ave-session-and-tokens"
             ]
           },
@@ -58,8 +65,6 @@
             "group": "Capabilities",
             "pages": [
               "guides/connector-app-to-app",
-              "guides/business-workspaces",
-              "guides/ave-for-businesses",
               "guides/ave-signing",
               "guides/end-to-end-encryption",
               "guides/e2ee-integration-checklist"
@@ -82,7 +87,9 @@
           },
           {
             "group": "Embed SDK",
-            "pages": ["sdk/embed-sdk"]
+            "pages": [
+              "sdk/embed-sdk"
+            ]
           }
         ]
       },

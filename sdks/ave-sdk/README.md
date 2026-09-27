@@ -111,54 +111,6 @@ const tokens = await finishPkceLogin({
 
 `startPkceLogin()` now generates and stores both `state` and `nonce` by default, and `finishPkceLogin()` validates the callback `state`, exchanges the authorization code, and verifies any returned `id_token` / `access_token_jwt` with Ave's JWKS.
 
-## Business workspaces
-
-Apps can use Ave Business organizations as workspaces by passing `organizationId` during sign-in. Ave manages membership, roles, SSO policy, and org scopes; your app stores product data keyed by `org_id`.
-
-If your app creates the workspace, show the user that it will create an Ave-managed workspace before calling `createAveWorkspaceOrganization`.
-
-```ts
-import { createAveWorkspaceOrganization, listAveWorkspaceOrganizations } from "@ave-id/sdk";
-import { startPkceLogin } from "@ave-id/sdk/client";
-
-let organizations = await listAveWorkspaceOrganizations(
-  { clientId: "YOUR_CLIENT_ID" },
-  tokens.access_token
-);
-
-if (!organizations.length) {
-  const organization = await createAveWorkspaceOrganization(
-    { clientId: "YOUR_CLIENT_ID" },
-    tokens.access_token,
-    {
-      name: "Example Co",
-      userConfirmedAveWorkspaceCreation: true,
-    }
-  );
-  organizations = [organization];
-}
-
-await startPkceLogin({
-  clientId: "YOUR_CLIENT_ID",
-  redirectUri: "https://yourapp.com/callback",
-  scope: "openid profile email offline_access",
-  organizationId: organizations[0]!.id,
-});
-```
-
-On your server, verify the token and read the workspace context:
-
-```ts
-import { getAveWorkspaceContext, verifyAveIdTokenFromAuthHeader } from "@ave-id/sdk/server";
-
-const principal = await verifyAveIdTokenFromAuthHeader(authorization, {
-  clientId: "YOUR_CLIENT_ID",
-});
-const workspace = getAveWorkspaceContext(principal?.claims);
-```
-
-See `guides/business-workspaces` in the docs repo.
-
 ## App encryption
 
 Enable `e2ee:symmetric` or `e2ee:asymmetric` in your authorize URL scope list. See [App encryption](/sdk/sdk-identity-keys).

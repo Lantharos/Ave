@@ -1,7 +1,7 @@
 import { and, desc, eq } from "drizzle-orm";
 import { Hono } from "hono";
 import { db, oauthApps, oauthAuthorizations, oauthResources } from "../../db";
-import { appEffectiveSupportsE2ee } from "../../lib/e2ee-scopes";
+import { appEffectiveSupportsE2ee } from "../../lib/identity/e2ee-scopes";
 import { requireAuth } from "../../middleware/auth";
 import { getQuickOrigin, isQuickClient } from "./shared";
 

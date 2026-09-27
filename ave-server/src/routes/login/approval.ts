@@ -3,18 +3,17 @@ import { and, eq, inArray } from "drizzle-orm";
 import { Hono } from "hono";
 import { z } from "zod";
 import { db, devices, identities, loginRequests, sessions } from "../../db";
-import { runInBackground } from "../../lib/background";
-import { recordActivityLog } from "../../lib/background-events";
-import { generateSessionToken, hashSessionToken } from "../../lib/crypto";
-import { listIdentitiesForOwner } from "../../lib/identity-serialization";
-import { enforceRateLimits, ipRateLimit, subjectRateLimit } from "../../lib/rate-limit";
-import { setSessionCookie } from "../../lib/session-cookie";
-import { sendLoginRequestNotification, type PushSubscription } from "../../lib/webpush";
+import { runInBackground } from "../../lib/platform/background";
+import { recordActivityLog } from "../../lib/platform/background-events";
+import { generateSessionToken, hashSessionToken } from "../../lib/identity/crypto";
+import { listIdentitiesForOwner } from "../../lib/identity/identity-serialization";
+import { enforceRateLimits, ipRateLimit, subjectRateLimit } from "../../lib/platform/rate-limit";
+import { setSessionCookie } from "../../lib/auth/session-cookie";
+import { sendLoginRequestNotification, type PushSubscription } from "../../lib/notifications/webpush";
 import {
   getOrCreateDevice,
   notifyAccountLoginEvent,
   notifyLoginRequestInApiApp,
-  rejectRequiredEnterpriseSso,
   type Bindings,
 } from "./shared";
 
@@ -50,8 +49,6 @@ app.post("/request-approval", zValidator("json", z.object({
     return c.json({ error: "Account not found" }, 404);
   }
 
-  const ssoRequired = await rejectRequiredEnterpriseSso(c, identity);
-  if (ssoRequired) return ssoRequired;
 
   const requestToken = generateSessionToken();
   const [request] = await db
@@ -89,7 +86,7 @@ app.post("/request-approval", zValidator("json", z.object({
     const invalidDeviceIds = (await Promise.all(userDevices.map(async (userDevice) => {
       if (!userDevice.pushSubscription) return null;
       try {
-        const sent = await sendLoginRequestNotification(c.env.HEAVY_SERVICES, userDevice.pushSubscription as PushSubscription, {
+        const delivery = await sendLoginRequestNotification(userDevice.pushSubscription as PushSubscription, {
           requestId: request.id,
           deviceName: request.deviceName || "Unknown Device",
           deviceType: request.deviceType || "computer",
@@ -97,7 +94,7 @@ app.post("/request-approval", zValidator("json", z.object({
           os: request.os || undefined,
           ipAddress: request.ipAddress || undefined,
         });
-        return sent ? null : userDevice.id;
+        return delivery === "expired" ? userDevice.id : null;
       } catch (error) {
         console.error(`[Push] Failed to send notification to device ${userDevice.id}:`, error);
         return null;
@@ -179,8 +176,6 @@ app.post("/request-status", zValidator("json", z.object({
       return c.json({ error: "Account not found" }, 404);
     }
 
-    const ssoRequired = await rejectRequiredEnterpriseSso(c, identity);
-    if (ssoRequired) return ssoRequired;
 
     const deviceRecord = await getOrCreateDevice(identity.userId, {
       name: claimed.deviceName || "Unknown Device",
@@ -215,7 +210,6 @@ app.post("/request-status", zValidator("json", z.object({
     });
 
     runInBackground(c, notifyAccountLoginEvent(
-      c.env.HEAVY_SERVICES,
       identity.userId,
       {
         method: "device_approval",

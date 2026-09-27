@@ -3,12 +3,12 @@ import { and, eq } from "drizzle-orm";
 import { Hono } from "hono";
 import { z } from "zod";
 import { db, identities, oauthApps, oauthAuthorizations } from "../../db";
-import { appEffectiveSupportsE2ee, isScopeAllowedForApp } from "../../lib/e2ee-scopes";
-import { parseOAuthPrompt, requiresAuthorizeInteractionPrompt, wantsAccountPickerPrompt } from "../../lib/oauth-prompt";
-import { consumeAuthorizationCode, createAuthorizationCodeWrite, getAuthorizationCode } from "../../lib/oauth-store";
-import { getIssuer, signJwt, verifyJwt } from "../../lib/oidc";
-import { enforceNativeRateLimits, getClientIp, ipRateLimit, subjectRateLimit } from "../../lib/rate-limit";
-import { isOriginAllowedForApp, isRedirectUriAllowedForApp, normalizeRedirectUri } from "../../lib/redirect-uri";
+import { appEffectiveSupportsE2ee, isScopeAllowedForApp } from "../../lib/identity/e2ee-scopes";
+import { parseOAuthPrompt, requiresAuthorizeInteractionPrompt, wantsAccountPickerPrompt } from "../../lib/oauth/oauth-prompt";
+import { consumeAuthorizationCode, createAuthorizationCodeWrite, getAuthorizationCode } from "../../lib/oauth/oauth-store";
+import { getIssuer, signJwt, verifyJwt } from "../../lib/oauth/oidc";
+import { enforceNativeRateLimits, getClientIp, ipRateLimit, subjectRateLimit } from "../../lib/platform/rate-limit";
+import { isOriginAllowedForApp, isRedirectUriAllowedForApp, normalizeRedirectUri } from "../../lib/oauth/redirect-uri";
 import { requireAuth } from "../../middleware/auth";
 import {
   ensureFedCmRequest,
@@ -21,7 +21,7 @@ import {
   resolveOauthAppForClient,
   setLoginStatusHeader,
 } from "./shared";
-import { buildTokenResponseFromAuthorizationCode } from "./token-response";
+import { buildTokenResponseFromAuthorizationCode } from "./tokens/token-response";
 
 const app = new Hono();
 

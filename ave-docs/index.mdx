@@ -41,7 +41,6 @@ Ave uses separate hosts for sign-in, API calls, and organization administration.
 | --- | --- |
 | `https://aveid.net` | Sign-in UI, Connector consent, OIDC discovery, JWKS |
 | `https://api.aveid.net` | Token exchange, userinfo, signing, management, API calls |
-| `https://business.aveid.net` | Business organization membership, org key grants, verified domains, and SSO setup |
 
 <Warning>
   Send OAuth token exchanges to `https://api.aveid.net/api/oauth/token`. User-facing authorization pages stay on `https://aveid.net`.

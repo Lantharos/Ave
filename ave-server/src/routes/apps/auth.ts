@@ -1,6 +1,6 @@
 import type { MiddlewareHandler } from "hono";
-import { getAccessToken } from "../../lib/oauth-store";
-import { getResourceAudience, verifyJwt } from "../../lib/oidc";
+import { getAccessToken } from "../../lib/oauth/oauth-store";
+import { getResourceAudience, verifyJwt } from "../../lib/oauth/oidc";
 import type { AuthUser } from "../../middleware/auth";
 
 declare module "hono" {
@@ -30,8 +30,6 @@ export const requireDevUser: MiddlewareHandler = async (c, next) => {
               deviceId: null,
               isReadOnly: false,
               authMethod: typeof payload.auth_method === "string" ? payload.auth_method : null,
-              enterpriseSsoOrganizationId: typeof payload.org_id === "string" ? payload.org_id : null,
-              enterpriseSsoConnectionId: typeof payload.sso_connection_id === "string" ? payload.sso_connection_id : null,
             });
             return next();
           }

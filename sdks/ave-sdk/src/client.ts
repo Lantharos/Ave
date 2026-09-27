@@ -1,4 +1,4 @@
-import { mergeAppEncryptionFromUrl, stripSensitiveFragmentParams } from "./app-key.js";
+import { mergeAppEncryptionFromUrl, stripSensitiveFragmentParams } from "./crypto/app-key.js";
 import {
   buildAuthorizeUrl,
   buildConnectorUrl,
@@ -12,7 +12,7 @@ import {
   type OAuthPrompt,
 } from "./index.js";
 import { verifyReturnedTokens } from "./client/token-validation.js";
-import type { AveSession } from "./session.js";
+import type { AveSession } from "./session/session.js";
 import type {
   FedCmTokenResponse,
   TokenResponse,
@@ -26,32 +26,14 @@ export {
   mergeAppEncryptionFromUrl,
   normalizeAppKeyBase64,
   stripSensitiveFragmentParams,
-} from "./app-key.js";
-export { fetchJwks, verifyJwt } from "./jwt.js";
-export {
-  createAveWorkspaceOrganization,
-  getAveWorkspaceContext,
-  getAveWorkspaceContextFromUserInfo,
-  hasAveWorkspaceRole,
-  hasAveWorkspaceScope,
-  listAveWorkspaceOrganizations,
-  requireAveWorkspaceContext,
-} from "./workspace.js";
+} from "./crypto/app-key.js";
+export { fetchJwks, verifyJwt } from "./crypto/jwt.js";
 export type {
   FedCmTokenResponse,
   IdentityKeyEnvelope,
   IdentityPublicKeyRecord,
   VerifyJwtOptions,
 } from "./types.js";
-export type {
-  AveWorkspaceAuthMethod,
-  AveWorkspaceContext,
-  AveWorkspaceEncryptionMode,
-  AveWorkspaceKeyCustody,
-  AveWorkspaceOrganization,
-  AveWorkspaceRole,
-  AveWorkspaceScope,
-} from "./workspace.js";
 
 interface FedCmIdentityCredential extends Credential {
   token?: string;
@@ -83,7 +65,6 @@ interface FedCmOptions {
 }
 
 interface SignInOptions extends FedCmOptions {
-  organizationId?: string;
 }
 
 function decodeJwtPayload(token: string): Record<string, unknown> | null {
@@ -170,7 +151,6 @@ export async function startPkceLogin(params: {
   issuer?: string;
   state?: string;
   nonce?: string;
-  organizationId?: string;
   prompt?: OAuthPrompt | OAuthPrompt[] | string;
 }): Promise<void> {
   const verifier = generateCodeVerifier();
@@ -197,7 +177,6 @@ export async function startPkceLogin(params: {
       nonce,
       codeChallenge: challenge,
       codeChallengeMethod: "S256",
-      organizationId: params.organizationId,
       prompt: params.prompt,
     }
   );
@@ -288,7 +267,7 @@ export async function signInWithFedCm(params: FedCmOptions): Promise<FedCmTokenR
 }
 
 export async function signIn(params: SignInOptions & { preferFedCm?: boolean }): Promise<FedCmTokenResponse | null> {
-  if (!params.organizationId && params.preferFedCm !== false && supportsFedCm()) {
+  if (params.preferFedCm !== false && supportsFedCm()) {
     return signInWithFedCm(params);
   }
 

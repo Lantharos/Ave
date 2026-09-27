@@ -1,0 +1,16 @@
+{
+  "name": "ave",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "ave-server",
+    "ave-web",
+    "sdks/*"
+  ],
+  "scripts": {
+    "check": "bun run --filter ave-server check && bun run --filter ave-web check && bun run --filter @ave-id/sdk build && bun run --filter @ave-id/embed build",
+    "build": "bun run --filter ave-web build && bun run --filter @ave-id/sdk build && bun run --filter @ave-id/embed build",
+    "dev:api": "bun run --filter ave-server dev",
+    "dev:web": "bun run --filter ave-web dev"
+  }
+}

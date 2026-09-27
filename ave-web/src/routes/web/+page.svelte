@@ -36,9 +36,6 @@
             <a href="https://devs.aveid.net" class="px-6 py-3 text-[#B9BBBE] text-lg" onclick={() => mobileMenuOpen = false}>
                 devs
             </a>
-            <a href="https://business.aveid.net" class="px-6 py-3 text-[#B9BBBE] text-lg" onclick={() => mobileMenuOpen = false}>
-                orgs
-            </a>
             <a href="https://docs.aveid.net" class="px-6 py-3 text-[#B9BBBE] text-lg" onclick={() => mobileMenuOpen = false}>
                 docs
             </a>
@@ -65,9 +62,6 @@
             </a>
             <a href="https://devs.aveid.net" class="px-[40px] py-[20px] cursor-pointer hover:bg-[#121212] transition-colors duration-300 rounded-full flex items-center justify-center text-[#B9BBBE] text-[24px]">
                 devs
-            </a>
-            <a href="https://business.aveid.net" class="px-[40px] py-[20px] cursor-pointer hover:bg-[#121212] transition-colors duration-300 rounded-full flex items-center justify-center text-[#B9BBBE] text-[24px]">
-                orgs
             </a>
             <a href="https://docs.aveid.net" class="px-[40px] py-[20px] cursor-pointer hover:bg-[#121212] transition-colors duration-300 rounded-full flex items-center justify-center text-[#B9BBBE] text-[24px]">
                 docs

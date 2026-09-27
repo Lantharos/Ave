@@ -1,12 +1,12 @@
 import { Hono } from "hono";
-import { getIssuer, getJwtPublicJwk } from "../lib/oidc";
+import { getIssuer, getJwtPublicJwk } from "../lib/oauth/oidc";
 import accountRoutes from "./oauth/account";
 import appKeyRecoveryRoutes from "./oauth/app-key-recovery";
 import authorizationBootstrapRoutes from "./oauth/authorization-bootstrap";
 import authorizationRoutes from "./oauth/authorize";
 import fedCmRoutes from "./oauth/fedcm";
 import metadataRoutes from "./oauth/metadata";
-import tokenRoutes from "./oauth/token";
+import tokenRoutes from "./oauth/tokens/token";
 import { getDiscoveryBase, publicCache } from "./oauth/shared";
 
 const app = new Hono();

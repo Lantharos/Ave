@@ -1,8 +1,8 @@
 import { eq } from "drizzle-orm";
 import { Hono } from "hono";
 import { db, sessions } from "../../db";
-import { hashSessionToken } from "../../lib/crypto";
-import { clearSessionCookie, SESSION_COOKIE_NAME } from "../../lib/session-cookie";
+import { hashSessionToken } from "../../lib/identity/crypto";
+import { clearSessionCookie, SESSION_COOKIE_NAME } from "../../lib/auth/session-cookie";
 import type { Bindings } from "./shared";
 
 const app = new Hono<{ Bindings: Bindings }>();

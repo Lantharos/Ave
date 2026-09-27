@@ -10,7 +10,7 @@ import {
   selectMasterKeyAccount,
   storeMasterKey,
 } from "../lib/crypto";
-import { queuePasskeySetupPrompt } from "../lib/passkey-setup-prompt";
+import { queuePasskeySetupPrompt } from "../lib/passkeys/setup-prompt";
 import { resolveSessionMasterKey } from "../lib/session-master-key";
 import { websocket } from "./websocket";
 

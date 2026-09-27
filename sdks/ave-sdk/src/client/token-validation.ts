@@ -1,5 +1,5 @@
-import { isJwtVerificationSupported } from "../crypto-runtime.js";
-import { verifyJwt } from "../jwt.js";
+import { isJwtVerificationSupported } from "../crypto/crypto-runtime.js";
+import { verifyJwt } from "../crypto/jwt.js";
 import type { AveIdTokenClaims, AveJwtClaims } from "../types.js";
 
 export async function verifyReturnedTokens(params: {

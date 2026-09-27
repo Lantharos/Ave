@@ -2,11 +2,11 @@
 
 Thanks for contributing.
 
-Ave is split into several packages rather than one root workspace, so the quickest way to be productive is to work inside the package you are changing and keep changes scoped to the relevant surface.
+Ave uses a Bun workspace. Install dependencies at the repository root, then work in the package you are changing.
 
 ## Repository layout
 
-- `ave-web` contains the unified SvelteKit frontend Worker for the product, developer portal, and business console
+- `ave-web` contains the unified SvelteKit frontend Worker for the product and developer portal
 - `ave-server` contains the OAuth/OIDC API, auth flows, signing, encryption, uploads, and developer portal backend routes
 - `ave-docs` contains the public documentation
 - `sdks/ave-sdk` contains the typed SDK
@@ -21,20 +21,16 @@ Ave is split into several packages rather than one root workspace, so the quicke
 
 ## Development setup
 
-Ave uses Bun. There is no root package manager workspace right now, so install dependencies inside the package you are editing.
+Run `bun install --frozen-lockfile` at the repository root. Run `bun run check` and `bun run build` there to verify all packages.
 
 Examples:
 
 ```bash
-cd ave-server
-bun install
-bun run dev
+bun run dev:api
 ```
 
 ```bash
-cd ave-web
-bun install
-bun run dev
+bun run dev:web
 ```
 
 Common verification commands:

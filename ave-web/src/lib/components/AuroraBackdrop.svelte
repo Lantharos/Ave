@@ -15,10 +15,7 @@
         | "reg-codes"
         | "reg-legal"
         | "reg-finishing"
-        | "reg-enrollment"
-        | "business-tr"
-        | "business-bl"
-        | "business-login";
+        | "reg-enrollment";
 
     type Preset = {
         colorStops: [string, string, string];
@@ -44,9 +41,6 @@
         "reg-legal": { colorStops: ["#868686", "#6c6c6c", "#3e3e3e"], amplitude: 1.05, blend: 0.5, height: 420, position: "bottom", opacity: 1 },
         "reg-finishing": { colorStops: ["#858585", "#737373", "#444444"], amplitude: 1.0, blend: 0.5, height: 420, position: "bottom", opacity: 1 },
         "reg-enrollment": { colorStops: ["#858585", "#696969", "#464646"], amplitude: 1.0, blend: 0.5, height: 420, position: "bottom", opacity: 1 },
-        "business-tr": { colorStops: ["#737579", "#5a5e62", "#393b3d"], amplitude: 0.85, blend: 0.6, height: 560, position: "top", opacity: 0.9 },
-        "business-bl": { colorStops: ["#797979", "#646464", "#3c3c3c"], amplitude: 0.85, blend: 0.6, height: 560, position: "bottom", opacity: 0.9 },
-        "business-login": { colorStops: ["#878787", "#646464", "#3c3c3c"], amplitude: 1, blend: 0.5, height: 420, position: "bottom", opacity: 1 },
     };
 
     let { preset = "home", cclass = "", mobileHeight = null } = $props<{ preset?: PresetName; cclass?: string; mobileHeight?: number | null }>();

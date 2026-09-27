@@ -6,7 +6,7 @@
     import { createDeletePasskeyMutation, createSecurityQuery, queryKeys } from "$lib/surfaces/web/lib/queries";
     import { queryClient } from "$lib/surfaces/web/lib/query-client";
     import { createMasterKeyBackup, loadMasterKey } from "$lib/surfaces/web/lib/crypto";
-    import { PasskeySetupUnavailableError, setUpPasskeyForCurrentDevice } from "$lib/surfaces/web/lib/passkey-setup";
+    import { PasskeySetupUnavailableError, setUpPasskeyForCurrentDevice } from "$lib/surfaces/web/lib/passkeys/setup";
     import { getPushStatus, subscribeToPushNotifications, unsubscribeFromPushNotifications, getPushSupportDetails } from "$lib/surfaces/web/lib/push";
     import { ChevronRight, RefreshCw } from "@lucide/svelte";
 

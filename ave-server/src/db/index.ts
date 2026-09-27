@@ -1,9 +1,6 @@
 import { drizzle } from "drizzle-orm/d1";
 import { AsyncLocalStorage } from "node:async_hooks";
-import * as businessSchema from "./business-schema";
-import * as baseSchema from "./schema";
-
-const schema = { ...baseSchema, ...businessSchema };
+import * as schema from "./schema";
 
 type DrizzleDb = ReturnType<typeof drizzle>;
 
@@ -61,5 +58,4 @@ export const primaryDb = databaseProxy(() => {
   return createDb((baseBoundDatabase as D1Database).withSession("first-primary"));
 });
 
-export * from "./business-schema";
 export * from "./schema";

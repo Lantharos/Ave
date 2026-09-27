@@ -1,13 +1,11 @@
 import { randomUUID, timingSafeEqual } from "crypto";
 import { eq } from "drizzle-orm";
-import { db, oauthApps, oauthRefreshTokens, organizationIdentityMembers, organizations } from "../../db";
-import { scopesForRole, type BusinessRole } from "../../lib/business";
-import { serializeEncryptionPolicy } from "../../lib/business-encryption";
-import { hashSessionToken } from "../../lib/crypto";
-import { normalizeScopeToken, parseOAuthScopes } from "../../lib/oauth-scopes";
-import { getAccessToken, type AccessTokenRecord } from "../../lib/oauth-store";
-import { getResourceAudience, verifyJwt } from "../../lib/oidc";
-import { normalizeRedirectUri } from "../../lib/redirect-uri";
+import { db, oauthApps, oauthRefreshTokens } from "../../db";
+import { hashSessionToken } from "../../lib/identity/crypto";
+import { normalizeScopeToken, parseOAuthScopes } from "../../lib/oauth/oauth-scopes";
+import { getAccessToken, type AccessTokenRecord } from "../../lib/oauth/oauth-store";
+import { getResourceAudience, verifyJwt } from "../../lib/oauth/oidc";
+import { normalizeRedirectUri } from "../../lib/oauth/redirect-uri";
 import { isQuickClient } from "./quick-client";
 
 export { buildQuickApp,getQuickOrigin,isQuickClient } from "./quick-client";
@@ -115,81 +113,6 @@ export function hasAllScopes(grantedScope: string, requestedScope: string): bool
   return parseScopes(requestedScope).every((scope) => granted.has(scope));
 }
 
-export function organizationClaims(record: {
-  organizationId?: string;
-  organizationName?: string;
-  organizationMemberId?: string;
-  organizationRole?: string;
-  organizationScopes?: string[];
-  organizationSigningAuthority?: boolean;
-  organizationEncryptionMode?: string;
-  organizationKeyCustody?: string;
-  organizationAuthMethod?: string;
-  organizationSsoConnectionId?: string;
-}) {
-  if (!record.organizationId) return {};
-  return {
-    org_id: record.organizationId,
-    org_name: record.organizationName,
-    org_member_id: record.organizationMemberId,
-    org_role: record.organizationRole,
-    org_scopes: record.organizationScopes,
-    org_signing_authority: record.organizationSigningAuthority,
-    org_encryption_mode: record.organizationEncryptionMode,
-    org_key_custody: record.organizationKeyCustody,
-    auth_method: record.organizationAuthMethod,
-    sso_connection_id: record.organizationSsoConnectionId,
-    auth_context: "organization",
-  };
-}
-
-export function organizationResponse(record: {
-  organizationId?: string;
-  organizationName?: string;
-  organizationMemberId?: string;
-  organizationRole?: string;
-  organizationScopes?: string[];
-  organizationSigningAuthority?: boolean;
-  organizationEncryptionMode?: string;
-  organizationKeyCustody?: string;
-  organizationAuthMethod?: string;
-  organizationSsoConnectionId?: string;
-}) {
-  if (!record.organizationId) return null;
-  return {
-    id: record.organizationId,
-    name: record.organizationName,
-    memberId: record.organizationMemberId,
-    role: record.organizationRole,
-    scopes: record.organizationScopes || [],
-    signingAuthority: !!record.organizationSigningAuthority,
-    encryptionMode: record.organizationEncryptionMode,
-    keyCustody: record.organizationKeyCustody,
-    authMethod: record.organizationAuthMethod,
-    ssoConnectionId: record.organizationSsoConnectionId,
-    e2eeKeyDelivery: "ave_identity_grants_only",
-  };
-}
-
-export function workspaceOrganizationResponse(
-  organization: typeof organizations.$inferSelect,
-  member: typeof organizationIdentityMembers.$inferSelect,
-  encryptionPolicy: ReturnType<typeof serializeEncryptionPolicy>
-) {
-  return {
-    id: organization.id,
-    name: organization.name,
-    slug: organization.slug,
-    logoUrl: organization.logoUrl,
-    role: member.role,
-    scopes: scopesForRole(member.role as BusinessRole, member.scopes as string[] | null),
-    signingAuthority: member.signingAuthority,
-    ssoRequired: organization.ssoRequired,
-    encryptionMode: encryptionPolicy.mode,
-    keyCustody: keyCustodyForEncryptionMode(encryptionPolicy.mode),
-  };
-}
-
 export async function resolveAccessTokenRecord(token: string): Promise<AccessTokenRecord | null> {
   if (token.split(".").length !== 3) {
     return getAccessToken(token);
@@ -208,12 +131,6 @@ export async function resolveOauthAppForAccessRecord(record: Pick<AccessTokenRec
     : eq(oauthApps.id, record.appId);
   const [oauthApp] = await db.select().from(oauthApps).where(lookup).limit(1);
   return oauthApp ?? null;
-}
-
-export function keyCustodyForEncryptionMode(mode: string | undefined) {
-  if (mode === "e2ee") return "identity_grants";
-  if (mode === "enterprise_managed") return "customer_kms";
-  return "ave_standard";
 }
 
 export function ensureFedCmRequest(c: any): Response | null {

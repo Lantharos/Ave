@@ -95,7 +95,6 @@ export const oauthApi = {
       scope: string;
       state?: string;
       identityId: string;
-      organizationId?: string;
       codeChallenge?: string;
       codeChallengeMethod?: "S256" | "plain";
       encryptedAppKey?: string;

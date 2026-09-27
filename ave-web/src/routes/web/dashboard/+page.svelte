@@ -12,7 +12,7 @@
     import { type Identity as IdentityType } from "$lib/surfaces/web/lib/api";
     import { createPendingRequestsQuery, queryKeys } from "$lib/surfaces/web/lib/queries";
     import { queryClient } from "$lib/surfaces/web/lib/query-client";
-    import { clearPendingPasskeySetupPrompt, readPendingPasskeySetupPrompt, type PendingPasskeySetupPrompt } from "$lib/surfaces/web/lib/passkey-setup-prompt";
+    import { clearPendingPasskeySetupPrompt, readPendingPasskeySetupPrompt, type PendingPasskeySetupPrompt } from "$lib/surfaces/web/lib/passkeys/setup-prompt";
     import { isPlatformAuthenticatorAvailable } from "$lib/infrastructure/webauthn/passkeys";
     import { Plus } from "@lucide/svelte";
 
@@ -44,7 +44,7 @@
         if (requestedPage) {
             selectedPage = requestedPage;
         } else if (identities.length > 0) {
-            selectedPage = identities[0].displayName;
+            selectedPage = identities[0].id;
         }
 
         const unsubscribe = websocket.onLoginRequest(() => {
@@ -101,7 +101,7 @@
 
     function selectIdentity(identity: IdentityType) {
         auth.setCurrentIdentity(identity);
-        selectedPage = identity.displayName;
+        selectedPage = identity.id;
         mobileSidebarOpen = false;
     }
 
@@ -110,11 +110,11 @@
         mobileSidebarOpen = false;
     }
 
-    let selectedIdentity = $derived(identities.find(i => i.displayName === selectedPage));
+    let selectedIdentity = $derived(identities.find(i => i.id === selectedPage));
 </script>
 
 <div class="bg-[#090909] relative w-full min-h-screen-fixed flex flex-col md:flex-row px-3 py-4 md:gap-10 md:px-8 md:py-12 xl:gap-[100px] xl:px-[120px] xl:py-[100px]">
-    <button 
+    <button
         class="mobile-menu-btn fixed top-3 right-3 z-50 p-2 bg-[#171717] rounded-full md:hidden"
         onclick={() => mobileSidebarOpen = !mobileSidebarOpen}
     >
@@ -134,47 +134,46 @@
             <div class="flex flex-col gap-2 w-full max-w-sm">
                 <Text type="hd" size={14} color="#878787">IDENTITIES</Text>
                 {#each identities as identity (identity.id)}
-                    <SidebarButton 
-                        text={identity.displayName} 
-                        bind:currentlySelected={selectedPage} 
-                        onclick={() => selectIdentity(identity)} 
-                        image={identity.avatarUrl || "/placeholder.png"} 
+                    <SidebarButton
+                        text={identity.displayName}
+                        selected={selectedPage === identity.id}
+                        onclick={() => selectIdentity(identity)}
+                        image={identity.avatarUrl || "/placeholder.png"}
                     />
                 {/each}
                 {#if identities.length < 5}
-                    <SidebarButton 
-                        text="New Identity" 
-                        bind:currentlySelected={selectedPage} 
-                        onclick={handleNewIdentity} 
+                    <SidebarButton
+                        text="New Identity"
+                        selected={selectedPage === "New Identity"}
+                        onclick={handleNewIdentity}
                         Icon={Plus}
                     />
                 {/if}
-                
+
                 <div class="h-px bg-[#878787]/20 w-full my-1"></div>
-                
+
                 <Text type="hd" size={14} color="#878787">ACCOUNT</Text>
                 {#if pendingApprovals > 0}
                     <div class="relative">
-                        <SidebarButton 
-                            text="Login Requests" 
-                            bind:currentlySelected={selectedPage} 
-                            onclick={() => selectPage("Login Requests")} 
+                        <SidebarButton
+                            text="Login Requests"
+                            selected={selectedPage === "Login Requests"}
+                            onclick={() => selectPage("Login Requests")}
                         />
                         <span class="absolute -top-1 -right-1 bg-red-500 text-white text-xs w-5 h-5 rounded-full flex items-center justify-center">
                             {pendingApprovals}
                         </span>
                     </div>
                 {/if}
-                <SidebarButton text="Security" bind:currentlySelected={selectedPage} onclick={() => selectPage("Security")} />
-                <SidebarButton text="Devices" bind:currentlySelected={selectedPage} onclick={() => selectPage("Devices")} />
-                <SidebarButton text="My Data" bind:currentlySelected={selectedPage} onclick={() => selectPage("My Data")} />
-                <SidebarButton text="Activity Log" bind:currentlySelected={selectedPage} onclick={() => selectPage("Activity Log")} />
-                <SidebarButton text="Connectors" bind:currentlySelected={selectedPage} onclick={() => selectPage("Connectors")} />
-                
+                <SidebarButton text="Security" selected={selectedPage === "Security"} onclick={() => selectPage("Security")} />
+                <SidebarButton text="Devices" selected={selectedPage === "Devices"} onclick={() => selectPage("Devices")} />
+                <SidebarButton text="My Data" selected={selectedPage === "My Data"} onclick={() => selectPage("My Data")} />
+                <SidebarButton text="Activity Log" selected={selectedPage === "Activity Log"} onclick={() => selectPage("Activity Log")} />
+                <SidebarButton text="Connectors" selected={selectedPage === "Connectors"} onclick={() => selectPage("Connectors")} />
+
                 <div class="h-px bg-[#878787]/20 w-full my-1"></div>
                 <SidebarButton
                     text={isLoggingOut ? "Logging out..." : "Logout"}
-                    bind:currentlySelected={selectedPage}
                     onclick={handleLogout}
                     disabled={isLoggingOut}
                 />
@@ -186,18 +185,18 @@
         <div class="flex flex-col gap-[10px]">
             <Text type="hd" size={24} color="#878787">IDENTITIES</Text>
             {#each identities as identity (identity.id)}
-                <SidebarButton 
-                    text={identity.displayName} 
-                    bind:currentlySelected={selectedPage} 
-                    onclick={() => selectIdentity(identity)} 
-                    image={identity.avatarUrl || "/placeholder.png"} 
+                <SidebarButton
+                    text={identity.displayName}
+                    selected={selectedPage === identity.id}
+                    onclick={() => selectIdentity(identity)}
+                    image={identity.avatarUrl || "/placeholder.png"}
                 />
             {/each}
             {#if identities.length < 5}
-                <SidebarButton 
-                        text="New Identity" 
-                        bind:currentlySelected={selectedPage} 
-                        onclick={handleNewIdentity} 
+                <SidebarButton
+                        text="New Identity"
+                        selected={selectedPage === "New Identity"}
+                        onclick={handleNewIdentity}
                         Icon={Plus}
                     />
             {/if}
@@ -208,26 +207,25 @@
             <Text type="hd" size={24} color="#878787">ACCOUNT</Text>
             {#if pendingApprovals > 0}
                 <div class="relative">
-                    <SidebarButton 
-                        text="Login Requests" 
-                        bind:currentlySelected={selectedPage} 
-                        onclick={() => { selectedPage = "Login Requests"; }} 
+                    <SidebarButton
+                        text="Login Requests"
+                        selected={selectedPage === "Login Requests"}
+                        onclick={() => { selectedPage = "Login Requests"; }}
                     />
                     <span class="absolute -top-1 -right-1 bg-red-500 text-white text-xs w-5 h-5 rounded-full flex items-center justify-center">
                         {pendingApprovals}
                     </span>
                 </div>
             {/if}
-            <SidebarButton text="Security" bind:currentlySelected={selectedPage} onclick={() => { selectedPage = "Security"; }} />
-            <SidebarButton text="Devices" bind:currentlySelected={selectedPage} onclick={() => { selectedPage = "Devices"; }} />
-            <SidebarButton text="My Data" bind:currentlySelected={selectedPage} onclick={() => { selectedPage = "My Data"; }} />
-            <SidebarButton text="Activity Log" bind:currentlySelected={selectedPage} onclick={() => { selectedPage = "Activity Log"; }} />
-            <SidebarButton text="Connectors" bind:currentlySelected={selectedPage} onclick={() => { selectedPage = "Connectors"; }} />
+            <SidebarButton text="Security" selected={selectedPage === "Security"} onclick={() => { selectedPage = "Security"; }} />
+            <SidebarButton text="Devices" selected={selectedPage === "Devices"} onclick={() => { selectedPage = "Devices"; }} />
+            <SidebarButton text="My Data" selected={selectedPage === "My Data"} onclick={() => { selectedPage = "My Data"; }} />
+            <SidebarButton text="Activity Log" selected={selectedPage === "Activity Log"} onclick={() => { selectedPage = "Activity Log"; }} />
+            <SidebarButton text="Connectors" selected={selectedPage === "Connectors"} onclick={() => { selectedPage = "Connectors"; }} />
         </div>
         <div class="h-[1px] bg-[#878787]/20 w-full"></div>
         <SidebarButton
             text={isLoggingOut ? "Logging out..." : "Logout"}
-            bind:currentlySelected={selectedPage}
             onclick={handleLogout}
             disabled={isLoggingOut}
         />

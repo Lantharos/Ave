@@ -1,39 +1,37 @@
 {
-	"name": "ave-web",
-	"private": true,
-	"version": "0.0.1",
-	"type": "module",
-	"scripts": {
-		"dev": "vite dev",
-		"build": "rm -rf .svelte-kit/output .svelte-kit/cloudflare .svelte-kit/cloudflare-tmp && wrangler types --check && vite build",
-		"deploy": "bun run build && wrangler deploy --keep-vars",
-		"preview": "wrangler dev .svelte-kit/cloudflare/_worker.js --port 4173",
-		"prepare": "svelte-kit sync || echo ''",
-		"check": "rm -rf .svelte-kit/output .svelte-kit/cloudflare .svelte-kit/cloudflare-tmp && wrangler types --check && svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
-		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
-		"gen": "rm -rf .svelte-kit/output .svelte-kit/cloudflare .svelte-kit/cloudflare-tmp && wrangler types"
-	},
-	"devDependencies": {
-		"@sveltejs/adapter-cloudflare": "^7.2.9",
-		"@sveltejs/kit": "^2.70.3",
-		"@sveltejs/vite-plugin-svelte": "^7.3.0",
-		"@tailwindcss/vite": "^4.3.3",
-		"@types/node": "^26.4.1",
-		"svelte": "^5.57.0",
-		"svelte-check": "^4.7.6",
-		"tailwindcss": "^4.3.3",
-		"typescript": "~6.0.3",
-		"vite": "^8.2.2",
-		"wrangler": "^4.129.0"
-	},
-	"dependencies": {
-		"@lucide/svelte": "^1.41.0",
-		"@noble/ed25519": "^3.2.0",
-		"@simplewebauthn/browser": "^14.0.0",
-		"@tanstack/svelte-query": "^6.1.48",
-		"ogl": "^1.0.11"
-	},
-	"overrides": {
-		"cookie": "0.7.2"
-	}
+  "name": "ave-web",
+  "private": true,
+  "version": "0.0.1",
+  "type": "module",
+  "scripts": {
+    "dev": "vite dev",
+    "build": "rm -rf .svelte-kit/output .svelte-kit/cloudflare .svelte-kit/cloudflare-tmp && wrangler types --check && vite build",
+    "deploy": "bun run build && wrangler deploy --keep-vars",
+    "preview": "wrangler dev .svelte-kit/cloudflare/_worker.js --port 4173",
+    "prepare": "svelte-kit sync || echo ''",
+    "check": "rm -rf .svelte-kit/.svelte-check .svelte-kit/output .svelte-kit/cloudflare .svelte-kit/cloudflare-tmp && wrangler types --check && svelte-kit sync && svelte-check --tsgo --tsconfig ./tsconfig.json",
+    "check:watch": "svelte-kit sync && svelte-check --tsgo --tsconfig ./tsconfig.json --watch",
+    "gen": "rm -rf .svelte-kit/output .svelte-kit/cloudflare .svelte-kit/cloudflare-tmp && wrangler types"
+  },
+  "devDependencies": {
+    "@sveltejs/adapter-cloudflare": "^7.2.9",
+    "@sveltejs/kit": "^2.70.3",
+    "@sveltejs/vite-plugin-svelte": "^7.3.1",
+    "@tailwindcss/vite": "^4.3.3",
+    "@types/node": "^26.6.3",
+    "svelte": "^5.57.1",
+    "svelte-check": "^4.7.6",
+    "tailwindcss": "^4.3.3",
+    "typescript": "~6.0.3",
+    "vite": "^8.3.1",
+    "wrangler": "^4.141.0",
+    "@typescript/native": "npm:typescript@^7.0.2"
+  },
+  "dependencies": {
+    "@lucide/svelte": "^1.48.0",
+    "@noble/ed25519": "^3.2.0",
+    "@simplewebauthn/browser": "^14.0.0",
+    "@tanstack/svelte-query": "^6.3.0",
+    "ogl": "^1.0.11"
+  }
 }

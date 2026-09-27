@@ -1,341 +1,15 @@
 <script lang="ts">
-    import Text from "$lib/surfaces/web/components/Text.svelte";
-    import IdentityCard from "$lib/surfaces/web/components/IdentityCard.svelte";
-    import Button from "$lib/surfaces/web/components/Button.svelte";
-    import { deriveBannerColorFromFile } from "$lib/surfaces/web/lib/avatar-image";
-    import { api, type Identity as IdentityType } from "$lib/surfaces/web/lib/api";
-    import { createStoredIdentityEncryptionKeyPair, loadMasterKey } from "$lib/surfaces/web/lib/crypto";
-    import { auth } from "$lib/surfaces/web/stores/auth";
-    import { Save } from "@lucide/svelte";
-
-    let { newIdentity = false, identity = null } = $props<{
+import Text from "$lib/surfaces/web/components/Text.svelte";
+import IdentityCard from "$lib/surfaces/web/components/IdentityCard.svelte";
+import Button from "$lib/surfaces/web/components/Button.svelte";
+import { Save } from "@lucide/svelte";
+import type { Identity as IdentityType } from "$lib/surfaces/web/lib/api";
+let { newIdentity = false, identity = null } = $props<{
         newIdentity?: boolean;
         identity?: IdentityType | null;
     }>();
-
-    // Form state
-    let displayName = $state("");
-    let handle = $state("");
-    let email = $state("");
-    let verificationCode = $state("");
-    let birthday = $state("");
-    let avatarUrl = $state("");
-    let bannerUrl = $state("");
-
-    let editing = $state({
-        displayName: false,
-        handle: false,
-        email: false,
-        birthday: false
-    });
-
-    let isSaving = $state(false);
-    let uploadingAvatar = $state(false);
-    let uploadingBanner = $state(false);
-    let error = $state("");
-    let success = $state("");
-    let showEmailVerificationModal = $state(false);
-    let lastSyncedIdentityId = $state<string | null>(null);
-
-    $effect(() => {
-        if (identity) {
-            const switchedIdentity = lastSyncedIdentityId !== identity.id;
-            if (switchedIdentity) {
-                lastSyncedIdentityId = identity.id;
-                verificationCode = "";
-                showEmailVerificationModal = false;
-            }
-            displayName = identity.displayName;
-            handle = identity.handle;
-            email = identity.pendingEmail || identity.email || "";
-            birthday = identity.birthday || "";
-            avatarUrl = identity.avatarUrl || "";
-            bannerUrl = identity.bannerUrl || "";
-        } else {
-            lastSyncedIdentityId = null;
-            showEmailVerificationModal = false;
-        }
-    });
-
-    async function saveField(field: string) {
-        if (!identity) return;
-        
-        isSaving = true;
-        error = "";
-        success = "";
-
-        try {
-            const updateData: Record<string, string | null> = {};
-            
-            switch (field) {
-                case "displayName":
-                    updateData.displayName = displayName;
-                    break;
-                case "handle":
-                    updateData.handle = handle;
-                    break;
-                case "birthday":
-                    updateData.birthday = birthday || null;
-                    break;
-            }
-
-            const { identity: updated } = await api.identities.update(identity.id, updateData);
-            auth.updateIdentity(updated);
-            editing[field as keyof typeof editing] = false;
-            success = "Saved!";
-            setTimeout(() => success = "", 2000);
-        } catch (e: any) {
-            error = e.message || "Failed to save";
-        } finally {
-            isSaving = false;
-        }
-    }
-
-    async function startEmailVerification() {
-        if (!identity || !email.trim()) return;
-
-        isSaving = true;
-        error = "";
-        success = "";
-
-        try {
-            const { identity: updated } = await api.identities.startEmailVerification(identity.id, email.trim());
-            auth.updateIdentity(updated);
-            email = updated.pendingEmail || updated.email || "";
-            editing.email = false;
-            verificationCode = "";
-            showEmailVerificationModal = true;
-            success = "Verification code sent";
-            setTimeout(() => success = "", 2000);
-        } catch (e: any) {
-            error = e.message || "Failed to send verification code";
-        } finally {
-            isSaving = false;
-        }
-    }
-
-    async function verifyEmail() {
-        if (!identity || !verificationCode.trim()) return;
-
-        isSaving = true;
-        error = "";
-        success = "";
-
-        try {
-            const { identity: updated } = await api.identities.verifyEmail(identity.id, verificationCode.trim());
-            auth.updateIdentity(updated);
-            email = updated.email || "";
-            verificationCode = "";
-            showEmailVerificationModal = false;
-            success = "Email verified";
-            setTimeout(() => success = "", 2000);
-        } catch (e: any) {
-            error = e.message || "Failed to verify email";
-        } finally {
-            isSaving = false;
-        }
-    }
-
-    async function resendEmailVerification() {
-        if (!identity) return;
-
-        isSaving = true;
-        error = "";
-        success = "";
-
-        try {
-            const { identity: updated } = await api.identities.resendEmailVerification(identity.id);
-            auth.updateIdentity(updated);
-            email = updated.pendingEmail || updated.email || "";
-            showEmailVerificationModal = true;
-            success = "Verification code sent";
-            setTimeout(() => success = "", 2000);
-        } catch (e: any) {
-            error = e.message || "Failed to resend verification code";
-        } finally {
-            isSaving = false;
-        }
-    }
-
-    async function clearEmail() {
-        if (!identity) return;
-
-        isSaving = true;
-        error = "";
-        success = "";
-
-        try {
-            const { identity: updated } = await api.identities.clearEmail(identity.id);
-            auth.updateIdentity(updated);
-            email = "";
-            verificationCode = "";
-            editing.email = false;
-            showEmailVerificationModal = false;
-            success = "Email removed";
-            setTimeout(() => success = "", 2000);
-        } catch (e: any) {
-            error = e.message || "Failed to remove email";
-        } finally {
-            isSaving = false;
-        }
-    }
-
-    async function createIdentity() {
-        if (!displayName.trim() || !handle.trim()) {
-            error = "Name and handle are required";
-            return;
-        }
-
-        isSaving = true;
-        error = "";
-
-        try {
-            const masterKey = await loadMasterKey();
-            const { identity: created } = await api.identities.create({
-                displayName: displayName.trim(),
-                handle: handle.trim().toLowerCase(),
-                email: email.trim() || undefined,
-                birthday: birthday || undefined,
-                avatarUrl: avatarUrl || undefined,
-                bannerUrl: bannerUrl || undefined,
-                encryptionKey: masterKey ? await createStoredIdentityEncryptionKeyPair(masterKey) : undefined,
-            });
-
-            auth.addIdentity(created);
-            success = "Identity created!";
-            
-            // Reset form
-            displayName = "";
-            handle = "";
-            email = "";
-            birthday = "";
-            avatarUrl = "";
-            bannerUrl = "";
-        } catch (e: any) {
-            error = e.message || "Failed to create identity";
-        } finally {
-            isSaving = false;
-        }
-    }
-
-    function formatBirthday(dateStr: string): string {
-        if (!dateStr) return "Not set";
-        const date = new Date(dateStr);
-        return date.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
-    }
-
-    async function handleAvatarUpload(file: File) {
-        if (!identity) {
-            avatarUrl = URL.createObjectURL(file);
-            bannerUrl = await deriveBannerColorFromFile(file);
-            return;
-        }
-
-        try {
-            uploadingAvatar = true;
-            error = "";
-            const bannerColor = await deriveBannerColorFromFile(file);
-            await api.upload.avatar(identity.id, file);
-            const { identity: updatedIdentity } = await api.identities.update(identity.id, {
-                bannerUrl: bannerColor,
-            });
-            
-            auth.updateIdentity(updatedIdentity);
-            bannerUrl = bannerColor;
-            
-            success = "Avatar updated!";
-            setTimeout(() => success = "", 2000);
-        } catch (e: any) {
-            console.error("[Avatar Upload] Failed:", e);
-            error = e.message || "Failed to upload avatar";
-        } finally {
-            uploadingAvatar = false;
-        }
-    }
-
-    async function handleBannerChange(fileOrHex: File | string) {
-        if (!identity) {
-            // For new identity, just use object URL or color
-            if (typeof fileOrHex === "string") {
-                // Store color as bannerUrl (it starts with #)
-                bannerUrl = fileOrHex;
-            } else {
-                bannerUrl = URL.createObjectURL(fileOrHex);
-            }
-            return;
-        }
-
-        if (typeof fileOrHex === "string") {
-            // Color selected - save color as bannerUrl
-            try {
-                uploadingBanner = true;
-                error = "";
-                // Update identity with color as bannerUrl
-                const { identity: updated } = await api.identities.update(identity.id, {
-                    bannerUrl: fileOrHex
-                });
-                bannerUrl = fileOrHex;
-                auth.updateIdentity(updated);
-                success = "Banner color updated!";
-                setTimeout(() => success = "", 2000);
-            } catch (e: any) {
-                error = e.message || "Failed to update banner";
-            } finally {
-                uploadingBanner = false;
-            }
-        } else {
-            // File selected - upload banner
-            try {
-                uploadingBanner = true;
-                error = "";
-                await api.upload.banner(identity.id, fileOrHex);
-
-                // Fetch the updated identity from the API to ensure we have the latest data
-                const { identity: updatedIdentity } = await api.identities.get(identity.id);
-                
-                // Update auth store with fresh identity data
-                auth.updateIdentity(updatedIdentity);
-                
-                success = "Banner updated!";
-                setTimeout(() => success = "", 2000);
-            } catch (e: any) {
-                console.error("[Banner Upload] Failed:", e);
-                error = e.message || "Failed to upload banner";
-            } finally {
-                uploadingBanner = false;
-            }
-        }
-    }
-
-    // Helper to check if bannerUrl is a color (starts with #) or an image URL
-    let bannerIsColor = $derived(bannerUrl.startsWith("#"));
-    let bannerImage = $derived(bannerIsColor ? undefined : bannerUrl || undefined);
-    let bannerColorValue = $derived(bannerIsColor ? bannerUrl : "#B9BBBE");
-
-    // Delete identity
-    let showDeleteConfirm = $state(false);
-    let isDeleting = $state(false);
-    let emailActionButtonClass = $derived("w-12 h-12 md:w-[122px] md:h-[122px] shrink-0 p-3 md:p-[40px] bg-[#111111] hover:bg-[#202020] transition-colors duration-300 rounded-[16px] md:rounded-[32px] flex items-center justify-center");
-    let displayedEmail = $derived(identity ? (identity.pendingEmail || identity.email || "Not set") : "Not set");
-    let emailIsPending = $derived(Boolean(identity?.pendingEmail));
-
-    async function deleteIdentity() {
-        if (!identity) return;
-        
-        isDeleting = true;
-        error = "";
-
-        try {
-            await api.identities.delete(identity.id);
-            auth.removeIdentity(identity.id);
-            showDeleteConfirm = false;
-            // The parent component should handle navigation after deletion
-        } catch (e: any) {
-            error = e.message || "Failed to delete identity";
-        } finally {
-            isDeleting = false;
-        }
-    }
+import { createIdentityEditor } from "./identity/identity-editor.svelte";
+const flow = createIdentityEditor(() => identity);
 </script>
 
 {#snippet editIcon()}
@@ -345,105 +19,105 @@
 {/snippet}
 
 <div class="flex flex-col gap-4 md:gap-[40px] w-full z-10 p-3 md:p-[60px] bg-[#111111]/60 rounded-[24px] md:rounded-[64px] backdrop-blur-[20px]">
-    {#if error}
+    {#if flow.error}
         <div class="bg-red-600/20 border border-red-600 text-red-400 px-4 py-3 rounded-2xl">
-            {error}
+            {flow.error}
         </div>
     {/if}
-    
-    {#if success}
+
+    {#if flow.success}
         <div class="bg-[#32A94C]/20 border border-[#32A94C] text-[#32A94C] px-4 py-3 rounded-2xl">
-            {success}
+            {flow.success}
         </div>
     {/if}
 
     {#if newIdentity}
-        <IdentityCard 
-            avatar={avatarUrl || "/placeholder.png"} 
-            banner={bannerImage} 
-            bannerColor={bannerColorValue} 
-            size="large" 
-            onUploadAvatar={handleAvatarUpload} 
-            onChangeBanner={handleBannerChange}
+        <IdentityCard
+            avatar={flow.avatarUrl || "/placeholder.png"}
+            banner={flow.bannerImage}
+            bannerColor={flow.bannerColorValue}
+            size="large"
+            onUploadAvatar={flow.handleAvatarUpload}
+            onChangeBanner={flow.handleBannerChange}
         >
             <div class="flex flex-col gap-2 md:gap-[10px]">
                 <div class="p-3 md:p-[30px] bg-[#111111] rounded-[16px] md:rounded-[32px]">
                     <Text type="hd" size={16} mobileSize={12} color="#878787">NAME *</Text>
-                    <input 
-                        type="text" 
-                        class="w-full bg-transparent border-b border-[#333333] mt-2 md:mt-[10px] pb-[5px] text-white focus:outline-none" 
+                    <input
+                        type="text"
+                        class="w-full bg-transparent border-b border-[#333333] mt-2 md:mt-[10px] pb-[5px] text-white focus:outline-none"
                         placeholder="Enter your name"
-                        bind:value={displayName}
+                        bind:value={flow.displayName}
                         autocomplete="off"
                     />
                 </div>
                 <div class="p-3 md:p-[30px] bg-[#111111] rounded-[16px] md:rounded-[32px]">
                     <Text type="hd" size={16} mobileSize={12} color="#878787">HANDLE *</Text>
-                    <input 
-                        type="text" 
-                        class="w-full bg-transparent border-b border-[#333333] mt-2 md:mt-[10px] pb-[5px] text-white focus:outline-none" 
+                    <input
+                        type="text"
+                        class="w-full bg-transparent border-b border-[#333333] mt-2 md:mt-[10px] pb-[5px] text-white focus:outline-none"
                         placeholder="Enter your handle"
-                        bind:value={handle}
+                        bind:value={flow.handle}
                         autocomplete="off"
                     />
                 </div>
                 <div class="p-3 md:p-[30px] bg-[#111111] rounded-[16px] md:rounded-[32px]">
                     <Text type="hd" size={16} mobileSize={12} color="#878787">EMAIL</Text>
-                    <input 
-                        type="email" 
-                        class="w-full bg-transparent border-b border-[#333333] mt-2 md:mt-[10px] pb-[5px] text-white focus:outline-none" 
+                    <input
+                        type="email"
+                        class="w-full bg-transparent border-b border-[#333333] mt-2 md:mt-[10px] pb-[5px] text-white focus:outline-none"
                         placeholder="Enter your email"
-                        bind:value={email}
+                        bind:value={flow.email}
                         autocomplete="off"
                     />
                 </div>
                 <div class="p-3 md:p-[30px] bg-[#111111] rounded-[16px] md:rounded-[32px]">
                     <Text type="hd" size={16} mobileSize={12} color="#878787">BIRTHDAY</Text>
-                    <input 
-                        type="date" 
+                    <input
+                        type="date"
                         class="w-full bg-transparent border-b border-[#333333] mt-2 md:mt-[10px] pb-[5px] text-white focus:outline-none"
-                        bind:value={birthday}
+                        bind:value={flow.birthday}
                         autocomplete="off"
                     />
                 </div>
             </div>
         </IdentityCard>
 
-        <Button 
-            text={isSaving ? "SAVING..." : "CREATE IDENTITY"} 
-            onclick={createIdentity} 
+        <Button
+            text={flow.isSaving ? "SAVING..." : "CREATE IDENTITY"}
+            onclick={flow.createIdentity}
             Icon={Save}
             iconStrokeWidth={2.5}
-            disabled={isSaving || !displayName.trim() || !handle.trim()}
+            disabled={flow.isSaving || !flow.displayName.trim() || !flow.handle.trim()}
         />
     {:else if identity}
-        <IdentityCard 
-            avatar={avatarUrl || "/placeholder.png"} 
-            size="large" 
-            banner={bannerImage} 
-            bannerColor={bannerColorValue} 
-            onUploadAvatar={handleAvatarUpload} 
-            onChangeBanner={handleBannerChange}
+        <IdentityCard
+            avatar={flow.avatarUrl || "/placeholder.png"}
+            size="large"
+            banner={flow.bannerImage}
+            bannerColor={flow.bannerColorValue}
+            onUploadAvatar={flow.handleAvatarUpload}
+            onChangeBanner={flow.handleBannerChange}
         >
             <div class="flex flex-col gap-2 md:gap-[10px]">
                 <!-- Name Field -->
                 <div class="flex flex-col md:flex-row gap-2 md:gap-[10px]">
                     <div class="p-3 md:p-[30px] bg-[#111111] rounded-[16px] md:rounded-[32px] w-full flex flex-col justify-center">
                         <Text type="hd" size={16} mobileSize={12} color="#878787">NAME</Text>
-                        {#if editing.displayName}
+                        {#if flow.editing.displayName}
                             <div class="flex flex-col md:flex-row gap-3 items-stretch md:items-center mt-2 md:mt-[10px]">
-                                <input 
-                                    type="text" 
-                                    class="flex-1 bg-transparent border-b border-[#333333] pb-[8px] text-white text-lg md:text-[24px] focus:outline-none" 
-                                    bind:value={displayName}
+                                <input
+                                    type="text"
+                                    class="flex-1 bg-transparent border-b border-[#333333] pb-[8px] text-white text-lg md:text-[24px] focus:outline-none"
+                                    bind:value={flow.displayName}
                                     autocomplete="off"
                                 />
-                                <button 
+                                <button
                                     class="px-5 py-2 bg-[#FFFFFF] hover:bg-[#E0E0E0] text-[#090909] rounded-full text-[16px] font-medium"
-                                    onclick={() => saveField("displayName")}
-                                    disabled={isSaving}
+                                    onclick={() => flow.saveField("displayName")}
+                                    disabled={flow.isSaving}
                                 >
-                                    {isSaving ? "..." : "Save"}
+                                    {flow.isSaving ? "..." : "Save"}
                                 </button>
                             </div>
                         {:else}
@@ -451,9 +125,9 @@
                         {/if}
                     </div>
 
-                    <button 
-                        onclick={() => { editing.displayName = !editing.displayName }} 
-                        class="w-full md:w-auto md:aspect-square flex-grow h-12 md:h-full p-3 md:p-[40px] bg-[#111111] hover:bg-[#202020] transition-colors duration-300 cursor-pointer rounded-[16px] md:rounded-[32px] flex items-center justify-center" 
+                    <button
+                        onclick={() => { flow.editing.displayName = !flow.editing.displayName }}
+                        class="w-full md:w-auto md:aspect-square flex-grow h-12 md:h-full p-3 md:p-[40px] bg-[#111111] hover:bg-[#202020] transition-colors duration-300 cursor-pointer rounded-[16px] md:rounded-[32px] flex items-center justify-center"
                         aria-label="edit name"
                     >
                         {@render editIcon()}
@@ -464,20 +138,20 @@
                 <div class="flex flex-col md:flex-row gap-2 md:gap-[10px]">
                     <div class="p-3 md:p-[30px] bg-[#111111] rounded-[16px] md:rounded-[32px] w-full flex flex-col justify-center">
                         <Text type="hd" size={16} mobileSize={12} color="#878787">HANDLE</Text>
-                        {#if editing.handle}
+                        {#if flow.editing.handle}
                             <div class="flex flex-col md:flex-row gap-3 items-stretch md:items-center mt-2 md:mt-[10px]">
-                                <input 
-                                    type="text" 
-                                    class="flex-1 bg-transparent border-b border-[#333333] pb-[8px] text-white text-lg md:text-[24px] focus:outline-none" 
-                                    bind:value={handle}
+                                <input
+                                    type="text"
+                                    class="flex-1 bg-transparent border-b border-[#333333] pb-[8px] text-white text-lg md:text-[24px] focus:outline-none"
+                                    bind:value={flow.handle}
                                     autocomplete="off"
                                 />
-                                <button 
+                                <button
                                     class="px-5 py-2 bg-[#FFFFFF] hover:bg-[#E0E0E0] text-[#090909] rounded-full text-[16px] font-medium"
-                                    onclick={() => saveField("handle")}
-                                    disabled={isSaving}
+                                    onclick={() => flow.saveField("handle")}
+                                    disabled={flow.isSaving}
                                 >
-                                    {isSaving ? "..." : "Save"}
+                                    {flow.isSaving ? "..." : "Save"}
                                 </button>
                             </div>
                         {:else}
@@ -485,9 +159,9 @@
                         {/if}
                     </div>
 
-                    <button 
-                        onclick={() => { editing.handle = !editing.handle }} 
-                        class="w-full md:w-auto md:aspect-square flex-grow h-12 md:h-full p-3 md:p-[40px] bg-[#111111] hover:bg-[#202020] transition-colors duration-300 cursor-pointer rounded-[16px] md:rounded-[32px] flex items-center justify-center" 
+                    <button
+                        onclick={() => { flow.editing.handle = !flow.editing.handle }}
+                        class="w-full md:w-auto md:aspect-square flex-grow h-12 md:h-full p-3 md:p-[40px] bg-[#111111] hover:bg-[#202020] transition-colors duration-300 cursor-pointer rounded-[16px] md:rounded-[32px] flex items-center justify-center"
                         aria-label="edit handle"
                     >
                         {@render editIcon()}
@@ -498,27 +172,27 @@
                 <div class="flex flex-col md:flex-row gap-2 md:gap-[10px]">
                     <div class="p-3 md:p-[30px] bg-[#111111] rounded-[16px] md:rounded-[32px] w-full flex flex-col justify-center">
                         <Text type="hd" size={16} mobileSize={12} color="#878787">EMAIL</Text>
-                        {#if editing.email}
+                        {#if flow.editing.email}
                             <div class="flex flex-col md:flex-row gap-3 items-stretch md:items-center mt-2 md:mt-[10px]">
-                                <input 
-                                    type="email" 
-                                    class="flex-1 bg-transparent border-b border-[#333333] pb-[8px] text-white text-lg md:text-[24px] focus:outline-none" 
-                                    bind:value={email}
+                                <input
+                                    type="email"
+                                    class="flex-1 bg-transparent border-b border-[#333333] pb-[8px] text-white text-lg md:text-[24px] focus:outline-none"
+                                    bind:value={flow.email}
                                     placeholder="Enter email"
                                     autocomplete="off"
                                 />
-                                <button 
+                                <button
                                     class="px-5 py-2 bg-[#FFFFFF] hover:bg-[#E0E0E0] text-[#090909] rounded-full text-[16px] font-medium"
-                                    onclick={startEmailVerification}
-                                    disabled={isSaving}
+                                    onclick={flow.startEmailVerification}
+                                    disabled={flow.isSaving}
                                 >
-                                    {isSaving ? "..." : "Continue"}
+                                    {flow.isSaving ? "..." : "Continue"}
                                 </button>
                             </div>
                         {:else}
                             <div class="flex flex-row flex-wrap items-center gap-2 md:gap-[14px]">
-                                <Text type="h" size={24} mobileSize={16} weight="medium">{displayedEmail}</Text>
-                                {#if emailIsPending}
+                                <Text type="h" size={24} mobileSize={16} weight="medium">{flow.displayedEmail}</Text>
+                                {#if flow.emailIsPending}
                                     <span class="text-[#D2AC57] text-sm md:text-[16px] font-semibold">UNVERIFIED</span>
                                 {:else if identity.email}
                                     <svg class="w-5 h-5 md:w-[28px] md:h-[28px]" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" aria-label="email verified">
@@ -530,12 +204,12 @@
                         {/if}
                     </div>
 
-                    {#if !editing.email && emailIsPending}
+                    {#if !flow.editing.email && flow.emailIsPending}
                         <button
                             onclick={() => {
-                                showEmailVerificationModal = true;
+                                flow.showEmailVerificationModal = true;
                             }}
-                            class="{emailActionButtonClass} cursor-pointer"
+                            class="{flow.emailActionButtonClass} cursor-pointer"
                             aria-label="verify email"
                         >
                             <svg class="w-6 h-6 md:w-[48px] md:h-[48px]" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -546,9 +220,9 @@
                         </button>
                     {/if}
 
-                    <button 
-                        onclick={() => { editing.email = !editing.email; showEmailVerificationModal = false; }} 
-                        class="{emailActionButtonClass} cursor-pointer" 
+                    <button
+                        onclick={() => { flow.editing.email = !flow.editing.email; flow.showEmailVerificationModal = false; }}
+                        class="{flow.emailActionButtonClass} cursor-pointer"
                         aria-label="edit email"
                     >
                         {@render editIcon()}
@@ -559,30 +233,30 @@
                 <div class="flex flex-col md:flex-row gap-2 md:gap-[10px]">
                     <div class="p-3 md:p-[30px] bg-[#111111] rounded-[16px] md:rounded-[32px] w-full flex flex-col justify-center">
                         <Text type="hd" size={16} mobileSize={12} color="#878787">BIRTHDAY</Text>
-                        {#if editing.birthday}
+                        {#if flow.editing.birthday}
                             <div class="flex flex-col md:flex-row gap-3 items-stretch md:items-center mt-2 md:mt-[10px]">
-                                <input 
-                                    type="date" 
-                                    class="flex-1 bg-transparent border-b border-[#333333] pb-[8px] text-white text-lg md:text-[24px] focus:outline-none" 
-                                    bind:value={birthday}
+                                <input
+                                    type="date"
+                                    class="flex-1 bg-transparent border-b border-[#333333] pb-[8px] text-white text-lg md:text-[24px] focus:outline-none"
+                                    bind:value={flow.birthday}
                                     autocomplete="off"
                                 />
-                                <button 
+                                <button
                                     class="px-5 py-2 bg-[#FFFFFF] hover:bg-[#E0E0E0] text-[#090909] rounded-full text-[16px] font-medium"
-                                    onclick={() => saveField("birthday")}
-                                    disabled={isSaving}
+                                    onclick={() => flow.saveField("birthday")}
+                                    disabled={flow.isSaving}
                                 >
-                                    {isSaving ? "..." : "Save"}
+                                    {flow.isSaving ? "..." : "Save"}
                                 </button>
                             </div>
                         {:else}
-                            <Text type="h" size={24} mobileSize={16} weight="medium">{formatBirthday(identity.birthday || "")}</Text>
+                            <Text type="h" size={24} mobileSize={16} weight="medium">{flow.formatBirthday(identity.birthday || "")}</Text>
                         {/if}
                     </div>
 
-                    <button 
-                        onclick={() => { editing.birthday = !editing.birthday }} 
-                        class="w-full md:w-auto md:aspect-square flex-grow h-12 md:h-full p-3 md:p-[40px] bg-[#111111] hover:bg-[#202020] transition-colors duration-300 cursor-pointer rounded-[16px] md:rounded-[32px] flex items-center justify-center" 
+                    <button
+                        onclick={() => { flow.editing.birthday = !flow.editing.birthday }}
+                        class="w-full md:w-auto md:aspect-square flex-grow h-12 md:h-full p-3 md:p-[40px] bg-[#111111] hover:bg-[#202020] transition-colors duration-300 cursor-pointer rounded-[16px] md:rounded-[32px] flex items-center justify-center"
                         aria-label="edit birthday"
                     >
                         {@render editIcon()}
@@ -593,31 +267,31 @@
 
         <!-- Delete Identity Section -->
         {#if !identity.isPrimary}
-            {#if showDeleteConfirm}
+            {#if flow.showDeleteConfirm}
                 <div class="p-3 md:p-[30px] bg-[#111111] rounded-[16px] md:rounded-[32px] flex flex-col gap-3 md:gap-[15px]">
                     <Text type="h" size={18} color="#E14747">Delete this identity?</Text>
                     <p class="text-[#878787] text-sm md:text-[14px]">This action cannot be undone. All data associated with this identity will be permanently removed.</p>
                     <div class="flex gap-2 md:gap-[10px] mt-2 md:mt-[10px]">
-                        <button 
+                        <button
                             class="flex-1 py-3 md:py-[15px] bg-[#E14747] hover:bg-[#C73E3E] text-white rounded-[16px] text-[14px] font-semibold transition-colors"
-                            onclick={deleteIdentity}
-                            disabled={isDeleting}
+                            onclick={flow.deleteIdentity}
+                            disabled={flow.isDeleting}
                         >
-                            {isDeleting ? "Deleting..." : "Delete"}
+                            {flow.isDeleting ? "Deleting..." : "Delete"}
                         </button>
-                        <button 
+                        <button
                             class="flex-1 py-3 md:py-[15px] bg-[#222222] hover:bg-[#333333] text-white rounded-[16px] text-[14px] font-semibold transition-colors"
-                            onclick={() => showDeleteConfirm = false}
-                            disabled={isDeleting}
+                            onclick={() => flow.showDeleteConfirm = false}
+                            disabled={flow.isDeleting}
                         >
                             Cancel
                         </button>
                     </div>
                 </div>
             {:else}
-                <button 
+                <button
                     class="w-full p-4 md:p-[30px] bg-[#111111] hover:bg-[#1a1a1a] rounded-[24px] md:rounded-[32px] text-[#878787] hover:text-[#E14747] transition-colors flex items-center justify-between group"
-                    onclick={() => showDeleteConfirm = true}
+                    onclick={() => flow.showDeleteConfirm = true}
                 >
                     <div class="flex items-center gap-3 md:gap-[15px]">
                         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" class="opacity-60 group-hover:opacity-100 transition-opacity">
@@ -635,11 +309,11 @@
     {/if}
 </div>
 
-{#if showEmailVerificationModal && identity && emailIsPending}
+{#if flow.showEmailVerificationModal && identity && flow.emailIsPending}
     <div
         class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4"
-        onclick={() => showEmailVerificationModal = false}
-        onkeydown={(e) => e.key === "Escape" && (showEmailVerificationModal = false)}
+        onclick={() => flow.showEmailVerificationModal = false}
+        onkeydown={(e) => e.key === "Escape" && (flow.showEmailVerificationModal = false)}
         role="dialog"
         aria-modal="true"
         tabindex="-1"
@@ -667,17 +341,17 @@
                         inputmode="numeric"
                         maxlength="6"
                         class="w-full min-w-0 bg-transparent border-b border-[#333333] pb-[10px] text-white text-lg md:text-[24px] focus:outline-none"
-                        bind:value={verificationCode}
+                        bind:value={flow.verificationCode}
                         placeholder="Enter code"
                         autocomplete="one-time-code"
                     />
                     <button
                         type="button"
                         class="w-full sm:w-auto sm:self-end shrink-0 px-5 py-3 bg-[#FFFFFF] hover:bg-[#E0E0E0] text-[#090909] rounded-full text-[16px] font-medium disabled:opacity-60"
-                        onclick={verifyEmail}
-                        disabled={isSaving || verificationCode.trim().length !== 6}
+                        onclick={flow.verifyEmail}
+                        disabled={flow.isSaving || flow.verificationCode.trim().length !== 6}
                     >
-                        {isSaving ? "..." : "Verify"}
+                        {flow.isSaving ? "..." : "Verify"}
                     </button>
                 </div>
             </div>
@@ -686,8 +360,8 @@
                 <button
                     type="button"
                     class="flex-1 py-3 md:py-[15px] bg-[#FFFFFF] text-[#090909] font-semibold rounded-[16px] hover:bg-[#E0E0E0] transition-colors disabled:opacity-60"
-                    onclick={resendEmailVerification}
-                    disabled={isSaving}
+                    onclick={flow.resendEmailVerification}
+                    disabled={flow.isSaving}
                 >
                     Resend code
                 </button>
@@ -695,19 +369,19 @@
                     type="button"
                     class="flex-1 py-3 md:py-[15px] bg-[#111111] text-[#FFFFFF] font-semibold rounded-[16px] hover:bg-[#202020] transition-colors disabled:opacity-60"
                     onclick={() => {
-                        email = identity.pendingEmail || "";
-                        showEmailVerificationModal = false;
-                        editing.email = true;
+                        flow.email = identity.pendingEmail || "";
+                        flow.showEmailVerificationModal = false;
+                        flow.editing.email = true;
                     }}
-                    disabled={isSaving}
+                    disabled={flow.isSaving}
                 >
                     Change email
                 </button>
                 <button
                     type="button"
                     class="flex-1 py-3 md:py-[15px] bg-[#111111] text-[#878787] font-semibold rounded-[16px] hover:bg-[#202020] hover:text-[#FFFFFF] transition-colors disabled:opacity-60"
-                    onclick={clearEmail}
-                    disabled={isSaving}
+                    onclick={flow.clearEmail}
+                    disabled={flow.isSaving}
                 >
                     Clear
                 </button>

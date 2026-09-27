@@ -29,7 +29,7 @@ const credentialBase = {
   id: credentialId,
   rawId: credentialId,
   type: z.literal("public-key"),
-  authenticatorAttachment: z.enum(["cross-platform", "platform"]).nullable().optional(),
+  authenticatorAttachment: z.enum(["cross-platform", "platform"]).nullish().transform((value) => value ?? undefined),
   clientExtensionResults: credentialExtensions,
 };
 
@@ -39,7 +39,7 @@ export const authenticationCredentialSchema = z.object({
     clientDataJSON: encodedBytes(64 * 1024),
     authenticatorData: encodedBytes(64 * 1024),
     signature: encodedBytes(64 * 1024),
-    userHandle: encodedBytes(64 * 1024).nullable().optional(),
+    userHandle: encodedBytes(64 * 1024).nullish().transform((value) => value ?? undefined),
   }),
 });
 

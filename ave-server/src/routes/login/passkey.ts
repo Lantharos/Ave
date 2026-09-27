@@ -4,15 +4,15 @@ import { Hono } from "hono";
 import { z } from "zod";
 import { authenticationCredentialSchema } from "../../contracts/security/webauthn";
 import { db, passkeys, sessions } from "../../db";
-import { runInBackground } from "../../lib/background";
-import { recordActivityLog } from "../../lib/background-events";
-import { deleteChallenge, getChallenge } from "../../lib/challenge-store";
-import { generateSessionToken, hashSessionToken } from "../../lib/crypto";
-import { verifyPasskeyAuthentication, type AuthenticatorTransport } from "../../lib/heavy-services";
-import { listIdentitiesForOwner } from "../../lib/identity-serialization";
-import { enforceRateLimits, ipRateLimit, subjectRateLimit } from "../../lib/rate-limit";
-import { setSessionCookie } from "../../lib/session-cookie";
-import { extractAllowedWebauthnOrigin } from "../../lib/webauthn-origin";
+import { runInBackground } from "../../lib/platform/background";
+import { recordActivityLog } from "../../lib/platform/background-events";
+import { deleteChallenge, getChallenge } from "../../lib/auth/challenge-store";
+import { generateSessionToken, hashSessionToken } from "../../lib/identity/crypto";
+import { verifyPasskeyAuthentication, type AuthenticatorTransport } from "../../lib/auth/webauthn";
+import { listIdentitiesForOwner } from "../../lib/identity/identity-serialization";
+import { enforceRateLimits, ipRateLimit, subjectRateLimit } from "../../lib/platform/rate-limit";
+import { setSessionCookie } from "../../lib/auth/session-cookie";
+import { extractAllowedWebauthnOrigin } from "../../lib/auth/webauthn-origin";
 import { getOrCreateDevice, notifyAccountLoginEvent, type Bindings } from "./shared";
 
 const app = new Hono<{ Bindings: Bindings }>();
@@ -63,7 +63,7 @@ app.post("/passkey", zValidator("json", z.object({
   if (!expectedOrigin) return c.json({ error: "Invalid credential origin" }, 400);
 
   try {
-    const verification = await verifyPasskeyAuthentication(c.env.HEAVY_SERVICES, {
+    const verification = await verifyPasskeyAuthentication({
       response: credential,
       expectedChallenge: storedChallenge.challenge,
       expectedOrigin,
@@ -126,7 +126,6 @@ app.post("/passkey", zValidator("json", z.object({
     });
 
     runInBackground(c, notifyAccountLoginEvent(
-      c.env.HEAVY_SERVICES,
       storedChallenge.userId,
       {
         method: "passkey",

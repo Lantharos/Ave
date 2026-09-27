@@ -17,7 +17,7 @@ import {
   authorizationHasE2eeMaterial,
   resolveE2eeAuthorization,
   type E2eeMode,
-} from "$lib/surfaces/web/lib/e2ee-scopes";
+} from "$lib/surfaces/web/lib/oauth/e2ee-scopes";
 
 type AppEncryptionSupport = {
   supportsE2ee: boolean;

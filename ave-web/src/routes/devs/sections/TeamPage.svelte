@@ -35,8 +35,8 @@
   const activeMembers = $derived(workspace.members.filter((member) => member.status === "active"));
   const invites = $derived(workspace.members.filter((member) => member.status === "invited"));
   const workspaceAvatar = $derived(workspace.logoUrl || null);
-  const canManageProfile = $derived(workspace.signingAuthority && (workspace.role === "owner" || workspace.scopes.includes("manage_org")));
-  const canManageMembers = $derived(workspace.signingAuthority && (workspace.role === "owner" || workspace.scopes.includes("manage_identities")) && workspace.role !== "viewer");
+  const canManageProfile = $derived(workspace.role === "owner");
+  const canManageMembers = $derived(workspace.role !== "viewer");
   const assignableRoles = $derived<Exclude<WorkspaceRole, "owner">[]>(workspace.role === "owner" ? ["admin", "viewer"] : ["viewer"]);
 </script>
 
