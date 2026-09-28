@@ -2,7 +2,7 @@ import { ApiError, createAveApiClient } from "$lib/infrastructure/http/ave-api-c
 import { saveBookmark } from "$lib/infrastructure/http/bookmark-store";
 import { resolveApiBase } from "$lib/infrastructure/http/origins";
 
-export const API_BASE = resolveApiBase();
+const API_BASE = resolveApiBase();
 
 const client = createAveApiClient({
   baseUrl: API_BASE,

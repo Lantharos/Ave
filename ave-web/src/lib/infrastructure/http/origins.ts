@@ -13,9 +13,3 @@ export function resolveApiBase(): string {
   return "https://api.aveid.net";
 }
 
-export function resolveAveOrigin(): string {
-  const configured = import.meta.env.VITE_AVE_ORIGIN?.trim();
-  if (configured) return trimTrailingSlash(configured);
-  if (typeof window !== "undefined" && isLocalHostname(window.location.hostname)) return "http://localhost:5173";
-  return "https://aveid.net";
-}

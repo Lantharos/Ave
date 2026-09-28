@@ -261,6 +261,5 @@ export const auth = createAuthStore();
 // Derived stores for convenience
 export const isAuthenticated = derived(auth, ($auth) => $auth.isAuthenticated);
 export const isLoading = derived(auth, ($auth) => $auth.isLoading);
-export const currentIdentity = derived(auth, ($auth) => $auth.currentIdentity);
 export const identities = derived(auth, ($auth) => $auth.identities);
 export const isReadOnly = derived(auth, ($auth) => $auth.isReadOnly);

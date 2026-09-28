@@ -90,14 +90,6 @@ export function normalizeOauthTokenPayload(input: unknown): unknown {
   };
 }
 
-export function getWebBase(): string {
-  return process.env.RP_ORIGIN || "https://aveid.net";
-}
-
-export function getApiBase(): string {
-  return process.env.OIDC_DISCOVERY_BASE || "https://api.aveid.net";
-}
-
 export function hasScope(scope: string, requested: string): boolean {
   return parseScopes(scope).includes(normalizeScopeToken(requested));
 }
@@ -114,10 +106,3 @@ export async function resolveAccessTokenRecord(token: string): Promise<AccessTok
   return getAccessToken(jwtPayload.jti);
 }
 
-export async function resolveOauthAppForAccessRecord(record: Pick<AccessTokenRecord, "appId">) {
-  const lookup = record.appId.startsWith("app_")
-    ? eq(oauthApps.clientId, record.appId)
-    : eq(oauthApps.id, record.appId);
-  const [oauthApp] = await db.select().from(oauthApps).where(lookup).limit(1);
-  return oauthApp ?? null;
-}

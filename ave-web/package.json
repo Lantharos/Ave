@@ -29,7 +29,6 @@
   },
   "dependencies": {
     "@lucide/svelte": "^1.48.0",
-    "@noble/ed25519": "^3.2.0",
     "@simplewebauthn/browser": "^14.0.0",
     "@tanstack/svelte-query": "^6.3.0",
     "ogl": "^1.0.11"

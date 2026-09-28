@@ -58,26 +58,3 @@ export function isRedirectUriAllowedForApp(app: Pick<OAuthApp, "redirectUris" | 
   return redirectUris.includes(redirectUri) || (!!app.developmentMode && (isLoopbackRedirectUri(redirectUri) || isExpoGoRedirectUri(redirectUri)));
 }
 
-export function isOriginAllowedForApp(app: Pick<OAuthApp, "redirectUris" | "developmentMode" | "websiteUrl">, origin: string): boolean {
-  if (app.developmentMode && isLoopbackRedirectUri(origin)) {
-    return true;
-  }
-
-  const allowedOrigins = new Set<string>();
-
-  for (const redirectUri of (app.redirectUris || []) as string[]) {
-    try {
-      allowedOrigins.add(new URL(redirectUri).origin);
-    } catch {
-    }
-  }
-
-  if (app.websiteUrl) {
-    try {
-      allowedOrigins.add(new URL(app.websiteUrl).origin);
-    } catch {
-    }
-  }
-
-  return allowedOrigins.has(origin);
-}

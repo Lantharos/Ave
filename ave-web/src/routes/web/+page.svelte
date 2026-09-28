@@ -84,10 +84,10 @@
         </h1>
 
         <h2 class="font-medium text-[#D3D3D3] text-lg md:text-[36px]">
-            Not another login. Not another password. Just <span class="italic underline">you</span>.
+            Not another login. Not another password. Just <span class="italic underline underline-offset-4">you</span>.
         </h2>
 
-        <p class="font-normal text-[#878787] text-base md:text-[36px] mt-8 md:mt-[10%] max-w-full md:max-w-[80%]">
+        <p class="font-normal text-[#878787] text-base leading-relaxed md:text-[24px] mt-8 md:mt-16 max-w-full md:max-w-[680px]">
             No tracking, no profiles, no middlemen. Your passkey proves who you are and unlocks the keys that keep your data encrypted in the apps you trust. Ave never sees them.
         </p>
     </div>

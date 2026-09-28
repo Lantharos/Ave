@@ -52,31 +52,6 @@ export function createAuthorizationCodeWrite(id: string, value: AuthorizationCod
     });
 }
 
-export async function getAuthorizationCode(id: string): Promise<{
-  value: AuthorizationCodeRecord | null;
-  expired: boolean;
-}> {
-  const [row] = await db
-    .select()
-    .from(oauthAuthorizationCodes)
-    .where(eq(oauthAuthorizationCodes.id, id))
-    .limit(1);
-  const record = row
-    ? {
-        value: { ...row.value, authorizationId: row.authorizationId ?? undefined } as AuthorizationCodeRecord,
-        expiresAt: new Date(row.expiresAt).getTime(),
-      } satisfies StoredOAuthRecord<AuthorizationCodeRecord>
-    : null;
-  if (!record) {
-    return { value: null, expired: false };
-  }
-  if (Date.now() > record.expiresAt) {
-    await deleteAuthorizationCode(id);
-    return { value: null, expired: true };
-  }
-  return { value: record.value, expired: false };
-}
-
 export async function consumeAuthorizationCode(id: string): Promise<{
   value: AuthorizationCodeRecord | null;
   expired: boolean;
@@ -98,10 +73,6 @@ export async function consumeAuthorizationCode(id: string): Promise<{
     return { value: null, expired: true };
   }
   return { value: record.value, expired: false };
-}
-
-async function deleteAuthorizationCode(id: string): Promise<void> {
-  await db.delete(oauthAuthorizationCodes).where(eq(oauthAuthorizationCodes.id, id));
 }
 
 export function createAccessTokenWrite(id: string, value: AccessTokenRecord) {

@@ -22,9 +22,7 @@ Keep applied D1 migrations. Rehearse changes against an export and check retaine
 
 D1 enforces foreign keys during migrations and ignores `PRAGMA foreign_keys = OFF`, so dropping a table also runs its `ON DELETE CASCADE` actions. Never let a migration drop or rebuild a table that other rows still reference. Move the referencing rows aside first, the way `0031_slim_ave.sql` rebuilds `organizations`, and rehearse on a local copy before applying remotely.
 
-`0031_slim_ave.sql` removes delegation, signing, analytics, banner and team role data. Deploy the API first and apply the migration immediately after. The previous API reads the removed columns, and the new API cannot create teams until `organizations.owner_user_id` is gone. `oauth_apps.owner_id` stays in the table with every value cleared, because rebuilding `oauth_apps` would cascade into authorizations and tokens.
-
-`0032_drop_e2ee_app_flag.sql` drops `oauth_apps.supports_e2ee`. Encryption is chosen per sign-in with an `e2ee:*` scope, so apps must request one before this is deployed. Apply it together with `0031`.
+`oauth_apps.owner_id` is still in the table with every value cleared, because rebuilding `oauth_apps` would cascade into authorizations and tokens.
 
 Do not roll back to a Worker that selects removed columns after a cleanup migration. Use a forward fix, or restore the matching database and Worker together during a controlled recovery.
 

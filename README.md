@@ -44,7 +44,6 @@ Configure the frontend's local environment when using the local API:
 ```env
 VITE_API_URL="http://localhost:3000"
 VITE_WS_URL="ws://localhost:3000/ws"
-VITE_AVE_ORIGIN="http://localhost:5173"
 ```
 
 The local frontend serves the product at `/` and the developer portal at `/devs`. API development uses port 3000.
