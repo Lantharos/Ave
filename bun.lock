@@ -52,7 +52,7 @@
     },
     "sdks/ave-embed": {
       "name": "@ave-id/embed",
-      "version": "0.6.0",
+      "version": "0.7.0",
     },
     "sdks/ave-sdk": {
       "name": "@ave-id/sdk",
