@@ -1,193 +1,81 @@
 ---
 title: "@ave-id/sdk"
-description: "Typed helpers for Quick Ave, OAuth, Connector delegation, Signing, and framework session integrations."
+description: "TypeScript helpers for Ave sign-in, encryption keys, token verification, and session management."
 ---
 
 ```bash
 bun add @ave-id/sdk
 ```
 
-The SDK is split into focused pages. Start with the surface you need:
+The package has no dependencies. It runs in browsers, Workers, Node, Bun, and Expo.
 
 <CardGroup cols={3}>
-  <Card title="Quick Ave" icon="bolt">
-    `startQuickSignIn`, `handleQuickCallback`, `getQuickIdentity`.
+  <Card title="App encryption" icon="lock" href="/sdk/sdk-identity-keys">
+    Encryption scopes, key extraction, public-key lookup, and encrypting for other users.
   </Card>
   <Card title="OAuth and PKCE" icon="key" href="/sdk/sdk-oauth">
-    `buildAuthorizeUrl`, `exchangeCode`, `refreshToken`, `startPkceLogin`, server helpers.
+    `startPkceLogin`, `completeOAuthCallback`, `exchangeCode`, `verifyJwt`, and server helpers.
   </Card>
   <Card title="Ave Session" icon="rotate" href="/guides/ave-session-and-tokens">
-    `AveSession`, storage adapters, Convex helpers, Svelte helpers, refresh coordination.
-  </Card>
-  <Card title="Connector" icon="link" href="/sdk/sdk-connector">
-    `buildConnectorUrl`, `exchangeDelegatedToken`, `startConnectorFlow`, delegation management.
-  </Card>
-  <Card title="Signing" icon="pen-nib" href="/sdk/sdk-signing">
-    `createSignatureRequest`, `getSignatureStatus`, `verifySignature`, `openSigningPopup`.
-  </Card>
-  <Card title="Identity keys" icon="lock" href="/sdk/sdk-identity-keys">
-    `getIdentityKey`, `encryptPayloadForHandle`, `decryptWrappedPayload`, URL-safe payload params.
+    Token and key persistence, refresh coordination, and Convex, Svelte, and Expo adapters.
   </Card>
 </CardGroup>
 
----
+## Import paths
 
-## Quick Ave
+| Import | Contents | Runtime |
+|---|---|---|
+| `@ave-id/sdk` | PKCE and OAuth helpers, `AveSession`, storage adapters, encryption helpers, `verifyJwt` | Any |
+| `@ave-id/sdk/client` | `startPkceLogin`, `finishPkceLogin`, `completeOAuthCallback` | Browser |
+| `@ave-id/sdk/server` | `verifyAveIdToken`, `verifyAveIdTokenFromAuthHeader`, `exchangeCodeServer`, `refreshTokenServer` | Server |
+| `@ave-id/sdk/app-key` | Fragment parsing and stripping helpers | Any |
+| `@ave-id/sdk/app-encryption` | Public-key lookup, `encryptForAppUser`, `decryptFromAppSender` | Any with Web Crypto |
+| `@ave-id/sdk/session` | `AveSession` and `snapshotFromTokenResponse` | Any |
+| `@ave-id/sdk/session-storage` | `createLocalStorageAdapter`, `createMemoryStorage`, `createSecureStoreAdapter` | Any |
+| `@ave-id/sdk/convex` | `wireAveSessionToConvex` | Any |
+| `@ave-id/sdk/svelte` | `aveSessionToStore` | Browser |
+| `@ave-id/sdk/expo-session` | `configureAveSdkForExpo`, `completeExpoOAuthCallback`, `AveSession`, SecureStore adapter | Expo |
+| `@ave-id/sdk/expo-lifecycle` | `onExpoAppForegroundRefresh` | Expo |
+| `@ave-id/sdk/types` | `TokenResponse`, `UserInfo`, JWT claim types | Types |
 
-No dashboard. No client IDs. No environment variables. No redirect configuration.
-
-**Protect a page**:
-
-```ts
-import { getQuickIdentity, startQuickSignIn } from "@ave-id/sdk/client";
-
-const user = getQuickIdentity();
-if (!user) await startQuickSignIn();
-```
-
-**Callback route** — create a page at `/ave/callback` that does exactly one thing:
-
-```ts
-import { handleQuickCallback } from "@ave-id/sdk/client";
-
-await handleQuickCallback();
-```
-
-That's it. Quick Ave derives a client ID from your origin, handles PKCE, stores the token locally, and redirects back to where the user was. Nothing to register.
-
-<Tip>
-  Evaluating whether this is easier than Clerk or Auth0? It is — because there's no dashboard step at all. Ship a working prototype in under 2 minutes, then [upgrade to the full OIDC flow](/guides/quick-ave-to-standard) when you're ready for refresh tokens, app branding, or confidential flows.
-</Tip>
-
-### `startQuickSignIn(options?)`
-
-Generates PKCE parameters, saves the return-to URL, and redirects the user to Ave.
+## Sign in with an encryption key
 
 ```ts
-async function startQuickSignIn(options?: {
-  issuer?: string;       // default: "https://aveid.net"
-  scope?: string;        // default: "openid profile email"
-  redirectUri?: string;  // default: <origin>/ave/callback
-  returnTo?: string;     // default: current URL
-}): Promise<void>
+import { AveSession, createLocalStorageAdapter } from "@ave-id/sdk";
+import { completeOAuthCallback, startPkceLogin } from "@ave-id/sdk/client";
+
+const oauth = { clientId: "YOUR_CLIENT_ID", redirectUri: "https://yourapp.com/callback" };
+const session = new AveSession({ oauth, storage: createLocalStorageAdapter() });
+
+// Sign-in button
+await startPkceLogin({ ...oauth, scope: "openid profile offline_access e2ee:symmetric" });
+
+// Callback page
+await completeOAuthCallback(session, oauth);
+const appKeyBase64 = session.getAppKeyBase64();
 ```
 
----
-
-### `handleQuickCallback(options?)`
-
-Convenience wrapper: calls `finishQuickSignIn`, then redirects the user to where they were before `startQuickSignIn` was called.
+## Verify tokens on your server
 
 ```ts
-async function handleQuickCallback(options?: {
-  issuer?: string;
-  redirectUri?: string;  // must match the redirectUri used in startQuickSignIn
-  fallbackPath?: string; // where to go if no return-to is stored (default: "/")
-}): Promise<QuickIdentity | null>
+import { verifyAveIdTokenFromAuthHeader } from "@ave-id/sdk/server";
+
+const principal = await verifyAveIdTokenFromAuthHeader(request.headers.get("authorization"), {
+  clientId: process.env.AVE_CLIENT_ID!,
+});
 ```
 
----
+`principal.subject` is the identity ID. `principal.claims` holds the verified `id_token` claims.
 
-### `finishQuickSignIn(options?)`
+## Expo
 
-Exchanges the authorization code that Ave appended to your callback URL. Returns `null` when no `code` param is present — safe to call on every page load.
+Expo native has no Web Crypto digest. Configure `expo-crypto` once at startup:
 
 ```ts
-async function finishQuickSignIn(options?: {
-  issuer?: string;
-  redirectUri?: string;
-  url?: string;          // override URL to parse (default: window.location.href)
-}): Promise<QuickIdentity | null>
+import * as ExpoCrypto from "expo-crypto";
+import { configureAveSdkForExpo } from "@ave-id/sdk/expo-session";
+
+configureAveSdkForExpo(ExpoCrypto);
 ```
 
----
-
-### `getQuickIdentity(storageKey?)`
-
-Returns the cached `QuickIdentity` from `localStorage`, or `null` when not signed in or the token has expired locally. Makes no network request.
-
-```ts
-function getQuickIdentity(storageKey?: string): QuickIdentity | null
-```
-
----
-
-### `clearQuickIdentity(storageKey?)`
-
-Removes the stored `QuickIdentity` (sign-out).
-
-```ts
-function clearQuickIdentity(storageKey?: string): void
-```
-
----
-
-### `checkQuickSession(options?)`
-
-Validates the current token against the Ave server. Use this when you need a real-time check rather than relying on the local expiry.
-
-```ts
-async function checkQuickSession(options?: {
-  issuer?: string;
-  storageKey?: string;
-  token?: string;  // supply a token directly instead of reading from storage
-}): Promise<{
-  status: "active" | "login_required" | "unsupported";
-  reason?: string;
-}>
-```
-
----
-
-### `startQuickSessionMonitor(options?)`
-
-Starts a periodic `checkQuickSession` loop. Fires `onLoginRequired` and stops itself when the session is no longer valid.
-
-```ts
-function startQuickSessionMonitor(options?: {
-  issuer?: string;
-  storageKey?: string;
-  intervalMs?: number;  // default: 60 000
-  onLoginRequired?: (result: { reason?: string }) => void;
-  onError?: (error: Error) => void;
-}): { stop: () => void }
-```
-
----
-
-### `QuickIdentity`
-
-```ts
-interface QuickIdentity {
-  userId: string;        // Ave identity UUID
-  handle?: string;       // @handle
-  displayName?: string;
-  email?: string;
-  avatarUrl?: string;
-  /**
-   * JWT access token (`access_token_jwt`) for Ave APIs.
-   * Its audience is Ave's resource audience, not your app. Use `idToken` or
-   * your own session for app API authentication.
-   * Always verify server-side: check `iss`, `aud`, `exp`, and the JWT signature
-   * against the JWKS endpoint before trusting claims.
-   * The JWT payload always contains `quick: true` — Standard-only API
-   * middleware can check for the absence of this claim to reject Quick tokens.
-   * Upgrade to Standard Ave for confidential flows.
-   */
-  token: string;
-  /**
-   * OIDC id_token — pass this to Convex (`convex.setAuth`) or any service
-   * that validates OIDC identity. Only present when `openid` scope was
-   * requested (the default). `aud` equals your Quick Ave clientId:
-   * `"origin:https://yourapp.com"`.
-   */
-  idToken?: string;
-  expiresIn: number;     // seconds until expiry
-  receivedAt: number;    // Unix ms when the token was stored
-}
-```
-
-<Note>
-  For a full walkthrough including Convex wiring, session monitoring, and the upgrade path see the [Quick Ave guide](/guides/quick-ave).
-</Note>
-
+See [Expo with AuthSession](/guides/expo-auth-session).

@@ -108,7 +108,7 @@ Register that exact redirect URI in the Ave developer portal for your app.
 
 ## Ave Session + SecureStore (single-flight refresh)
 
-For **`offline_access`**, token refresh, and optional **`#app_key`** (E2EE) merged from the redirect URL string:
+For **`offline_access`**, token refresh, and encryption keys merged from the redirect URL fragment:
 
 ```ts
 import * as ExpoCrypto from "expo-crypto";
@@ -132,7 +132,7 @@ const session = new AveSession({
   crossTabSync: false,
 });
 
-// After AuthSession success — pass full URL when E2EE may include #app_key on web:
+// After AuthSession success — pass the full redirect URL so encryption keys in its fragment are merged:
 await completeExpoOAuthCallback(
   session,
   { clientId: CLIENT_ID, redirectUri },

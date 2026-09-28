@@ -40,7 +40,6 @@ export interface AveJwtClaims extends JwtPayload {
   cid?: string;
   sid?: string;
   uid?: string;
-  quick?: boolean;
 }
 
 export interface AveIdTokenClaims extends JwtPayload {
@@ -88,7 +87,7 @@ export interface TokenResponse {
   access_token_jwt: string;
   id_token?: string;
   refresh_token?: string;
-  /** Plaintext app encryption key (e.g. FedCM) or after merging `#app_key` from redirect fragment */
+  /** Plaintext app encryption key after merging `#app_key` from the redirect fragment */
   app_key?: string;
   app_key_old?: string;
   app_public_key?: string;
@@ -109,11 +108,6 @@ export interface TokenResponse {
   user_id?: string;
 }
 
-export interface FedCmTokenResponse extends TokenResponse {
-  app_key?: string;
-  encryptedAppKey?: string;
-}
-
 export interface UserInfo {
   sub: string;
   name?: string;
@@ -122,51 +116,6 @@ export interface UserInfo {
   picture?: string;
   iss?: string;
   user_id?: string;
-}
-
-// Ave Signing types
-export interface SignatureRequest {
-  requestId: string;
-  expiresAt: string;
-  publicKey: string;
-}
-
-export interface SignatureResult {
-  status: "signed" | "denied" | "expired" | "pending";
-  signature?: string;
-  resolvedAt?: string;
-}
-
-export interface SigningConfig {
-  clientId: string;
-  clientSecret: string;
-  issuer?: string;
-}
-
-export interface DelegationTokenResponse {
-  access_token: string;
-  token_type: "Bearer";
-  expires_in: number;
-  scope: string;
-  audience: string;
-  target_resource: string;
-  communication_mode: "user_present" | "background";
-}
-
-export interface DelegationGrant {
-  id: string;
-  createdAt: string;
-  updatedAt: string;
-  revokedAt?: string | null;
-  communicationMode: "user_present" | "background";
-  scope: string;
-  sourceAppClientId: string;
-  sourceAppName: string;
-  sourceAppIconUrl?: string;
-  sourceAppWebsiteUrl?: string;
-  targetResourceKey: string;
-  targetResourceName: string;
-  targetAudience: string;
 }
 
 export interface AppEncryptionUserRecord {
@@ -181,17 +130,4 @@ export interface AppEncryptionUserRecord {
 export interface AppEncryptedPayload {
   encryptedPayload: string;
   senderPublicKey: string;
-}
-
-export interface IdentityPublicKeyRecord {
-  handle: string;
-  publicKey: string;
-  createdAt: string;
-}
-
-export interface IdentityKeyEnvelope {
-  hasKey: boolean;
-  publicKey?: string | null;
-  encryptedPrivateKey?: string | null;
-  createdAt?: string | null;
 }

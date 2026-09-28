@@ -27,10 +27,21 @@ Keep billing, invitations, project permissions, and membership changes in your a
 
 One Ave account may contain multiple identities. Each identity has a different `sub`. Treat these as separate app principals unless your product explicitly supports account linking. Require authenticated proof before linking identities; do not merge accounts based on matching email or display name.
 
+## Encrypted workspaces
+
+With `e2ee:asymmetric`, a workspace can have its own symmetric key that only members hold:
+
+1. The member who creates the workspace generates a random AES-256 workspace key on their device.
+2. For each member, wrap the workspace key with `encryptForAppUser(workspaceKey, member.publicKey)` and store the envelope with the membership row.
+3. A member unwraps their envelope with `decryptFromAppSender(envelope, session.getAppPrivateKeyBase64()!)` and uses the workspace key for workspace data.
+4. To add someone, an existing member wraps the key for the new member's public key. To remove someone, rotate the workspace key and re-wrap it for the remaining members.
+
+Your server stores envelopes and ciphertext, and enforces membership on every request, but never holds a workspace key. See [End-to-end encryption](/guides/end-to-end-encryption) for the SDK calls.
+
 ## OAuth scopes
 
-Scopes authorize your app to obtain specific Ave information or capabilities. For example, `email` requests a verified email address and encryption scopes enable app-key delivery. These scopes do not grant workspace membership or product permissions.
+Scopes authorize your app to obtain specific Ave information or capabilities. For example, `email` requests a verified email address and encryption scopes deliver app keys. These scopes do not grant workspace membership or product permissions.
 
 ## Developer teams
 
-Teams in the Ave developer portal manage OAuth applications and their credentials. These teams are separate from your product's workspaces. Owners manage the team profile and administrators; administrators manage applications and viewer memberships; viewers have read access.
+Teams in the [developer portal](https://devs.aveid.net) own your Ave apps and their credentials. They are separate from your product's workspaces. Add members by the verified email address on their Ave identity. Every member can manage the team's apps, client secrets, members, and team profile, and a team always keeps at least one member. Each app in the portal lists the identities that have authorized it.

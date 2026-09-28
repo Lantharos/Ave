@@ -4,10 +4,7 @@ import { db, oauthApps } from "../../../db";
 import { isScopeAllowedForApp } from "../../../lib/identity/e2ee-scopes";
 import { consumeAuthorizationCode } from "../../../lib/oauth/oauth-store";
 import {
-  buildQuickApp,
-  getQuickOrigin,
   isClientSecretValid,
-  isQuickClient,
   isValidPkceCodeVerifier,
   parseScopes,
   timingSafeEqualString,
@@ -28,7 +25,7 @@ export async function handleAuthorizationCode(c: Context, payload: Authorization
     }, 400);
   }
   const authCode = authCodeResult.value;
-  if (!isQuickClient(clientId) && !authCode.authorizationId) {
+  if (!authCode.authorizationId) {
     return c.json({ error: "invalid_grant", error_description: "App authorization was revoked" }, 400);
   }
 
@@ -36,50 +33,16 @@ export async function handleAuthorizationCode(c: Context, payload: Authorization
     return c.json({ error: "invalid_grant", error_description: "Redirect URI mismatch" }, 400);
   }
 
-  // Find (or derive) the OAuth app
-  let oauthApp: ReturnType<typeof buildQuickApp> | typeof oauthApps.$inferSelect;
-  if (isQuickClient(clientId)) {
-    // Quick Auth: PKCE is mandatory — it must have been set at authorize time
-    if (!authCode.codeChallenge) {
-      return c.json({ error: "invalid_request", error_description: "PKCE is required for Quick Ave" }, 400);
-    }
-    // Validate that the redirect_uri origin matches the client_id origin
-    // (mirrors the check performed at authorize time)
-    const quickOrigin = getQuickOrigin(clientId);
-    if (!quickOrigin) {
-      return c.json({ error: "invalid_client", error_description: "Invalid client_id" }, 400);
-    }
-    let redirectOrigin: string;
-    try { redirectOrigin = new URL(redirectUri).origin; } catch (err) {
-      if (!(err instanceof TypeError)) throw err;
-      return c.json({ error: "invalid_grant", error_description: "Invalid redirect_uri" }, 400);
-    }
-    if (redirectOrigin !== quickOrigin) {
-      return c.json({ error: "invalid_grant", error_description: "redirect_uri origin does not match client_id" }, 400);
-    }
-    // When the browser sends an Origin header (always present for cross-origin fetch),
-    // it must match the client_id origin — this cannot be forged by browser code.
-    const requestOrigin = c.req.header("Origin");
-    if (requestOrigin && requestOrigin !== quickOrigin) {
-      return c.json({ error: "invalid_client", error_description: "Request origin does not match client_id" }, 400);
-    }
-    oauthApp = buildQuickApp(clientId);
-  } else {
-    const [app] = await db
-      .select()
-      .from(oauthApps)
-      .where(eq(oauthApps.clientId, clientId))
-      .limit(1);
+  const [oauthApp] = await db
+    .select()
+    .from(oauthApps)
+    .where(eq(oauthApps.clientId, clientId))
+    .limit(1);
 
-    if (!app) {
-      return c.json({ error: "invalid_client", error_description: "Client not found" }, 400);
-    }
-    oauthApp = app;
+  if (!oauthApp) {
+    return c.json({ error: "invalid_client", error_description: "Client not found" }, 400);
   }
 
-  // Verify the client presenting the code is the same one that received it at
-  // authorize time. For Quick clients oauthApp.id === clientId; for standard
-  // clients oauthApp.id is the database UUID stored in the auth code.
   if (oauthApp.id !== authCode.appId) {
     return c.json({ error: "invalid_grant", error_description: "client_id does not match authorization" }, 400);
   }
@@ -142,7 +105,6 @@ export async function handleAuthorizationCode(c: Context, payload: Authorization
   const response = await buildTokenResponseFromAuthorizationCode({
     authCode,
     oauthApp,
-    clientId,
     redirectUri,
     issueRefreshToken: clientSecretAuthenticated || pkceAuthenticated,
   });

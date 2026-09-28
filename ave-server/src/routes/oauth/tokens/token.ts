@@ -4,7 +4,6 @@ import { enforceNativeRateLimits, getClientIp, ipRateLimit, subjectRateLimit } f
 import { handleAuthorizationCode } from "./authorization-code";
 import { handleRefreshToken } from "./refresh-token";
 import { oauthTokenRequestSchema } from "./token-schema";
-import { handleTokenExchange } from "./token-exchange";
 
 const app = new Hono();
 
@@ -27,8 +26,6 @@ app.post("/token", zValidator("json", oauthTokenRequestSchema), async (c) => {
   if (rateLimitResponse) return rateLimitResponse;
 
   switch (payload.grantType) {
-    case "urn:ietf:params:oauth:grant-type:token-exchange":
-      return handleTokenExchange(c, payload);
     case "refresh_token":
       return handleRefreshToken(c, payload);
     case "authorization_code":

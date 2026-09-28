@@ -1,9 +1,9 @@
 ---
 title: "@ave-id/sdk OAuth"
-description: "Standard OAuth / PKCE functions for registered Ave apps. Covers PKCE helpers, buildAuthorizeUrl, exchangeCode, refreshToken, fetchUserInfo, and client/server helpers."
+description: "OAuth and PKCE functions: PKCE helpers, buildAuthorizeUrl, exchangeCode, refreshToken, fetchUserInfo, browser callback helpers, JWT verification, and server helpers."
 ---
 
-These functions are for **registered Ave apps** (apps with a `clientId` from the developer portal). If you haven't registered yet, start with [Quick Ave](/guides/quick-ave) or the [quickstart](/quickstart).
+These functions take the client ID of an app registered at [devs.aveid.net](https://devs.aveid.net). New to Ave? Start with the [quickstart](/quickstart).
 
 ```bash
 bun add @ave-id/sdk
@@ -13,14 +13,15 @@ bun add @ave-id/sdk
 
 | Import | Contents | Runtime |
 |---|---|---|
-| `@ave-id/sdk` | Core OAuth, PKCE helpers, `verifyJwt`, `fetchJwks` | Browser or Node |
-| `@ave-id/sdk/client` | `startPkceLogin`, `finishPkceLogin`, `signIn`, `signInWithFedCm` — browser redirect + FedCM helpers | Browser only |
-| `@ave-id/sdk/expo-session` | `configureAveSdkForExpo`, `completeExpoOAuthCallback`, `AveSession`, SecureStore adapter, `wireAveSessionToConvex` — React Native / Expo (needs `expo-crypto` for PKCE) | Expo |
-| `@ave-id/sdk/next` | `AveSessionProvider`, `useAveSession`, `AveConvexBridge` — Next.js App Router (peer: `react`) | Browser |
-| `@ave-id/sdk/server` | `exchangeCodeServer`, `refreshTokenServer`, `verifyJwt` — uses `clientSecret` | Server only |
+| `@ave-id/sdk` | PKCE helpers, `buildAuthorizeUrl`, `exchangeCode`, `refreshToken`, `fetchUserInfo`, `verifyJwt`, `fetchJwks` | Any |
+| `@ave-id/sdk/client` | `startPkceLogin`, `finishPkceLogin`, `completeOAuthCallback` | Browser |
+| `@ave-id/sdk/server` | `verifyAveIdToken`, `verifyAveIdTokenFromAuthHeader`, `exchangeCodeServer`, `refreshTokenServer` | Server |
+| `@ave-id/sdk/expo-session` | `configureAveSdkForExpo`, `completeExpoOAuthCallback`, `AveSession`, SecureStore adapter | Expo |
+
+See [@ave-id/sdk](/sdk/javascript-sdk) for every import path.
 
 <Warning>
-  Never import from `@ave-id/sdk/server` in browser code. Those functions require your `clientSecret`, which must never be exposed to the client.
+  Never use `exchangeCodeServer` or `refreshTokenServer` in browser code. They require your `clientSecret`, which must never be exposed to the client.
 </Warning>
 
 ## Config object
@@ -98,11 +99,12 @@ Builds the URL to redirect users to Ave for sign-in.
 function buildAuthorizeUrl(
   config: AveConfig,
   params?: {
-    scope?: Scope[];
+    scope?: string[];
     state?: string;
     nonce?: string;
     codeChallenge?: string;
     codeChallengeMethod?: "S256" | "plain";
+    prompt?: OAuthPrompt | OAuthPrompt[] | string;
     extraParams?: Record<string, string>;
   }
 ): string
@@ -116,8 +118,8 @@ function buildAuthorizeUrl(
   The registered redirect URI the user will be sent to after authorization.
 </ParamField>
 
-<ParamField path="params.scope" type="Scope[]" default='["openid", "profile", "email"]'>
-  Scopes to request. Available values: `"openid"`, `"profile"`, `"email"`, `"offline_access"`, `"user_id"`.
+<ParamField path="params.scope" type="string[]" default='["openid", "profile", "email"]'>
+  Scopes to request: `"openid"`, `"profile"`, `"email"`, `"offline_access"`, `"user_id"`, and one of `"e2ee:symmetric"` or `"e2ee:asymmetric"`, optionally with `"e2ee:reset"`. See [Scopes and claims](/guides/scopes-and-claims).
 </ParamField>
 
 <ParamField path="params.state" type="string">
@@ -138,7 +140,7 @@ function buildAuthorizeUrl(
 </ParamField>
 
 <ParamField path="params.extraParams" type="object">
-  Extra query parameters on the Ave sign-in URL. Prefer standard OAuth parameters; encryption is requested via `e2ee:*` scopes — see [App encryption](/sdk/sdk-identity-keys).
+  Extra query parameters on the Ave sign-in URL. Encryption is requested with scopes, not extra parameters; see [App encryption](/sdk/sdk-identity-keys).
 </ParamField>
 
 ```ts
@@ -159,7 +161,7 @@ window.location.href = url;
 
 ### `buildSwitchAccountUrl(config, params?)`
 
-Convenience wrapper around `buildAuthorizeUrl` that sets `prompt=select_account`. Use from your app's **Switch account** or **Use a different profile** action so Ave blocks quick re-authorization and always shows the identity picker plus swipe-to-authorize UI.
+Convenience wrapper around `buildAuthorizeUrl` that sets `prompt=select_account`. Use from your app's **Switch account** or **Use a different profile** action so Ave skips instant re-authorization and always shows the identity picker plus swipe-to-authorize UI.
 
 ```ts
 function buildSwitchAccountUrl(
@@ -169,7 +171,7 @@ function buildSwitchAccountUrl(
 ```
 
 ```ts
-import { buildSwitchAccountUrl, generateCodeChallenge, generateCodeVerifier } from "@ave-id/sdk";
+import { buildSwitchAccountUrl, generateCodeChallenge, generateCodeVerifier, generateNonce } from "@ave-id/sdk";
 
 const verifier = generateCodeVerifier();
 const challenge = await generateCodeChallenge(verifier);
@@ -259,85 +261,6 @@ Returns `UserInfo` with `sub`, `name?`, `preferred_username?`, `email?`, `pictur
 
 Import from `@ave-id/sdk/client`. Browser-only.
 
-### `supportsFedCm()`
-
-Checks whether the current browser environment is eligible to attempt FedCM.
-
-```ts
-function supportsFedCm(): boolean
-```
-
----
-
-### `signInWithFedCm(params)`
-
-Attempts a browser-native FedCM sign-in and returns tokens immediately without a redirect callback.
-
-```ts
-async function signInWithFedCm(params: {
-  clientId: string;
-  redirectUri: string;
-  scope?: string;
-  issuer?: string;
-  state?: string;
-  nonce?: string;
-  prompt?: "none" | "login" | "consent" | "select_account" | string;
-  mediation?: CredentialMediationRequirement;
-}): Promise<FedCmTokenResponse>
-```
-
-Ave returns the normal token payload. For E2EE apps, Ave continues in a FedCM dialog so the existing Ave authorization UI can unlock the user's master key and prepare the plaintext `app_key` handoff before resuming automatically.
-
-
----
-
-### `signIn(params)`
-
-Smart sign-in helper for browser apps.
-
-It tries FedCM first when available, and falls back to the standard PKCE redirect flow when it isn't.
-
-```ts
-async function signIn(params: {
-  clientId: string;
-  redirectUri: string;
-  scope?: string;
-  issuer?: string;
-  state?: string;
-  nonce?: string;
-  mediation?: CredentialMediationRequirement;
-  preferFedCm?: boolean;
-}): Promise<FedCmTokenResponse | null>
-```
-
-Returns:
-
-- `FedCmTokenResponse` when FedCM completes in-page
-- `null` when the helper falls back to `startPkceLogin()` and redirects the browser
-
-
-```ts
-import { finishPkceLogin, signIn } from "@ave-id/sdk/client";
-
-const result = await signIn({
-  clientId: "YOUR_CLIENT_ID",
-  redirectUri: "https://yourapp.com/callback",
-  scope: "openid profile email offline_access",
-});
-
-if (result) {
-  // FedCM completed immediately
-} else {
-  // Browser redirected for PKCE fallback
-}
-
-// On your callback page:
-const tokens = await finishPkceLogin({
-  clientId: "YOUR_CLIENT_ID",
-  redirectUri: "https://yourapp.com/callback",
-});
-```
-
 ### `startPkceLogin(params)`
 
 Generates PKCE params, saves them to `sessionStorage`, and redirects the user to Ave. The browser-friendly alternative to calling `generateCodeVerifier` + `buildAuthorizeUrl` + `window.location.href` manually.
@@ -361,7 +284,7 @@ Automatically generates a PKCE verifier/challenge, a `nonce` for ID token replay
 
 ### `finishPkceLogin(options)`
 
-Handles the OAuth callback: reads stored PKCE state, verifies the returned `state` against the stored value, exchanges the authorization code, verifies the returned tokens, and cleans up `sessionStorage`. Returns `null` when no `code` parameter is present — safe to call on every page load.
+Handles the OAuth callback: reads stored PKCE state, verifies the returned `state` against the stored value, exchanges the authorization code, merges encryption keys from the URL fragment, verifies the returned tokens, removes keys from the address bar, and cleans up `sessionStorage`. Returns `null` when no `code` parameter is present — safe to call on every page load.
 
 ```ts
 async function finishPkceLogin(options: {
@@ -390,8 +313,32 @@ const tokens = await finishPkceLogin({
 });
 
 if (tokens) {
-  // User is signed in — tokens.id_token, tokens.access_token, etc.
+  // User is signed in — tokens.id_token, tokens.app_key, etc.
 }
+```
+
+---
+
+### `completeOAuthCallback(session, options)`
+
+Runs `finishPkceLogin` with the same options, then saves the tokens and any encryption keys with `session.setTokensFromResponse`. Returns the token response, or `null` when the URL has no `code`.
+
+```ts
+async function completeOAuthCallback(
+  session: AveSession,
+  options: Parameters<typeof finishPkceLogin>[0],
+): Promise<TokenResponse | null>
+```
+
+```ts
+import { AveSession, createLocalStorageAdapter } from "@ave-id/sdk";
+import { completeOAuthCallback } from "@ave-id/sdk/client";
+
+const oauth = { clientId: "YOUR_CLIENT_ID", redirectUri: "https://yourapp.com/callback" };
+const session = new AveSession({ oauth, storage: createLocalStorageAdapter() });
+
+await completeOAuthCallback(session, oauth);
+session.getAppKeyBase64();
 ```
 
 ---
@@ -489,7 +436,33 @@ const { keys } = await fetchJwks();
 
 ## Server helpers
 
-Import from `@ave-id/sdk/server`. Server runtime only — requires your `clientSecret`.
+Import from `@ave-id/sdk/server`.
+
+### `verifyAveIdToken(token, options)`
+
+Verifies an Ave `id_token` for your client ID: signature, issuer, audience, and expiry. Returns the claims, or `null`.
+
+```ts
+async function verifyAveIdToken(
+  token: string,
+  options: { clientId: string; issuer?: string; fetcher?: typeof fetch },
+): Promise<AveIdTokenClaims | null>
+```
+
+### `verifyAveIdTokenFromAuthHeader(authorization, options)`
+
+Reads a `Bearer` token from an `Authorization` header value and verifies it with `verifyAveIdToken`. Returns `{ subject, claims }`, where `subject` is the identity ID, or `null`.
+
+```ts
+import { verifyAveIdTokenFromAuthHeader } from "@ave-id/sdk/server";
+
+const principal = await verifyAveIdTokenFromAuthHeader(request.headers.get("authorization"), {
+  clientId: process.env.AVE_CLIENT_ID!,
+});
+if (!principal) return new Response("Unauthorized", { status: 401 });
+```
+
+`getBearerToken(authorization)` returns the raw token from a header value without verifying it.
 
 ### `exchangeCodeServer(config, payload)`
 
@@ -530,7 +503,7 @@ async function refreshTokenServer(
 
 ## TokenResponse
 
-The shape returned by `exchangeCode`, `exchangeCodeServer`, `refreshToken`, and `refreshTokenServer`:
+The shape returned by `exchangeCode`, `exchangeCodeServer`, `refreshToken`, `refreshTokenServer`, and `finishPkceLogin`. The token endpoint never returns key fields; `finishPkceLogin`, `completeOAuthCallback`, and `mergeAppEncryptionFromUrl` add them from the callback fragment.
 
 ```ts
 interface TokenResponse {
@@ -544,11 +517,18 @@ interface TokenResponse {
   user_id?: string;          // Present when user_id scope is granted
   user?: {                   // May be absent depending on scopes/config
     id: string;
-    handle: string;
-    displayName: string;
+    handle?: string;
+    displayName?: string;
     email?: string;
-    avatarUrl?: string;
+    avatarUrl?: string | null;
   } | null;
+  app_key?: string;             // Merged from the callback fragment (e2ee:symmetric)
+  app_public_key?: string;      // Merged from the callback fragment (e2ee:asymmetric)
+  app_private_key?: string;     // Merged from the callback fragment (e2ee:asymmetric)
+  app_key_old?: string;         // Previous keys after e2ee:reset
+  app_public_key_old?: string;
+  app_private_key_old?: string;
+  app_key_reset?: boolean;
 }
 ```
 
@@ -572,4 +552,5 @@ try {
 
 ## See also
 
-- [Identity keys and wrapped payloads](/sdk/sdk-identity-keys) — `getIdentityKey`, envelope decryption, and passing secrets through redirects after OAuth.
+- [App encryption](/sdk/sdk-identity-keys) — reading keys from the callback, public-key lookup, and encrypting for other users.
+- [Ave Session](/guides/ave-session-and-tokens) — persisting tokens and keys, and refreshing before expiry.

@@ -1,9 +1,8 @@
 import { and, desc, eq } from "drizzle-orm";
 import { Hono } from "hono";
-import { db, oauthApps, oauthAuthorizations, oauthResources } from "../../db";
+import { db, oauthApps, oauthAuthorizations } from "../../db";
 import { appEffectiveSupportsE2ee } from "../../lib/identity/e2ee-scopes";
 import { requireAuth } from "../../middleware/auth";
-import { getQuickOrigin, isQuickClient } from "./shared";
 
 const app = new Hono();
 
@@ -24,27 +23,7 @@ app.get("/authorize/bootstrap/:clientId", requireAuth, async (c) => {
   const clientId = c.req.param("clientId") || "";
   const identityId = c.req.query("identity_id");
 
-  if (isQuickClient(clientId)) {
-    const quickOrigin = getQuickOrigin(clientId);
-    if (!quickOrigin) {
-      return c.json({ error: "App not found" }, 404);
-    }
-
-    return c.json({
-      app: {
-        id: clientId,
-        name: quickOrigin,
-        description: "Quick Ave — authenticate without app registration",
-        iconUrl: null,
-        websiteUrl: quickOrigin,
-        supportsE2ee: false,
-      },
-      resources: [],
-      authorizations: [],
-    });
-  }
-
-  const appAuthorizationsQuery = db
+  const appAuthorizationRows = await db
     .select({
       appId: oauthApps.id,
       appName: oauthApps.name,
@@ -70,25 +49,6 @@ app.get("/authorize/bootstrap/:clientId", requireAuth, async (c) => {
     ))
     .where(eq(oauthApps.clientId, clientId))
     .orderBy(desc(oauthAuthorizations.lastAuthorizedAt));
-  const resourcesQuery = db
-    .select({
-      resourceKey: oauthResources.resourceKey,
-      displayName: oauthResources.displayName,
-      description: oauthResources.description,
-      scopes: oauthResources.scopes,
-      audience: oauthResources.audience,
-      status: oauthResources.status,
-    })
-    .from(oauthResources)
-    .innerJoin(oauthApps, eq(oauthApps.id, oauthResources.ownerAppId))
-    .where(and(
-      eq(oauthApps.clientId, clientId),
-      eq(oauthResources.status, "active"),
-    ));
-  const [appAuthorizationRows, resources] = await Promise.all([
-    appAuthorizationsQuery,
-    resourcesQuery,
-  ]);
   const appRow = appAuthorizationRows[0];
 
   if (!appRow) {
@@ -158,7 +118,6 @@ app.get("/authorize/bootstrap/:clientId", requireAuth, async (c) => {
       ...oauthApp,
       supportsE2ee: appEffectiveSupportsE2ee(oauthApp),
     },
-    resources,
     authorizations,
   });
 });

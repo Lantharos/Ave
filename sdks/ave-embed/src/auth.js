@@ -122,6 +122,5 @@ export async function openAvePopup(options) {
 }
 
 export async function startAveAuth(options) {
-  const normalized = { ...options, clientId: options.clientId ?? `origin:${new URL(options.redirectUri).origin}` };
-  return options.container ? mountAveEmbed(normalized) : openAveSheet(normalized);
+  return options.container ? mountAveEmbed(options) : openAveSheet(options);
 }

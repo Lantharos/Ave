@@ -3,7 +3,7 @@
   import Button from "./Button.svelte";
   import type { DevApp } from "../lib/api";
   import type { WorkspaceState, WorkspaceSummary } from "../lib/portal";
-  import { getInitials } from "../lib/portal";
+  import { countLabel, getInitials } from "../lib/portal";
 
   interface Props {
     workspace: WorkspaceState;
@@ -40,7 +40,6 @@
   let menuRoot: HTMLDivElement | null = null;
 
   const selectedApp = $derived(apps.find((app) => app.id === selectedAppId) || null);
-  const activeMembers = $derived(workspace.members.filter((member) => member.status === "active").length);
   const workspaceAvatar = $derived(workspace.logoUrl || null);
   const accountAvatar = $derived(workspace.members[0]?.avatarUrl || null);
 
@@ -93,7 +92,7 @@
           {/if}
           <span class="flex min-w-0 flex-col leading-none">
             <span class="truncate text-[14px] md:text-[15px] font-semibold">{workspace.name}</span>
-            <span class="truncate pt-1 text-[12px] text-[#7d7d7d]">{activeMembers} members</span>
+            <span class="truncate pt-1 text-[12px] text-[#7d7d7d]">{countLabel(workspace.members.length, "member")}</span>
           </span>
           <svg class="h-4 w-4 text-[#7d7d7d] shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
             <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" />
@@ -120,7 +119,7 @@
           </span>
           <span class="flex min-w-0 flex-col leading-none">
             <span class="truncate text-[14px] md:text-[15px] font-semibold">{selectedApp?.name || "Applications"}</span>
-            <span class="truncate pt-1 text-[12px] text-[#7d7d7d]">{selectedApp ? "Open app" : `${apps.length} apps`}</span>
+            <span class="truncate pt-1 text-[12px] text-[#7d7d7d]">{selectedApp ? "Open app" : countLabel(apps.length, "app")}</span>
           </span>
           <svg class="h-4 w-4 text-[#7d7d7d] shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
             <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" />
@@ -129,7 +128,7 @@
       </div>
 
       <div class="flex items-center gap-2 flex-wrap">
-        <Button variant="ghost" size="sm" onclick={onopenteam}>Invite</Button>
+        <Button variant="ghost" size="sm" onclick={onopenteam}>Members</Button>
         <button
           aria-label="Open Ave dashboard"
           title="Open Ave dashboard"
@@ -167,9 +166,8 @@
             >
               <span class="min-w-0">
                 <span class="block truncate text-[15px] font-semibold text-white">{organization.name}</span>
-                <span class="block pt-1 text-[13px] text-[#7d7d7d]">{organization.memberCount} members and {organization.appCount} apps</span>
+                <span class="block pt-1 text-[13px] text-[#7d7d7d]">{countLabel(organization.memberCount, "member")} and {countLabel(organization.appCount, "app")}</span>
               </span>
-              <span class="rounded-full bg-white/[0.05] px-3 py-1.5 text-[12px] text-[#b0b0b0]">{organization.role}</span>
             </button>
           {/each}
         </div>
@@ -177,7 +175,7 @@
         <div class="flex flex-col gap-3">
           <div class="rounded-[26px] bg-white/[0.03] px-5 py-5">
             <p class="m-0 text-[18px] font-semibold text-white">{workspace.name}</p>
-            <p class="m-0 pt-2 text-[14px] text-[#7d7d7d]">{activeMembers} active members</p>
+            <p class="m-0 pt-2 text-[14px] text-[#7d7d7d]">{countLabel(workspace.members.length, "member")}</p>
           </div>
           <button class="rounded-[24px] border-0 bg-white/[0.03] px-5 py-4 text-left text-[15px] text-white cursor-pointer transition-colors duration-300 hover:bg-white/[0.05]" onclick={() => {
             closeMenus();
@@ -219,7 +217,7 @@
           }}
         >
           <p class="m-0 text-[16px] font-semibold text-white">All applications</p>
-          <p class="m-0 pt-2 text-[13px] text-[#7d7d7d]">{apps.length} apps in this workspace</p>
+          <p class="m-0 pt-2 text-[13px] text-[#7d7d7d]">{countLabel(apps.length, "app")} in this workspace</p>
         </button>
 
         {#each apps as app}

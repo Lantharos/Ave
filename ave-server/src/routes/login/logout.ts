@@ -28,7 +28,6 @@ app.post("/logout", async (c) => {
   }
 
   clearSessionCookie(c);
-  c.header("Set-Login", "logged-out");
   return c.json({ success: true });
 });
 

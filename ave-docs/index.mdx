@@ -1,67 +1,73 @@
 ---
 title: "Ave"
-description: "Passkey identity, OAuth/OIDC, delegation, signing, and encrypted app-key delivery for modern apps."
+description: "Passkey accounts, OAuth 2.0 and OpenID Connect, and end-to-end encryption keys delivered to your app."
 ---
 
-Ave is a passkey-first identity platform built on OAuth 2.0 and OpenID Connect. It handles hosted sign-in, token issuance, refresh, delegated app access, identity-backed signing, and optional per-app encryption key delivery.
+Ave is an identity provider for apps that need to be secure and end-to-end encrypted. Users sign in with a passkey, your app receives standard OpenID Connect tokens, and, when you ask for it, a per-user encryption key that only the user's device and your client code ever see in plaintext.
 
-## Choose a path
+Ave's servers store encryption keys only in a form wrapped by the user's master key. The master key is unlocked on the user's device during sign-in, the app key is unwrapped in the browser, and it reaches your app in the callback URL fragment, which browsers never send to a server.
+
+## What you get
 
 <CardGroup cols={2}>
-  <Card title="Quick Ave" icon="bolt" href="/guides/quick-ave">
-    Add sign-in without registering an app. Use it for prototypes, internal tools, and the first version of an integration.
+  <Card title="End-to-end encryption keys" icon="lock" href="/guides/end-to-end-encryption">
+    Request `e2ee:symmetric` for a per-user AES-256 key, or `e2ee:asymmetric` for a keypair plus public-key lookup so users can encrypt for each other.
   </Card>
-  <Card title="Registered OAuth" icon="key" href="/quickstart">
-    Register an app when you need PKCE, refresh tokens, app branding, configured redirect URIs, or a confidential client.
+  <Card title="Passkey accounts" icon="fingerprint" href="/reference/how-it-works">
+    Passwordless sign-in, account recovery, and multiple identities per account. Your app never handles credentials.
+  </Card>
+  <Card title="Standard OAuth 2.0 and OIDC" icon="key" href="/guides/oauth-authorization-code-flow">
+    Authorization code flow with PKCE, ID tokens, refresh token rotation, discovery, and JWKS.
+  </Card>
+  <Card title="Your app's structure" icon="users" href="/guides/app-authorization">
+    Ave gives you a verified identity. Workspaces, membership, roles, and billing stay in your app.
   </Card>
 </CardGroup>
 
-## What Ave includes
+## How an encrypted app uses Ave
 
-<CardGroup cols={2}>
-  <Card title="Convex integration" icon="database" href="/guides/convex-custom-auth">
-    Use Ave as a Convex OIDC provider and keep Convex supplied with fresh ID tokens.
-  </Card>
-  <Card title="Connector delegation" icon="link" href="/guides/connector-app-to-app">
-    Let one app request scoped access to another Ave-registered resource on a user's behalf.
-  </Card>
-  <Card title="Signing" icon="pen-nib" href="/guides/ave-signing">
-    Request identity-backed Ed25519 signatures for approvals that need a verifiable user action.
-  </Card>
-  <Card title="End-to-end encryption" icon="lock" href="/guides/end-to-end-encryption">
-    Deliver per-app, per-identity encryption keys without exposing plaintext key material to the server.
-  </Card>
-</CardGroup>
+<Steps>
+  <Step title="Register your app">
+    Create an app at [devs.aveid.net](https://devs.aveid.net) and register its callback URL. Every integration uses a registered client ID.
+  </Step>
+  <Step title="Ask for an encryption scope">
+    Add `e2ee:symmetric` or `e2ee:asymmetric` to the scopes you request at sign-in. The consent screen tells the user that your app is end-to-end encrypted.
+  </Step>
+  <Step title="Receive the key with the tokens">
+    `completeOAuthCallback` from `@ave-id/sdk/client` or the `onTokens` callback in `@ave-id/embed` hands you the tokens and the key together. The key comes from the URL fragment, not from the token endpoint.
+  </Step>
+  <Step title="Encrypt on the client">
+    Encrypt user data with the key before it leaves the device. Your backend stores ciphertext and uses the verified `id_token` to decide who can read which rows.
+  </Step>
+</Steps>
+
+The [Quickstart](/quickstart) walks through these steps with code.
 
 ## Hosts
 
-Ave uses separate hosts for sign-in, API calls, and organization administration. Keep the sign-in and API hosts separate in your integration.
-
 | Host | Use it for |
 | --- | --- |
-| `https://aveid.net` | Sign-in UI, Connector consent, OIDC discovery, JWKS |
-| `https://api.aveid.net` | Token exchange, userinfo, signing, management, API calls |
+| `https://aveid.net` | Sign-in and consent pages, OIDC discovery, JWKS |
+| `https://api.aveid.net` | Token exchange, userinfo, public-key lookup |
+| `https://devs.aveid.net` | Registering and managing apps |
 
 <Warning>
-  Send OAuth token exchanges to `https://api.aveid.net/api/oauth/token`. User-facing authorization pages stay on `https://aveid.net`.
+  Send token requests to `https://api.aveid.net/api/oauth/token`. Users sign in on `https://aveid.net`.
 </Warning>
 
-## How to get started
+## Where to go next
 
-<Steps>
-  <Step title="Try Quick Ave first">
-    [Quick Ave](/guides/quick-ave) gives you origin-based auth without a dashboard, client ID, or redirect URI setup.
-  </Step>
-  <Step title="Move to registered OAuth">
-    [Quickstart](/quickstart) covers app registration, PKCE, token exchange, refresh tokens, and session creation.
-  </Step>
-  <Step title="Understand the tokens">
-    [OAuth authorization code flow](/guides/oauth-authorization-code-flow) explains `id_token`, `access_token`, `access_token_jwt`, and refresh token rotation.
-  </Step>
-  <Step title="Pick your client model">
-    Browser and mobile apps use [PKCE](/guides/pkce-for-public-clients). Server apps can use [confidential clients](/guides/server-side-confidential-clients).
-  </Step>
-  <Step title="Add advanced features when ready">
-    Add [Connector delegation](/guides/connector-app-to-app), [Signing](/guides/ave-signing), [end-to-end encryption](/guides/end-to-end-encryption), or [Convex auth](/guides/convex-custom-auth) when your app needs them.
-  </Step>
-</Steps>
+<CardGroup cols={2}>
+  <Card title="Quickstart" icon="rocket" href="/quickstart">
+    Register an app, request an encryption key, and sign a user in.
+  </Card>
+  <Card title="Encryption model" icon="shield" href="/security/encryption-model-and-key-lifecycle">
+    Where keys are generated, how they are wrapped, and what Ave can and cannot see.
+  </Card>
+  <Card title="Public clients and PKCE" icon="browser" href="/guides/pkce-for-public-clients">
+    Browser, desktop, and mobile apps without a client secret.
+  </Card>
+  <Card title="Convex and Expo" icon="mobile" href="/guides/expo-auth-session">
+    Framework guides for common Ave setups.
+  </Card>
+</CardGroup>

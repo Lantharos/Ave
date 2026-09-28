@@ -1,6 +1,6 @@
 # @ave-id/embed
 
-Ave sign-in, Connector consent, and signing in an iframe, sheet, or popup.
+Ave sign-in and encryption key delivery in an iframe, sheet, or popup.
 
 ```bash
 bun add @ave-id/embed
@@ -8,12 +8,14 @@ bun add @ave-id/embed
 
 ## Sign in
 
-`startAveAuth()` opens a sheet and handles PKCE, state, nonce, and the code exchange when you provide `onTokens`. Omit `clientId` to use Quick Ave for your callback's origin.
+`startAveAuth()` opens a sheet and handles PKCE, state, nonce, and the code exchange when you provide `onTokens`.
 
 ```js
 import { startAveAuth } from "@ave-id/embed";
 
 const auth = await startAveAuth({
+  clientId: "YOUR_CLIENT_ID",
+  scope: "openid profile e2ee:symmetric",
   redirectUri: "https://yourapp.com/callback",
   onTokens: (tokens) => {
     createSession(tokens);
@@ -22,7 +24,7 @@ const auth = await startAveAuth({
 });
 ```
 
-Registered apps can request encryption scopes. `onTokens` includes the granted `app_key`, `app_public_key`, and `app_private_key` fields from the callback fragment, along with any previous keys and `app_key_reset` recovery flag. These keys stay in the browser; the SDK sends only the authorization code and PKCE verifier to the token endpoint.
+Apps with end-to-end encryption enabled can request an encryption scope. `onTokens` includes the granted `app_key`, `app_public_key`, and `app_private_key` fields from the callback fragment, along with any previous keys and `app_key_reset` recovery flag. These keys stay in the browser; the SDK sends only the authorization code and PKCE verifier to the token endpoint.
 
 Profile and email fields in `tokens.user` depend on the granted scopes. Use `@ave-id/sdk` to verify returned JWTs before relying on their claims.
 
@@ -88,68 +90,15 @@ await openAveSheet({
 
 For an application-managed callback, a sheet or inline embed redirects the current page to Ave if the required popup is blocked. Your persisted callback state must survive that navigation. Keep `redirectUri` identical during authorization and exchange.
 
-## Connector consent
-
-Connector sheets and popups return controls synchronously. They open `/connect` to request access to a downstream resource.
-
-```js
-import { openAveConnectorSheet } from "@ave-id/embed";
-
-const connector = openAveConnectorSheet({
-  clientId: "YOUR_CLIENT_ID",
-  redirectUri: "https://yourapp.com/callback",
-  resource: "target:resource",
-  scope: "resource.access",
-  mode: "user_present",
-  onSuccess: ({ redirectUrl }) => window.location.assign(redirectUrl),
-  onError: ({ message }) => showError(message),
-});
-```
-
-`openAveConnectorPopup` accepts the same options plus `width` and `height`, and returns `null` if blocked.
-
-## Signing
-
-```js
-import { openAveSigningSheet } from "@ave-id/embed";
-
-const signing = openAveSigningSheet({
-  requestId: "SIGNING_REQUEST_ID",
-  onSigned: (result) => acceptSignature(result),
-  onDenied: (error) => showError(error.message),
-});
-```
-
-`openAveSigningPopup` has the same callbacks and accepts `width` and `height`. Both helpers return controls synchronously and send the embedding origin with the signing request.
-
-## Connector runtime
-
-```js
-import { openAveConnectorRuntime } from "@ave-id/embed";
-
-const runtime = openAveConnectorRuntime({
-  delegatedToken: "DELEGATED_TOKEN",
-  target: "iris",
-  onReady: () => runtime.send({
-    id: "request-1",
-    mode: "stream",
-    messages: [{ role: "user", content: "hello" }],
-  }),
-  onEvent: (event) => renderResult(event),
-});
-
-runtime.destroy();
-```
-
-`destroy()` removes the frame and its listeners. Each embed accepts messages only from its configured Ave origin and its own iframe or popup, so simultaneous flows remain separate.
+`destroy()` on an inline embed removes the frame and its listeners. Each embed accepts messages only from its configured Ave origin and its own iframe or popup, so simultaneous flows remain separate.
 
 ## Common options
 
-- `clientId`, `redirectUri`: app and exact callback URL for auth and Connector flows.
-- `scope`: defaults to `openid profile email` for auth or `resource.access` for Connector.
+- `clientId`, `redirectUri`: your app and its exact callback URL.
+- `scope`: defaults to `openid profile email`.
 - `issuer`: defaults to `https://aveid.net`.
-- `theme`: defaults to `dark` for auth.
+- `theme`: defaults to `dark`.
 - `width`, `height`: inline dimensions or popup dimensions, depending on the helper.
-- `onTokens`, `onSuccess`, `onError`, `onClose`: auth callbacks; `onTokens` takes precedence over `onSuccess`.
+- `onTokens`, `onSuccess`, `onError`, `onClose`: callbacks; `onTokens` takes precedence over `onSuccess`.
 
 The package has no runtime dependencies. Build it with `bun run build` on Linux, macOS, or Windows.

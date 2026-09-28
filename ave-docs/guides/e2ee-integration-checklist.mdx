@@ -1,34 +1,37 @@
 ---
 title: "E2EE integration checklist"
-description: "Encryption scopes, fragment handling, and identity isolation for apps that encrypt data."
+description: "What to check before shipping an app that uses Ave encryption keys."
 ---
 
 Use this checklist alongside [End-to-end encryption](/guides/end-to-end-encryption) and [Encryption model and key lifecycle](/security/encryption-model-and-key-lifecycle).
 
-## Before you ship
+## Sign-in
 
-- Register an OAuth app and request **`e2ee:symmetric`** or **`e2ee:asymmetric`** in your authorize URL scope list.
-- Request the E2EE scope in your authorize URL (one per sign-in). Legacy apps with `supportsE2ee` still work without an explicit scope.
-- For asymmetric mode, plan to store `app_private_key` locally and `app_public_key` on your user record.
+- Request exactly one of `e2ee:symmetric` or `e2ee:asymmetric`, and the same one on every sign-in.
+- Request `e2ee:reset` only from an explicit user action, and be ready to receive the previous keys.
+- Verify the `id_token` and key your records by its `sub`.
 
-## Redirect and URL fragment
+## Key handling
 
-- Plaintext keys are delivered in the **`#fragment`**, not in JSON token bodies.
-- Symmetric: `app_key`. Asymmetric: `app_public_key` + `app_private_key`.
-- Normalize **`+`** when parsing base64 from `URLSearchParams`.
-- Use **`mergeAppEncryptionFromUrl`** / **`completeOAuthCallback`**, then **`stripSensitiveFragmentParams`**.
-- **`AveSession`**: `getAppKeyBase64()`, `getAppPublicKeyBase64()`, `getAppPrivateKeyBase64()`.
+- Keys arrive in the callback fragment, not in the token response. Use `completeOAuthCallback`, the embed's `onTokens`, or `mergeAppEncryptionFromUrl`.
+- Remove key parameters from the URL after reading them. The SDK callback helpers do this; call `stripSensitiveFragmentParams()` if you parse the fragment yourself.
+- Restore `+` characters before decoding base64 from `URLSearchParams`, or use `normalizeAppKeyBase64`.
+- Read keys from `AveSession` with `getAppKeyBase64()`, `getAppPublicKeyBase64()`, and `getAppPrivateKeyBase64()`.
+- Never send the symmetric key or the private key to your backend, analytics, error reporting, or logs.
 
-## Multi-user encryption
+## Encryption
 
-- Look up recipients with `/api/encryption/app-lookup` or SDK `lookupAppPublicKeyByHandle`.
-- Encrypt with `encryptForAppHandle`; decrypt with `decryptFromAppSender` and the stored private key.
+- Use AES-GCM with a new random 12-byte IV for every message, and store the IV with the ciphertext.
+- For asymmetric mode, encrypt with `encryptForAppHandle` or `encryptForAppUser` and decrypt with `decryptFromAppSender`.
+- Handle `404` from the public-key lookup as "this person has not used your app yet".
 
-## Identity isolation
+## Identities
 
-- Use a separate encrypted data domain per Ave identity. Switching identity must switch key context.
+- Keep a separate encrypted data domain per Ave identity. Switching identity switches key context.
+- Fail closed when a key is missing or decryption fails. Never fall back to storing plaintext, and never overwrite ciphertext you could not decrypt.
 
 ## Related
 
 - [App encryption SDK](/sdk/sdk-identity-keys)
-- [Scopes and claims](/guides/scopes-and-claims)
+- [Encryption endpoints](/api/encryption-endpoints)
+- [Recover an app key](/troubleshooting/recover-app-key)

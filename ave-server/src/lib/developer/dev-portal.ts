@@ -1,21 +1,12 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, notExists, sql } from "drizzle-orm";
 import { db, identities, oauthApps, developerMembers, organizations } from "../../db";
 import type { AuthUser } from "../../middleware/auth";
 
-export type OrganizationRole = "owner" | "admin" | "viewer";
-const roleRank: Record<OrganizationRole, number> = { owner: 3, admin: 2, viewer: 1 };
-
-export function canManageRole(actor: OrganizationRole, target: OrganizationRole): boolean {
-  return actor === "owner" || roleRank[actor] > roleRank[target];
-}
-
-function mapMembership(row: {
+type MembershipRow = {
   member: typeof developerMembers.$inferSelect;
   identity: typeof identities.$inferSelect;
   organization: typeof organizations.$inferSelect;
-}) {
-  return { ...row, memberId: row.member.id, role: row.member.role, status: row.member.status };
-}
+};
 
 async function listMemberships(userId: string, organizationId?: string) {
   const rows = await db.select({ member: developerMembers, identity: identities, organization: organizations })
@@ -24,15 +15,11 @@ async function listMemberships(userId: string, organizationId?: string) {
     .innerJoin(organizations, eq(organizations.id, developerMembers.organizationId))
     .where(and(
       eq(identities.userId, userId),
-      eq(developerMembers.status, "active"),
       organizationId ? eq(organizations.id, organizationId) : undefined,
     ));
-  const memberships = new Map<string, ReturnType<typeof mapMembership>>();
+  const memberships = new Map<string, MembershipRow>();
   for (const row of rows) {
-    const previous = memberships.get(row.organization.id);
-    if (!previous || roleRank[row.member.role] > roleRank[previous.role]) {
-      memberships.set(row.organization.id, mapMembership(row));
-    }
+    if (!memberships.has(row.organization.id)) memberships.set(row.organization.id, row);
   }
   return [...memberships.values()];
 }
@@ -44,8 +31,8 @@ export async function createOrganization(userId: string, name: string) {
   const id = crypto.randomUUID();
   const slug = `${name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "team"}-${id}`;
   await db.batch([
-    db.insert(organizations).values({ id, name, slug, ownerUserId: userId }),
-    db.insert(developerMembers).values({ organizationId: id, identityId: identity.id, role: "owner", status: "active" }),
+    db.insert(organizations).values({ id, name, slug }),
+    db.insert(developerMembers).values({ organizationId: id, identityId: identity.id }),
   ]);
   const [membership] = await listMemberships(userId, id);
   return membership;
@@ -57,13 +44,13 @@ export async function getOrganizationMemberships(userId: string) {
 }
 
 export async function ensurePersonalOrganization(userId: string) {
-  const memberships = await getOrganizationMemberships(userId);
-  return memberships.sort((a, b) => roleRank[b.role] - roleRank[a.role])[0].organization;
+  const [membership] = await getOrganizationMemberships(userId);
+  return membership.organization;
 }
 
-export async function requireOrganizationAccess(user: AuthUser, organizationId: string, minimumRole: OrganizationRole = "viewer") {
+export async function requireOrganizationAccess(user: AuthUser, organizationId: string) {
   const [membership] = await listMemberships(user.id, organizationId);
-  return membership && roleRank[membership.role] >= roleRank[minimumRole] ? membership : null;
+  return membership ?? null;
 }
 
 export async function getAccessibleApps(user: AuthUser, organizationId?: string) {
@@ -74,14 +61,18 @@ export async function getAccessibleApps(user: AuthUser, organizationId?: string)
   return db.select().from(oauthApps).where(eq(oauthApps.organizationId, membership.organization.id));
 }
 
-export async function getAccessibleApp(user: AuthUser, appId: string, minimumRole: OrganizationRole = "viewer") {
-  const rows = await db.select({ app: oauthApps, member: developerMembers, identity: identities, organization: organizations })
+export async function getAccessibleApp(user: AuthUser, appId: string) {
+  const [row] = await db.select({ app: oauthApps })
     .from(oauthApps)
-    .innerJoin(organizations, eq(organizations.id, oauthApps.organizationId))
-    .innerJoin(developerMembers, and(eq(developerMembers.organizationId, organizations.id), eq(developerMembers.status, "active")))
+    .innerJoin(developerMembers, eq(developerMembers.organizationId, oauthApps.organizationId))
     .innerJoin(identities, and(eq(identities.id, developerMembers.identityId), eq(identities.userId, user.id)))
-    .where(eq(oauthApps.id, appId));
-  const row = rows.filter((entry) => roleRank[entry.member.role] >= roleRank[minimumRole])
-    .sort((a, b) => roleRank[b.member.role] - roleRank[a.member.role])[0];
-  return row ? { app: row.app, membership: mapMembership(row) } : null;
+    .where(eq(oauthApps.id, appId))
+    .limit(1);
+  return row?.app ?? null;
+}
+
+export function deleteEmptyOrganizations() {
+  return db.delete(organizations).where(notExists(
+    db.select({ id: sql`1` }).from(developerMembers).where(eq(developerMembers.organizationId, organizations.id)),
+  ));
 }

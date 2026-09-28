@@ -176,10 +176,6 @@ const HASH_SECRET_KEYS = [
 
   "app_private_key_old",
 
-  "unwrapped_secret",
-
-  "unwrappedSecretB64",
-
 ];
 
 

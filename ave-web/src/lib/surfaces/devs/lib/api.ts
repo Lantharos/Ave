@@ -1,6 +1,6 @@
 import { createAveApiClient } from "$lib/infrastructure/http/ave-api-client";
 import { resolveApiBase } from "$lib/infrastructure/http/origins";
-import type { WorkspaceMember, WorkspaceRole, WorkspaceState, WorkspaceSummary } from "./portal";
+import type { WorkspaceMember, WorkspaceState, WorkspaceSummary } from "./portal";
 
 const client = createAveApiClient({ baseUrl: resolveApiBase() });
 const request = client.request;
@@ -21,36 +21,6 @@ export interface DevApp {
   createdAt: string;
   organizationId?: string | null;
   identityCount?: number;
-  resources?: AppResource[];
-}
-
-export interface AppResource {
-  id: string;
-  resourceKey: string;
-  displayName: string;
-  description?: string;
-  scopes: string[];
-  audience: string;
-  status: "active" | "disabled";
-}
-
-export interface AppInsightSnapshot {
-  totalIdentities: number;
-  totalAuthorizations: number;
-  weeklyAuthorizations: number;
-  activeRefreshTokens: number;
-  instantSignInRate: number;
-  methodCounts: {
-    passkey: number;
-    deviceApproval: number;
-    trustCode: number;
-    unknown: number;
-  };
-  redirectSecurityRate: number;
-  resources: number;
-  activeDelegations: number;
-  revocations: number;
-  totalActivityEvents: number;
 }
 
 export interface AppIdentityRecord {
@@ -68,32 +38,11 @@ export interface AppIdentityRecord {
   lastMethod?: string | null;
 }
 
-export interface AppEvent {
-  id: string;
-  action: string;
-  details?: Record<string, unknown> | null;
-  severity: "info" | "warning" | "danger";
-  createdAt: string;
-  source: "activity" | "delegation";
-}
-
-export interface AppOverviewBundle {
-  insights: AppInsightSnapshot;
-  identities: AppIdentityRecord[];
-  events: AppEvent[];
-}
-
 export interface PaginatedResult<T> {
   items: T[];
   total: number;
   limit: number;
   offset: number;
-  hasMore: boolean;
-}
-
-export interface CursorPaginatedResult<T> {
-  items: T[];
-  nextCursor: string | null;
   hasMore: boolean;
 }
 
@@ -168,30 +117,23 @@ export async function updateOrganization(
   });
 }
 
-export async function inviteOrganizationMember(
+export async function addOrganizationMember(
   organizationId: string,
-  payload: { email: string; role: WorkspaceRole },
+  email: string,
 ): Promise<{ member: WorkspaceMember }> {
-  const email = payload.email.trim().toLowerCase();
-  return request(`/api/organizations/${organizationId}/invites`, {
+  return request(`/api/organizations/${organizationId}/members`, {
     method: "POST",
-    body: JSON.stringify({ ...payload, email }),
+    body: JSON.stringify({ email: email.trim().toLowerCase() }),
   });
 }
 
-export async function updateOrganizationMemberRole(
+export async function removeOrganizationMember(
   organizationId: string,
   memberId: string,
-  role: WorkspaceRole,
-): Promise<{ member: { id: string; role: WorkspaceRole; status: string } }> {
+): Promise<{ success: boolean }> {
   return request(`/api/organizations/${organizationId}/members/${memberId}`, {
-    method: "PATCH",
-    body: JSON.stringify({ role }),
+    method: "DELETE",
   });
-}
-
-export async function fetchAppOverview(appId: string): Promise<AppOverviewBundle> {
-  return request<AppOverviewBundle>(`/api/apps/${appId}/overview`);
 }
 
 export async function fetchAppIdentities(
@@ -203,17 +145,6 @@ export async function fetchAppIdentities(
   if (options.offset !== undefined) query.set("offset", String(options.offset));
   const suffix = query.toString() ? `?${query.toString()}` : "";
   return request<PaginatedResult<AppIdentityRecord>>(`/api/apps/${appId}/identities${suffix}`);
-}
-
-export async function fetchAppActivity(
-  appId: string,
-  options: { limit?: number; cursor?: string } = {},
-): Promise<CursorPaginatedResult<AppEvent>> {
-  const query = new URLSearchParams();
-  if (options.limit !== undefined) query.set("limit", String(options.limit));
-  if (options.cursor) query.set("cursor", options.cursor);
-  const suffix = query.toString() ? `?${query.toString()}` : "";
-  return request<CursorPaginatedResult<AppEvent>>(`/api/apps/${appId}/activity${suffix}`);
 }
 
 export async function createApp(
@@ -246,25 +177,6 @@ export async function rotateSecret(
 ): Promise<{ clientSecret: string }> {
   return request(`/api/apps/${appId}/rotate-secret`, {
     method: "POST",
-  });
-}
-
-export async function createResource(
-  appId: string,
-  payload: Omit<AppResource, "id">,
-): Promise<{ resource: AppResource }> {
-  return request(`/api/apps/${appId}/resources`, {
-    method: "POST",
-    body: JSON.stringify(payload),
-  });
-}
-
-export async function deleteResource(
-  appId: string,
-  resourceId: string,
-): Promise<{ success: boolean }> {
-  return request(`/api/apps/${appId}/resources/${resourceId}`, {
-    method: "DELETE",
   });
 }
 

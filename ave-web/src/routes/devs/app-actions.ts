@@ -1,15 +1,13 @@
 import type { DevApp, UpdateAppPayload } from "$lib/surfaces/devs/lib/api";
 import { queryClient } from "$lib/surfaces/devs/lib/query-client";
-import { createCreateAppMutation, createUpdateAppMutation, createDeleteAppMutation, createRotateSecretMutation, createCreateResourceMutation, createDeleteResourceMutation, queryKeys } from "$lib/surfaces/devs/lib/queries";
+import { createCreateAppMutation, createUpdateAppMutation, createDeleteAppMutation, createRotateSecretMutation, queryKeys } from "$lib/surfaces/devs/lib/queries";
 import type { PortalState } from "./portal-state.svelte";
 
-export function createAppActions(state: PortalState, loadPortal: (organizationId?: string) => Promise<void>, loadSelectedApp: (appId: string) => Promise<void>) {
+export function createAppActions(state: PortalState, loadPortal: (organizationId?: string) => Promise<void>, openApp: (appId: string) => void) {
     const createAppMutation = createCreateAppMutation(() => state.currentOrganizationId);
     const updateAppMutation = createUpdateAppMutation();
     const deleteAppMutation = createDeleteAppMutation();
     const rotateSecretMutation = createRotateSecretMutation();
-    const createResourceMutation = createCreateResourceMutation();
-    const deleteResourceMutation = createDeleteResourceMutation();
     async function handleCreate(form: {
         name: string;
         description: string;
@@ -47,7 +45,6 @@ export function createAppActions(state: PortalState, loadPortal: (organizationId
 
             state.apps = [result.app, ...state.apps];
             state.newSecret = result.clientSecret;
-            state.appBundles = {};
             await queryClient.invalidateQueries({ queryKey: ["portal"] });
             state.createModalOpen = false;
             if (state.workspace) {
@@ -56,7 +53,7 @@ export function createAppActions(state: PortalState, loadPortal: (organizationId
                     appCount: state.workspace.appCount + 1,
                 };
             }
-            await loadSelectedApp(result.app.id);
+            openApp(result.app.id);
         } catch (err) {
             state.error = err instanceof Error ? err.message : "Failed to create app";
         } finally {
@@ -114,22 +111,11 @@ export function createAppActions(state: PortalState, loadPortal: (organizationId
                 appId: app.id,
                 data: payload,
             });
-            const organizationChanged = result.app.organizationId !== previousOrganizationId;
-            await queryClient.invalidateQueries({ queryKey: queryKeys.appOverview(app.id) });
-            await queryClient.invalidateQueries({ queryKey: ["portal"] });
-
-            if (organizationChanged) {
-                state.appBundles = {};
-                state.selectedAppId = result.app.id;
-                state.appSection = "configure";
+            if (result.app.organizationId !== previousOrganizationId) {
                 await loadPortal(result.app.organizationId || undefined);
-                await loadSelectedApp(result.app.id);
+                openApp(result.app.id);
             } else {
                 state.apps = state.apps.map((entry) => (entry.id === result.app.id ? result.app : entry));
-                state.appBundles = Object.fromEntries(
-                    Object.entries(state.appBundles).filter(([key]) => key !== app.id),
-                );
-                await loadSelectedApp(app.id);
             }
             state.saveState = "saved";
 
@@ -152,13 +138,8 @@ export function createAppActions(state: PortalState, loadPortal: (organizationId
         try {
             await deleteAppMutation.mutateAsync(target.id);
             await queryClient.invalidateQueries({ queryKey: ["portal"] });
-            queryClient.removeQueries({ queryKey: queryKeys.appOverview(target.id) });
             queryClient.removeQueries({ queryKey: queryKeys.appIdentities(target.id) });
-            queryClient.removeQueries({ queryKey: queryKeys.appActivity(target.id) });
             state.apps = state.apps.filter((app) => app.id !== target.id);
-            state.appBundles = Object.fromEntries(
-                Object.entries(state.appBundles).filter(([key]) => key !== target.id),
-            );
             if (state.workspace) {
                 state.workspace = {
                     ...state.workspace,
@@ -167,9 +148,7 @@ export function createAppActions(state: PortalState, loadPortal: (organizationId
             }
             if (state.selectedAppId === target.id) {
                 state.selectedAppId = null;
-                state.appInsights = null;
                 state.appIdentities = [];
-                state.appEvents = [];
                 state.workspaceSection = "applications";
             }
             state.deleteTarget = null;
@@ -188,41 +167,5 @@ export function createAppActions(state: PortalState, loadPortal: (organizationId
         }
     }
 
-    async function handleCreateResource(appId: string, resource: {
-        resourceKey: string;
-        displayName: string;
-        description?: string;
-        scopes: string[];
-        audience: string;
-        status: "active" | "disabled";
-    }) {
-        const result = await createResourceMutation.mutateAsync({ appId, resource });
-        await queryClient.invalidateQueries({ queryKey: queryKeys.appOverview(appId) });
-        state.apps = state.apps.map((app) =>
-            app.id === appId
-                ? { ...app, resources: [...(app.resources || []), result.resource] }
-                : app,
-        );
-        state.appBundles = Object.fromEntries(
-            Object.entries(state.appBundles).filter(([key]) => key !== appId),
-        );
-        await loadSelectedApp(appId);
-    }
-
-    async function handleDeleteResource(appId: string, resourceId: string) {
-        await deleteResourceMutation.mutateAsync({ appId, resourceId });
-        await queryClient.invalidateQueries({ queryKey: queryKeys.appOverview(appId) });
-        state.apps = state.apps.map((app) =>
-            app.id === appId
-                ? { ...app, resources: (app.resources || []).filter((resource) => resource.id !== resourceId) }
-                : app,
-        );
-        state.appBundles = Object.fromEntries(
-            Object.entries(state.appBundles).filter(([key]) => key !== appId),
-        );
-        await loadSelectedApp(appId);
-    }
-
-
-    return { handleCreate, handleRotateSecret, handleSaveApp, handleConfirmDelete, handleCopy, handleCreateResource, handleDeleteResource };
+    return { handleCreate, handleRotateSecret, handleSaveApp, handleConfirmDelete, handleCopy };
 }

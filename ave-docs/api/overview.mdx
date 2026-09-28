@@ -1,17 +1,17 @@
 ---
 title: "API overview"
-description: "Endpoint families, authentication requirements, and request conventions for the Ave OAuth/OIDC and Signing APIs."
+description: "Endpoint families, authentication requirements, and request conventions for the Ave API."
 ---
 
 <CardGroup cols={3}>
-  <Card title="OAuth + OIDC" icon="key" href="/api/oauth-endpoints">
-    Token grants, userinfo, discovery, and delegation management endpoints.
+  <Card title="OAuth and OIDC" icon="key" href="/api/oauth-endpoints">
+    Token grants, userinfo, discovery, and authorization management.
   </Card>
-  <Card title="Signing" icon="pen-nib" href="/api/signing-endpoints">
-    Signature request lifecycle, verification, and key management.
+  <Card title="Encryption" icon="lock" href="/api/encryption-endpoints">
+    App public-key lookup for end-to-end encrypted apps.
   </Card>
   <Card title="Security" icon="shield" href="/security/best-practices">
-    Hardening checklist for token handling, claims validation, and key safety.
+    Hardening checklist for token handling, claim validation, and key safety.
   </Card>
 </CardGroup>
 
@@ -22,12 +22,12 @@ https://api.aveid.net
 ```
 
 <Note>
-  Use `api.aveid.net` for all API calls. Use `aveid.net` for user-facing auth pages (sign-in, Connector consent). Never mix the two.
+  Use `api.aveid.net` for API calls and `aveid.net` for sign-in pages, discovery, and JWKS.
 </Note>
 
 ## Request conventions
 
-Request bodies use JSON except multipart image uploads. The token endpoint accepts both OAuth-standard `snake_case` fields and legacy `camelCase` fields.
+Request bodies are JSON, except multipart image uploads. The token endpoint accepts OAuth `snake_case` field names and their `camelCase` equivalents.
 
 <CodeGroup>
 ```bash Token request
@@ -46,60 +46,46 @@ curl -X POST https://api.aveid.net/api/oauth/token \
 curl https://api.aveid.net/api/oauth/userinfo \
   -H "Authorization: Bearer ACCESS_TOKEN"
 ```
+
+```bash Public-key lookup
+curl "https://api.aveid.net/api/encryption/app-lookup?client_id=YOUR_CLIENT_ID&handle=alice"
+```
 </CodeGroup>
 
 ## Authentication by endpoint family
 
 <AccordionGroup>
-  <Accordion title="Public OAuth/OIDC endpoints — no auth required">
-    These endpoints are public and require no credentials:
+  <Accordion title="Public endpoints">
+    These need no credentials, or carry them in the request body:
 
     - `GET /.well-known/openid-configuration` — OIDC discovery metadata
     - `GET /.well-known/jwks.json` — JWT verification keys
     - `GET /.well-known/webfinger` — issuer discovery
-    - `GET /api/oauth/app/:clientId` — app public metadata
-    - `GET /api/oauth/resource/:resourceKey` — Connector resource metadata
-    - `POST /api/oauth/token` — token grants (credentials validated in request body)
+    - `GET /api/oauth/app/:clientId` — public app metadata
+    - `POST /api/oauth/token` — token grants; client credentials or PKCE verifier in the body
+    - `GET /api/encryption/app-lookup` — app public-key lookup
 
-    Userinfo requires a bearer token:
-    - `GET /api/oauth/userinfo` — requires `Authorization: Bearer <access_token>`
+    `GET /api/oauth/userinfo` requires `Authorization: Bearer <access_token>`.
   </Accordion>
 
-  <Accordion title="Session-authenticated OAuth management endpoints">
-    These require an authenticated Ave session (bearer session token or Ave session cookie):
+  <Accordion title="Ave session endpoints">
+    Ave's own sign-in pages use these with the user's Ave session. Apps do not call them directly:
 
-    - `POST /api/oauth/authorize` — grant authorization and produce a redirect URL
-    - `GET /api/oauth/authorizations` — list active authorizations
-    - `GET /api/oauth/authorization/:clientId` — get authorization for a specific app
-    - `GET /api/oauth/delegations` — list active Connector grants
-    - `DELETE /api/oauth/delegations/:delegationId` — revoke a Connector grant
+    - `POST /api/oauth/authorize` — grant authorization and produce the callback URL
+    - `GET /api/oauth/authorize/bootstrap/:clientId` — app, identities, and existing authorization for the consent screen
+    - `GET /api/oauth/authorizations` — list the user's app authorizations
+    - `GET /api/oauth/authorization/:clientId` — one app's authorization, including its wrapped keys
+    - `DELETE /api/oauth/authorizations/:authId` — disconnect an app
+    - `PUT /api/oauth/authorization/:clientId/encryption-key` — replace a wrapped symmetric app key during [recovery](/troubleshooting/recover-app-key)
   </Accordion>
 
-  <Accordion title="Signing endpoints — app credentials in body">
-    App-facing signing endpoints authenticate with `clientId` + `clientSecret` in the request body:
+  <Accordion title="Account encryption keys">
+    Each identity also has its own encryption keypair, separate from per-app keys. Ave's sign-in pages manage it:
 
-    - `POST /api/signing/request` — create a signing request
-    - `GET /api/signing/request/:requestId/status` — poll request status
-    - `GET /api/signing/public-key/:handle` — look up an identity's public key
-    - `POST /api/signing/verify` — verify a signature
-
-    User-facing signing endpoints require a session token:
-    - `GET /api/signing/keys` — list the user's signing keys
-    - `POST /api/signing/keys/:identityId` — create a signing key
-    - `PUT /api/signing/keys/:identityId` — rotate a signing key
-    - `POST /api/signing/requests/:requestId/sign` — approve a request
-    - `POST /api/signing/requests/:requestId/deny` — deny a request
-  </Accordion>
-
-  <Accordion title="Identity encryption keys">
-    Encryption keys and Ed25519 signing keys are separate key pairs. Encryption endpoints manage each identity's encrypted private-key envelope:
-
-    - `GET /api/encryption/public-key/:handle` — public encryption-key lookup
-    - `GET /api/encryption/keys/:identityId` — read the authenticated identity's key envelope
-    - `POST /api/encryption/keys/:identityId` — create an encryption key
-    - `PUT /api/encryption/keys/:identityId` — replace its key envelope
-
-    Signing-key rotation uses `PUT /api/signing/keys/:identityId` and requires a signature from the existing signing key. Initial signing-key enrollment requires an authenticated session.
+    - `GET /api/encryption/public-key/:handle` — public key lookup
+    - `GET /api/encryption/keys/:identityId` — read the authenticated identity's wrapped private key
+    - `POST /api/encryption/keys/:identityId` — create the keypair
+    - `PUT /api/encryption/keys/:identityId` — replace the wrapped private key
   </Accordion>
 </AccordionGroup>
 

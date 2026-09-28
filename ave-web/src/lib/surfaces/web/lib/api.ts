@@ -7,7 +7,6 @@ import { mydataApi } from "./api/mydata";
 import { oauthApi } from "./api/oauth";
 import { registerApi } from "./api/authentication/register";
 import { securityApi } from "./api/authentication/security";
-import { signingApi } from "./api/signing";
 import { uploadApi } from "./api/upload";
 
 export { ApiError, clearD1Bookmark } from "./api/transport";
@@ -23,6 +22,5 @@ export const api = {
   mydata: mydataApi,
   encryption: encryptionApi,
   oauth: oauthApi,
-  signing: signingApi,
   upload: uploadApi,
 };

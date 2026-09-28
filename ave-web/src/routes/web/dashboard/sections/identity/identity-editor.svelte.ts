@@ -1,4 +1,3 @@
-import { deriveBannerColorFromFile } from "$lib/surfaces/web/lib/avatar-image";
 import { api } from "$lib/surfaces/web/lib/api";
 import { createStoredIdentityEncryptionKeyPair, loadMasterKey } from "$lib/surfaces/web/lib/crypto";
 import { auth } from "$lib/surfaces/web/stores/auth";
@@ -11,7 +10,6 @@ export function createIdentityEditor(getIdentity: () => IdentityType | null) {
     let verificationCode = $state("");
     let birthday = $state("");
     let avatarUrl = $state("");
-    let bannerUrl = $state("");
 
     let editing = $state({
         displayName: false,
@@ -40,7 +38,6 @@ export function createIdentityEditor(getIdentity: () => IdentityType | null) {
             email = identity.pendingEmail || identity.email || "";
             birthday = identity.birthday || "";
             avatarUrl = identity.avatarUrl || "";
-            bannerUrl = identity.bannerUrl || "";
         } else {
             lastSyncedIdentityId = null;
             showEmailVerificationModal = false;
@@ -192,7 +189,6 @@ export function createIdentityEditor(getIdentity: () => IdentityType | null) {
                 email: email.trim() || undefined,
                 birthday: birthday || undefined,
                 avatarUrl: avatarUrl || undefined,
-                bannerUrl: bannerUrl || undefined,
                 encryptionKey: masterKey ? await createStoredIdentityEncryptionKeyPair(masterKey) : undefined,
             });
 
@@ -204,7 +200,6 @@ export function createIdentityEditor(getIdentity: () => IdentityType | null) {
             email = "";
             birthday = "";
             avatarUrl = "";
-            bannerUrl = "";
         } catch (e) {
             error = e instanceof Error ? e.message : "Failed to create identity";
         } finally {
@@ -222,20 +217,13 @@ export function createIdentityEditor(getIdentity: () => IdentityType | null) {
         const identity = getIdentity();
         if (!identity) {
             avatarUrl = URL.createObjectURL(file);
-            bannerUrl = await deriveBannerColorFromFile(file);
             return;
         }
 
         try {
             error = "";
-            const bannerColor = await deriveBannerColorFromFile(file);
-            await api.upload.avatar(identity.id, file);
-            const { identity: updatedIdentity } = await api.identities.update(identity.id, {
-                bannerUrl: bannerColor,
-            });
-
-            auth.updateIdentity(updatedIdentity);
-            bannerUrl = bannerColor;
+            const { avatarUrl: uploadedAvatarUrl } = await api.upload.avatar(identity.id, file);
+            auth.updateIdentity({ ...identity, avatarUrl: uploadedAvatarUrl });
 
             success = "Avatar updated!";
             setTimeout(() => success = "", 2000);
@@ -244,57 +232,6 @@ export function createIdentityEditor(getIdentity: () => IdentityType | null) {
             error = e instanceof Error ? e.message : "Failed to upload avatar";
         }
     }
-
-    async function handleBannerChange(fileOrHex: File | string) {
-        const identity = getIdentity();
-        if (!identity) {
-
-            if (typeof fileOrHex === "string") {
-
-                bannerUrl = fileOrHex;
-            } else {
-                bannerUrl = URL.createObjectURL(fileOrHex);
-            }
-            return;
-        }
-
-        if (typeof fileOrHex === "string") {
-
-            try {
-                error = "";
-
-                const { identity: updated } = await api.identities.update(identity.id, {
-                    bannerUrl: fileOrHex
-                });
-                bannerUrl = fileOrHex;
-                auth.updateIdentity(updated);
-                success = "Banner color updated!";
-                setTimeout(() => success = "", 2000);
-            } catch (e) {
-                error = e instanceof Error ? e.message : "Failed to update banner";
-            }
-        } else {
-
-            try {
-                error = "";
-                await api.upload.banner(identity.id, fileOrHex);
-
-                const { identity: updatedIdentity } = await api.identities.get(identity.id);
-
-                auth.updateIdentity(updatedIdentity);
-
-                success = "Banner updated!";
-                setTimeout(() => success = "", 2000);
-            } catch (e) {
-                console.error("[Banner Upload] Failed:", e);
-                error = e instanceof Error ? e.message : "Failed to upload banner";
-            }
-        }
-    }
-
-    let bannerIsColor = $derived(bannerUrl.startsWith("#"));
-    let bannerImage = $derived(bannerIsColor ? undefined : bannerUrl || undefined);
-    let bannerColorValue = $derived(bannerIsColor ? bannerUrl : "#B9BBBE");
 
     let showDeleteConfirm = $state(false);
     let isDeleting = $state(false);
@@ -325,10 +262,7 @@ export function createIdentityEditor(getIdentity: () => IdentityType | null) {
         get error() { return error; },
         get success() { return success; },
         get avatarUrl() { return avatarUrl; },
-        get bannerImage() { return bannerImage; },
-        get bannerColorValue() { return bannerColorValue; },
         handleAvatarUpload,
-        handleBannerChange,
         get displayName() { return displayName; },
         set displayName(value: typeof displayName) { displayName = value; },
         get handle() { return handle; },

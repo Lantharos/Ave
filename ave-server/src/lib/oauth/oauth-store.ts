@@ -21,10 +21,6 @@ export type AuthorizationCodeRecord = {
   encryptedAppPrivateKey?: string;
   appEncryptionMode?: string;
   nonce?: string;
-  requestedResource?: string;
-  requestedScope?: string;
-  communicationMode?: "user_present" | "background";
-  delegationGrantId?: string;
 };
 
 export type AccessTokenRecord = {

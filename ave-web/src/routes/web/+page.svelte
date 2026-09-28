@@ -88,7 +88,7 @@
         </h2>
 
         <p class="font-normal text-[#878787] text-base md:text-[36px] mt-8 md:mt-[10%] max-w-full md:max-w-[80%]">
-            No tracking, no profiles, no middlemen. Just a clean, secure way to prove who you are and connect safely anywhere.
+            No tracking, no profiles, no middlemen. Your passkey proves who you are and unlocks the keys that keep your data encrypted in the apps you trust. Ave never sees them.
         </p>
     </div>
 

@@ -7,7 +7,6 @@ export interface Identity {
   pendingEmail?: string | null;
   birthday?: string;
   avatarUrl?: string;
-  bannerUrl?: string;
   isPrimary: boolean;
   createdAt?: string;
   hasEncryptionKey?: boolean;
@@ -81,26 +80,6 @@ export interface ActivityLogEntry {
   severity?: string;
   ipAddress?: string;
   createdAt: string;
-}
-
-export interface SignatureRequest {
-  id: string;
-  payload: string;
-  metadata?: Record<string, unknown>;
-  createdAt: string;
-  expiresAt: string;
-  app: {
-    id: string;
-    name: string;
-    iconUrl?: string;
-    websiteUrl?: string;
-  };
-  identity: {
-    id: string;
-    handle: string;
-    displayName: string;
-    avatarUrl?: string | null;
-  };
 }
 
 export interface IdentityEncryptionKey {

@@ -1,114 +1,82 @@
 ---
 title: "Encryption model and key lifecycle"
-description: "How Ave delivers per-app, per-identity encryption keys — and how to handle them safely."
+description: "Where Ave's encryption keys are created, how they are wrapped and unlocked, and what Ave's servers can see."
 ---
 
-## How it works
+## What Ave can see
 
-Ave's E2EE model gives each (app, identity) pair a **stable, isolated encryption context**. The server stores an *encrypted* form of your app key, protected by the user's master key during the first authorization. From then on, Ave delivers the key back to you on the post-authorization redirect via URL fragment.
-
-At consent time, the Ave UI decrypts that ciphertext **in the browser** using the user's master key, then places the plaintext app key in the fragment. The token and authorization-code responses do not carry the decrypted secret.
-
-When a passkey supports PRF, Ave uses its output in the browser to encrypt and unlock the user's master key. The PRF output is omitted from credentials sent to the API for registration, sign-in, and key unlocking. Only the encrypted master key is stored on the server.
-
-Saved browser master keys are associated with the account's authenticated identities. Sign-in prefers the key unlocked by the verified passkey; a key from another account cannot substitute for it. Previously saved keys without an account association are reused only after they successfully decrypt an existing key for the current identity. Unmatched keys remain available for recovery. Passkey and recovery-code responses identify the account that owns the recovered key; Ave checks that association before saving it. Device approval applies the session returned with the transferred key. When persistent browser storage is unavailable, an unlocked key remains available for the current page session.
-
-For **multi-user asymmetric** encryption, enable `e2ee:asymmetric` on your app and use per-user app keypairs with the [lookup API](/sdk/sdk-identity-keys). The old identity wrapped OAuth payload flow (`wrapped_key`) is removed.
-
-| Property | Symmetric (`e2ee:symmetric`) | Asymmetric (`e2ee:asymmetric`) |
+| Material | Stored on Ave | Visible to Ave in plaintext |
 |---|---|---|
-| Key material | AES-256 app key | ECDH P-256 public + private keypair |
-| Fragment | `#app_key=` | `#app_public_key=` + `#app_private_key=` |
-| Multi-user | Encrypt with shared app key or roll your own | Lookup public keys; encrypt without Ave handshakes |
+| Master key | Encrypted by passkey PRF output or recovery material | No |
+| Symmetric app key | Encrypted by the master key | No |
+| Asymmetric private key | Encrypted by the master key | No |
+| Asymmetric public key | Plaintext, for lookup | Yes, by design |
+| Your users' data | Not stored on Ave | No |
+
+Each app and identity pair has its own isolated keys. Keys for one app cannot be requested by another, and different identities of the same account have different keys.
+
+## Master key
+
+Every Ave account has a master key that encrypts all of its app keys. It is created in the browser and stored on Ave only as ciphertext.
+
+When a passkey supports PRF, the PRF output encrypts and unlocks the master key in the browser. PRF output is omitted from every credential sent to the API for registration, sign-in, and key unlocking. Recovery codes and approval from another signed-in device can also restore the master key on a new device.
+
+Saved browser master keys are associated with the account's authenticated identities. Sign-in prefers the key unlocked by the verified passkey; a key from another account cannot substitute for it. Previously saved keys without an account association are reused only after they successfully decrypt an existing key for the current identity. Unmatched keys remain available for recovery. Passkey and recovery-code responses identify the account that owns the recovered key, and Ave checks that association before saving it. Device approval applies the session returned with the transferred key. When persistent browser storage is unavailable, an unlocked key remains available for the current page session.
 
 ## Key lifecycle
 
 <Steps>
-  <Step title="First authorization (key provisioning)">
-    When a user authorizes your E2EE-capable app for the first time, the app generates key material client-side and encrypts it with the user's passkey. The encrypted key is sent along with the authorization request.
+  <Step title="Provisioning">
+    The first time an identity authorizes your app with an encryption scope, the Ave sign-in page generates the key material in the browser: an AES-256 key for `e2ee:symmetric`, or a P-256 keypair for `e2ee:asymmetric`. It encrypts the secret part with the master key and sends only the ciphertext, plus the public key in asymmetric mode, with the authorization.
   </Step>
-  <Step title="Grant storage">
-    Ave stores the encrypted key context in the user's authorization record. The server never holds the plaintext.
+  <Step title="Storage">
+    Ave stores the wrapped key on the authorization record for that app and identity.
   </Step>
-  <Step title="Key handoff via URL fragment">
-    After the user consents, the Ave authorization UI reads the server-stored encrypted key and decrypts it on the client side using the user's master key. It then passes the plaintext app key to your callback as a URL fragment (`#app_key=...`). The server value is **never** sent — the fragment contains the already-decrypted key. Parse it from the fragment before or alongside your authorization code exchange.
-
-    ```ts
-    // Parse the app key from the URL fragment before clearing it
-    const hashParams = new URLSearchParams(window.location.hash.slice(1));
-    const rawKey = hashParams.get("app_key");
-
-    // Clear the fragment from browser history immediately
-    window.history.replaceState({}, "", window.location.pathname + window.location.search);
-    ```
+  <Step title="Delivery">
+    On every sign-in, the Ave sign-in page fetches the wrapped key, decrypts it with the master key on the device, and appends the plaintext to your callback URL fragment. Browsers do not send fragments in HTTP requests, so the key reaches your client code without passing through Ave's API or your server. The token endpoint never returns key material.
   </Step>
-  <Step title="Key import">
-    Your app normalizes the base64 key payload (URL fragments can turn `+` into a space), decodes it, and imports it into the Web Crypto API.
-
-    ```ts
-    // Normalize base64 — URL fragments turn + into space
-    const normalized = rawKey.replace(/ /g, "+");
-    const keyBytes = Uint8Array.from(atob(normalized), c => c.charCodeAt(0));
-
-    const cryptoKey = await crypto.subtle.importKey(
-      "raw",
-      keyBytes,
-      { name: "AES-GCM" },
-      false,
-      ["encrypt", "decrypt"]
-    );
-    ```
+  <Step title="Use">
+    Your client reads the key from the fragment, removes it from the address bar, and keeps it in client-side storage. See [End-to-end encryption](/guides/end-to-end-encryption) for the SDK helpers.
   </Step>
-  <Step title="Encrypt and decrypt data">
-    Use AES-GCM with a unique IV for every encryption operation.
-
-    ```ts
-    // Encrypt
-    const iv = crypto.getRandomValues(new Uint8Array(12));
-    const ciphertext = await crypto.subtle.encrypt(
-      { name: "AES-GCM", iv },
-      cryptoKey,
-      plaintext
-    );
-
-    // Decrypt
-    const plaintext = await crypto.subtle.decrypt(
-      { name: "AES-GCM", iv },
-      cryptoKey,
-      ciphertext
-    );
-    ```
+  <Step title="Rotation">
+    When your app requests `e2ee:reset`, the sign-in page generates new keys and delivers them together with the previous ones. Your app re-encrypts existing data and then discards the previous keys.
   </Step>
-  <Step title="Identity switch handling">
-    When the user switches identities, transition the encryption context. Different identities have different keys.
-
-    Key storage pattern: `app:{appId}:identity:{identityId}:data`
-
-    Never merge or share encrypted datasets across identities.
+  <Step title="Revocation">
+    When a user disconnects your app in Ave, its tokens and wrapped keys for that identity are deleted. Data you encrypted with those keys can no longer be decrypted unless your app kept its own copy of the key.
   </Step>
 </Steps>
 
+| Property | Symmetric (`e2ee:symmetric`) | Asymmetric (`e2ee:asymmetric`) |
+|---|---|---|
+| Key material | AES-256 app key | P-256 public and private keys |
+| Fragment | `app_key` | `app_public_key`, `app_private_key` |
+| Sharing between users | Build your own key exchange | Look up public keys and encrypt directly |
+
 ## Fragment hygiene
 
-The app key arrives as a URL fragment (`#app_key=...`). Browsers silently replace `+` with a space in fragment parameters, which breaks base64 decoding.
+URL fragments stay out of HTTP requests, but they remain in the address bar, browser history, and anything that reads `location.href`. Read the fragment on the callback page, then remove it:
 
 ```ts
-// Always normalize before atob():
-const safe = rawKey.replace(/ /g, "+");
+import { mergeAppEncryptionFromUrl, stripSensitiveFragmentParams } from "@ave-id/sdk";
+
+const withKeys = mergeAppEncryptionFromUrl(window.location.href, tokens);
+stripSensitiveFragmentParams();
 ```
 
-After parsing the key, remove the fragment from the browser's history to prevent it from appearing in logs or being shared via the back button.
+`URLSearchParams` turns `+` into a space, which breaks base64. The SDK helpers restore it; if you parse the fragment yourself, call `normalizeAppKeyBase64` or `value.replace(/ /g, "+")` before decoding.
+
+Load analytics, session replay, and error reporting scripts after the fragment has been removed, or configure them to drop URL fragments.
 
 ## Failure handling
 
 <AccordionGroup>
-  <Accordion title="Key missing for an E2EE-required route">
-    Block the action and prompt the user to re-authorize your app. Do not silently degrade to unencrypted storage.
+  <Accordion title="Key missing on a route that requires encryption">
+    Block the action and start sign-in again with the encryption scope. Do not fall back to unencrypted storage.
   </Accordion>
   <Accordion title="Decryption fails">
-    Treat this as a key-context mismatch. Do not overwrite existing ciphertext — you could destroy data. Prompt re-authentication and re-grant.
+    Treat it as a key-context mismatch: a different identity, or rotated keys. Do not overwrite the existing ciphertext.
   </Accordion>
-  <Accordion title="Corrupted payload">
-    Fail closed. Request user re-authentication rather than attempting to recover from a potentially tampered key payload.
+  <Accordion title="The stored wrapped key no longer matches your data">
+    If a trusted session still holds the original key, see [Recover an app key](/troubleshooting/recover-app-key).
   </Accordion>
 </AccordionGroup>

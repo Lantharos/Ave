@@ -1,27 +1,22 @@
 import { createMutation } from "@tanstack/svelte-query";
 import {
+  addOrganizationMember,
   createApp,
   createOrganization,
-  createResource,
   deleteApp,
-  deleteResource,
-  inviteOrganizationMember,
+  removeOrganizationMember,
   rotateSecret,
   updateApp,
   updateOrganization,
-  updateOrganizationMemberRole,
   uploadWorkspaceLogo,
   type CreateAppPayload,
   type UpdateAppPayload,
 } from "./api";
-import type { WorkspaceRole } from "./portal";
 import { queryClient } from "./query-client";
 
 export const queryKeys = {
   portal: (organizationId?: string) => ["portal", organizationId ?? "current"] as const,
-  appOverview: (appId: string) => ["appOverview", appId] as const,
   appIdentities: (appId: string) => ["appIdentities", appId] as const,
-  appActivity: (appId: string) => ["appActivity", appId] as const,
   workspace: (organizationId: string) => ["workspace", organizationId] as const,
 };
 
@@ -39,8 +34,7 @@ export function createUpdateAppMutation() {
   return createMutation(() => ({
     mutationFn: async (payload: { appId: string; data: UpdateAppPayload }) =>
       updateApp(payload.appId, payload.data),
-    onSuccess: async (_, variables) => {
-      await queryClient.invalidateQueries({ queryKey: queryKeys.appOverview(variables.appId) });
+    onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["portal"] });
     },
   }));
@@ -70,10 +64,10 @@ export function createCreateOrganizationMutation() {
   }));
 }
 
-export function createInviteMemberMutation() {
+export function createAddMemberMutation() {
   return createMutation(() => ({
-    mutationFn: async (payload: { organizationId: string; email: string; role: WorkspaceRole }) =>
-      inviteOrganizationMember(payload.organizationId, { email: payload.email, role: payload.role }),
+    mutationFn: async (payload: { organizationId: string; email: string }) =>
+      addOrganizationMember(payload.organizationId, payload.email),
     onSuccess: async (_, variables) => {
       await queryClient.invalidateQueries({ queryKey: queryKeys.workspace(variables.organizationId) });
       await queryClient.invalidateQueries({ queryKey: ["portal"] });
@@ -81,10 +75,10 @@ export function createInviteMemberMutation() {
   }));
 }
 
-export function createUpdateMemberRoleMutation() {
+export function createRemoveMemberMutation() {
   return createMutation(() => ({
-    mutationFn: async (payload: { organizationId: string; memberId: string; role: WorkspaceRole }) =>
-      updateOrganizationMemberRole(payload.organizationId, payload.memberId, payload.role),
+    mutationFn: async (payload: { organizationId: string; memberId: string }) =>
+      removeOrganizationMember(payload.organizationId, payload.memberId),
     onSuccess: async (_, variables) => {
       await queryClient.invalidateQueries({ queryKey: queryKeys.workspace(variables.organizationId) });
       await queryClient.invalidateQueries({ queryKey: ["portal"] });
@@ -111,37 +105,6 @@ export function createUploadWorkspaceLogoMutation() {
       uploadWorkspaceLogo(payload.organizationId, payload.file),
     onSuccess: async (_, variables) => {
       await queryClient.invalidateQueries({ queryKey: queryKeys.workspace(variables.organizationId) });
-      await queryClient.invalidateQueries({ queryKey: ["portal"] });
-    },
-  }));
-}
-
-export function createCreateResourceMutation() {
-  return createMutation(() => ({
-    mutationFn: async (payload: {
-      appId: string;
-      resource: {
-        resourceKey: string;
-        displayName: string;
-        description?: string;
-        scopes: string[];
-        audience: string;
-        status: "active" | "disabled";
-      };
-    }) => createResource(payload.appId, payload.resource),
-    onSuccess: async (_, variables) => {
-      await queryClient.invalidateQueries({ queryKey: queryKeys.appOverview(variables.appId) });
-      await queryClient.invalidateQueries({ queryKey: ["portal"] });
-    },
-  }));
-}
-
-export function createDeleteResourceMutation() {
-  return createMutation(() => ({
-    mutationFn: async (payload: { appId: string; resourceId: string }) =>
-      deleteResource(payload.appId, payload.resourceId),
-    onSuccess: async (_, variables) => {
-      await queryClient.invalidateQueries({ queryKey: queryKeys.appOverview(variables.appId) });
       await queryClient.invalidateQueries({ queryKey: ["portal"] });
     },
   }));

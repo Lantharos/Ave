@@ -56,18 +56,6 @@
     "./expo-session": {
       "types": "./dist/integrations/expo-session.d.ts",
       "default": "./dist/integrations/expo-session.js"
-    },
-    "./next": {
-      "types": "./dist/next/react.d.ts",
-      "default": "./dist/next/react.js"
-    }
-  },
-  "peerDependencies": {
-    "react": ">=18.0.0"
-  },
-  "peerDependenciesMeta": {
-    "react": {
-      "optional": true
     }
   },
   "files": [
@@ -77,8 +65,6 @@
     "build": "rm -rf dist && tsc -p tsconfig.json"
   },
   "devDependencies": {
-    "@types/react": "^19.3.0",
-    "react": "^19.3.0",
     "typescript": "^7.0.2"
   },
   "repository": {

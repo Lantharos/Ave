@@ -103,7 +103,6 @@ async function prepareImageUpload(file: File, maxSize: number): Promise<
 
 // Max file sizes (in bytes)
 const MAX_AVATAR_SIZE = 5 * 1024 * 1024; // 5MB
-const MAX_BANNER_SIZE = 10 * 1024 * 1024; // 10MB
 const MAX_WORKSPACE_LOGO_SIZE = 5 * 1024 * 1024; // 5MB
 
 // All routes require authentication
@@ -248,20 +247,11 @@ app.post("/workspace-logo", async (c) => {
     return c.json({ error: "Organization ID required" }, 400);
   }
 
-  const [organization] = await db
-    .select()
-    .from(organizations)
-    .where(eq(organizations.id, organizationId))
-    .limit(1);
-
-  if (!organization) {
+  const membership = await requireOrganizationAccess(user, organizationId);
+  if (!membership) {
     return c.json({ error: "Organization not found" }, 404);
   }
-
-  const access = await requireOrganizationAccess(user, organizationId, "owner");
-  if (!access) {
-    return c.json({ error: "Organization not found" }, 404);
-  }
+  const { organization } = membership;
 
   const upload = await prepareImageUpload(file, MAX_WORKSPACE_LOGO_SIZE);
   if (!upload.ok) {
@@ -296,71 +286,6 @@ app.post("/workspace-logo", async (c) => {
   return c.json({ logoUrl });
 });
 
-// Upload banner
-app.post("/banner", async (c) => {
-  const user = c.get("user")!;
-  const sizeResponse = rejectLargeRequest(c, MAX_BANNER_SIZE);
-  if (sizeResponse) return sizeResponse;
-
-  const body = await c.req.parseBody();
-  const file = body.file as File | undefined;
-  const identityId = body.identityId as string | undefined;
-
-  if (!file || !(file instanceof File)) {
-    return c.json({ error: "No file provided" }, 400);
-  }
-
-  if (!identityId) {
-    return c.json({ error: "Identity ID required" }, 400);
-  }
-
-  // Validate identity belongs to user
-  const [identity] = await db
-    .select()
-    .from(identities)
-    .where(and(eq(identities.id, identityId), eq(identities.userId, user.id)))
-    .limit(1);
-
-  if (!identity) {
-    return c.json({ error: "Identity not found" }, 404);
-  }
-
-  const upload = await prepareImageUpload(file, MAX_BANNER_SIZE);
-  if (!upload.ok) {
-    return c.json({ error: upload.error }, upload.status);
-  }
-
-  const key = `banners/${identity.id}/${upload.filename}`;
-  const bannerUrl = await uploadToR2(c, upload.buffer, key, upload.contentType);
-
-  // Update identity
-  await db
-    .update(identities)
-    .set({ bannerUrl, updatedAt: new Date() })
-    .where(eq(identities.id, identityId));
-
-  // Delete old banner if exists (only if it's an R2 URL, not a color)
-  if (identity.bannerUrl && !identity.bannerUrl.startsWith("#")) {
-    const oldKey = getKeyFromUrl(c, identity.bannerUrl, `banners/${identity.id}/`);
-    if (oldKey) {
-      await deleteFromR2(c, oldKey);
-    }
-  }
-
-  recordActivityLog(c, {
-    userId: user.id,
-    action: "banner_updated",
-    details: { identityId },
-    deviceId: user.deviceId,
-    ipAddress: c.req.header("x-forwarded-for") || c.req.header("x-real-ip"),
-    userAgent: c.req.header("user-agent"),
-    severity: "info",
-  });
-
-  return c.json({ bannerUrl });
-});
-
-// Delete avatar
 app.delete("/avatar/:identityId", async (c) => {
   const user = c.get("user")!;
   const identityId = c.req.param("identityId");
@@ -388,39 +313,6 @@ app.delete("/avatar/:identityId", async (c) => {
   await db
     .update(identities)
     .set({ avatarUrl: null, updatedAt: new Date() })
-    .where(eq(identities.id, identityId));
-
-  return c.json({ success: true });
-});
-
-// Delete banner
-app.delete("/banner/:identityId", async (c) => {
-  const user = c.get("user")!;
-  const identityId = c.req.param("identityId");
-
-  // Validate identity belongs to user
-  const [identity] = await db
-    .select()
-    .from(identities)
-    .where(and(eq(identities.id, identityId), eq(identities.userId, user.id)))
-    .limit(1);
-
-  if (!identity) {
-    return c.json({ error: "Identity not found" }, 404);
-  }
-
-  // Delete from R2 if exists (only if it's an R2 URL, not a color)
-  if (identity.bannerUrl && !identity.bannerUrl.startsWith("#")) {
-    const key = getKeyFromUrl(c, identity.bannerUrl, `banners/${identity.id}/`);
-    if (key) {
-      await deleteFromR2(c, key);
-    }
-  }
-
-  // Update identity
-  await db
-    .update(identities)
-    .set({ bannerUrl: null, updatedAt: new Date() })
     .where(eq(identities.id, identityId));
 
   return c.json({ success: true });

@@ -15,6 +15,7 @@ import {
 import { validateOpaqueKeyEnvelope, validatePublicKeyBlob } from "../../lib/identity/encryption-key-payload";
 import { listIdentitiesForOwner, serializeIdentityForOwner } from "../../lib/identity/identity-serialization";
 import { enforceRateLimits, ipRateLimit, subjectRateLimit } from "../../lib/platform/rate-limit";
+import { deleteEmptyOrganizations } from "../../lib/developer/dev-portal";
 import { requireAuth, requireWritableForMutation } from "../../middleware/auth";
 
 const app = new Hono();
@@ -62,11 +63,6 @@ app.post("/", zValidator("json", z.object({
   email: z.string().email().optional(),
   birthday: z.string().optional(),
   avatarUrl: z.string().url().optional(),
-  // bannerUrl can be a URL or a hex color (e.g., #FF6B6B)
-  bannerUrl: z.string().optional().refine(
-    (val) => val === undefined || val.startsWith("#") || z.string().url().safeParse(val).success,
-    { message: "Must be a valid URL or hex color" }
-  ),
   encryptionKey: z.object({
     publicKey: z.string().min(1),
     encryptedPrivateKey: z.string().min(1),
@@ -112,7 +108,6 @@ app.post("/", zValidator("json", z.object({
       pendingEmail: data.email ? normalizeEmail(data.email) : null,
       birthday: data.birthday,
       avatarUrl: data.avatarUrl,
-      bannerUrl: data.bannerUrl,
       isPrimary: existingCount.length === 0, // First identity is primary
     })
     .returning();
@@ -149,11 +144,6 @@ app.patch("/:identityId", zValidator("json", z.object({
   handle: z.string().min(3).max(32).regex(/^[a-zA-Z0-9_]+$/).optional(),
   birthday: z.string().nullable().optional(),
   avatarUrl: z.string().url().nullable().optional(),
-  // bannerUrl can be a URL or a hex color (e.g., #FF6B6B)
-  bannerUrl: z.string().nullable().optional().refine(
-    (val) => val === null || val === undefined || val.startsWith("#") || z.string().url().safeParse(val).success,
-    { message: "Must be a valid URL or hex color" }
-  ),
 })), async (c) => {
   const user = c.get("user")!;
   const identityId = c.req.param("identityId");
@@ -188,7 +178,6 @@ app.patch("/:identityId", zValidator("json", z.object({
   if (data.handle !== undefined) updateData.handle = data.handle.toLowerCase();
   if (data.birthday !== undefined) updateData.birthday = data.birthday;
   if (data.avatarUrl !== undefined) updateData.avatarUrl = data.avatarUrl;
-  if (data.bannerUrl !== undefined) updateData.bannerUrl = data.bannerUrl;
   
   const [updated] = await db
     .update(identities)
@@ -455,6 +444,7 @@ app.delete("/:identityId", async (c) => {
     ))
     .returning({ id: identities.id });
   if (!removed) return c.json({ error: "Cannot delete the primary identity" }, 400);
+  await deleteEmptyOrganizations();
   
   // Log activity
   recordActivityLog(c, {

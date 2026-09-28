@@ -20,15 +20,11 @@ For local development, copy `.dev.vars.example` to `.dev.vars` and configure loc
 
 Keep applied D1 migrations. Rehearse changes against an export and check retained records and foreign keys before changing production. Store database exports outside the repository with access restricted to the operator.
 
-The developer-team transition uses two migrations:
+D1 enforces foreign keys during migrations and ignores `PRAGMA foreign_keys = OFF`, so dropping a table also runs its `ON DELETE CASCADE` actions. Never let a migration drop or rebuild a table that other rows still reference. Move the referencing rows aside first, the way `0031_slim_ave.sql` rebuilds `organizations`, and rehearse on a local copy before applying remotely.
 
-1. `0029_developer_members.sql` creates and copies developer memberships. Apply this before deploying the API that reads `developer_members`.
-2. Deploy the API and frontend, verify health, passkey options, OAuth discovery, and developer access, and allow previous requests to finish.
-3. `0030_retire_business.sql` removes enterprise-only data and columns. Apply this after the new API is serving all traffic. It preserves ordinary accounts, app ownership, sessions, grants, signing keys, and personal encryption keys.
+`0031_slim_ave.sql` removes delegation, signing, analytics, banner and team role data. Deploy the API first and apply the migration immediately after. The previous API reads the removed columns, and the new API cannot create teams until `organizations.owner_user_id` is gone. `oauth_apps.owner_id` stays in the table with every value cleared, because rebuilding `oauth_apps` would cascade into authorizations and tokens.
 
-For an existing deployment, apply only the additive migration first by pointing a temporary Wrangler configuration at a directory containing migrations through `0029`. After deployment, use the normal configuration to apply the remaining migration. A fresh local database can apply the whole history at once.
-
-Do not roll back to a Worker that selects removed columns after the cleanup migration. Use a forward fix, or restore the matching database and Worker together during a controlled recovery.
+Do not roll back to a Worker that selects removed columns after a cleanup migration. Use a forward fix, or restore the matching database and Worker together during a controlled recovery.
 
 ## Workers and secrets
 
@@ -48,6 +44,6 @@ Check both queue backlog and the dead-letter queue before retiring an event prod
 
 ## Verification
 
-Verify public health and OIDC discovery, authenticated account and developer access, passkey registration/login, OAuth code exchange and refresh, signing, recovery, and encrypted key delivery. Exercise push delivery with an enrolled device when available; a successful build cannot prove notification delivery or physical authenticator behavior.
+Verify public health and OIDC discovery, authenticated account and developer access, passkey registration/login, OAuth code exchange and refresh, recovery, and encrypted key delivery. Exercise push delivery with an enrolled device when available; a successful build cannot prove notification delivery or physical authenticator behavior.
 
-Publish SDK packages through the npm workflow after the API is deployed. SDK 0.11 removes the workspace API; app-owned workspaces use the verified Ave identity as their member identifier.
+Publish SDK packages through the npm workflow after the API is deployed.

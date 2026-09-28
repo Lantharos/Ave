@@ -1,9 +1,9 @@
 import { recordActivityLog } from "../../lib/platform/background-events";
 import { zValidator } from "@hono/zod-validator";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 import { Hono } from "hono";
 import { z } from "zod";
-import { db, identities, oauthApps, oauthAuthorizations, oauthResources, developerMembers, organizations } from "../../db";
+import { db, identities, oauthApps, oauthAuthorizations, developerMembers, organizations } from "../../db";
 import {
   createOrganization,
   getOrganizationMemberships,
@@ -31,8 +31,6 @@ function mapOrganizationSummary(
     name: membership.organization.name,
     logoUrl: membership.organization.logoUrl,
     slug: membership.organization.slug,
-    appLimit: membership.organization.appLimit,
-    role: membership.role,
     appCount: appCountByOrganizationId.get(membership.organization.id) || 0,
     memberCount: memberCountByOrganizationId.get(membership.organization.id) || 0,
   };
@@ -48,8 +46,6 @@ function mapWorkspaceMembers(members: Array<{
     name: identity.displayName || identity.handle,
     email: identity.email,
     avatarUrl: identity.avatarUrl,
-    role: member.role,
-    status: "active" as const,
     joinedAt: member.createdAt,
   }));
 }
@@ -81,7 +77,6 @@ app.get("/", async (c) => {
         .select({
           organizationId: developerMembers.organizationId,
           memberId: developerMembers.id,
-          status: developerMembers.status,
         })
         .from(developerMembers)
         .where(inArray(developerMembers.organizationId, organizationIds))
@@ -89,7 +84,6 @@ app.get("/", async (c) => {
 
   const memberCountByOrganizationId = new Map<string, number>();
   for (const row of memberRows) {
-    if (row.status !== "active") continue;
     memberCountByOrganizationId.set(row.organizationId, (memberCountByOrganizationId.get(row.organizationId) || 0) + 1);
   }
 
@@ -117,10 +111,10 @@ app.get("/bootstrap", async (c) => {
     });
   }
 
-  const selectedMembership = memberships.find((entry) => entry.organization.id === currentOrganizationId);
-  if (!selectedMembership) return c.json({ error: "Organization not found" }, 404);
+  const membership = memberships.find((entry) => entry.organization.id === currentOrganizationId);
+  if (!membership) return c.json({ error: "Organization not found" }, 404);
 
-  const [appRows, memberRows, resources, authorizationCounts] = await Promise.all([
+  const [appRows, memberRows, authorizationCounts] = await Promise.all([
     db
       .select()
       .from(oauthApps)
@@ -129,15 +123,7 @@ app.get("/bootstrap", async (c) => {
       .select({ member: developerMembers, identity: identities })
       .from(developerMembers)
       .innerJoin(identities, eq(identities.id, developerMembers.identityId))
-      .where(and(
-        inArray(developerMembers.organizationId, organizationIds),
-        eq(developerMembers.status, "active"),
-      )),
-    db
-      .select({ resource: oauthResources })
-      .from(oauthResources)
-      .innerJoin(oauthApps, eq(oauthApps.id, oauthResources.ownerAppId))
-      .where(eq(oauthApps.organizationId, currentOrganizationId)),
+      .where(inArray(developerMembers.organizationId, organizationIds)),
     db
       .select({
         appId: oauthAuthorizations.appId,
@@ -164,25 +150,8 @@ app.get("/bootstrap", async (c) => {
   const organizationsSummary = memberships.map((membership) =>
     mapOrganizationSummary(membership, appCountByOrganizationId, memberCountByOrganizationId),
   );
-  const membership = memberships.find((entry) => entry.organization.id === currentOrganizationId) ?? null;
-  if (!membership) {
-    return c.json({
-      organizations: organizationsSummary,
-      currentOrganizationId,
-      organization: null,
-      apps: [],
-    });
-  }
-
   const members = memberRows.filter(({ member }) => member.organizationId === currentOrganizationId);
   const apps = appRows.filter((appRow) => appRow.organizationId === currentOrganizationId);
-
-  const resourcesByAppId = new Map<string, Array<(typeof resources)[number]["resource"]>>();
-  for (const { resource } of resources) {
-    const list = resourcesByAppId.get(resource.ownerAppId) || [];
-    list.push(resource);
-    resourcesByAppId.set(resource.ownerAppId, list);
-  }
 
   const identityCountByAppId = new Map(
     authorizationCounts.map((row) => [row.appId, Number(row.identityCount || 0)]),
@@ -196,17 +165,11 @@ app.get("/bootstrap", async (c) => {
       name: membership.organization.name,
       logoUrl: membership.organization.logoUrl,
       slug: membership.organization.slug,
-      appLimit: membership.organization.appLimit,
-      role: membership.role,
       members: mapWorkspaceMembers(members),
       appCount: apps.length,
     },
     apps: apps.map((appRow) =>
-      serializeApp(
-        appRow,
-        resourcesByAppId.get(appRow.id) || [],
-        identityCountByAppId.get(appRow.id) || 0,
-      ),
+      serializeApp(appRow, identityCountByAppId.get(appRow.id) || 0),
     ),
   });
 });
@@ -217,8 +180,7 @@ app.post("/", zValidator("json", z.object({
   const user = c.get("user")!;
   const payload = c.req.valid("json");
 
-  const membership = await createOrganization(user.id, payload.name.trim());
-  const { organization } = membership;
+  const { organization } = await createOrganization(user.id, payload.name.trim());
 
   return c.json({
     organization: {
@@ -226,8 +188,6 @@ app.post("/", zValidator("json", z.object({
       name: organization.name,
       logoUrl: organization.logoUrl,
       slug: organization.slug,
-      appLimit: organization.appLimit,
-      role: membership.role,
       appCount: 0,
       memberCount: 1,
     },
@@ -238,7 +198,7 @@ app.get("/:organizationId", async (c) => {
   const user = c.get("user")!;
   const organizationId = c.req.param("organizationId");
 
-  const membership = await requireOrganizationAccess(user, organizationId, "viewer");
+  const membership = await requireOrganizationAccess(user, organizationId);
   if (!membership) {
     return c.json({ error: "Organization not found" }, 404);
   }
@@ -247,7 +207,7 @@ app.get("/:organizationId", async (c) => {
     .select({ member: developerMembers, identity: identities })
     .from(developerMembers)
     .innerJoin(identities, eq(identities.id, developerMembers.identityId))
-    .where(and(eq(developerMembers.organizationId, organizationId), eq(developerMembers.status, "active")));
+    .where(eq(developerMembers.organizationId, organizationId));
 
   const apps = await db
     .select({
@@ -262,8 +222,6 @@ app.get("/:organizationId", async (c) => {
       name: membership.organization.name,
       logoUrl: membership.organization.logoUrl,
       slug: membership.organization.slug,
-      appLimit: membership.organization.appLimit,
-      role: membership.role,
       members: mapWorkspaceMembers(members),
       appCount: apps.length,
     },
@@ -278,7 +236,7 @@ app.patch("/:organizationId", zValidator("json", z.object({
   const organizationId = c.req.param("organizationId");
   const payload = c.req.valid("json");
 
-  const membership = await requireOrganizationAccess(user, organizationId, "owner");
+  const membership = await requireOrganizationAccess(user, organizationId);
   if (!membership) {
     return c.json({ error: "Organization not found" }, 404);
   }
@@ -307,12 +265,10 @@ app.patch("/:organizationId", zValidator("json", z.object({
 
   return c.json({
     organization: {
-      role: membership.role,
       id: updated.id,
       name: updated.name,
       logoUrl: updated.logoUrl,
       slug: updated.slug,
-      appLimit: updated.appLimit,
     },
   });
 });

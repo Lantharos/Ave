@@ -34,11 +34,8 @@ const flow = createIdentityEditor(() => identity);
     {#if newIdentity}
         <IdentityCard
             avatar={flow.avatarUrl || "/placeholder.png"}
-            banner={flow.bannerImage}
-            bannerColor={flow.bannerColorValue}
             size="large"
             onUploadAvatar={flow.handleAvatarUpload}
-            onChangeBanner={flow.handleBannerChange}
         >
             <div class="flex flex-col gap-2 md:gap-[10px]">
                 <div class="p-3 md:p-[30px] bg-[#111111] rounded-[16px] md:rounded-[32px]">
@@ -94,10 +91,7 @@ const flow = createIdentityEditor(() => identity);
         <IdentityCard
             avatar={flow.avatarUrl || "/placeholder.png"}
             size="large"
-            banner={flow.bannerImage}
-            bannerColor={flow.bannerColorValue}
             onUploadAvatar={flow.handleAvatarUpload}
-            onChangeBanner={flow.handleBannerChange}
         >
             <div class="flex flex-col gap-2 md:gap-[10px]">
                 <!-- Name Field -->

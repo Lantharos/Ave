@@ -7,24 +7,6 @@ export const oauthApi = {
         timeoutMs,
       }),
 
-    fedcmFinalize: (data: {
-      code: string;
-      clientId: string;
-      state?: string;
-      appKey?: string;
-      appPublicKey?: string;
-      appPrivateKey?: string;
-      appKeyOld?: string;
-      appPublicKeyOld?: string;
-      appPrivateKeyOld?: string;
-      appKeyReset?: boolean;
-    }) =>
-      request<{ assertion: string }>("/api/oauth/fedcm/finalize", {
-        method: "POST",
-        body: JSON.stringify(data),
-        timeoutMs: 30000,
-      }),
-
     getApp: (clientId: string) =>
       request<{
         app: {
@@ -34,16 +16,8 @@ export const oauthApi = {
           iconUrl?: string;
           websiteUrl?: string;
           supportsE2ee: boolean;
-        allowedScopes?: string[];
-      };
-        resources?: {
-          resourceKey: string;
-          displayName: string;
-          description?: string;
-          scopes: string[];
-          audience: string;
-          status: string;
-        }[];
+          allowedScopes?: string[];
+        };
       }>(`/api/oauth/app/${encodeURIComponent(clientId)}`, { publicRequest: true }),
 
     getAuthorizeBootstrap: (clientId: string, identityId?: string) => {
@@ -56,38 +30,13 @@ export const oauthApi = {
           iconUrl?: string;
           websiteUrl?: string;
           supportsE2ee: boolean;
-        allowedScopes?: string[];
-      };
-        resources?: {
-          resourceKey: string;
-          displayName: string;
-          description?: string;
-          scopes: string[];
-          audience: string;
-          status: string;
-        }[];
+          allowedScopes?: string[];
+        };
         authorizations: OAuthAuthorization[];
       }>(`/api/oauth/authorize/bootstrap/${encodeURIComponent(clientId)}${query}`, {
         cache: "no-store",
       });
     },
-
-    getResource: (resourceKey: string) =>
-      request<{
-        resource: {
-          resourceKey: string;
-          displayName: string;
-          description?: string;
-          scopes: string[];
-          audience: string;
-          status: string;
-          ownerAppClientId: string;
-          ownerAppName: string;
-          ownerAppDescription?: string;
-          ownerAppIconUrl?: string;
-          ownerAppWebsiteUrl?: string;
-        };
-      }>(`/api/oauth/resource/${encodeURIComponent(resourceKey)}`, { publicRequest: true }),
 
     authorize: (data: {
       clientId: string;
@@ -101,10 +50,6 @@ export const oauthApi = {
       appPublicKey?: string;
       encryptedAppPrivateKey?: string;
       nonce?: string;
-      connector?: boolean;
-      requestedResource?: string;
-      requestedScope?: string;
-      communicationMode?: "user_present" | "background";
       interactionMode?: "instant" | "prompt";
     }) =>
       request<{ redirectUrl: string }>("/api/oauth/authorize", {
@@ -130,28 +75,4 @@ export const oauthApi = {
           }),
         },
       ),
-
-    getDelegations: () =>
-      request<{
-        delegations: {
-          id: string;
-          createdAt: string;
-          updatedAt: string;
-          revokedAt?: string | null;
-          communicationMode: "user_present" | "background";
-          scope: string;
-          sourceAppClientId: string;
-          sourceAppName: string;
-          sourceAppIconUrl?: string;
-          sourceAppWebsiteUrl?: string;
-          targetResourceKey: string;
-          targetResourceName: string;
-          targetAudience: string;
-        }[];
-      }>("/api/oauth/delegations"),
-
-    revokeDelegation: (delegationId: string) =>
-      request<{ success: boolean }>(`/api/oauth/delegations/${delegationId}`, {
-        method: "DELETE",
-      }),
 };

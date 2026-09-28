@@ -5,8 +5,6 @@ export interface PendingAuthContext {
   appName: string | null;
   appIconUrl: string | null;
   clientId: string | null;
-  isQuickAuth: boolean;
-  originHostname: string | null;
 }
 
 function publicPathname(pathname: string) {
@@ -58,43 +56,18 @@ export async function loadPendingAuthContext(): Promise<PendingAuthContext | nul
     return null;
   }
 
-  if (clientId.startsWith("origin:")) {
-    try {
-      const origin = new URL(clientId.slice("origin:".length));
-      return {
-        appName: origin.hostname,
-        appIconUrl: null,
-        clientId,
-        isQuickAuth: true,
-        originHostname: origin.hostname,
-      };
-    } catch {
-      return {
-        appName: null,
-        appIconUrl: null,
-        clientId,
-        isQuickAuth: true,
-        originHostname: null,
-      };
-    }
-  }
-
   try {
     const appData = await api.oauth.getApp(clientId);
     return {
       appName: appData.app.name,
       appIconUrl: appData.app.iconUrl || null,
       clientId,
-      isQuickAuth: false,
-      originHostname: null,
     };
   } catch {
     return {
       appName: null,
       appIconUrl: null,
       clientId,
-      isQuickAuth: false,
-      originHostname: null,
     };
   }
 }

@@ -5,32 +5,26 @@ import { identityClaimsForApp, serializeIdentityForApp } from "../../../lib/iden
 import { createAccessTokenWrite, type AuthorizationCodeRecord } from "../../../lib/oauth/oauth-store";
 import { getIssuer, getResourceAudience, hashToken, signJwt } from "../../../lib/oauth/oidc";
 import {
-  buildQuickApp,
   generateAccessToken,
   generateRefreshToken,
   hasScope,
-  isQuickClient,
   nowSeconds,
 } from "../shared";
 
 export async function buildTokenResponseFromAuthorizationCode(params: {
   authCode: AuthorizationCodeRecord;
-  oauthApp: ReturnType<typeof buildQuickApp> | typeof oauthApps.$inferSelect;
-  clientId: string;
+  oauthApp: typeof oauthApps.$inferSelect;
   redirectUri: string;
-  includeEncryptedAppKey?: boolean;
   issueRefreshToken?: boolean;
 }) {
-  const { authCode, oauthApp, clientId, redirectUri, includeEncryptedAppKey, issueRefreshToken = false } = params;
+  const { authCode, oauthApp, redirectUri, issueRefreshToken = false } = params;
 
   const accessToken = generateAccessToken();
   const accessTokenTtl = oauthApp.accessTokenTtlSeconds || 3600;
   const refreshTokenTtl = oauthApp.refreshTokenTtlSeconds || 30 * 24 * 60 * 60;
   const issuedAt = nowSeconds();
   const expiresAt = issuedAt + accessTokenTtl;
-  const shouldIssueRefreshToken = issueRefreshToken
-    && hasScope(authCode.scope, "offline_access")
-    && !isQuickClient(clientId);
+  const shouldIssueRefreshToken = issueRefreshToken && hasScope(authCode.scope, "offline_access");
   const refreshToken = shouldIssueRefreshToken ? generateRefreshToken() : null;
   const refreshTokenId = shouldIssueRefreshToken ? randomUUID() : null;
 
@@ -87,7 +81,6 @@ export async function buildTokenResponseFromAuthorizationCode(params: {
     scope: authCode.scope,
     cid: oauthApp.clientId,
     uid: hasScope(authCode.scope, "user_id") ? authCode.userId : undefined,
-    ...(isQuickClient(clientId) ? { quick: true } : {}),
   });
   const identity = await identityPromise;
 
@@ -126,11 +119,6 @@ export async function buildTokenResponseFromAuthorizationCode(params: {
 
   if (refreshToken) {
     response.refresh_token = refreshToken;
-  }
-
-
-  if (includeEncryptedAppKey && authCode.encryptedAppKey) {
-    response.encryptedAppKey = authCode.encryptedAppKey;
   }
 
   return response;

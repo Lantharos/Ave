@@ -2,7 +2,6 @@
     import Text from "$lib/surfaces/web/components/Text.svelte";
     import Button from "$lib/surfaces/web/components/Button.svelte";
     import IdentityCard from "$lib/surfaces/web/components/IdentityCard.svelte";
-    import { deriveBannerColorFromFile } from "$lib/surfaces/web/lib/avatar-image";
     import { api } from "$lib/surfaces/web/lib/api";
     import { ChevronRight } from "@lucide/svelte";
 
@@ -12,8 +11,6 @@
         email: string;
         birthday: string;
         avatarUrl: string;
-        bannerUrl: string;
-        bannerColor: string;
     }
 
     let { onNext, initialData } = $props<{ 
@@ -26,8 +23,6 @@
     let email = $state("");
     let birthday = $state("");
     let avatarUrl = $state("");
-    let bannerUrl = $state("");
-    let bannerColor = $state("#1a1a2e");
 
     $effect(() => {
         if (!initialData) return;
@@ -36,8 +31,6 @@
         email = initialData.email || "";
         birthday = initialData.birthday || "";
         avatarUrl = initialData.avatarUrl || "";
-        bannerUrl = initialData.bannerUrl || "";
-        bannerColor = initialData.bannerColor || "#1a1a2e";
     });
 
     let handleError = $state("");
@@ -99,24 +92,11 @@
             email: email.trim(),
             birthday,
             avatarUrl,
-            bannerUrl,
-            bannerColor,
         });
     }
 
-    async function handleAvatarUpload(file: File) {
+    function handleAvatarUpload(file: File) {
         avatarUrl = URL.createObjectURL(file);
-        bannerColor = await deriveBannerColorFromFile(file);
-        bannerUrl = "";
-    }
-
-    function handleBannerChange(fileOrHex: File | string) {
-        if (typeof fileOrHex === "string") {
-            bannerColor = fileOrHex;
-            bannerUrl = "";
-        } else {
-            bannerUrl = URL.createObjectURL(fileOrHex);
-        }
     }
 
     let isValid = $derived(
@@ -135,10 +115,7 @@
 
         <IdentityCard 
             avatar={avatarUrl || "/placeholder.png"} 
-            banner={bannerUrl} 
-            bannerColor={bannerColor} 
             onUploadAvatar={handleAvatarUpload} 
-            onChangeBanner={handleBannerChange}
         >
             <div class="flex flex-col gap-2 md:gap-[10px]">
                 <div class="p-5 md:p-[30px] bg-[#111111] rounded-[24px] md:rounded-[32px]">

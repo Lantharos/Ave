@@ -3,26 +3,23 @@ title: "Ave Session"
 description: "Persist OAuth tokens, refresh safely, and keep framework auth clients supplied with fresh ID tokens."
 ---
 
-OAuth tokens expire on a short clock. That is separate from how long a user should stay signed in. When a registered Ave app requests `offline_access`, Ave issues a refresh token so your app can rotate tokens without sending the user through consent again.
+OAuth tokens expire on a short clock. That is separate from how long a user should stay signed in. When your app requests `offline_access`, Ave issues a refresh token so your app can rotate tokens without sending the user through consent again.
 
-`AveSession` gives you one supported lifecycle for that work: persist the token bundle, refresh before expiry, collapse duplicate refresh calls, broadcast changes across tabs, and save rotated refresh tokens atomically.
+`AveSession` gives you one supported lifecycle for that work: persist the token bundle and any encryption keys, refresh before expiry, collapse duplicate refresh calls, broadcast changes across tabs, and save rotated refresh tokens atomically.
 
 ## When to use it
 
-- You use a registered OAuth app and requested `offline_access`.
+- You requested `offline_access` and want refresh handled for you.
+- You requested an encryption scope and want the keys kept next to the tokens.
 - You need a fresh `id_token` for Convex, your API, or another auth client.
 - You want to avoid duplicated refresh calls, stale refresh tokens, and cold-start races.
-- You need framework adapters for Convex, Svelte, Next.js, or Expo.
-
-<Note>
-  Quick Ave does not issue refresh tokens. Move to a registered app when you need long-lived sessions. See [Upgrading from Quick Ave](/guides/quick-ave-to-standard).
-</Note>
+- You need adapters for Convex, Svelte, or Expo.
 
 ## Disconnected apps
 
-Disconnecting an app in Ave invalidates its refresh tokens and access to Ave APIs for the selected identity. Handle a definitive `invalid_grant` by clearing the app session and starting sign-in again. Reconnecting requires consent and does not reactivate old tokens.
+Disconnecting an app in Ave invalidates its refresh tokens and access to Ave APIs for the selected identity, and deletes its encryption keys for that identity. Handle a definitive `invalid_grant` by clearing the app session and starting sign-in again. Reconnecting requires consent, does not reactivate old tokens, and provisions new encryption keys.
 
-An ID token or delegated resource JWT already accepted by another service remains subject to that service’s session policy and the token’s expiry. Signing out locally only clears the local session.
+An ID token already accepted by another service remains subject to that service’s session policy and the token’s expiry. Signing out locally only clears the local session.
 
 ## Create a session
 
@@ -50,13 +47,13 @@ const idToken = await session.getValidIdToken();
 
 `completeOAuthCallback` runs `finishPkceLogin` and `setTokensFromResponse` together. Use it on your OAuth callback route, then call `hydrate()` during app startup.
 
-If the redirect includes an E2EE `#app_key`, `finishPkceLogin` merges it into the token response and removes sensitive fragment parameters from the URL. `session.getAppKeyBase64()` returns the stored key after `hydrate()`.
+If the redirect carries encryption keys in its fragment, `finishPkceLogin` merges them into the token response and removes them from the URL. `session.getAppKeyBase64()`, `getAppPublicKeyBase64()`, and `getAppPrivateKeyBase64()` return the stored keys after `hydrate()`.
 
 <Tip>
   Set `devtools: true` only in development. It exposes `window.__aveSessionDev` with state, expiry helpers, and `lastRefreshError`.
 </Tip>
 
-`getValidIdToken()` waits for proactive refresh when the JWT is near expiry. For production refresh-token handling, prefer `createMemoryStorage()` or a backend-for-frontend instead of `localStorage`. See [Quickstart](/quickstart) for storage guidance.
+`getValidIdToken()` waits for proactive refresh when the JWT is near expiry. `createLocalStorageAdapter()` keeps the refresh token and any encryption keys in `localStorage`. For stricter setups, use `createMemoryStorage()`, your own `AveSessionStorage`, or a backend-for-frontend with `customRefresh`.
 
 ## Convex
 
@@ -64,17 +61,13 @@ If the redirect includes an E2EE `#app_key`, `finishPkceLogin` merges it into th
 import { ConvexReactClient } from "convex/react";
 import { wireAveSessionToConvex } from "@ave-id/sdk/convex";
 
-const convex = new ConvexReactClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
+const convex = new ConvexReactClient(CONVEX_URL);
 
 await session.hydrate();
 wireAveSessionToConvex(convex, session);
 ```
 
 Call `session.setTokensFromResponse` after login. `wireAveSessionToConvex` passes a function that calls `getValidIdToken()` so Convex always receives a valid token.
-
-## Next.js App Router
-
-Use `AveSessionProvider` and `useAveSession` from `@ave-id/sdk/next`. If you use Convex, `AveConvexBridge` can replace a manual `wireAveSessionToConvex` call. See [Next.js App Router + Ave Session](/guides/nextjs-ave-session).
 
 ## Svelte
 
@@ -125,11 +118,13 @@ onExpoAppForegroundRefresh(AppState, session);
 
 Pass `customRefresh` in `AveSession` options to POST to your own `/api/session/refresh` endpoint. That endpoint can read an HttpOnly cookie and return `TokenResponse`-shaped JSON. The client never stores the refresh token.
 
-## E2EE app key
+## Encryption keys
 
-For registered E2EE apps, Ave may append `#app_key=...` after consent. `finishPkceLogin` merges that value into the returned `TokenResponse`, and `AveSession` stores it as `appKeyBase64` next to your OAuth tokens so you can use `session.getAppKeyBase64()` after `hydrate()`.
+When a sign-in requests `e2ee:symmetric` or `e2ee:asymmetric`, Ave appends the keys to the callback fragment. `completeOAuthCallback`, `completeExpoOAuthCallback`, and the embed's `onTokens` merge them into the token response, and `setTokensFromResponse` stores them in the snapshot next to your tokens.
 
-You still own crypto policy. Import the key with Web Crypto according to [End-to-end encryption](/guides/end-to-end-encryption). FedCM flows may set `app_key` on the token response directly; that value is merged the same way.
+Refreshes keep the stored keys. A sign-in with `e2ee:reset` replaces them, and the snapshot exposes the previous keys as `appKeyBase64Old`, `appPublicKeyBase64Old`, and `appPrivateKeyBase64Old` with `appEncryptionWasReset` set so you can re-encrypt existing data. `signOut()` clears keys along with tokens.
+
+`AveSession` stores keys wherever its storage adapter stores tokens. Choose the adapter with that in mind, and import keys with Web Crypto as shown in [End-to-end encryption](/guides/end-to-end-encryption). `setAppKeyBase64()` replaces or clears the symmetric key if you manage it yourself.
 
 ## Dev tools
 
@@ -137,7 +132,20 @@ With `devtools: true`, `window.__aveSessionDev` exposes `getState()`, expiry hel
 
 ## Server APIs
 
-Use `getBearerToken` and `verifyAveIdTokenFromAuthHeader` from `@ave-id/sdk/server` to turn `Authorization: Bearer &lt;id_token&gt;` into `subject` plus claims. See [Postgres, SQLite, and JWT auth](/guides/sql-postgres-jwt-auth).
+Send `await session.getValidIdToken()` as a bearer token to your backend. On the server, `verifyAveIdTokenFromAuthHeader` from `@ave-id/sdk/server` verifies the signature, issuer, audience, and expiry, and returns the identity ID as `subject`:
+
+```ts
+import { verifyAveIdTokenFromAuthHeader } from "@ave-id/sdk/server";
+
+const principal = await verifyAveIdTokenFromAuthHeader(request.headers.get("authorization"), {
+  clientId: process.env.AVE_CLIENT_ID!,
+});
+if (!principal) return new Response("Unauthorized", { status: 401 });
+
+const identityId = principal.subject;
+```
+
+Use `verifyAveIdToken(token, { clientId })` when the token comes from somewhere other than an `Authorization` header.
 
 ## Related
 

@@ -1,0 +1,46 @@
+---
+title: "Encryption endpoints"
+description: "Look up app public keys for identities that use your end-to-end encrypted app."
+---
+
+Encryption keys reach your app in the callback fragment, not through an API call. The only app-facing encryption endpoint is the public-key lookup for `e2ee:asymmetric` apps. The SDK wraps it as `lookupAppPublicKeyByHandle` and `lookupAppUserByPublicKey`.
+
+## `GET /api/encryption/app-lookup`
+
+Public. No credentials required.
+
+<ParamField query="client_id" type="string" required>
+	Your app's client ID. Results are limited to identities that authorized this app.
+</ParamField>
+<ParamField query="handle" type="string">
+	Look up an identity by handle. Case-insensitive.
+</ParamField>
+<ParamField query="public_key" type="string">
+	Look up the identity that owns an app public key (base64 SPKI).
+</ParamField>
+
+Provide exactly one of `handle` or `public_key`.
+
+```bash
+curl "https://api.aveid.net/api/encryption/app-lookup?client_id=YOUR_CLIENT_ID&handle=alice"
+```
+
+```json
+{
+  "clientId": "YOUR_CLIENT_ID",
+  "identityId": "identity-uuid",
+  "handle": "alice",
+  "displayName": "Alice Smith",
+  "publicKey": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE...",
+  "encryptionMode": "asymmetric"
+}
+```
+
+Errors:
+
+- `400` both or neither of `handle` and `public_key`, or a malformed public key
+- `404` app not found
+- `404` identity not found, it has not signed in to this app, or it has no app public key yet
+- `429` rate limited
+
+A `404` for an existing user usually means they have not used your app with `e2ee:asymmetric`. Ask them to sign in to your app rather than creating keys on their behalf.

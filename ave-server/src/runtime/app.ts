@@ -15,7 +15,6 @@ import organizationsRoutes from "../routes/developer/organizations";
 import pushRoutes from "../routes/account/push";
 import registerRoutes from "../routes/account/register";
 import securityRoutes from "../routes/account/security";
-import signingRoutes from "../routes/signatures/signing";
 import uploadRoutes from "../routes/upload";
 import type { Bindings } from "./bindings";
 import { D1_BOOKMARK_HEADER } from "./request-database";
@@ -27,19 +26,12 @@ function isCredentialedOAuthCorsPath(path: string): boolean {
     || path === "/api/oauth/session/bootstrap"
     || path === "/api/oauth/authorizations"
     || path.startsWith("/api/oauth/authorization/")
-    || path.startsWith("/api/oauth/authorizations/")
-    || path === "/api/oauth/delegations"
-    || path.startsWith("/api/oauth/delegations/")
-    || path === "/api/oauth/fedcm/accounts"
-    || path === "/api/oauth/fedcm/assertion"
-    || path === "/api/oauth/fedcm/finalize";
+    || path.startsWith("/api/oauth/authorizations/");
 }
 
 function isPublicApiCorsPath(path: string): boolean {
-  return path.startsWith("/api/signing/public-key/")
-    || path.startsWith("/api/encryption/public-key/")
-    || path === "/api/encryption/app-lookup"
-    || path === "/api/signing/verify";
+  return path.startsWith("/api/encryption/public-key/")
+    || path === "/api/encryption/app-lookup";
 }
 
 function buildApp() {
@@ -73,13 +65,7 @@ function buildApp() {
   });
 
   const oauthCorsMiddleware = cors({
-    origin: (origin, c) => {
-      const path = c.req.path;
-      if (path.startsWith("/api/oauth/fedcm/")) {
-        return origin || "https://aveid.net";
-      }
-      return resolveCorsOrigin(origin, c.req.header("host"));
-    },
+    origin: (origin, c) => resolveCorsOrigin(origin, c.req.header("host")),
     credentials: true,
     maxAge: 86400,
     allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
@@ -136,10 +122,6 @@ function buildApp() {
   app.use("*", async (c, next) => {
     if (c.req.method === "OPTIONS") return next();
 
-    if (c.req.path.startsWith("/api/oauth/fedcm/")) {
-      return next();
-    }
-
     const cookieHeader = c.req.header("Cookie") || "";
     const hasSessionCookie = cookieHeader.includes(`${SESSION_COOKIE_NAME}=`);
     if (!hasSessionCookie) return next();
@@ -195,7 +177,6 @@ function buildApp() {
   app.route("/api/apps", appsRoutes);
   app.route("/api/organizations", organizationsRoutes);
   app.route("/api/push", pushRoutes);
-  app.route("/api/signing", signingRoutes);
   app.route("/api/encryption", encryptionRoutes);
   app.route("/.well-known", oidcRoutes);
   app.route("/api/upload", uploadRoutes);

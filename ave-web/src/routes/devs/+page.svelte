@@ -5,18 +5,17 @@
   import { setQueryClientContext } from "@tanstack/svelte-query";
   import { onMount } from "svelte";
   import PortalView from "./sections/PortalView.svelte";
-  import { fetchAppActivity, fetchAppIdentities, fetchAppOverview, fetchOrganization, fetchPortalBootstrap, ApiError, type AppOverviewBundle } from "$lib/surfaces/devs/lib/api";
+  import { fetchAppIdentities, fetchOrganization, fetchPortalBootstrap, ApiError } from "$lib/surfaces/devs/lib/api";
   import { queryClient } from "$lib/surfaces/devs/lib/query-client";
-  import { createCreateOrganizationMutation, createInviteMemberMutation, createUpdateMemberRoleMutation, createUpdateOrganizationMutation, createUploadWorkspaceLogoMutation, queryKeys } from "$lib/surfaces/devs/lib/queries";
-  import type { WorkspaceRole } from "$lib/surfaces/devs/lib/portal";
+  import { createAddMemberMutation, createCreateOrganizationMutation, createRemoveMemberMutation, createUpdateOrganizationMutation, createUploadWorkspaceLogoMutation, queryKeys } from "$lib/surfaces/devs/lib/queries";
 
   setQueryClientContext(queryClient);
   const state = createPortalState();
-  const { handleCreate, handleRotateSecret, handleSaveApp, handleConfirmDelete, handleCopy, handleCreateResource, handleDeleteResource } = createAppActions(state, loadPortal, loadSelectedApp);
+  const { handleCreate, handleRotateSecret, handleSaveApp, handleConfirmDelete, handleCopy } = createAppActions(state, loadPortal, openApp);
 
   const createOrganizationMutation = createCreateOrganizationMutation();
-  const inviteMemberMutation = createInviteMemberMutation();
-  const updateMemberRoleMutation = createUpdateMemberRoleMutation();
+  const addMemberMutation = createAddMemberMutation();
+  const removeMemberMutation = createRemoveMemberMutation();
   const updateOrganizationMutation = createUpdateOrganizationMutation();
   const uploadWorkspaceLogoMutation = createUploadWorkspaceLogoMutation();
 
@@ -51,14 +50,7 @@
       state.apps = bootstrap.apps;
 
       if (state.selectedAppId && !bootstrap.apps.some((app) => app.id === state.selectedAppId)) {
-        state.selectedAppId = null;
-        state.appInsights = null;
-        state.appIdentities = [];
-        state.appEvents = [];
-        state.appIdentitiesTotal = 0;
-        state.appEventsTotal = 0;
-        state.appEventsCursor = null;
-        state.appEventsHasMore = false;
+        clearSelectedApp();
       }
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) {
@@ -73,52 +65,6 @@
       state.error = err instanceof Error ? err.message : "Failed to load portal";
     } finally {
       state.loading = false;
-    }
-  }
-
-  async function loadSelectedApp(appId: string) {
-    const cachedBundle = queryClient.getQueryData<AppOverviewBundle>(queryKeys.appOverview(appId)) || state.appBundles[appId];
-
-    if (cachedBundle) {
-      applyAppBundle(cachedBundle);
-      state.appLoading = false;
-    } else {
-      state.appInsights = null;
-      state.appIdentities = [];
-      state.appEvents = [];
-      state.appIdentitiesTotal = 0;
-      state.appEventsTotal = 0;
-      state.appEventsCursor = null;
-      state.appEventsHasMore = false;
-      state.appLoading = true;
-    }
-
-    try {
-      const bundle = await queryClient.fetchQuery({
-        queryKey: queryKeys.appOverview(appId),
-        queryFn: () => fetchAppOverview(appId),
-      });
-      state.appBundles = {
-        ...state.appBundles,
-        [appId]: bundle,
-      };
-
-      if (state.selectedAppId === appId) {
-        applyAppBundle(bundle);
-      }
-    } catch (err) {
-      if (state.selectedAppId === appId && !cachedBundle) {
-        state.appInsights = null;
-        state.appIdentities = [];
-        state.appEvents = [];
-        state.appIdentitiesTotal = 0;
-        state.appEventsTotal = 0;
-      }
-      state.error = err instanceof Error ? err.message : "Failed to load app overview";
-    } finally {
-      if (state.selectedAppId === appId) {
-        state.appLoading = false;
-      }
     }
   }
 
@@ -144,33 +90,10 @@
     }
   }
 
-  async function loadAppActivityPage(appId: string, reset = false) {
-    if (state.appEventsLoadingMore) return;
-    state.appEventsLoadingMore = true;
-
-    try {
-      const page = await queryClient.fetchQuery({
-        queryKey: [...queryKeys.appActivity(appId), reset ? null : state.appEventsCursor, 25],
-        queryFn: () => fetchAppActivity(appId, { limit: 25, cursor: reset ? undefined : state.appEventsCursor || undefined }),
-      });
-      state.appEvents = reset ? page.items : [...state.appEvents, ...page.items];
-      state.appEventsCursor = page.nextCursor;
-      state.appEventsHasMore = page.hasMore;
-    } catch (err) {
-      state.error = err instanceof Error ? err.message : "Failed to load app activity";
-    } finally {
-      state.appEventsLoadingMore = false;
-    }
-  }
-
-  function applyAppBundle(bundle: AppOverviewBundle) {
-    state.appInsights = bundle.insights;
-    state.appIdentities = bundle.identities;
-    state.appEvents = bundle.events;
-    state.appIdentitiesTotal = bundle.insights.totalIdentities;
-    state.appEventsTotal = bundle.insights.totalActivityEvents;
-    state.appEventsCursor = null;
-    state.appEventsHasMore = bundle.events.length < bundle.insights.totalActivityEvents;
+  function clearSelectedApp() {
+    state.selectedAppId = null;
+    state.appIdentities = [];
+    state.appIdentitiesTotal = 0;
   }
 
   function handleSignIn() {
@@ -182,106 +105,70 @@
   }
 
   function openWorkspace(section: WorkspaceSection) {
-    state.selectedAppId = null;
-    state.appInsights = null;
-    state.appIdentities = [];
-    state.appEvents = [];
-    state.appIdentitiesTotal = 0;
-    state.appEventsTotal = 0;
-    state.appEventsCursor = null;
-    state.appEventsHasMore = false;
+    clearSelectedApp();
     state.createModalOpen = false;
     state.createOrganizationModalOpen = false;
     state.workspaceSection = section;
   }
 
   async function switchOrganization(organizationId: string) {
-    state.selectedAppId = null;
-    state.appInsights = null;
-    state.appIdentities = [];
-    state.appEvents = [];
-    state.appIdentitiesTotal = 0;
-    state.appEventsTotal = 0;
-    state.appEventsCursor = null;
-    state.appEventsHasMore = false;
-    state.appBundles = {};
-    state.appLoading = false;
+    clearSelectedApp();
     state.createModalOpen = false;
     state.createOrganizationModalOpen = false;
     state.workspaceSection = "applications";
     await loadPortal(organizationId);
   }
 
-  async function openApp(appId: string | null) {
-    if (!appId) {
-      state.selectedAppId = null;
-      state.appInsights = null;
-      state.appIdentities = [];
-      state.appEvents = [];
-      state.appIdentitiesTotal = 0;
-      state.appEventsTotal = 0;
-      state.appEventsCursor = null;
-      state.appEventsHasMore = false;
-      state.appLoading = false;
-      state.createModalOpen = false;
-      state.createOrganizationModalOpen = false;
-      state.workspaceSection = "applications";
-      return;
-    }
+  function openApp(appId: string | null) {
+    clearSelectedApp();
+    state.createModalOpen = false;
+    state.createOrganizationModalOpen = false;
+    state.workspaceSection = "applications";
+    if (!appId) return;
 
     state.selectedAppId = appId;
-    state.workspaceSection = "applications";
-    state.appSection = "overview";
-    void loadSelectedApp(appId);
+    state.appSection = "configure";
+    void loadAppIdentitiesPage(appId, true);
   }
 
   function handleAppSectionSelect(id: string) {
     state.appSection = id as AppSection;
-
-    if (!state.selectedAppId) return;
-
-    if (state.appSection === "identities" && state.appIdentities.length < state.appIdentitiesTotal) {
-      void loadAppIdentitiesPage(state.selectedAppId, true);
-    }
-
-    if (state.appSection === "activity" && (state.appEventsTotal === 0 || state.appEvents.length < state.appEventsTotal)) {
-      void loadAppActivityPage(state.selectedAppId, true);
-    }
   }
 
-  async function handleInvite(email: string, role: WorkspaceRole) {
+  async function refreshWorkspace(organizationId: string) {
+    const refreshedWorkspace = await queryClient.fetchQuery({
+      queryKey: queryKeys.workspace(organizationId),
+      queryFn: () => fetchOrganization(organizationId),
+    });
+    state.workspace = refreshedWorkspace;
+    state.organizations = state.organizations.map((organization) =>
+      organization.id === refreshedWorkspace.id
+        ? { ...organization, memberCount: refreshedWorkspace.members.length }
+        : organization,
+    );
+  }
+
+  async function handleAddMember(email: string) {
     if (!state.workspace) return;
     const organizationId = state.workspace.id;
 
     try {
-      await inviteMemberMutation.mutateAsync({ organizationId, email, role });
-      const refreshedWorkspace = await queryClient.fetchQuery({
-        queryKey: queryKeys.workspace(organizationId),
-        queryFn: () => fetchOrganization(organizationId),
-      });
-      state.workspace = refreshedWorkspace;
-      state.organizations = state.organizations.map((organization) =>
-        organization.id === refreshedWorkspace.id
-          ? { ...organization, memberCount: refreshedWorkspace.members.filter((member) => member.status === "active").length }
-          : organization,
-      );
+      await addMemberMutation.mutateAsync({ organizationId, email });
+      await refreshWorkspace(organizationId);
     } catch (err) {
-      state.error = err instanceof Error ? err.message : "Failed to invite member";
+      state.error = err instanceof Error ? err.message : "Failed to add member";
     }
   }
 
-  async function handleRoleChange(memberId: string, role: WorkspaceRole) {
+  async function handleRemoveMember(memberId: string) {
     if (!state.workspace) return;
     const organizationId = state.workspace.id;
 
     try {
-      await updateMemberRoleMutation.mutateAsync({ organizationId, memberId, role });
-      state.workspace = await queryClient.fetchQuery({
-        queryKey: queryKeys.workspace(organizationId),
-        queryFn: () => fetchOrganization(organizationId),
-      });
+      await removeMemberMutation.mutateAsync({ organizationId, memberId });
+      await refreshWorkspace(organizationId);
     } catch (err) {
-      state.error = err instanceof Error ? err.message : "Failed to update role";
+      state.error = err instanceof Error ? err.message : "Failed to remove member";
     }
   }
 
@@ -369,15 +256,9 @@
   bind:newOrganizationName={state.newOrganizationName}
   creating={state.creating}
   creatingOrganization={state.creatingOrganization}
-  appLoading={state.appLoading}
-  appInsights={state.appInsights}
   appIdentities={state.appIdentities}
-  appEvents={state.appEvents}
   appIdentitiesTotal={state.appIdentitiesTotal}
-  appEventsTotal={state.appEventsTotal}
   appIdentitiesLoadingMore={state.appIdentitiesLoadingMore}
-  appEventsLoadingMore={state.appEventsLoadingMore}
-  appEventsHasMore={state.appEventsHasMore}
   saveState={state.saveState}
   rotatingAppId={state.rotatingAppId}
   rotatedAppId={state.rotatedAppId}
@@ -391,14 +272,11 @@
   {handleCreate}
   {handleCreateOrganization}
   {loadAppIdentitiesPage}
-  {loadAppActivityPage}
   {handleSaveApp}
   {handleRotateSecret}
-  {handleCreateResource}
-  {handleDeleteResource}
   {handleCopy}
-  {handleInvite}
-  {handleRoleChange}
+  {handleAddMember}
+  {handleRemoveMember}
   {handleWorkspaceLogoUpload}
   {handleWorkspaceRename}
 />

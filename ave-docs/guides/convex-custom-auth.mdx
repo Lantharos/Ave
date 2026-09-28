@@ -1,4 +1,4 @@
-﻿---
+---
 title: "Convex custom auth"
 description: "Use Ave as a Convex custom OIDC auth provider. Covers which token to use, why, exact JWT claims, auth.config.ts setup, and full implementation."
 ---
@@ -113,7 +113,7 @@ The `subject` is the Ave identity UUID — this is the value you should use as y
     ```ts
     import { ConvexReactClient } from "convex/react";
 
-    const convex = new ConvexReactClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
+    const convex = new ConvexReactClient(CONVEX_URL);
 
     // Set the Ave id_token as the auth token
     convex.setAuth(async () => tokens.id_token);
@@ -165,7 +165,7 @@ The `subject` is the Ave identity UUID — this is the value you should use as y
     ```
 
     <Note>
-      Default token lifetime is often about **one hour** (`expires_in`). Quick Ave has **no** refresh token — upgrade to a [registered app](/guides/quick-ave-to-standard) with **`offline_access`**. See also [Sessions still flaky](#sessions-still-flaky) below.
+      Default token lifetime is about **one hour** (`expires_in`). Request **`offline_access`** to receive a refresh token. See also [Sessions still flaky](#sessions-still-flaky) below.
     </Note>
   </Step>
 </Steps>
@@ -176,7 +176,6 @@ If users drop out after ~**one hour**, or behavior feels random even with **`off
 
 | Cause | What to do |
 | --- | --- |
-| **Quick Ave** (`origin:…` clientId) | No refresh tokens — [upgrade](/guides/quick-ave-to-standard) |
 | **Missing `offline_access`** | Request it — refresh tokens are not issued without it |
 | **Using static `id_token` in `setAuth`** | Use a **function** that returns a **fresh** token ([Ave Session](/guides/ave-session-and-tokens)) |
 | **Refresh rotation not saved** | After every refresh, persist the **new** `refresh_token` before other requests run |

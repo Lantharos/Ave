@@ -1,16 +1,6 @@
 import { openEmbedPopup, postToEmbedParent } from "$lib/surfaces/web/util/embed-popup";
 import { postMessageTargetOriginFromRedirectUri } from "$lib/surfaces/web/util/embed-post-message-origin";
 
-type AveIdentityProvider = {
-  resolve(assertion: string): void;
-  close(): void;
-};
-
-export function identityProvider(): AveIdentityProvider | null {
-  const provider = (window as Window & { IdentityProvider?: AveIdentityProvider }).IdentityProvider;
-  return provider || null;
-}
-
 export function openAuthPopupHere(): boolean {
   const redirectUri = new URL(window.location.href).searchParams.get("redirect_uri") ?? "";
   return openEmbedPopup(postMessageTargetOriginFromRedirectUri(redirectUri), 450, 650);

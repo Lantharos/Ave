@@ -22,7 +22,6 @@
     const loadDevices = lazyModule(() => import("./sections/Devices.svelte"));
     const loadActivityLog = lazyModule(() => import("./sections/ActivityLog.svelte"));
     const loadLoginApproval = lazyModule(() => import("./sections/LoginApproval.svelte"));
-    const loadConnectors = lazyModule(() => import("./sections/Connectors.svelte"));
 
     let selectedPage = $state<string>("");
     let mobileSidebarOpen = $state(false);
@@ -169,7 +168,6 @@
                 <SidebarButton text="Devices" selected={selectedPage === "Devices"} onclick={() => selectPage("Devices")} />
                 <SidebarButton text="My Data" selected={selectedPage === "My Data"} onclick={() => selectPage("My Data")} />
                 <SidebarButton text="Activity Log" selected={selectedPage === "Activity Log"} onclick={() => selectPage("Activity Log")} />
-                <SidebarButton text="Connectors" selected={selectedPage === "Connectors"} onclick={() => selectPage("Connectors")} />
 
                 <div class="h-px bg-[#878787]/20 w-full my-1"></div>
                 <SidebarButton
@@ -221,7 +219,6 @@
             <SidebarButton text="Devices" selected={selectedPage === "Devices"} onclick={() => { selectedPage = "Devices"; }} />
             <SidebarButton text="My Data" selected={selectedPage === "My Data"} onclick={() => { selectedPage = "My Data"; }} />
             <SidebarButton text="Activity Log" selected={selectedPage === "Activity Log"} onclick={() => { selectedPage = "Activity Log"; }} />
-            <SidebarButton text="Connectors" selected={selectedPage === "Connectors"} onclick={() => { selectedPage = "Connectors"; }} />
         </div>
         <div class="h-[1px] bg-[#878787]/20 w-full"></div>
         <SidebarButton
@@ -257,8 +254,6 @@
             {#await loadMyData() then { default: MyData }}<MyData />{/await}
         {:else if selectedPage === "Activity Log"}
             {#await loadActivityLog() then { default: ActivityLog }}<ActivityLog />{/await}
-        {:else if selectedPage === "Connectors"}
-            {#await loadConnectors() then { default: Connectors }}<Connectors />{/await}
         {:else}
             <div class="flex items-center justify-center h-full">
                 <Text type="p" size={18} color="#878787">Select an option from the sidebar</Text>

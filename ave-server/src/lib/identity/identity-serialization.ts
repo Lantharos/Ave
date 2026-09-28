@@ -10,7 +10,6 @@ export type SerializedIdentity = {
   pendingEmail?: string | null;
   birthday?: string | null;
   avatarUrl?: string | null;
-  bannerUrl?: string | null;
   isPrimary: boolean;
   createdAt: Date;
   hasEncryptionKey?: boolean;
@@ -25,7 +24,6 @@ export function serializeIdentityForOwner(identity: Identity, hasEncryptionKey?:
     pendingEmail: identity.pendingEmail,
     birthday: identity.birthday,
     avatarUrl: identity.avatarUrl,
-    bannerUrl: identity.bannerUrl,
     isPrimary: identity.isPrimary,
     createdAt: identity.createdAt,
     ...(hasEncryptionKey === undefined ? {} : { hasEncryptionKey }),

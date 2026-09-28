@@ -6,16 +6,10 @@
   import TopBar from "$lib/surfaces/devs/components/TopBar.svelte";
   import Subnav from "$lib/surfaces/devs/components/Subnav.svelte";
   import { lazyModule } from "$lib/infrastructure/ui/lazy-module";
-  import type {
-    AppEvent,
-    AppIdentityRecord,
-    AppInsightSnapshot,
-    DevApp,
-  } from "$lib/surfaces/devs/lib/api";
-  import type { WorkspaceRole, WorkspaceState, WorkspaceSummary } from "$lib/surfaces/devs/lib/portal";
+  import type { AppIdentityRecord, DevApp } from "$lib/surfaces/devs/lib/api";
+  import type { WorkspaceState, WorkspaceSummary } from "$lib/surfaces/devs/lib/portal";
+  import type { AppSection, WorkspaceSection } from "../portal-state.svelte";
 
-  type WorkspaceSection = "applications" | "organization";
-  type AppSection = "overview" | "identities" | "activity" | "configure";
   type NavItem = { id: string; label: string; badge?: number };
 
   const loadSignInPage = lazyModule(() => import("./SignInPage.svelte"));
@@ -23,9 +17,7 @@
   const loadTeamPage = lazyModule(() => import("./TeamPage.svelte"));
   const loadCreateAppPage = lazyModule(() => import("./CreateAppPage.svelte"));
   const loadAppDetailPage = lazyModule(() => import("./AppDetailPage.svelte"));
-  const loadAppOverviewPage = lazyModule(() => import("./AppOverviewPage.svelte"));
   const loadAppIdentitiesView = lazyModule(() => import("./AppIdentitiesPage.svelte"));
-  const loadAppActivityView = lazyModule(() => import("./AppActivityPage.svelte"));
 
   let {
     authenticated,
@@ -49,15 +41,9 @@
     newOrganizationName = $bindable(),
     creating,
     creatingOrganization,
-    appLoading,
-    appInsights,
     appIdentities,
-    appEvents,
     appIdentitiesTotal,
-    appEventsTotal,
     appIdentitiesLoadingMore,
-    appEventsLoadingMore,
-    appEventsHasMore,
     saveState,
     rotatingAppId,
     rotatedAppId,
@@ -71,14 +57,11 @@
     handleCreate,
     handleCreateOrganization,
     loadAppIdentitiesPage,
-    loadAppActivityPage,
     handleSaveApp,
     handleRotateSecret,
-    handleCreateResource,
-    handleDeleteResource,
     handleCopy,
-    handleInvite,
-    handleRoleChange,
+    handleAddMember,
+    handleRemoveMember,
     handleWorkspaceLogoUpload,
     handleWorkspaceRename,
   }: {
@@ -103,15 +86,9 @@
     newOrganizationName: string;
     creating: boolean;
     creatingOrganization: boolean;
-    appLoading: boolean;
-    appInsights: AppInsightSnapshot | null;
     appIdentities: AppIdentityRecord[];
-    appEvents: AppEvent[];
     appIdentitiesTotal: number;
-    appEventsTotal: number;
     appIdentitiesLoadingMore: boolean;
-    appEventsLoadingMore: boolean;
-    appEventsHasMore: boolean;
     saveState: "idle" | "saving" | "saved";
     rotatingAppId: string | null;
     rotatedAppId: string | null;
@@ -119,7 +96,7 @@
     openAveDashboard: () => void;
     openWorkspace: (section: WorkspaceSection) => void;
     switchOrganization: (id: string) => Promise<void>;
-    openApp: (id: string | null) => Promise<void>;
+    openApp: (id: string | null) => void;
     handleAppSectionSelect: (id: string) => void;
     handleConfirmDelete: () => Promise<void>;
     handleCreate: (form: {
@@ -129,17 +106,11 @@
     }) => Promise<void>;
     handleCreateOrganization: () => Promise<void>;
     loadAppIdentitiesPage: (appId: string, reset?: boolean) => Promise<void>;
-    loadAppActivityPage: (appId: string, reset?: boolean) => Promise<void>;
     handleSaveApp: (app: DevApp & { redirectUrisText?: string }) => Promise<void>;
     handleRotateSecret: (appId: string) => Promise<void>;
-    handleCreateResource: (appId: string, resource: {
-      resourceKey: string; displayName: string; description?: string; scopes: string[];
-      audience: string; status: "active" | "disabled";
-    }) => Promise<void>;
-    handleDeleteResource: (appId: string, resourceId: string) => Promise<void>;
     handleCopy: (text: string) => Promise<void>;
-    handleInvite: (email: string, role: WorkspaceRole) => Promise<void>;
-    handleRoleChange: (memberId: string, role: WorkspaceRole) => Promise<void>;
+    handleAddMember: (email: string) => Promise<void>;
+    handleRemoveMember: (memberId: string) => Promise<void>;
     handleWorkspaceLogoUpload: (file: File) => Promise<void>;
     handleWorkspaceRename: (name: string) => Promise<void>;
   } = $props();
@@ -290,42 +261,7 @@
       {/if}
 
       <main class="flex-1 px-0 py-1 md:py-2">
-        {#if selectedApp && appLoading && !appInsights && appSection !== "configure"}
-          <div class="flex flex-col gap-5">
-            <div class="flex items-center gap-4">
-              <div class="h-12 w-12 rounded-[18px] bg-[#141414] animate-pulse"></div>
-              <div class="flex flex-col gap-2">
-                <div class="h-5 w-40 rounded-full bg-[#171717] animate-pulse"></div>
-                <div class="h-4 w-64 rounded-full bg-[#151515] animate-pulse"></div>
-              </div>
-            </div>
-            <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-              {#each Array.from({ length: 4 }) as _, index (index)}
-                <div class="rounded-[28px] bg-[#111111] p-6">
-                  <div class="h-4 w-24 rounded-full bg-[#171717] animate-pulse"></div>
-                  <div class="mt-5 h-10 w-20 rounded-full bg-[#1a1a1a] animate-pulse"></div>
-                  <div class="mt-4 h-4 w-32 rounded-full bg-[#151515] animate-pulse"></div>
-                </div>
-              {/each}
-            </div>
-            <div class="grid gap-4 xl:grid-cols-2">
-              {#each Array.from({ length: 2 }) as _, index (index)}
-                <div class="rounded-[28px] bg-[#111111] p-6">
-                  <div class="h-5 w-36 rounded-full bg-[#171717] animate-pulse"></div>
-                  <div class="mt-6 space-y-3">
-                    {#each Array.from({ length: 3 }) as __, itemIndex (itemIndex)}
-                      <div class="h-16 rounded-[20px] bg-[#151515] animate-pulse"></div>
-                    {/each}
-                  </div>
-                </div>
-              {/each}
-            </div>
-          </div>
-        {:else if selectedApp && appInsights && appSection === "overview"}
-          {#await loadAppOverviewPage() then { default: AppOverviewPage }}
-            <AppOverviewPage app={selectedApp} insights={appInsights} identities={appIdentities} events={appEvents} />
-          {/await}
-        {:else if selectedApp && appSection === "identities"}
+        {#if selectedApp && appSection === "identities"}
           {#await loadAppIdentitiesView() then { default: AppIdentitiesPage }}
             <AppIdentitiesPage
               identities={appIdentities}
@@ -333,18 +269,6 @@
               loadingmore={appIdentitiesLoadingMore}
               hasmore={appIdentities.length < appIdentitiesTotal}
               onloadmore={() => loadAppIdentitiesPage(selectedApp.id)}
-            />
-          {/await}
-        {:else if selectedApp && appInsights && appSection === "activity"}
-          {#await loadAppActivityView() then { default: AppActivityPage }}
-            <AppActivityPage
-              app={selectedApp}
-              insights={appInsights}
-              events={appEvents}
-              total={appEventsTotal}
-              loadingmore={appEventsLoadingMore}
-              hasmore={appEventsHasMore}
-              onloadmore={() => loadAppActivityPage(selectedApp.id)}
             />
           {/await}
         {:else if selectedApp && appSection === "configure"}
@@ -355,8 +279,6 @@
               onsave={handleSaveApp}
               onrotate={handleRotateSecret}
               ondelete={(app) => (deleteTarget = app)}
-              oncreateResource={handleCreateResource}
-              ondeleteResource={handleDeleteResource}
               oncopy={handleCopy}
               saving={saveState === "saving"}
               saved={saveState === "saved"}
@@ -377,8 +299,8 @@
           {#await loadTeamPage() then { default: TeamPage }}
             <TeamPage
               {workspace}
-              oninvite={handleInvite}
-              onchangerole={handleRoleChange}
+              onaddmember={handleAddMember}
+              onremovemember={handleRemoveMember}
               onuploadlogo={handleWorkspaceLogoUpload}
               onrename={handleWorkspaceRename}
             />

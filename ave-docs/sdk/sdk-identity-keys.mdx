@@ -1,101 +1,183 @@
 ---
-title: "@ave-id/sdk App encryption"
-description: "Per-app symmetric keys and asymmetric keypairs for multi-user E2EE without OAuth handshakes."
+title: "App encryption"
+description: "SDK reference for encryption scopes, reading keys from the callback, public-key lookup, and encrypting data for other users."
 ---
 
 ```bash
 bun add @ave-id/sdk
 ```
 
-## Encryption scopes
+Everything on this page is exported from `@ave-id/sdk`. The fragment helpers are also available from `@ave-id/sdk/app-key`, and the lookup and encryption helpers from `@ave-id/sdk/app-encryption`. For concepts and a walkthrough, see [End-to-end encryption](/guides/end-to-end-encryption).
 
-Enable encryption by requesting an `e2ee:*` scope at sign-in. No developer-portal configuration is required.
-
-| Scope | Mode | Fragment parameters |
-| --- | --- | --- |
-| `e2ee:symmetric` | AES-256 app key | `#app_key=` |
-| `e2ee:asymmetric` | ECDH P-256 keypair | `#app_public_key=` and `#app_private_key=` |
-
-Request exactly one E2EE mode scope per sign-in. Re-sign-in reuses existing per-app keys unless you also request `e2ee:reset`:
+## Scopes
 
 ```ts
-import { buildAuthorizeUrl } from "@ave-id/sdk";
+import { E2EE_RESET_SCOPE, E2EE_SCOPES } from "@ave-id/sdk";
+
+E2EE_SCOPES.SYMMETRIC;  // "e2ee:symmetric"
+E2EE_SCOPES.ASYMMETRIC; // "e2ee:asymmetric"
+E2EE_RESET_SCOPE;       // "e2ee:reset"
+```
+
+Add one mode scope to every sign-in. Add `E2EE_RESET_SCOPE` only when you intend to rotate keys.
+
+```ts
+import { buildAuthorizeUrl, E2EE_SCOPES } from "@ave-id/sdk";
 
 const url = buildAuthorizeUrl(
-  { clientId, redirectUri, issuer: "https://aveid.net" },
-  { scope: ["openid", "profile", "email", "e2ee:asymmetric"] },
-);
-
-// Dangerous: rotate keys (also shows a warning on the Ave consent screen)
-const rotateUrl = buildAuthorizeUrl(
-  { clientId, redirectUri, issuer: "https://aveid.net" },
-  { scope: ["openid", "profile", "email", "e2ee:asymmetric", "e2ee:reset"] },
+  { clientId, redirectUri },
+  { scope: ["openid", "profile", E2EE_SCOPES.ASYMMETRIC], state, nonce, codeChallenge },
 );
 ```
 
-After consent, parse the fragment with `mergeAppEncryptionFromUrl` (PKCE) or `completeOAuthCallback` (session helper). Store the **private key locally** in your app; persist the **public key** on your user record.
+## Reading keys from the callback
 
-On key rotation (`e2ee:reset`), the fragment also includes previous keys (`#app_key_old`, `#app_public_key_old`, `#app_private_key_old`) and `#app_key_reset=true` so your app can migrate ciphertext before discarding the old material.
+`completeOAuthCallback`, `finishPkceLogin`, `completeExpoOAuthCallback`, and the embed's `onTokens` already merge the keys into the token response. Use these helpers when you exchange the code yourself.
 
-## Multi-user encryption (asymmetric)
+### `mergeAppEncryptionFromUrl(url, tokens)`
 
-Look up another user's app public key, encrypt for them, and they decrypt with the private key you already stored locally.
+Returns a copy of `tokens` with every key found in the URL fragment: `app_key`, `app_public_key`, `app_private_key`, their `_old` counterparts, and `app_key_reset`.
 
 ```ts
-import {
-  encryptForAppHandle,
-  decryptFromAppSender,
-  lookupAppUserByPublicKey,
-} from "@ave-id/sdk";
-
-const wrapped = await encryptForAppHandle("room secret", {
-  clientId,
-  issuer: "https://aveid.net",
-  handle: "alice",
-});
-
-const alice = await lookupAppUserByPublicKey(
-  { clientId, issuer: "https://aveid.net" },
-  storedPublicKey,
-);
-
-const plain = await decryptFromAppSender(
-  wrapped,
-  session.getAppPrivateKeyBase64()!,
-);
+function mergeAppEncryptionFromUrl(url: string | URL, tokens: TokenResponse): TokenResponse
 ```
 
-### Lookup API
+`mergeAppKeyFromUrl` does the same for `app_key` only.
 
-Public endpoint (no user token). Returns **404** if the handle is unknown, the user has never signed in to your app, or they have not provisioned an app encryption key — your app should show messaging like “this person hasn’t used your app yet” instead of generating keys server-side.
+### `stripSensitiveFragmentParams(url?)`
 
-- `GET /api/encryption/app-lookup?client_id=…&handle=…` → public key + user metadata
-- `GET /api/encryption/app-lookup?client_id=…&public_key=…` → user metadata for that key
+Removes key parameters from the current URL with `history.replaceState`, leaving other fragment parameters in place. Call it as soon as the keys are read.
+
+### `extractAppKeyFromUrl(url)` and related
 
 ```ts
-import {
-  lookupAppPublicKeyByHandle,
-  AppEncryptionLookupError,
-} from "@ave-id/sdk";
+extractAppKeyFromUrl(url);           // app_key
+extractAppPublicKeyFromUrl(url);     // app_public_key
+extractAppPrivateKeyFromUrl(url);    // app_private_key
+extractAppKeyOldFromUrl(url);        // app_key_old
+extractAppPublicKeyOldFromUrl(url);  // app_public_key_old
+extractAppPrivateKeyOldFromUrl(url); // app_private_key_old
+extractAppKeyResetFromUrl(url);      // true when app_key_reset is set
+```
+
+Each returns the base64 value, or `null` when absent. Values are already normalized with `normalizeAppKeyBase64`, which restores `+` characters that `URLSearchParams` decodes as spaces.
+
+### `stripSensitiveHashFromUrlString(url)` and `stripOAuthQueryParamsFromUrlString(url)`
+
+Return a copy of a URL string without key fragment parameters, or without OAuth query parameters. Use them before logging or displaying a callback URL.
+
+## Keys in `AveSession`
+
+```ts
+session.getAppKeyBase64();          // string | undefined
+session.getAppPublicKeyBase64();    // string | undefined
+session.getAppPrivateKeyBase64();   // string | undefined
+await session.setAppKeyBase64(key); // replace, or pass null to clear
+```
+
+After a rotation, `session.getState().snapshot` also holds `appKeyBase64Old`, `appPublicKeyBase64Old`, `appPrivateKeyBase64Old`, and `appEncryptionWasReset`.
+
+## Public-key lookup
+
+Lookups need no user token and return only data for identities that authorized your client ID with `e2ee:asymmetric`.
+
+### `lookupAppPublicKeyByHandle(config, handle)`
+
+```ts
+function lookupAppPublicKeyByHandle(
+  config: { clientId: string; issuer?: string },
+  handle: string,
+): Promise<AppEncryptionUserRecord>
+```
+
+### `lookupAppUserByPublicKey(config, publicKey)`
+
+```ts
+function lookupAppUserByPublicKey(
+  config: { clientId: string; issuer?: string },
+  publicKey: string,
+): Promise<AppEncryptionUserRecord>
+```
+
+```ts
+interface AppEncryptionUserRecord {
+  clientId: string;
+  identityId: string;
+  handle: string;
+  displayName: string;
+  publicKey: string;       // base64 SPKI, P-256
+  encryptionMode: string;  // "asymmetric"
+}
+```
+
+Both throw `AppEncryptionLookupError` on failure. Its `status` is `404` when the identity does not exist, has not authorized your app, or has no public key yet.
+
+```ts
+import { AppEncryptionLookupError, lookupAppPublicKeyByHandle } from "@ave-id/sdk";
 
 try {
-  const recipient = await lookupAppPublicKeyByHandle(
-    { clientId, issuer: "https://aveid.net" },
-    "alice",
-  );
+  const recipient = await lookupAppPublicKeyByHandle({ clientId }, "alice");
 } catch (error) {
   if (error instanceof AppEncryptionLookupError && error.status === 404) {
-    // e.g. "Alice hasn't signed in to this app yet"
+    showInvite("alice");
   }
 }
 ```
 
-## Symmetric mode (legacy-compatible)
+## Encrypting for another user
 
-Older apps with `supportsE2ee` still default to symmetric when no `e2ee:*` scope is requested. The flow is unchanged: `#app_key=` in the redirect fragment.
+### `encryptForAppUser(payload, recipientPublicKey)`
 
-## Removed: identity wrapped OAuth payloads
+Encrypts `payload` for the holder of `recipientPublicKey`. It generates an ephemeral P-256 key, derives an AES-256-GCM key with ECDH, and encrypts with a random 12-byte IV.
 
-The old `wrapped_key` / `unwrapped_secret` authorize flow is removed. It required per-identity encryption keys and sent users back through Ave for every invite. Use app keypairs and the lookup API instead.
+```ts
+function encryptForAppUser(
+  payload: string | Uint8Array | ArrayBuffer,
+  recipientPublicKey: string,
+): Promise<AppEncryptedPayload>
 
-[Ave Signing](/sdk/sdk-signing) (Ed25519) is unchanged and separate from app encryption.
+interface AppEncryptedPayload {
+  encryptedPayload: string; // base64 of IV followed by ciphertext
+  senderPublicKey: string;  // base64 SPKI of the ephemeral key
+}
+```
+
+### `encryptForAppHandle(payload, params)`
+
+Looks up the recipient by handle, then calls `encryptForAppUser`.
+
+```ts
+function encryptForAppHandle(
+  payload: string | Uint8Array | ArrayBuffer,
+  params: { clientId: string; handle: string; issuer?: string },
+): Promise<AppEncryptedPayload>
+```
+
+### `decryptFromAppSender(envelope, privateKeyBase64)`
+
+Decrypts an `AppEncryptedPayload` with the recipient's `app_private_key`.
+
+```ts
+function decryptFromAppSender(
+  envelope: AppEncryptedPayload,
+  recipientPrivateKeyBase64: string,
+): Promise<ArrayBuffer>
+```
+
+### `importAppPrivateKey(privateKeyBase64)`
+
+Imports `app_private_key` as a non-extractable ECDH `CryptoKey` for your own key agreement code.
+
+## Example
+
+```ts
+import { decryptFromAppSender, encryptForAppHandle } from "@ave-id/sdk";
+
+// Sender
+const envelope = await encryptForAppHandle(JSON.stringify({ roomKey }), { clientId, handle: "alice" });
+await api.sendInvite({ to: "alice", envelope });
+
+// Recipient
+const plaintext = await decryptFromAppSender(envelope, session.getAppPrivateKeyBase64()!);
+const { roomKey } = JSON.parse(new TextDecoder().decode(plaintext));
+```

@@ -1,84 +1,191 @@
 ---
 title: "End-to-end encryption"
-description: "App encryption scopes, key handoff, and multi-user asymmetric encryption."
+description: "Request per-user encryption keys at sign-in, encrypt on the client, and let users encrypt data for each other."
 ---
 
-Ave delivers per-app, per-identity encryption material when your app requests an `e2ee:*` scope (or legacy `supportsE2ee`).
+Ave can hand your app an encryption key for each user as part of sign-in. The key is created and unwrapped on the user's device, delivered to your client code in the callback URL fragment, and stored on Ave only in a form encrypted by the user's master key. Your backend stores ciphertext and never needs the key.
 
-## Encryption scopes
+## Choose a mode
 
-Configure standard OIDC scopes in the developer portal if needed. Request `e2ee:*` scopes dynamically in your OAuth authorize URL — they are not configured in the portal.
+Request one encryption scope per sign-in. Nothing needs to be enabled in the developer portal.
 
-| Scope | Keys | Use case |
+| Scope | Key material | Use it for |
 | --- | --- | --- |
-| `e2ee:symmetric` | AES-256 `app_key` | Single-user or shared symmetric storage |
-| `e2ee:asymmetric` | ECDH P-256 keypair | Multi-user E2EE with public key lookup |
-| `e2ee:reset` | Modifier | Rotate keys (combine with a mode scope). Shows a warning on consent. |
-| `e2ee:pqc:kyber` | Reserved | Post-quantum (not yet available) |
-| `e2ee:pqc:dilithium` | Reserved | Post-quantum (not yet available) |
+| `e2ee:symmetric` | AES-256 `app_key` | Data only the user reads: notes, files, settings, backups |
+| `e2ee:asymmetric` | P-256 `app_public_key` and `app_private_key` | Data users send to each other: messages, shared documents, invitations |
+| `e2ee:reset` | Modifier | Rotating keys; combine with a mode scope |
 
-Request one E2EE mode scope per authorization. Re-sign-in **reuses** existing per-app keys. Add `e2ee:reset` only when you intend to rotate them.
+`e2ee:pqc:kyber` and `e2ee:pqc:dilithium` are reserved names and return `unsupported_encryption_mode`.
 
-```text
-scope=openid profile email e2ee:asymmetric
-scope=openid profile email e2ee:asymmetric e2ee:reset
+Asking for both modes in one request returns `invalid_scope`. Signing in again reuses the existing keys, so request the same mode every time.
+
+## Request the scope
+
+<CodeGroup>
+```ts SDK redirect
+import { startPkceLogin } from "@ave-id/sdk/client";
+
+await startPkceLogin({
+  clientId: "YOUR_CLIENT_ID",
+  redirectUri: "https://yourapp.com/callback",
+  scope: "openid profile offline_access e2ee:asymmetric",
+});
 ```
 
-## Key handoff
+```ts Embed
+import { startAveAuth } from "@ave-id/embed";
 
-During consent, Ave unlocks keys with the user's master key and returns plaintext only in the redirect **fragment** (never in the JSON token response):
+await startAveAuth({
+  clientId: "YOUR_CLIENT_ID",
+  redirectUri: "https://yourapp.com/callback",
+  scope: "openid profile offline_access e2ee:asymmetric",
+  onTokens: (tokens) => session.setTokensFromResponse(tokens),
+});
+```
 
-| Mode | Fragment |
+```ts Authorize URL
+import { buildAuthorizeUrl } from "@ave-id/sdk";
+
+const url = buildAuthorizeUrl(
+  { clientId: "YOUR_CLIENT_ID", redirectUri: "https://yourapp.com/callback" },
+  {
+    scope: ["openid", "profile", "offline_access", "e2ee:asymmetric"],
+    state,
+    nonce,
+    codeChallenge,
+    codeChallengeMethod: "S256",
+  },
+);
+```
+</CodeGroup>
+
+If the user's master key is not available on the device, Ave asks them to restore it with a passkey, recovery code, or another signed-in device before it returns to your app.
+
+## Receive the keys
+
+After consent, Ave redirects with the code in the query string and the keys in the fragment:
+
+| Mode | Fragment parameters |
 | --- | --- |
-| Symmetric | `#app_key=<base64>` |
-| Asymmetric | `#app_public_key=<base64>&app_private_key=<base64>` |
-| Key rotation (`e2ee:reset`) | New keys as above, plus `#app_key_old`, `#app_public_key_old`, `#app_private_key_old`, and `#app_key_reset=true` |
+| Symmetric | `app_key` |
+| Asymmetric | `app_public_key`, `app_private_key` |
+| Rotation | The new keys, plus `app_key_old`, `app_public_key_old`, `app_private_key_old`, and `app_key_reset=true` |
 
-Your app should:
+The keys are never included in the token endpoint response. The SDK reads them from the fragment and merges them into the token response for you:
 
-1. Parse the fragment immediately after redirect
-2. Store the private key (asymmetric) or app key (symmetric) in local secure storage
-3. Store the public key (asymmetric) on the user record in your database
-4. Clear the fragment from browser history
+- `completeOAuthCallback(session, options)` from `@ave-id/sdk/client` exchanges the code, merges the keys, removes them from the address bar, and saves them in the session.
+- `onTokens` in `@ave-id/embed` receives the merged token response directly.
+- `mergeAppEncryptionFromUrl(url, tokens)` from `@ave-id/sdk` merges them into a token response you exchanged yourself. Call `stripSensitiveFragmentParams()` afterwards.
 
-Use `mergeAppEncryptionFromUrl` from `@ave-id/sdk` or `completeOAuthCallback` with `AveSession`.
-
-## Multi-user encryption
-
-With `e2ee:asymmetric`, encrypt data for another user without a handshake:
-
-1. `GET /api/encryption/app-lookup?client_id=…&handle=…` → their app public key (404 if they have never signed in to your app or have no key)
-2. `encryptForAppHandle` (SDK) → ciphertext + ephemeral sender key
-3. Recipient decrypts with their locally stored app private key
-
-Reverse lookup: `client_id` + `public_key` → user handle and identity id.
-
-## Storage model
-
-- Keys are stable per (app, identity) pair and are **not** regenerated on re-sign-in
-- Use `e2ee:reset` for intentional rotation or recovery when the app lost local key material
-- Server stores only master-key-wrapped copies on Ave ID
-- Different identities get different key material
-
-## URL fragment parsing
-
-`URLSearchParams` treats `+` as space. Normalize before base64 decode:
+Read the keys from `AveSession`:
 
 ```ts
-const appKeyBase64 = hashParams.get("app_key")?.replace(/ /g, "+");
+await session.hydrate();
+
+session.getAppKeyBase64();        // e2ee:symmetric
+session.getAppPublicKeyBase64();  // e2ee:asymmetric
+session.getAppPrivateKeyBase64(); // e2ee:asymmetric
 ```
 
-## Crypto recommendations
+`AveSession` keeps the keys in the storage adapter you give it, next to the tokens. `createLocalStorageAdapter()` persists them across reloads. Because Ave delivers the same key on every sign-in, `createMemoryStorage()` or your own `AveSessionStorage` implementation work too if you would rather not keep keys at rest in the browser.
 
-- AES-GCM with random 12-byte IV per message (symmetric)
-- ECDH P-256 + AES-GCM for asymmetric payloads (SDK helpers use this)
-- Never reuse IVs with the same key
+## Symmetric mode
+
+Import the key as an AES-GCM key and use a fresh 12-byte IV for every encryption.
+
+```ts
+const raw = Uint8Array.from(atob(session.getAppKeyBase64()!), (c) => c.charCodeAt(0));
+const key = await crypto.subtle.importKey("raw", raw, "AES-GCM", false, ["encrypt", "decrypt"]);
+
+async function encrypt(plaintext: string) {
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const data = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, new TextEncoder().encode(plaintext));
+  return { iv, data };
+}
+
+async function decrypt(iv: Uint8Array, data: ArrayBuffer) {
+  const plaintext = await crypto.subtle.decrypt({ name: "AES-GCM", iv }, key, data);
+  return new TextDecoder().decode(plaintext);
+}
+```
+
+## Asymmetric mode
+
+Each user gets a P-256 keypair for your app. Ave stores the public key in plaintext so other users of your app can look it up, and stores the private key wrapped by the user's master key.
+
+### Encrypt for another user
+
+`encryptForAppHandle` looks up the recipient's public key for your app and encrypts with an ephemeral ECDH key and AES-GCM. No round trip through the recipient is needed.
+
+```ts
+import { encryptForAppHandle } from "@ave-id/sdk";
+
+const envelope = await encryptForAppHandle("the room key", {
+  clientId: "YOUR_CLIENT_ID",
+  handle: "alice",
+});
+
+// { encryptedPayload, senderPublicKey } — store or send both
+```
+
+If you already have the recipient's public key, for example from your own user table, call `encryptForAppUser(payload, publicKey)` instead.
+
+### Decrypt
+
+The recipient decrypts with the private key from their session:
+
+```ts
+import { decryptFromAppSender } from "@ave-id/sdk";
+
+const plaintext = await decryptFromAppSender(envelope, session.getAppPrivateKeyBase64()!);
+new TextDecoder().decode(plaintext);
+```
+
+### Look up users
+
+```ts
+import { AppEncryptionLookupError, lookupAppPublicKeyByHandle, lookupAppUserByPublicKey } from "@ave-id/sdk";
+
+try {
+  const alice = await lookupAppPublicKeyByHandle({ clientId: "YOUR_CLIENT_ID" }, "alice");
+  // alice.identityId, alice.handle, alice.displayName, alice.publicKey
+} catch (error) {
+  if (error instanceof AppEncryptionLookupError && error.status === 404) {
+    // Alice has not signed in to this app with e2ee:asymmetric yet
+  }
+}
+
+const sender = await lookupAppUserByPublicKey({ clientId: "YOUR_CLIENT_ID" }, envelope.senderPublicKey);
+```
+
+A lookup returns `404` when the handle does not exist, the identity has never authorized your app, or it has no asymmetric key yet. Show an invitation instead of generating keys on the user's behalf. Lookups are scoped to a client ID, so a user's public key for your app is unrelated to their keys for any other app.
+
+Store each user's public key on your own user record as well. Lookups by handle follow handle changes, but your records should point at the `identityId`.
+
+## Rotate keys
+
+Add `e2ee:reset` to a sign-in to replace the user's keys for your app. The consent screen warns the user that their previous keys will be replaced.
+
+```text
+scope=openid profile e2ee:symmetric e2ee:reset
+```
+
+The callback includes the new keys, the previous keys as `*_old` parameters, and `app_key_reset=true`. Decrypt existing data with the old key, re-encrypt it with the new key, then discard the old key. Only request `e2ee:reset` from an explicit user action; a normal sign-in never rotates keys.
+
+## Identities and devices
+
+- Keys belong to one app and one identity. Switching identity means switching key context; keep each identity's ciphertext separate.
+- The same identity gets the same keys on every device where its Ave account is unlocked.
+- Different apps get different keys. Another app cannot request yours.
+- When a user disconnects your app in Ave, its wrapped keys for that identity are deleted and the next sign-in provisions new ones. If your data must survive that, keep an encrypted backup of the key under your own recovery scheme.
 
 ## Failure modes
 
-- Missing E2EE scope in authorize request when app expects encryption
-- Master key not unlocked on device during consent
-- Fragment left in browser history — strip after read
-- Identity switch → different key context; do not mix ciphertext domains
+| Symptom | Cause |
+| --- | --- |
+| No key in the token response | The sign-in did not request an encryption scope, or you exchanged the code without merging the fragment |
+| `atob` throws | The key was read from `URLSearchParams` without restoring `+`; use the SDK helpers or `normalizeAppKeyBase64` |
+| Decryption fails after sign-in | The user signed in with a different identity, the keys were rotated, or the user disconnected and reconnected your app |
+| Key visible in history or logs | The fragment was not stripped after reading |
 
-See [App encryption SDK](/sdk/sdk-identity-keys) and [E2EE checklist](/guides/e2ee-integration-checklist).
+See the [integration checklist](/guides/e2ee-integration-checklist), the [encryption model](/security/encryption-model-and-key-lifecycle), and the [SDK reference](/sdk/sdk-identity-keys).

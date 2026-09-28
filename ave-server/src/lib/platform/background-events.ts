@@ -1,20 +1,8 @@
 import type { Context } from "hono";
-import {
-  activityLogs,
-  appAnalyticsEvents,
-  db,
-  oauthDelegationAuditLogs,
-  type NewActivityLog,
-} from "../../db";
+import { activityLogs, db, type NewActivityLog } from "../../db";
 import { runInBackground } from "./background";
 
-type AppAnalyticsEventInsert = typeof appAnalyticsEvents.$inferInsert;
-type OAuthDelegationAuditLogInsert = typeof oauthDelegationAuditLogs.$inferInsert;
-
-export type BackgroundEvent =
-  | { type: "activity_log"; values: NewActivityLog }
-  | { type: "app_analytics_event"; values: AppAnalyticsEventInsert }
-  | { type: "oauth_delegation_audit_log"; values: OAuthDelegationAuditLogInsert };
+export type BackgroundEvent = { type: "activity_log"; values: NewActivityLog };
 
 type BackgroundEventEnv = {
   BACKGROUND_EVENTS?: Queue<BackgroundEvent>;
@@ -45,34 +33,10 @@ export function recordActivityLog(c: Context, values: NewActivityLog): void {
   );
 }
 
-export function recordAppAnalyticsEvent(c: Context, values: AppAnalyticsEventInsert): void {
-  enqueueOrFallback(
-    c,
-    { type: "app_analytics_event", values },
-    () => db.insert(appAnalyticsEvents).values(values),
-    "App analytics event",
-  );
-}
-
-export function recordOAuthDelegationAuditLog(c: Context, values: OAuthDelegationAuditLogInsert): void {
-  enqueueOrFallback(
-    c,
-    { type: "oauth_delegation_audit_log", values },
-    () => db.insert(oauthDelegationAuditLogs).values(values),
-    "OAuth delegation audit log",
-  );
-}
-
 async function processBackgroundEvent(event: BackgroundEvent): Promise<void> {
   switch (event.type) {
     case "activity_log":
       await db.insert(activityLogs).values(event.values);
-      return;
-    case "app_analytics_event":
-      await db.insert(appAnalyticsEvents).values(event.values);
-      return;
-    case "oauth_delegation_audit_log":
-      await db.insert(oauthDelegationAuditLogs).values(event.values);
       return;
   }
 }
@@ -80,7 +44,9 @@ async function processBackgroundEvent(event: BackgroundEvent): Promise<void> {
 export async function processBackgroundEventBatch(batch: MessageBatch<BackgroundEvent>): Promise<void> {
   for (const message of batch.messages) {
     try {
-      await processBackgroundEvent(message.body);
+      if (message.body.type === "activity_log") {
+        await db.insert(activityLogs).values(message.body.values);
+      }
       message.ack();
     } catch (error) {
       console.error("Background event failed:", error);

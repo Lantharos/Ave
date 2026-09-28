@@ -6,7 +6,6 @@ const QUERY_KEYS = {
   devices: ["devices"] as const,
   pendingRequests: ["pendingRequests"] as const,
   security: ["security"] as const,
-  delegations: ["delegations"] as const,
   activity: (severity: "all" | "info" | "warning" | "danger") => ["activity", severity] as const,
 };
 
@@ -47,16 +46,6 @@ export function createSecurityQuery() {
   }));
 }
 
-export function createDelegationsQuery() {
-  return createQuery(() => ({
-    queryKey: QUERY_KEYS.delegations,
-    queryFn: async () => {
-      const result = await api.oauth.getDelegations();
-      return result.delegations;
-    },
-  }));
-}
-
 type ActivityFilter = "all" | "info" | "warning" | "danger";
 
 export function createActivityInfiniteQuery(getSeverity: () => ActivityFilter, pageSize = 20) {
@@ -81,31 +70,6 @@ export function createActivityInfiniteQuery(getSeverity: () => ActivityFilter, p
   }));
 }
 
-export function createConnectAuthorizeBootstrapQuery(getClientId: () => string, getResourceKey: () => string) {
-  return createQuery(() => ({
-    queryKey: ["connectAuthorizeBootstrap", getClientId(), getResourceKey()],
-    enabled: Boolean(getClientId() && getResourceKey()),
-    staleTime: 60_000,
-    queryFn: async () => {
-      const [appData, resourceData] = await Promise.all([
-        api.oauth.getApp(getClientId()),
-        api.oauth.getResource(getResourceKey()),
-      ]);
-
-      return {
-        app: appData.app,
-        resource: resourceData.resource,
-      };
-    },
-  }));
-}
-
-export function createAuthorizeConnectorMutation() {
-  return createMutation(() => ({
-    mutationFn: api.oauth.authorize,
-  }));
-}
-
 export function createRevokeDeviceMutation() {
   return createMutation(() => ({
     mutationFn: async (deviceId: string) => {
@@ -115,20 +79,6 @@ export function createRevokeDeviceMutation() {
     onSuccess: (_, deviceId) => {
       queryClient.setQueryData<Device[]>(QUERY_KEYS.devices, (previous = []) =>
         previous.filter((device) => device.id !== deviceId)
-      );
-    },
-  }));
-}
-
-export function createRevokeDelegationMutation() {
-  return createMutation(() => ({
-    mutationFn: async (delegationId: string) => {
-      await api.oauth.revokeDelegation(delegationId);
-      return delegationId;
-    },
-    onSuccess: (_, delegationId) => {
-      queryClient.setQueryData<any[]>(QUERY_KEYS.delegations, (previous = []) =>
-        previous.filter((delegation) => delegation.id !== delegationId)
       );
     },
   }));

@@ -1,6 +1,7 @@
-import { and, eq, isNotNull, sql } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { Hono } from "hono";
-import { activityLogs, db, devices, identities, oauthApps, oauthAuthorizations, organizations, passkeys, sessions, trustCodes, users } from "../../db";
+import { activityLogs, db, devices, identities, oauthAuthorizations, passkeys, sessions, trustCodes, users } from "../../db";
+import { deleteEmptyOrganizations } from "../../lib/developer/dev-portal";
 import { recordActivityLog } from "../../lib/platform/background-events";
 import { clearSessionCookie } from "../../lib/auth/session-cookie";
 import { requireAuth, requireWritableForMutation } from "../../middleware/auth";
@@ -21,7 +22,7 @@ app.get("/export", async (c) => {
     db.select({
       id: identities.id, displayName: identities.displayName, handle: identities.handle,
       email: identities.email, pendingEmail: identities.pendingEmail, birthday: identities.birthday,
-      avatarUrl: identities.avatarUrl, bannerUrl: identities.bannerUrl, isPrimary: identities.isPrimary,
+      avatarUrl: identities.avatarUrl, isPrimary: identities.isPrimary,
       createdAt: identities.createdAt,
     }).from(identities).where(eq(identities.userId, user.id)),
     db.select({
@@ -87,14 +88,10 @@ app.delete("/", async (c) => {
   const user = c.get("user")!;
   
   await db.batch([
-    db.update(oauthApps)
-      .set({ ownerId: sql`(select ${organizations.ownerUserId} from ${organizations} where ${organizations.id} = ${oauthApps.organizationId})` })
-      .where(and(eq(oauthApps.ownerId, user.id), isNotNull(oauthApps.organizationId))),
-    db.delete(oauthApps).where(eq(oauthApps.ownerId, user.id)),
     db.delete(users).where(eq(users.id, user.id)),
+    deleteEmptyOrganizations(),
   ]);
   clearSessionCookie(c);
-  c.header("Set-Login", "logged-out");
 
   return c.json({ 
     success: true,

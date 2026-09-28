@@ -7,7 +7,7 @@
     <AuroraBackdrop preset="terms" cclass="absolute top-0 left-0 w-full pointer-events-none select-none z-0" />
     <div class="self-center mt-12 md:mt-[100px] px-6 md:px-0 text-center relative z-10">
         <h1 class="font-bold text-white text-4xl md:text-[96px]">Terms of Service</h1>
-        <p class="font-medium text-[#D3D3D3] text-lg md:text-[36px] mt-2 md:mt-0">Last updated May 11, 2026</p>
+        <p class="font-medium text-[#D3D3D3] text-lg md:text-[36px] mt-2 md:mt-0">Last updated September 28, 2026</p>
     </div>
 
     <div class="w-full md:w-[60%] self-center flex flex-col gap-12 md:gap-[80px] mt-16 md:mt-[120px] mb-12 md:mb-[100px] px-6 md:px-0 relative z-10">
@@ -17,7 +17,7 @@
             By using Ave, you agree to these Terms and to our Privacy Policy. If you use Ave for an organization, you confirm that you have authority to use Ave for that organization.
         </LegalSec>
         <LegalSec title="What Ave Does">
-            Ave lets you create identities, sign in with passkeys and recovery methods, manage trusted devices, authorize apps with OAuth and OpenID Connect, use connector grants, manage developer apps and workspaces, and use identity-backed signing and encryption features.
+            Ave lets you create identities, sign in with passkeys and recovery methods, manage trusted devices, authorize apps with OAuth and OpenID Connect, give apps end-to-end encryption keys, and manage developer apps and workspaces.
             <br><br>
             Ave is an identity layer. It is not a social network, general file host, or backup service for data stored inside connected apps.
         </LegalSec>
@@ -39,7 +39,7 @@
         <LegalSec title="Connected Apps">
             When you authorize a connected app, Ave may issue tokens and share approved identity fields with that app. The app is responsible for what it does with data after it receives it.
             <br><br>
-            Revoking an authorization or connector grant stops future Ave-issued access where supported. It does not automatically delete data the connected app already received. Contact the connected app directly for its own data export or deletion process.
+            Revoking an authorization stops future Ave-issued access where supported. It does not automatically delete data the connected app already received. Contact the connected app directly for its own data export or deletion process.
         </LegalSec>
         <LegalSec title="Developer Use">
             If you register an app, resource, redirect URI, workspace, or organization in Ave, you are responsible for the accuracy of that information, for protecting client secrets, and for requesting only the scopes your app needs.
@@ -47,7 +47,7 @@
             You must present your own users with accurate information about how your app uses Ave and any data received from Ave. Do not misrepresent Ave, bypass consent screens, request scopes deceptively, or use tokens outside the permissions granted by the user and Ave.
         </LegalSec>
         <LegalSec title="Uploads">
-            You may upload avatars, banners, and workspace logos. You are responsible for having the rights to upload and display those images.
+            You may upload avatars and workspace logos. You are responsible for having the rights to upload and display those images.
             <br><br>
             Uploaded images may be public if someone has the asset URL. Do not upload private, illegal, infringing, abusive, or sensitive images unless you understand that public asset behavior.
         </LegalSec>

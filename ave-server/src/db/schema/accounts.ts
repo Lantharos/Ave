@@ -22,7 +22,6 @@ export const identities = sqliteTable("identities", {
   emailVerificationSentAt: integer("email_verification_sent_at", { mode: "timestamp_ms" }),
   birthday: text("birthday"),
   avatarUrl: text("avatar_url"),
-  bannerUrl: text("banner_url"),
   isPrimary: integer("is_primary", { mode: "boolean" }).default(false).notNull(),
 }, (table) => [
   index("identities_user_id_idx").on(table.userId),

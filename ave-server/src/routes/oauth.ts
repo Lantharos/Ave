@@ -4,7 +4,6 @@ import accountRoutes from "./oauth/account";
 import appKeyRecoveryRoutes from "./oauth/app-key-recovery";
 import authorizationBootstrapRoutes from "./oauth/authorization-bootstrap";
 import authorizationRoutes from "./oauth/authorize";
-import fedCmRoutes from "./oauth/fedcm";
 import metadataRoutes from "./oauth/metadata";
 import tokenRoutes from "./oauth/tokens/token";
 import { getDiscoveryBase, publicCache } from "./oauth/shared";
@@ -13,7 +12,6 @@ const app = new Hono();
 export const oidcRoutes = new Hono();
 
 app.route("/", metadataRoutes);
-app.route("/", fedCmRoutes);
 app.route("/", authorizationBootstrapRoutes);
 app.route("/", authorizationRoutes);
 app.route("/", tokenRoutes);
@@ -49,7 +47,7 @@ oidcRoutes.get("/openid-configuration", (c) => {
     jwks_uri: `${discoveryBase}/.well-known/jwks.json`,
     scopes_supported: ["openid", "profile", "email", "offline_access", "user_id"],
     response_types_supported: ["code"],
-    grant_types_supported: ["authorization_code", "refresh_token", "urn:ietf:params:oauth:grant-type:token-exchange"],
+    grant_types_supported: ["authorization_code", "refresh_token"],
     subject_types_supported: ["public"],
     id_token_signing_alg_values_supported: ["RS256"],
     token_endpoint_auth_methods_supported: ["client_secret_post", "none"],

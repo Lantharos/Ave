@@ -1,5 +1,5 @@
 import { zValidator } from "@hono/zod-validator";
-import { and, eq, isNull, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { Hono } from "hono";
 import { z } from "zod";
 import {
@@ -7,12 +7,9 @@ import {
   identities,
   oauthApps,
   oauthAuthorizations,
-  oauthDelegationGrants,
-  oauthResources,
 } from "../../db";
 import { buildE2eeAuthUpdate, validateE2eeAuthPayload } from "../../lib/identity/app-e2ee-auth";
-import { recordActivityLog, recordAppAnalyticsEvent, recordOAuthDelegationAuditLog } from "../../lib/platform/background-events";
-import type { E2eeMode } from "../../lib/identity/e2ee-scopes";
+import { recordActivityLog } from "../../lib/platform/background-events";
 import {
   isImplementedE2eeMode,
   isScopeAllowedForApp,
@@ -23,16 +20,9 @@ import { createAuthorizationCodeWrite } from "../../lib/oauth/oauth-store";
 import { enforceNativeRateLimits, getClientIp, ipRateLimit, subjectRateLimit } from "../../lib/platform/rate-limit";
 import { isRedirectUriAllowedForApp, normalizeRedirectUri } from "../../lib/oauth/redirect-uri";
 import { requireAuth } from "../../middleware/auth";
-import {
-  buildQuickApp,
-  generateAuthCode,
-  getQuickOrigin,
-  isQuickClient,
-  parseScopes,
-} from "./shared";
+import { generateAuthCode, parseScopes } from "./shared";
 
 const app = new Hono();
-
 
 // Authorization endpoint - user grants access
 app.post("/authorize", requireAuth, zValidator("json", z.object({
@@ -47,10 +37,6 @@ app.post("/authorize", requireAuth, zValidator("json", z.object({
   appPublicKey: z.string().optional(),
   encryptedAppPrivateKey: z.string().optional(),
   nonce: z.string().optional(),
-  connector: z.boolean().optional().default(false),
-  requestedResource: z.string().optional(),
-  requestedScope: z.string().optional(),
-  communicationMode: z.enum(["user_present", "background"]).optional().default("user_present"),
   interactionMode: z.enum(["instant", "prompt"]).optional().default("prompt"),
 })), async (c) => {
   const user = c.get("user")!;
@@ -66,10 +52,6 @@ app.post("/authorize", requireAuth, zValidator("json", z.object({
     appPublicKey,
     encryptedAppPrivateKey,
     nonce,
-    connector,
-    requestedResource,
-    requestedScope,
-    communicationMode,
     interactionMode,
   } = c.req.valid("json");
   const rateLimitResponse = await enforceNativeRateLimits(c, [
@@ -94,71 +76,33 @@ app.post("/authorize", requireAuth, zValidator("json", z.object({
   ]);
   if (rateLimitResponse) return rateLimitResponse;
 
+  const [authorizationContext] = await db
+    .select({
+      oauthApp: oauthApps,
+      identity: identities,
+      authorization: oauthAuthorizations,
+    })
+    .from(oauthApps)
+    .leftJoin(identities, and(
+      eq(identities.id, identityId),
+      eq(identities.userId, user.id),
+    ))
+    .leftJoin(oauthAuthorizations, and(
+      eq(oauthAuthorizations.userId, user.id),
+      eq(oauthAuthorizations.appId, oauthApps.id),
+      eq(oauthAuthorizations.identityId, identityId),
+    ))
+    .where(eq(oauthApps.clientId, clientId))
+    .limit(1);
 
-  // Find (or derive) the OAuth app
-  const isQuick = isQuickClient(clientId);
-  let oauthApp: ReturnType<typeof buildQuickApp> | typeof oauthApps.$inferSelect;
-  let identity: typeof identities.$inferSelect | null;
-  let existingAuth: typeof oauthAuthorizations.$inferSelect | null = null;
+  if (!authorizationContext) {
+    return c.json({ error: "Invalid client_id" }, 400);
+  }
+  const { oauthApp, identity } = authorizationContext;
+  let existingAuth = authorizationContext.authorization;
 
-  if (isQuick) {
-    const quickOrigin = getQuickOrigin(clientId);
-    if (!quickOrigin) {
-      return c.json({ error: "Invalid client_id" }, 400);
-    }
-    let redirectOrigin: string;
-    try { redirectOrigin = new URL(redirectUri).origin; } catch {
-      return c.json({ error: "Invalid redirect_uri" }, 400);
-    }
-    if (redirectOrigin !== quickOrigin) {
-      return c.json({ error: "Invalid redirect_uri" }, 400);
-    }
-    // PKCE is mandatory for Quick Auth (there is no client secret)
-    if (!codeChallenge) {
-      return c.json({ error: "invalid_request", error_description: "code_challenge is required for Quick Ave" }, 400);
-    }
-    // Enforce strong PKCE method for Quick Ave: only S256 is allowed
-    if (codeChallengeMethod !== "S256") {
-      return c.json({ error: "invalid_request", error_description: "code_challenge_method must be S256 for Quick Ave" }, 400);
-    }
-    oauthApp = buildQuickApp(clientId);
-    const [quickIdentity] = await db
-      .select()
-      .from(identities)
-      .where(and(eq(identities.id, identityId), eq(identities.userId, user.id)))
-      .limit(1);
-    identity = quickIdentity ?? null;
-  } else {
-    const [authorizationContext] = await db
-      .select({
-        oauthApp: oauthApps,
-        identity: identities,
-        authorization: oauthAuthorizations,
-      })
-      .from(oauthApps)
-      .leftJoin(identities, and(
-        eq(identities.id, identityId),
-        eq(identities.userId, user.id),
-      ))
-      .leftJoin(oauthAuthorizations, and(
-        eq(oauthAuthorizations.userId, user.id),
-        eq(oauthAuthorizations.appId, oauthApps.id),
-        eq(oauthAuthorizations.identityId, identityId),
-      ))
-      .where(eq(oauthApps.clientId, clientId))
-      .limit(1);
-
-    if (!authorizationContext) {
-      return c.json({ error: "Invalid client_id" }, 400);
-    }
-    oauthApp = authorizationContext.oauthApp;
-    identity = authorizationContext.identity;
-    existingAuth = authorizationContext.authorization;
-
-    // Validate redirect URI
-    if (!isRedirectUriAllowedForApp(oauthApp, redirectUri)) {
-      return c.json({ error: "Invalid redirect_uri" }, 400);
-    }
+  if (!isRedirectUriAllowedForApp(oauthApp, redirectUri)) {
+    return c.json({ error: "Invalid redirect_uri" }, 400);
   }
 
   const requestedScopes = parseScopes(scope);
@@ -169,7 +113,6 @@ app.post("/authorize", requireAuth, zValidator("json", z.object({
   if (invalidScopes.length > 0) {
     return c.json({ error: "invalid_scope", error_description: `Invalid scopes: ${invalidScopes.join(", ")}` }, 400);
   }
-
 
   if (!identity) {
     return c.json({ error: "Invalid identity" }, 400);
@@ -191,218 +134,126 @@ app.post("/authorize", requireAuth, zValidator("json", z.object({
       ? "fallback"
       : user.authMethod || "unknown";
 
-  // Track authorization (skipped for Quick Auth — no persistent app record)
-  let createdAuthorization = false;
   let authorizationId = existingAuth?.id;
   let authorizationUpdate: {
     id: string;
     e2ee: ReturnType<typeof buildE2eeAuthUpdate>;
   } | null = null;
-  let authorizedE2eeMode: E2eeMode | null = null;
-  let resetsE2ee = false;
-  if (!isQuick) {
-    const { mode: requestedE2eeMode, conflict: e2eeModeConflict, reset: e2eeReset } =
-      resolveRequestedE2eeModeConflict(
-      requestedScopes,
-      oauthApp,
+  const { mode: requestedE2eeMode, conflict: e2eeModeConflict, reset: e2eeReset } =
+    resolveRequestedE2eeModeConflict(requestedScopes, oauthApp, existingAuth);
+  if (e2eeModeConflict) {
+    return c.json({
+      error: "invalid_scope",
+      error_description: "Request only one E2EE encryption mode per authorization",
+    }, 400);
+  }
+  if (e2eeReset && !requestedE2eeMode) {
+    return c.json({
+      error: "invalid_scope",
+      error_description: "e2ee:reset requires an encryption mode or an existing app encryption setup",
+    }, 400);
+  }
+  if (requestedE2eeMode && !isImplementedE2eeMode(requestedE2eeMode)) {
+    return c.json({
+      error: "unsupported_encryption_mode",
+      error_description: `Encryption mode "${requestedE2eeMode}" is not available yet`,
+    }, 400);
+  }
+
+  const e2eePayload = {
+    encryptedAppKey,
+    appPublicKey,
+    encryptedAppPrivateKey,
+  };
+
+  if (requestedE2eeMode) {
+    const validationError = validateE2eeAuthPayload(
+      requestedE2eeMode,
+      e2eePayload,
       existingAuth,
+      { reset: e2eeReset },
     );
-    authorizedE2eeMode = requestedE2eeMode;
-    resetsE2ee = e2eeReset;
-    if (e2eeModeConflict) {
-      return c.json({
-        error: "invalid_scope",
-        error_description: "Request only one E2EE encryption mode per authorization",
-      }, 400);
+    if (validationError) {
+      return c.json({ error: validationError }, 400);
     }
-    if (e2eeReset && !requestedE2eeMode) {
-      return c.json({
-        error: "invalid_scope",
-        error_description: "e2ee:reset requires an encryption mode or an existing app encryption setup",
-      }, 400);
-    }
-    if (requestedE2eeMode && !isImplementedE2eeMode(requestedE2eeMode)) {
-      return c.json({
-        error: "unsupported_encryption_mode",
-        error_description: `Encryption mode "${requestedE2eeMode}" is not available yet`,
-      }, 400);
-    }
+  }
 
-    const e2eePayload = {
-      encryptedAppKey,
-      appPublicKey,
-      encryptedAppPrivateKey,
-    };
+  const e2eeUpdate = requestedE2eeMode
+    ? buildE2eeAuthUpdate(requestedE2eeMode, e2eePayload, existingAuth, { reset: e2eeReset })
+    : {};
 
-    if (requestedE2eeMode) {
-      const validationError = validateE2eeAuthPayload(
-        requestedE2eeMode,
-        e2eePayload,
-        existingAuth,
-        { reset: e2eeReset },
-      );
-      if (validationError) {
-        return c.json({ error: validationError }, 400);
-      }
-    }
-
-    const e2eeUpdate = requestedE2eeMode
-      ? buildE2eeAuthUpdate(requestedE2eeMode, e2eePayload, existingAuth, { reset: e2eeReset })
-      : {};
-
-    if (!existingAuth) {
-      const inserted = await db.insert(oauthAuthorizations).values({
-        scope: requestedScopes.join(" "),
-        userId: user.id,
-        appId: oauthApp.id,
-        identityId,
-        lastAuthorizedAt: new Date(),
-        authorizationCount: 1,
-        lastAuthMethod: authorizationMethod,
-        encryptedAppKey: e2eeUpdate.encryptedAppKey ?? null,
-        appPublicKey: e2eeUpdate.appPublicKey ?? null,
-        encryptedAppPrivateKey: e2eeUpdate.encryptedAppPrivateKey ?? null,
-        appEncryptionMode: e2eeUpdate.appEncryptionMode ?? null,
+  if (!existingAuth) {
+    const inserted = await db.insert(oauthAuthorizations).values({
+      scope: requestedScopes.join(" "),
+      userId: user.id,
+      appId: oauthApp.id,
+      identityId,
+      lastAuthorizedAt: new Date(),
+      authorizationCount: 1,
+      lastAuthMethod: authorizationMethod,
+      encryptedAppKey: e2eeUpdate.encryptedAppKey ?? null,
+      appPublicKey: e2eeUpdate.appPublicKey ?? null,
+      encryptedAppPrivateKey: e2eeUpdate.encryptedAppPrivateKey ?? null,
+      appEncryptionMode: e2eeUpdate.appEncryptionMode ?? null,
+    })
+      .onConflictDoNothing({
+        target: [oauthAuthorizations.userId, oauthAuthorizations.appId, oauthAuthorizations.identityId],
       })
-        .onConflictDoNothing({
-          target: [oauthAuthorizations.userId, oauthAuthorizations.appId, oauthAuthorizations.identityId],
-        })
-        .returning({ id: oauthAuthorizations.id });
-      createdAuthorization = inserted.length > 0;
-      authorizationId = inserted[0]?.id;
+      .returning({ id: oauthAuthorizations.id });
+    authorizationId = inserted[0]?.id;
 
-      if (!createdAuthorization) {
-        const [concurrentAuthorization] = await db
-          .select()
-          .from(oauthAuthorizations)
-          .where(and(
-            eq(oauthAuthorizations.userId, user.id),
-            eq(oauthAuthorizations.appId, oauthApp.id),
-            eq(oauthAuthorizations.identityId, identityId),
-          ))
-          .limit(1);
+    if (!authorizationId) {
+      const [concurrentAuthorization] = await db
+        .select()
+        .from(oauthAuthorizations)
+        .where(and(
+          eq(oauthAuthorizations.userId, user.id),
+          eq(oauthAuthorizations.appId, oauthApp.id),
+          eq(oauthAuthorizations.identityId, identityId),
+        ))
+        .limit(1);
 
-        if (!concurrentAuthorization) {
+      if (!concurrentAuthorization) {
+        return c.json({
+          error: "authorization_conflict",
+          error_description: "The authorization changed while it was being created. Please try again.",
+        }, 409);
+      }
+
+      if (requestedE2eeMode) {
+        const validationError = validateE2eeAuthPayload(
+          requestedE2eeMode,
+          e2eePayload,
+          concurrentAuthorization,
+          { reset: e2eeReset },
+        );
+        if (validationError) {
           return c.json({
             error: "authorization_conflict",
-            error_description: "The authorization changed while it was being created. Please try again.",
+            error_description: `${validationError}. Reload the authorization and try again.`,
           }, 409);
         }
+      }
 
-        if (requestedE2eeMode) {
-          const validationError = validateE2eeAuthPayload(
+      existingAuth = concurrentAuthorization;
+      authorizationId = concurrentAuthorization.id;
+      authorizationUpdate = {
+        id: concurrentAuthorization.id,
+        e2ee: requestedE2eeMode
+          ? buildE2eeAuthUpdate(
             requestedE2eeMode,
             e2eePayload,
             concurrentAuthorization,
             { reset: e2eeReset },
-          );
-          if (validationError) {
-            return c.json({
-              error: "authorization_conflict",
-              error_description: `${validationError}. Reload the authorization and try again.`,
-            }, 409);
-          }
-        }
-
-        existingAuth = concurrentAuthorization;
-        authorizationId = concurrentAuthorization.id;
-        authorizationUpdate = {
-          id: concurrentAuthorization.id,
-          e2ee: requestedE2eeMode
-            ? buildE2eeAuthUpdate(
-              requestedE2eeMode,
-              e2eePayload,
-              concurrentAuthorization,
-              { reset: e2eeReset },
-            )
-            : {},
-        };
-      }
-    } else {
-      authorizationUpdate = {
-        id: existingAuth.id,
-        e2ee: e2eeUpdate,
+          )
+          : {},
       };
     }
-  }
-
-  let delegationGrantId: string | undefined;
-  let resolvedRequestedScope: string | undefined;
-
-  if (connector) {
-    if (isQuick) {
-      return c.json({ error: "invalid_request", error_description: "Connector flow is not supported for Quick Ave" }, 400);
-    }
-    if (!requestedResource || !requestedScope) {
-      return c.json({ error: "invalid_request", error_description: "requestedResource and requestedScope are required for connector flow" }, 400);
-    }
-
-    const [resource] = await db
-      .select()
-      .from(oauthResources)
-      .where(and(eq(oauthResources.resourceKey, requestedResource), eq(oauthResources.status, "active")))
-      .limit(1);
-
-    if (!resource) {
-      return c.json({ error: "invalid_target", error_description: "Requested resource not found" }, 400);
-    }
-
-    const allowedResourceScopes = (resource.scopes || []) as string[];
-    const requestedConnectorScopes = parseScopes(requestedScope);
-    const invalidConnectorScopes = requestedConnectorScopes.filter((s) => !allowedResourceScopes.includes(s));
-    if (invalidConnectorScopes.length > 0) {
-      return c.json({ error: "invalid_scope", error_description: `Invalid connector scopes: ${invalidConnectorScopes.join(", ")}` }, 400);
-    }
-
-    const [existingGrant] = await db
-      .select()
-      .from(oauthDelegationGrants)
-      .where(and(
-        eq(oauthDelegationGrants.userId, user.id),
-        eq(oauthDelegationGrants.identityId, identityId),
-        eq(oauthDelegationGrants.sourceAppId, oauthApp.id),
-        eq(oauthDelegationGrants.targetResourceId, resource.id),
-        isNull(oauthDelegationGrants.revokedAt),
-      ))
-      .limit(1);
-
-    if (!existingGrant) {
-      const [newGrant] = await db.insert(oauthDelegationGrants).values({
-        authorizationId,
-        userId: user.id,
-        identityId,
-        sourceAppId: oauthApp.id,
-        targetResourceId: resource.id,
-        scope: requestedConnectorScopes.join(" "),
-        communicationMode,
-      }).returning();
-      delegationGrantId = newGrant.id;
-      resolvedRequestedScope = newGrant.scope;
-    } else {
-      const mergedScope = Array.from(new Set([...parseScopes(existingGrant.scope), ...requestedConnectorScopes])).join(" ");
-      await db.update(oauthDelegationGrants)
-        .set({
-          scope: mergedScope,
-          communicationMode,
-          updatedAt: new Date(),
-        })
-        .where(eq(oauthDelegationGrants.id, existingGrant.id));
-      delegationGrantId = existingGrant.id;
-      resolvedRequestedScope = mergedScope;
-    }
-
-    recordOAuthDelegationAuditLog(c, {
-      grantId: delegationGrantId,
-      userId: user.id,
-      sourceAppId: oauthApp.id,
-      targetResourceId: resource.id,
-      eventType: "grant_created",
-      details: {
-        requestedResource,
-        requestedScope: requestedConnectorScopes.join(" "),
-        communicationMode,
-      },
-    });
+  } else {
+    authorizationUpdate = {
+      id: existingAuth.id,
+      e2ee: e2eeUpdate,
+    };
   }
 
   // Generate authorization code
@@ -411,20 +262,20 @@ app.post("/authorize", requireAuth, zValidator("json", z.object({
   // Get the encrypted app key to include in the auth code
   // Either from the new authorization or from an existing one
   const finalEncryptedAppKey = (
-    resetsE2ee
+    e2eeReset
       ? encryptedAppKey
       : existingAuth?.encryptedAppKey || encryptedAppKey
   ) || undefined;
   const finalAppPublicKey = (
-    resetsE2ee
+    e2eeReset
       ? appPublicKey
       : existingAuth?.appPublicKey || appPublicKey
   ) || undefined;
   const finalEncryptedAppPrivateKey =
-    (resetsE2ee
+    (e2eeReset
       ? encryptedAppPrivateKey
       : existingAuth?.encryptedAppPrivateKey || encryptedAppPrivateKey) || undefined;
-  const finalAppEncryptionMode = authorizedE2eeMode || existingAuth?.appEncryptionMode || undefined;
+  const finalAppEncryptionMode = requestedE2eeMode || existingAuth?.appEncryptionMode || undefined;
 
   const authorizationCodeWrite = createAuthorizationCodeWrite(code, {
     authorizationId,
@@ -441,10 +292,6 @@ app.post("/authorize", requireAuth, zValidator("json", z.object({
     encryptedAppPrivateKey: finalEncryptedAppPrivateKey,
     appEncryptionMode: finalAppEncryptionMode,
     nonce: nonce || undefined,
-    requestedResource: connector ? requestedResource : undefined,
-    requestedScope: connector ? resolvedRequestedScope || requestedScope : undefined,
-    communicationMode: connector ? communicationMode : undefined,
-    delegationGrantId,
   });
 
   if (authorizationUpdate) {
@@ -464,12 +311,11 @@ app.post("/authorize", requireAuth, zValidator("json", z.object({
     await authorizationCodeWrite;
   }
 
-
   // Log activity
   recordActivityLog(c, {
     userId: user.id,
     action: "oauth_authorized",
-    appId: isQuick ? null : oauthApp.id,
+    appId: oauthApp.id,
     details: {
       appName: oauthApp.name,
       appId: oauthApp.id,
@@ -482,17 +328,6 @@ app.post("/authorize", requireAuth, zValidator("json", z.object({
     userAgent: c.req.header("user-agent"),
     severity: "info",
   });
-
-  if (!isQuick && createdAuthorization) {
-    recordAppAnalyticsEvent(c, {
-      appId: oauthApp.id,
-      identityId,
-      eventType: "authorization_added",
-      authMethod: user.authMethod || "unknown",
-      severity: "info",
-      metadata: { scope },
-    });
-  }
 
   // Build redirect URL with code
   const redirectUrl = new URL(redirectUri);

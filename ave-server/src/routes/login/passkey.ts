@@ -112,7 +112,6 @@ app.post("/passkey", zValidator("json", z.object({
       });
 
     setSessionCookie(c, sessionToken, expiresAt);
-    c.header("Set-Login", "logged-in");
 
     // Log activity
     recordActivityLog(c, {

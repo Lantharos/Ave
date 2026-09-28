@@ -37,8 +37,6 @@
         email: "",
         birthday: "",
         avatarUrl: "",
-        bannerUrl: "",
-        bannerColor: "#FFFFFF",
     });
 
     let tempUserId = "";
@@ -177,7 +175,6 @@
                     email: identityData.email || undefined,
                     birthday: identityData.birthday || undefined,
                     avatarUrl: identityData.avatarUrl || undefined,
-                    bannerUrl: identityData.bannerUrl || undefined,
                 },
 
                 device: deviceInfo,

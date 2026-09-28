@@ -6,9 +6,6 @@ import { normalizeScopeToken, parseOAuthScopes } from "../../lib/oauth/oauth-sco
 import { getAccessToken, type AccessTokenRecord } from "../../lib/oauth/oauth-store";
 import { getResourceAudience, verifyJwt } from "../../lib/oauth/oidc";
 import { normalizeRedirectUri } from "../../lib/oauth/redirect-uri";
-import { isQuickClient } from "./quick-client";
-
-export { buildQuickApp,getQuickOrigin,isQuickClient } from "./quick-client";
 
 export function getDiscoveryBase(): string {
   return process.env.OIDC_DISCOVERY_BASE || "https://api.aveid.net";
@@ -90,9 +87,6 @@ export function normalizeOauthTokenPayload(input: unknown): unknown {
     clientSecret: raw.clientSecret ?? raw.client_secret,
     codeVerifier: raw.codeVerifier ?? raw.code_verifier,
     refreshToken: raw.refreshToken ?? raw.refresh_token,
-    subjectToken: raw.subjectToken ?? raw.subject_token,
-    requestedResource: raw.requestedResource ?? raw.resource,
-    requestedScope: raw.requestedScope ?? raw.scope,
   };
 }
 
@@ -106,11 +100,6 @@ export function getApiBase(): string {
 
 export function hasScope(scope: string, requested: string): boolean {
   return parseScopes(scope).includes(normalizeScopeToken(requested));
-}
-
-export function hasAllScopes(grantedScope: string, requestedScope: string): boolean {
-  const granted = new Set(parseScopes(grantedScope));
-  return parseScopes(requestedScope).every((scope) => granted.has(scope));
 }
 
 export async function resolveAccessTokenRecord(token: string): Promise<AccessTokenRecord | null> {
@@ -131,30 +120,4 @@ export async function resolveOauthAppForAccessRecord(record: Pick<AccessTokenRec
     : eq(oauthApps.id, record.appId);
   const [oauthApp] = await db.select().from(oauthApps).where(lookup).limit(1);
   return oauthApp ?? null;
-}
-
-export function ensureFedCmRequest(c: any): Response | null {
-  const destination = c.req.header("Sec-Fetch-Dest");
-  if (destination !== "webidentity") {
-    return c.json({ error: "invalid_request", error_description: "FedCM requests must include Sec-Fetch-Dest: webidentity" }, 400);
-  }
-  return null;
-}
-
-export function setLoginStatusHeader(c: any, status: "logged-in" | "logged-out") {
-  c.header("Set-Login", status);
-}
-
-export async function resolveOauthAppForClient(clientId: string) {
-  if (isQuickClient(clientId)) {
-    return null;
-  }
-
-  const [app] = await db
-    .select()
-    .from(oauthApps)
-    .where(eq(oauthApps.clientId, clientId))
-    .limit(1);
-
-  return app ?? null;
 }

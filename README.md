@@ -1,8 +1,8 @@
 # Ave
 
-Ave is an open-source identity platform built around passkeys, OAuth 2.0, and OpenID Connect. It provides hosted sign-in, account recovery, Quick Ave, app-to-app delegation, identity-backed signing, and per-app encryption key delivery.
+Ave is an open-source identity provider for apps that need to be secure and end-to-end encrypted. Users sign in with passkeys over standard OAuth 2.0 and OpenID Connect, and apps can receive a per-user encryption key that is unwrapped on the user's device and delivered in the callback URL fragment. Ave's servers only ever store those keys encrypted by the user's master key.
 
-Apps own their workspaces, membership, billing, and authorization. Ave supplies the verified identity and the capabilities explicitly granted by that identity.
+Apps own their workspaces, membership, billing, and authorization. Ave supplies the verified identity and the keys that identity grants to the app.
 
 ## Repository
 
@@ -11,10 +11,10 @@ Apps own their workspaces, membership, billing, and authorization. Ave supplies 
 | `ave-server` | Hono API on Cloudflare Workers, with D1, R2, Queues, and Durable Objects |
 | `ave-web` | SvelteKit frontend for `aveid.net` and `devs.aveid.net` |
 | `ave-docs` | Public documentation at `docs.aveid.net` |
-| `sdks/ave-sdk` | TypeScript SDK and browser, server, Expo, Svelte, Next.js, and Convex integrations |
-| `sdks/ave-embed` | Browser embed for auth, Connector, and signing |
+| `sdks/ave-sdk` | TypeScript SDK with browser, server, Expo, Svelte, and Convex integrations |
+| `sdks/ave-embed` | Browser embed for sign-in |
 
-Developer teams in `devs.aveid.net` manage OAuth apps, resources, credentials, and team access. Owners manage the team profile and administrators; administrators manage applications and viewer memberships; viewers have read access.
+Developer teams in `devs.aveid.net` own OAuth apps and their credentials. Every member can manage the team's apps, members, and profile, and a team always keeps at least one member.
 
 ## Development
 
@@ -92,6 +92,6 @@ Packages must retain `repository.url` pointing to `https://github.com/Lantharos/
 
 ## Documentation
 
-Public guides cover Quick Ave, OAuth/PKCE, confidential clients, FedCM, Connector, signing, encryption, app authorization, and framework integrations. Update `ave-docs` when changing public behavior or SDK contracts.
+Public guides cover end-to-end encryption, OAuth and PKCE, confidential clients, sessions, app authorization, and framework integrations. Update `ave-docs` when changing public behavior or SDK contracts.
 
 Read [CONTRIBUTING.md](CONTRIBUTING.md) for contribution guidance and [SECURITY.md](SECURITY.md) for private vulnerability reporting.

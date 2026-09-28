@@ -26,7 +26,6 @@ export const registerApi = {
         email?: string;
         birthday?: string;
         avatarUrl?: string;
-        bannerUrl?: string;
       };
       device: {
         name: string;

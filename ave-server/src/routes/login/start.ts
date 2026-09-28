@@ -168,7 +168,6 @@ app.post("/demo", zValidator("json", z.object({
   });
 
   setSessionCookie(c, sessionToken, expiresAt);
-  c.header("Set-Login", "logged-in");
 
   recordActivityLog(c, {
     userId: identity.userId,

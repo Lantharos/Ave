@@ -75,9 +75,6 @@ export { fetchJwks, verifyJwt } from "./crypto/jwt.js";
 export type {
   AveIdTokenClaims,
   AveJwtClaims,
-  FedCmTokenResponse,
-  IdentityKeyEnvelope,
-  IdentityPublicKeyRecord,
   JwkKey,
   JwksResponse,
   JwtHeader,
@@ -151,27 +148,6 @@ export function buildSwitchAccountUrl(
   });
 }
 
-export function buildConnectorUrl(config: AveConfig, params: {
-  state?: string;
-  resource: string;
-  scope: string;
-  mode?: "user_present" | "background";
-  extraParams?: Record<string, string>;
-}): string {
-  const issuer = config.issuer || "https://aveid.net";
-  const search = new URLSearchParams({
-    client_id: config.clientId,
-    redirect_uri: config.redirectUri,
-    resource: params.resource,
-    scope: params.scope,
-    mode: params.mode || "user_present",
-    state: params.state || "",
-    ...params.extraParams,
-  });
-
-  return `${issuer}/connect?${search.toString()}`;
-}
-
 export async function exchangeCode(config: AveConfig, payload: {
   code: string;
   codeVerifier?: string;
@@ -201,100 +177,6 @@ export async function refreshToken(config: AveConfig, payload: { refreshToken: s
   return refreshAccessToken(config, payload);
 }
 
-export async function exchangeFedCmAssertion(
-  config: Pick<AveConfig, "clientId" | "issuer">,
-  payload: { assertion: string }
-): Promise<import("./types.js").FedCmTokenResponse> {
-  const apiBase = getApiBase(config.issuer);
-  const response = await fetch(`${apiBase}/api/oauth/fedcm/exchange`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      assertion: payload.assertion,
-      clientId: config.clientId,
-    }),
-  });
-
-  if (!response.ok) {
-    const data = await response.json();
-    throw new Error(data.error_description || data.error || "Failed to exchange FedCM assertion");
-  }
-
-  return response.json();
-}
-
-export async function exchangeDelegatedToken(
-  config: AveConfig,
-  payload: {
-    subjectToken: string;
-    requestedResource: string;
-    requestedScope: string;
-    actor?: Record<string, unknown>;
-    clientSecret?: string;
-  }
-): Promise<import("./types.js").DelegationTokenResponse> {
-  const apiBase = getApiBase(config.issuer);
-  const response = await fetch(`${apiBase}/api/oauth/token`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      grantType: "urn:ietf:params:oauth:grant-type:token-exchange",
-      subjectToken: payload.subjectToken,
-      requestedResource: payload.requestedResource,
-      requestedScope: payload.requestedScope,
-      clientId: config.clientId,
-      clientSecret: payload.clientSecret,
-      actor: payload.actor,
-    }),
-  });
-
-  if (!response.ok) {
-    const data = await response.json();
-    throw new Error(data.error || "Failed to exchange delegated token");
-  }
-
-  return response.json();
-}
-
-export async function listDelegations(
-  config: { issuer?: string },
-  sessionToken: string
-): Promise<import("./types.js").DelegationGrant[]> {
-  const apiBase = getApiBase(config.issuer);
-  const response = await fetch(`${apiBase}/api/oauth/delegations`, {
-    headers: {
-      Authorization: `Bearer ${sessionToken}`,
-    },
-  });
-
-  if (!response.ok) {
-    const data = await response.json();
-    throw new Error(data.error || "Failed to list delegations");
-  }
-
-  const payload = await response.json();
-  return payload.delegations || [];
-}
-
-export async function revokeDelegation(
-  config: { issuer?: string },
-  sessionToken: string,
-  delegationId: string
-): Promise<void> {
-  const apiBase = getApiBase(config.issuer);
-  const response = await fetch(`${apiBase}/api/oauth/delegations/${encodeURIComponent(delegationId)}`, {
-    method: "DELETE",
-    headers: {
-      Authorization: `Bearer ${sessionToken}`,
-    },
-  });
-
-  if (!response.ok) {
-    const data = await response.json();
-    throw new Error(data.error || "Failed to revoke delegation");
-  }
-}
-
 export async function fetchUserInfo(config: AveConfig, accessToken: string): Promise<import("./types.js").UserInfo> {
   const apiBase = getApiBase(config.issuer);
   const response = await fetch(`${apiBase}/api/oauth/userinfo`, {
@@ -304,42 +186,6 @@ export async function fetchUserInfo(config: AveConfig, accessToken: string): Pro
   if (!response.ok) {
     const data = await response.json();
     throw new Error(data.error || "Failed to fetch user info");
-  }
-
-  return response.json();
-}
-
-
-export async function getIdentityPublicKey(
-  config: { issuer?: string },
-  handle: string
-): Promise<import("./types.js").IdentityPublicKeyRecord> {
-  const apiBase = getApiBase(config.issuer);
-  const response = await fetch(`${apiBase}/api/signing/public-key/${encodeURIComponent(handle)}`);
-
-  if (!response.ok) {
-    const data = await response.json();
-    throw new Error(data.error || "Failed to get identity public key");
-  }
-
-  return response.json();
-}
-
-export async function getIdentityKey(
-  config: { issuer?: string },
-  sessionToken: string,
-  identityId: string
-): Promise<import("./types.js").IdentityKeyEnvelope> {
-  const apiBase = getApiBase(config.issuer);
-  const response = await fetch(`${apiBase}/api/signing/keys/${encodeURIComponent(identityId)}`, {
-    headers: {
-      Authorization: `Bearer ${sessionToken}`,
-    },
-  });
-
-  if (!response.ok) {
-    const data = await response.json();
-    throw new Error(data.error || "Failed to get identity key envelope");
   }
 
   return response.json();
@@ -367,6 +213,3 @@ function base64UrlEncode(bytes: Uint8Array): string {
     .replace(/\//g, "_")
     .replace(/=+$/, "");
 }
-
-export { createSignatureRequest, getSignatureStatus, getPublicKey, verifySignature, buildSigningUrl, openSigningPopup } from "./signing.js";
-export type { SigningConfig } from "./signing.js";

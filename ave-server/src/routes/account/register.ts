@@ -94,7 +94,6 @@ const completeRegistrationSchema = z.object({
     email: z.string().email().optional(),
     birthday: z.string().optional(),
     avatarUrl: z.string().url().optional(),
-    bannerUrl: z.string().url().optional(),
   }),
   // Device info
   device: z.object({
@@ -178,7 +177,6 @@ app.post("/complete", zValidator("json", completeRegistrationSchema), async (c) 
         pendingEmail: data.identity.email ? normalizeEmail(data.identity.email) : null,
         birthday: data.identity.birthday,
         avatarUrl: data.identity.avatarUrl,
-        bannerUrl: data.identity.bannerUrl,
         isPrimary: true,
       })
       .returning();
@@ -276,7 +274,6 @@ app.post("/complete", zValidator("json", completeRegistrationSchema), async (c) 
   await deleteChallenge("registration", data.tempUserId);
   
   setSessionCookie(c, result.sessionToken, new Date(Date.now() + 30 * 24 * 60 * 60 * 1000));
-  c.header("Set-Login", "logged-in");
 
   return c.json({
     success: true,

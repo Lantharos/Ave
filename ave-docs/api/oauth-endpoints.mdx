@@ -1,72 +1,65 @@
 ---
-title: "OAuth + OIDC endpoints"
-description: "Detailed endpoint contract for app metadata, authorize, token grants, userinfo, discovery, and delegation management."
+title: "OAuth and OIDC endpoints"
+description: "Endpoint contract for app metadata, authorization, token grants, userinfo, discovery, and authorization management."
 ---
 
 <Tip>
-	The token endpoint accepts both OAuth-standard `snake_case` fields and legacy `camelCase` fields. Prefer `grant_type`, `client_id`, `redirect_uri`, and `code_verifier` in new integrations.
+	The token endpoint accepts OAuth `snake_case` field names and their `camelCase` equivalents in a JSON body.
 </Tip>
 
 ## `GET /api/oauth/app/:clientId`
 
-Returns app public metadata and active connector resources.
+Returns public app metadata: `id`, `name`, `description`, `iconUrl`, `websiteUrl`, and `supportsE2ee`.
 
 Errors:
 
 - `404` app not found
 
-## `GET /api/oauth/resource/:resourceKey`
+## `GET https://aveid.net/signin`
 
-Returns active connector resource metadata plus owner app info.
+The authorization endpoint. Redirect the user here with:
 
-Errors:
-
-- `404` resource not found
-
-## `POST /api/oauth/authorize` (session-authenticated)
-
-Used by authenticated Ave session context to grant app authorization and produce redirect URL with code.
-
-Body fields include:
-
-<ParamField path="clientId" type="string" required>
-	OAuth client identifier.
+<ParamField query="client_id" type="string" required>
+	Your app's client ID.
 </ParamField>
-<ParamField path="redirectUri" type="string" required>
-	Must exactly match one of the app's registered redirect URIs.
+<ParamField query="redirect_uri" type="string" required>
+	Must exactly match one of the app's registered redirect URIs, or be a local development URL when development mode is on.
 </ParamField>
-<ParamField path="identityId" type="uuid" required>
-	Identity selected by the authenticated user.
+<ParamField query="scope" type="string">
+	Space-separated scopes. Standard scopes must be in the app's allowlist. `user_id` and one encryption mode (`e2ee:symmetric` or `e2ee:asymmetric`, optionally with `e2ee:reset`) can be added per request.
 </ParamField>
-<ParamField path="scope" type="string">
-	Space-separated scopes; validated against app allowlist.
+<ParamField query="state" type="string">
+	Returned unchanged on the callback. Required by the SDK helpers.
 </ParamField>
-<ParamField path="codeChallenge" type="string">
-	PKCE challenge for public-client authorization.
+<ParamField query="nonce" type="string">
+	Copied into the `id_token`.
 </ParamField>
-<ParamField path="encryptedAppKey" type="string">
-	Required for first E2EE authorization when the app supports E2EE.
+<ParamField query="code_challenge" type="string">
+	PKCE challenge. Required for public clients.
 </ParamField>
-<ParamField path="requestedResource" type="string">
-	Connector resource key when `connector=true`.
+<ParamField query="code_challenge_method" type="string">
+	`S256` or `plain`. Use `S256`.
 </ParamField>
-<ParamField path="requestedScope" type="string">
-	Connector scope set requested by source app.
+<ParamField query="prompt" type="string">
+	`none`, `login`, `consent`, or `select_account`, space-separated.
 </ParamField>
 
-Notable behavior:
+On success, Ave redirects to `redirect_uri?code=...&state=...`. When an encryption scope was granted, the keys follow in the fragment:
 
-- Scope validation against app allowlist
-- E2EE key required for E2EE app first authorization
-- Connector grant create/update with merged scopes
+| Mode | Fragment parameters |
+| --- | --- |
+| `e2ee:symmetric` | `app_key` |
+| `e2ee:asymmetric` | `app_public_key`, `app_private_key` |
+| With `e2ee:reset` | The new keys, `app_key_old`, `app_public_key_old`, `app_private_key_old`, and `app_key_reset=true` |
+
+Values are standard base64. The sign-in page rejects an authorization request with:
+
+- `invalid_scope` — a standard scope outside the allowlist, or more than one encryption mode
+- `unsupported_encryption_mode` — a reserved encryption scope such as `e2ee:pqc:kyber`
 
 ## `POST /api/oauth/token`
 
-Supported `grant_type` values:
-
-1. `authorization_code`
-2. `refresh_token`
-3. `urn:ietf:params:oauth:grant-type:token-exchange`
+Supported `grant_type` values: `authorization_code` and `refresh_token`.
 
 <Tabs>
 	<Tab title="authorization_code">
@@ -89,29 +82,16 @@ Supported `grant_type` values:
 			"client_secret": "YOUR_CLIENT_SECRET"
 		}
 		```
-	</Tab>
-	<Tab title="token_exchange">
-		```json
-		{
-			"grant_type": "urn:ietf:params:oauth:grant-type:token-exchange",
-			"subject_token": "SOURCE_APP_ACCESS_TOKEN",
-			"resource": "target:resource",
-			"scope": "resource.access",
-			"client_id": "YOUR_CLIENT_ID",
-			"client_secret": "YOUR_CLIENT_SECRET"
-		}
-		```
+
+		Public clients omit `client_secret`.
 	</Tab>
 </Tabs>
 
 ### Authorization code grant
 
-Validates code, expiry, redirect URI, and either:
+Validates the code, its expiry, the redirect URI, and either the PKCE verifier (when the authorization used a code challenge) or the client secret.
 
-- PKCE verifier (if code challenge present), or
-- client secret
-
-Returns tokens and a scope-filtered `user` payload: `id` is always present, display name/handle/avatar require `profile`, and email requires `email`.
+Returns tokens and a scope-filtered `user` payload: `id` is always present, display name, handle, and avatar require `profile`, and email requires `email`. Encryption keys are never part of this response; they are delivered only in the callback fragment.
 
 <ResponseField name="access_token" type="string">
 	Opaque bearer token accepted by Ave APIs.
@@ -120,48 +100,20 @@ Returns tokens and a scope-filtered `user` payload: `id` is always present, disp
 	Signed JWT for Ave API authorization. Its audience is Ave's resource audience.
 </ResponseField>
 <ResponseField name="id_token" type="string">
-	Returned when `openid` scope is granted.
+	Returned when `openid` is granted. Its audience is your client ID.
 </ResponseField>
 <ResponseField name="refresh_token" type="string">
-	Returned when `offline_access` scope is granted.
+	Returned when `offline_access` is granted.
+</ResponseField>
+<ResponseField name="user_id" type="string">
+	Returned when `user_id` is granted.
 </ResponseField>
 
 ### Refresh token grant
 
-Validates the token hash record, client ownership, active app authorization, and revoked/reuse/expiry state, then rotates the refresh token and returns new access and refresh tokens with the granted `scope`. An `id_token` is included only with `openid`. Reuse detection is scoped to the rotated token lineage that was reused, not unrelated refresh tokens held by the same app on other devices. Disconnecting an app removes its authorization codes, Ave access tokens, refresh tokens, and connector grants for that identity; reconnecting does not restore old tokens.
+Validates the token record, client ownership, the active app authorization, and revocation, reuse, and expiry state, then rotates the refresh token and returns new access and refresh tokens with the granted `scope`. An `id_token` is included only with `openid`. Reuse detection is scoped to the rotated token lineage that was reused, not to unrelated refresh tokens held by the same app on other devices.
 
-### Token exchange grant (Connector)
-
-Exchanges source app token for delegated target token after grant and scope checks.
-
-## FedCM endpoints
-
-Ave also exposes an additive FedCM flow for supported browsers.
-
-### `GET /api/oauth/fedcm/config`
-
-Returns the Ave FedCM provider configuration.
-
-### `GET /api/oauth/fedcm/accounts`
-
-Returns the currently signed-in Ave identities for the browser session.
-
-### `POST /api/oauth/fedcm/assertion`
-
-Returns either:
-
-- a short-lived Ave FedCM assertion token, or
-- a `continue_on` URL when consent or E2EE setup must finish in a dialog
-
-Direct completion requires an existing authorization covering every requested scope. New scopes, including `user_id`, require consent. Older authorizations without recorded consent scopes also require consent. Standard scopes must be in the app’s current allowlist at assertion and exchange time.
-
-### `POST /api/oauth/fedcm/finalize`
-
-Used by Ave's continuation UI to turn a completed consent step into a short-lived FedCM assertion.
-
-### `POST /api/oauth/fedcm/exchange`
-
-Exchanges a FedCM assertion for the normal token payload. For E2EE apps, the signed FedCM assertion can also carry `app_key` after Ave's continuation dialog completes the existing key-unlock flow.
+Disconnecting an app removes its authorization codes, access tokens, refresh tokens, and wrapped encryption keys for that identity. Reconnecting does not restore old tokens and provisions new keys.
 
 ## `GET /api/oauth/userinfo`
 
@@ -169,45 +121,53 @@ Authorization: `Bearer <access_token_or_access_token_jwt>`
 
 Returns claims based on granted scopes:
 
-- always `sub`
+- always `sub` and `iss`
 - `profile`: `name`, `preferred_username`, `picture`
 - `email`: `email`
-- `user_id`: when included in the authorized scope
+- `user_id`: `user_id`
 
 <AccordionGroup>
 	<Accordion title="Why userinfo may omit fields">
 		Claims are scope-gated. Missing `email` or profile fields usually means those scopes were not granted.
 	</Accordion>
 	<Accordion title="Accepted token formats">
-		The endpoint accepts both opaque `access_token` and JWT `access_token_jwt` when valid and unexpired.
+		The endpoint accepts both the opaque `access_token` and `access_token_jwt` when valid and unexpired.
 	</Accordion>
 </AccordionGroup>
 
 Errors:
 
 - `401 unauthorized` missing bearer token
-- `401 invalid_token` invalid/expired/unresolvable token
+- `401 invalid_token` invalid, expired, or unresolvable token
 
 ## `GET /.well-known/openid-configuration`
 
-Returns issuer metadata, endpoints, supported scopes, response types, grant types, and signing algs.
+Returns issuer metadata, endpoints, and supported scopes, response types, grant types (`authorization_code`, `refresh_token`), token endpoint authentication methods (`client_secret_post`, `none`), and ID token signing algorithms (`RS256`).
 
 ## `GET /.well-known/jwks.json`
 
-Returns signing key set for JWT verification.
+Returns the key set for JWT verification.
 
 ## `GET /.well-known/webfinger?resource=...`
 
-Returns issuer discovery link for requested resource.
+Returns the issuer discovery link for the requested resource.
 
-## `GET /api/oauth/delegations` (session-authenticated)
+## Authorization management
 
-Lists user connector grants with source app and target resource context.
+These endpoints use the user's Ave session and back the account dashboard and consent screen.
 
-## `DELETE /api/oauth/delegations/:delegationId` (session-authenticated)
+### `GET /api/oauth/authorizations`
 
-Revokes active delegation grant and records audit log.
+Lists the apps the user has authorized, per identity.
 
-<Check>
-	After revocation, token-exchange attempts for that grant fail until the user re-authorizes connector access.
-</Check>
+### `GET /api/oauth/authorization/:clientId`
+
+Returns the user's most recent authorization for an app, including its wrapped encryption keys and public key. Ave's sign-in page unwraps them locally.
+
+### `DELETE /api/oauth/authorizations/:authId`
+
+Disconnects an app for one identity and records an activity log entry.
+
+### `PUT /api/oauth/authorization/:clientId/encryption-key`
+
+Replaces the wrapped symmetric app key for an existing authorization with an envelope encrypted in the browser. Used by [app key recovery](/troubleshooting/recover-app-key).

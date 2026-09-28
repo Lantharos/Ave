@@ -2,7 +2,7 @@
   "$schema": "https://mintlify.com/docs.json",
   "theme": "mint",
   "name": "Ave",
-  "description": "Passkey identity, OAuth/OIDC, delegation, signing, and encrypted app-key delivery.",
+  "description": "Passkey accounts, OAuth 2.0 and OpenID Connect, and end-to-end encryption keys delivered to your app.",
   "colors": {
     "primary": "#D3D3D3",
     "light": "#e5e5e5",
@@ -33,41 +33,33 @@
         "tab": "Guides",
         "groups": [
           {
-            "group": "Start",
+            "group": "Encryption",
             "pages": [
-              "guides/quick-ave",
-              "guides/quick-ave-to-standard"
+              "guides/end-to-end-encryption",
+              "guides/e2ee-integration-checklist"
             ]
           },
           {
-            "group": "OAuth",
+            "group": "Sign-in",
             "pages": [
               "guides/oauth-authorization-code-flow",
-              "guides/fedcm-browser-sign-in",
               "guides/pkce-for-public-clients",
               "guides/server-side-confidential-clients",
               "guides/scopes-and-claims",
-              "guides/app-authorization",
               "guides/ave-session-and-tokens"
+            ]
+          },
+          {
+            "group": "Building on Ave",
+            "pages": [
+              "guides/app-authorization"
             ]
           },
           {
             "group": "Frameworks",
             "pages": [
               "guides/expo-auth-session",
-              "guides/convex-custom-auth",
-              "guides/nextjs-ave-session",
-              "guides/sql-postgres-jwt-auth",
-              "guides/better-auth-ave"
-            ]
-          },
-          {
-            "group": "Capabilities",
-            "pages": [
-              "guides/connector-app-to-app",
-              "guides/ave-signing",
-              "guides/end-to-end-encryption",
-              "guides/e2ee-integration-checklist"
+              "guides/convex-custom-auth"
             ]
           }
         ]
@@ -79,10 +71,8 @@
             "group": "JavaScript SDK",
             "pages": [
               "sdk/javascript-sdk",
-              "sdk/sdk-oauth",
               "sdk/sdk-identity-keys",
-              "sdk/sdk-connector",
-              "sdk/sdk-signing"
+              "sdk/sdk-oauth"
             ]
           },
           {
@@ -101,7 +91,7 @@
             "pages": [
               "api/overview",
               "api/oauth-endpoints",
-              "api/signing-endpoints"
+              "api/encryption-endpoints"
             ]
           }
         ]
@@ -112,8 +102,8 @@
           {
             "group": "Security",
             "pages": [
-              "security/best-practices",
-              "security/encryption-model-and-key-lifecycle"
+              "security/encryption-model-and-key-lifecycle",
+              "security/best-practices"
             ]
           },
           {

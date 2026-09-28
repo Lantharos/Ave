@@ -47,6 +47,16 @@ A **confidential client** is an app whose server can store a `clientSecret` secu
     }
     ```
   </Step>
+  <Step title="Verify the ID token">
+    `exchangeCodeServer` returns the tokens as Ave sent them. Verify the `id_token` before creating a session:
+
+    ```ts
+    import { verifyAveIdToken } from "@ave-id/sdk/server";
+
+    const claims = await verifyAveIdToken(tokens.id_token!, { clientId: process.env.AVE_CLIENT_ID! });
+    if (!claims || claims.nonce !== storedNonce) throw new Error("Invalid id_token");
+    ```
+  </Step>
   <Step title="Store tokens server-side and issue a session">
     Store `access_token`, `access_token_jwt`, `id_token`, and `refresh_token` in your encrypted server-side session store. Issue your own session cookie to the browser.
 
@@ -70,6 +80,10 @@ A **confidential client** is an app whose server can store a `clientSecret` secu
     ```
   </Step>
 </Steps>
+
+## Encryption keys and server callbacks
+
+Encryption keys are delivered in the callback URL fragment, which browsers do not send to servers. A server-rendered callback route receives the code but never the keys. If your app requests an encryption scope, have the callback page read the fragment in client code with `extractAppKeyFromUrl` or `mergeAppEncryptionFromUrl` from `@ave-id/sdk`, keep the keys on the client, and call `stripSensitiveFragmentParams()`. The code exchange can still happen on your server.
 
 ## Client secret rules
 

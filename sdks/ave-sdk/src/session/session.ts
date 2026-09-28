@@ -245,7 +245,7 @@ export class AveSession {
   }
 
   /**
-   * Apply tokens from authorization code exchange (or FedCM). Persists before resolving.
+   * Apply tokens from an authorization code exchange. Persists before resolving.
    */
   async setTokensFromResponse(tr: TokenResponse): Promise<void> {
     const next = snapshotFromTokenResponse(tr, this.snapshot);

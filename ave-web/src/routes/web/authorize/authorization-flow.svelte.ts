@@ -1,11 +1,7 @@
 import { createEmbeddedSession } from "./lib/embeddedSession.svelte";
 import { createMasterKeyRecovery } from "./lib/masterKeyRecovery.svelte";
 import { prepareAuthorizationEncryption } from "./lib/prepare-authorization-encryption";
-import {
-    identityProvider,
-    isCustomSchemeRedirect,
-    postToEmbedHost,
-} from "./lib/browser";
+import { isCustomSchemeRedirect, postToEmbedHost } from "./lib/browser";
 import { parseAuthorizationParams } from "./lib/params";
 import { api, type Identity, type OAuthAuthorization } from "$lib/surfaces/web/lib/api";
 import {
@@ -51,13 +47,8 @@ export function createAuthorizationFlow() {
     const forceAuthorizePrompt = $derived(requiresAuthorizeInteractionPrompt(oauthPrompts));
     const wantsSelectAccount = $derived(wantsAccountPickerPrompt(oauthPrompts));
 
-    const isQuickAuth = $derived(params.clientId.startsWith("origin:"));
     const requiresEmailScope = $derived.by(() => parseOAuthScopes(params.scope).includes("email"));
     const selectedIdentityNeedsEmail = $derived.by(() => Boolean(selectedIdentity && requiresEmailScope && !selectedIdentity.email));
-    const quickOriginHostname = $derived.by(() => {
-        if (!isQuickAuth) return null;
-        try { return new URL(params.clientId.slice("origin:".length)).hostname; } catch { return null; }
-    });
     const authorizeRequestedScopes = $derived.by(() => parseOAuthScopes(params.scope));
     const wantsUserIdScope = $derived(hasUserIdScope(authorizeRequestedScopes));
 
@@ -105,7 +96,7 @@ export function createAuthorizationFlow() {
     }
 
     function appDisplayName() {
-        return appInfo?.name || quickOriginHostname || "this app";
+        return appInfo?.name || "this app";
     }
 
     function syncSelectedIdentity(identity: Identity) {
@@ -287,32 +278,6 @@ export function createAuthorizationFlow() {
 
             const result = await api.oauth.authorize(authData);
 
-            const fedCmProvider = params.fedcmContinue ? identityProvider() : null;
-            if (fedCmProvider) {
-                const code = new URL(result.redirectUrl).searchParams.get("code");
-                if (!code) {
-                    throw new Error("FedCM authorization did not return a code");
-                }
-
-                const finalized = await api.oauth.fedcmFinalize({
-                    code,
-                    clientId: params.clientId,
-                    state: params.state || undefined,
-                    appKey: rawAppKey || undefined,
-                    appPublicKey: rawAppPublicKey || undefined,
-                    appPrivateKey: rawAppPrivateKey || undefined,
-                    appKeyOld: rawAppKeyOld || undefined,
-                    appPublicKeyOld: rawAppPublicKeyOld || undefined,
-                    appPrivateKeyOld: rawAppPrivateKeyOld || undefined,
-                    appKeyReset: wantsE2eeReset || undefined,
-                });
-
-                fedCmProvider.resolve(finalized.assertion);
-                completed = true;
-                authorizing = false;
-                return;
-            }
-
             let redirectUrl = result.redirectUrl;
             const hashParams = new URLSearchParams();
             if (rawAppKey) hashParams.set("app_key", rawAppKey);
@@ -406,13 +371,6 @@ export function createAuthorizationFlow() {
     }
 
     function handleDeny() {
-        const fedCmProvider = params.fedcmContinue ? identityProvider() : null;
-        if (fedCmProvider) {
-            fedCmProvider.close();
-            completed = true;
-            return;
-        }
-
         const redirectUrl = new URL(params.redirectUri);
         redirectUrl.searchParams.set("error", "access_denied");
         if (params.state) {
@@ -450,10 +408,6 @@ export function createAuthorizationFlow() {
             existingAuth = null;
             appInfo = null;
         }
-        if (params.resource) {
-            window.location.replace(`/connect${window.location.search}`);
-            return;
-        }
         if (completed) return;
         if (!authenticated.current) {
             if (authLoading.current || retryingCookieSession) return;
@@ -469,7 +423,7 @@ export function createAuthorizationFlow() {
                     embeddedSession.tryAutoStorageAccess();
                     return;
                 }
-                if (!resolvedAppInfo && !appInfo && !quickOriginHostname) {
+                if (!resolvedAppInfo && !appInfo) {
                     return;
                 }
                 embeddedSession.needsStorageAccess = true;
@@ -494,7 +448,6 @@ export function createAuthorizationFlow() {
         get embedSheet() { return embedSheet; },
         get resolvedAppInfo() { return resolvedAppInfo; },
         get appInfo() { return appInfo; },
-        get quickOriginHostname() { return quickOriginHostname; },
         appDisplayName,
         get autoAuthorizing() { return autoAuthorizing; },
         get launchedExternalApp() { return launchedExternalApp; },
@@ -502,7 +455,6 @@ export function createAuthorizationFlow() {
         get completed() { return completed; },
         handleDeny,
         get authorizing() { return authorizing; },
-        get isQuickAuth() { return isQuickAuth; },
         get authorizeShowsE2ee() { return authorizeShowsE2ee; },
         get authorizeRequestedScopes() { return authorizeRequestedScopes; },
         get existingAuth() { return existingAuth; },

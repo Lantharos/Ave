@@ -1,84 +1,61 @@
 ---
 title: "How Ave works"
-description: "A plain-English walkthrough of Ave's architecture: passkey identity, OAuth/OIDC token flow, Connector delegation, Signing, and E2EE."
+description: "Passkey accounts, the OAuth and OIDC flow, and how encryption keys reach your app without Ave seeing them in plaintext."
 ---
 
-## The big picture
+## The pieces
 
-Ave combines several things that usually live in separate systems:
-
-<CardGroup cols={2}>
-  <Card title="Passwordless identity" icon="fingerprint">
-    Users authenticate with a passkey — no passwords, no SMS codes.
+<CardGroup cols={3}>
+  <Card title="Passkey accounts" icon="fingerprint">
+    Users authenticate with a passkey. Each account can hold several identities, and each identity is a separate principal to your app.
   </Card>
-  <Card title="OAuth 2.0 + OIDC" icon="key">
-    Standard authorization code flow with PKCE, ID tokens, access tokens, and refresh tokens.
+  <Card title="OAuth 2.0 and OIDC" icon="key">
+    Authorization code flow with PKCE, ID tokens, access tokens, and rotating refresh tokens.
   </Card>
-  <Card title="Connector delegation" icon="link">
-    One app can request scoped access to another app's resources on a user's behalf.
-  </Card>
-  <Card title="Signing" icon="pen-nib">
-    Apps can request cryptographic approval from a user — the user signs a payload with their Ed25519 key.
-  </Card>
-  <Card title="E2EE key delivery" icon="lock">
-    Per-app, per-identity encryption keys are delivered via URL fragment (`#app_key=...`) on the OAuth callback redirect — never in `/api/oauth/token` responses. The server never holds plaintext.
+  <Card title="App encryption keys" icon="lock">
+    Per-app, per-identity keys, wrapped by the user's master key on Ave and unwrapped only on the user's device.
   </Card>
 </CardGroup>
 
-## The standard OAuth flow
+## Sign-in
 
 <Steps>
-  <Step title="Your app redirects the user to Ave">
-    You construct a URL to `https://aveid.net/signin` with your `client_id`, `redirect_uri`, scopes, PKCE challenge, `state`, and `nonce`. The user is sent there.
+  <Step title="Your app sends the user to Ave">
+    Your app opens `https://aveid.net/signin` with its `client_id`, `redirect_uri`, scopes, PKCE challenge, `state`, and `nonce`, either by redirecting or through the embed.
   </Step>
-  <Step title="The user authenticates">
-    The user completes passkey login and selects an identity in the Ave UI. Ave issues a short-lived, one-time authorization code.
+  <Step title="The user authenticates and consents">
+    The user signs in with a passkey, picks an identity, and approves the scopes your app asked for.
   </Step>
-  <Step title="Ave redirects back with a code">
-    Ave redirects to your `redirect_uri` with `?code=...&state=...`. Your app validates `state` before doing anything else.
+  <Step title="Ave redirects back">
+    Ave returns to your `redirect_uri` with `?code=...&state=...`. If your app asked for an encryption scope, the keys follow in the fragment: `#app_key=...`.
   </Step>
-  <Step title="Your app exchanges the code for tokens">
-    Your app (or server) sends the code to `POST https://api.aveid.net/api/oauth/token`. You get back access tokens, an ID token, and optionally a refresh token.
+  <Step title="Your app exchanges the code">
+    Your app sends the code and PKCE verifier to `POST https://api.aveid.net/api/oauth/token` and receives an `id_token`, access tokens, and, with `offline_access`, a refresh token.
   </Step>
-  <Step title="Your app uses the tokens">
-    Use `id_token` to establish a user session. Use `access_token` or `access_token_jwt` to call Ave APIs. Use `refresh_token` to get new tokens without re-authenticating.
+  <Step title="Your app creates its session">
+    Verify the `id_token`, key your records by its `sub`, and keep the encryption key on the client.
   </Step>
 </Steps>
 
-## Optional extension flows
+## Encryption keys
 
-<AccordionGroup>
-  <Accordion title="Connector delegation — app-to-app access">
-    The Connector flow lets one app ("source") request delegated access to a resource owned by another app ("target"). The user approves once at `https://aveid.net/connect`. Afterward, the source app uses a **token-exchange grant** to get a delegated token scoped to that resource.
+Every Ave account has a master key. It is generated on the user's device and stored on Ave only in encrypted form, unlocked with passkey PRF output, a recovery code, or a transfer from another signed-in device. The master key never leaves the device in plaintext.
 
-    Use this when: your app needs to act on a user's behalf in another service that also uses Ave.
+When an app first asks for `e2ee:symmetric` or `e2ee:asymmetric`, the Ave sign-in page generates the app's key material in the browser, encrypts it with the master key, and stores only that ciphertext on the authorization. On every later sign-in, the page decrypts the stored ciphertext locally and places the plaintext in the callback fragment. Fragments are not sent in HTTP requests, so the plaintext reaches your client code without passing through Ave's API or your server.
 
-    → [Full guide](/guides/connector-app-to-app)
-  </Accordion>
-  <Accordion title="Signing — cryptographic user approval">
-    Your server creates a signing request with a human-readable payload. The user sees the payload in the Ave UI and approves with their passkey. Ave returns an Ed25519 signature that you verify server-side before taking any irreversible action.
+Keys are stable per app and identity. A user who signs in again, or on another device, gets the same key. A different identity gets different keys. Rotation only happens when your app asks for it with `e2ee:reset`.
 
-    Use this when: you need high-integrity proof that a specific person approved a specific action (e.g. financial transactions, permissions changes).
+See [Encryption model and key lifecycle](/security/encryption-model-and-key-lifecycle) for details.
 
-    → [Full guide](/guides/ave-signing)
-  </Accordion>
-  <Accordion title="E2EE — per-app encryption keys">
-    For apps that store encrypted user data, Ave can deliver a per-app, per-identity encryption key. During the authorization consent step, the Ave UI decrypts the server-stored key using the user's master key and passes the plaintext key as `#app_key=...` in the callback redirect fragment. Your server never sees plaintext key material.
+## Responsibilities
 
-    Use this when: you want users to own their data and you want to guarantee you can't read it.
-
-    → [Full guide](/guides/end-to-end-encryption)
-  </Accordion>
-</AccordionGroup>
-
-## Trust model
-
-| Layer | Who operates it | What it's responsible for |
+| Layer | Operated by | Responsible for |
 |---|---|---|
-| **Ave auth UI + identity system** | Ave | Passkey auth, identity selection, user consent |
-| **Ave API** | Ave | Token issuance, validation, signing, metadata |
-| **Your backend** | You | Session management, business logic, app-level authorization |
+| Sign-in pages and accounts | Ave | Passkey authentication, identity selection, consent, key wrapping and unwrapping on the user's device |
+| Ave API | Ave | Token issuance, userinfo, storing wrapped keys, public-key lookup |
+| Your client | You | Encrypting and decrypting user data, keeping keys out of logs and URLs |
+| Your backend | You | Verifying tokens, storing ciphertext, workspaces, membership, and permissions |
 
 <Note>
-  Ave tokens and signatures are **identity signals** — they tell you who the user is and what they approved. Enforcing what that identity is *allowed to do* in your app is still your responsibility.
+  Ave tells you who the user is and delivers their keys. What that identity is allowed to do in your app is decided by your app. See [App workspaces and permissions](/guides/app-authorization).
 </Note>

@@ -116,20 +116,20 @@ export function createPopupFlow({ url, issuer, handlers, onError, onClose, width
   return { popup, close: flow.close };
 }
 
-export function createSheetFlow({ url, signing = false, ...options }) {
+export function createSheetFlow({ url, ...options }) {
   const overlay = document.createElement("div");
   overlay.style.cssText = `
-    position: fixed; inset: 0; background: rgba(0, 0, 0, ${signing ? "0.8" : "0.7"});
+    position: fixed; inset: 0; background: rgba(0, 0, 0, 0.7);
     backdrop-filter: blur(4px); z-index: 999999; display: flex; align-items: flex-end;
     justify-content: center; animation: aveSheetFadeIn 0.2s ease-out;
   `;
   const sheet = document.createElement("div");
   sheet.setAttribute("role", "dialog");
   sheet.setAttribute("aria-modal", "true");
-  sheet.setAttribute("aria-label", signing ? "Ave signing" : "Ave sign-in");
+  sheet.setAttribute("aria-label", "Ave sign-in");
   sheet.style.cssText = `
-    width: 100%; max-width: ${signing ? "600" : "500"}px; max-height: 90vh;
-    background: ${signing ? "#111111" : "#090909"}; border-radius: ${signing ? "32" : "24"}px ${signing ? "32" : "24"}px 0 0;
+    width: 100%; max-width: 500px; max-height: 90vh;
+    background: #090909; border-radius: 24px 24px 0 0;
     overflow: hidden; animation: aveSheetSlideUp 0.3s ease-out; position: relative;
   `;
   const handle = document.createElement("div");

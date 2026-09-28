@@ -22,7 +22,7 @@ export const requireDevUser: MiddlewareHandler = async (c, next) => {
         const userId = typeof payload.uid === "string" ? payload.uid : null;
         const tokenClientId = typeof payload.cid === "string" ? payload.cid : "";
         const tokenScopes = typeof payload.scope === "string" ? payload.scope.split(/\s+/).filter(Boolean) : [];
-        if (devPortalClientId && tokenClientId === devPortalClientId && userId && tokenScopes.includes("user_id") && payload.quick !== true) {
+        if (devPortalClientId && tokenClientId === devPortalClientId && userId && tokenScopes.includes("user_id")) {
           const access = typeof payload.jti === "string" ? await getAccessToken(payload.jti) : null;
           if (access?.userId === userId && access.identityId === payload.sub) {
             c.set("devUser", {

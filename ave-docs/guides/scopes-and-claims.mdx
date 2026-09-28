@@ -1,9 +1,9 @@
-﻿---
+---
 title: "Scopes and claims"
-description: "Every available scope, what JWT claims it adds to id_token and access_token_jwt, and how to design your permission model."
+description: "Every available scope, the claims and keys it adds, and how to request scopes safely."
 ---
 
-Scopes are space-separated strings you pass in the `scope` parameter of your authorization request. They control what information Ave includes in the tokens and what actions your app can perform.
+Scopes are space-separated strings you pass in the `scope` parameter of your authorization request. They control what information Ave includes in the tokens and whether Ave delivers encryption keys to your app.
 
 ```text
 scope=openid profile email offline_access
@@ -15,7 +15,7 @@ scope=openid profile email offline_access
 
 ## Standard scopes
 
-These are available to all OAuth apps without any special configuration.
+These are allowlisted per app in the developer portal. New apps allow all four by default.
 
 <ParamField path="openid" type="scope">
   Required for OIDC. Without this scope, no `id_token` is returned — just an access token.
@@ -99,9 +99,33 @@ These are available to all OAuth apps without any special configuration.
   Use this for long-lived sessions or background sync scenarios. Store the refresh token in an HTTP-only cookie or your server-side session storage — never in `localStorage`.
 </ParamField>
 
+## Encryption scopes
+
+Requested per sign-in; nothing needs to be enabled in the developer portal. Request one encryption mode per authorization. Keys are delivered in the callback fragment, never in the token response. See [End-to-end encryption](/guides/end-to-end-encryption).
+
+<ParamField path="e2ee:symmetric" type="scope">
+  Provisions a per-identity AES-256 app key. Delivered after consent in the redirect fragment as `#app_key=`.
+</ParamField>
+
+<ParamField path="e2ee:asymmetric" type="scope">
+  Provisions a stable ECDH P-256 keypair per identity. Public and private keys are returned in the fragment (`#app_public_key=`, `#app_private_key=`). Store the private key in your app; persist the public key in your database. Other users' public keys are available via `/api/encryption/app-lookup`.
+</ParamField>
+
+<ParamField path="e2ee:reset" type="scope">
+  **Dangerous — key rotation.** Combine with `e2ee:symmetric` or `e2ee:asymmetric` (or rely on the stored mode on re-sign-in). Regenerates per-app encryption keys instead of reusing existing ones. The redirect fragment includes new keys, previous keys as `#app_key_old` / `#app_public_key_old` / `#app_private_key_old`, and `#app_key_reset=true`. Re-sign-in **without** this scope never rotates keys.
+</ParamField>
+
+<ParamField path="e2ee:pqc:kyber" type="scope">
+  Reserved for post-quantum key exchange. Requests return `unsupported_encryption_mode`.
+</ParamField>
+
+<ParamField path="e2ee:pqc:dilithium" type="scope">
+  Reserved for post-quantum signatures. Requests return `unsupported_encryption_mode`.
+</ParamField>
+
 ## Extended scopes
 
-These are requested dynamically at sign-in, not configured in the developer portal.
+Requested per sign-in; not configured in the developer portal.
 
 <ParamField path="user_id" type="scope">
   **Discouraged for most apps.** Exposes the permanent user UUID — stable across all identities for the same Ave account. Users see a warning on the consent screen.
@@ -127,30 +151,6 @@ These are requested dynamically at sign-in, not configured in the developer port
   </Note>
 </ParamField>
 
-## Encryption scopes
-
-Requested dynamically at sign-in — not configured in the developer portal. Request exactly one per authorization.
-
-<ParamField path="e2ee:symmetric" type="scope">
-  Provisions a per-user AES-256 app key. Delivered after consent in the redirect fragment as `#app_key=`. Legacy apps with `supportsE2ee` behave like this scope when no `e2ee:*` scope is listed.
-</ParamField>
-
-<ParamField path="e2ee:asymmetric" type="scope">
-  Provisions a stable ECDH P-256 keypair per user. Public and private keys are returned in the fragment (`#app_public_key=`, `#app_private_key=`). Store the private key in your app; persist the public key in your database. Other users' public keys are available via `/api/encryption/app-lookup`.
-</ParamField>
-
-<ParamField path="e2ee:reset" type="scope">
-  **Dangerous — key rotation.** Combine with `e2ee:symmetric` or `e2ee:asymmetric` (or rely on the stored mode on re-sign-in). Regenerates per-app encryption keys instead of reusing existing ones. The redirect fragment includes new keys, previous keys as `#app_key_old` / `#app_public_key_old` / `#app_private_key_old`, and `#app_key_reset=true`. Re-sign-in **without** this scope never rotates keys.
-</ParamField>
-
-<ParamField path="e2ee:pqc:kyber" type="scope">
-  Reserved for post-quantum key exchange. Not yet available.
-</ParamField>
-
-<ParamField path="e2ee:pqc:dilithium" type="scope">
-  Reserved for post-quantum signatures. Not yet available.
-</ParamField>
-
 ## Scope-to-token mapping
 
 | Scope | id_token claims added | access_token_jwt claims added | token response fields |
@@ -160,18 +160,12 @@ Requested dynamically at sign-in — not configured in the developer portal. Req
 | `email` | `email` | — | `user.email` |
 | `offline_access` | — | — | `refresh_token` |
 | `user_id` | — | `uid` | `user_id` |
+| `e2ee:symmetric` | — | — | `app_key`, merged from the fragment |
+| `e2ee:asymmetric` | — | — | `app_public_key`, `app_private_key`, merged from the fragment |
 
 The access JWT always carries `iss`, `sub`, `aud`, `exp`, `iat`, `jti`, `scope`, and `cid`. Ave checks its stored authorization when accepting it at Ave APIs.
 
-Authorization-code and FedCM responses include `user.id` for the selected identity. Other `user` fields follow the scopes above; account-owner fields such as `isPrimary` are never shared with apps. Refresh responses do not include a `user` object.
-
-## Connector scopes
-
-Connector flows use resource-defined scopes, not OIDC scopes. The target resource defines what scopes it exposes (for example `resource.read`, `resource.write`). When a user approves the connector, they grant specific scopes from the resource's available list.
-
-When you perform the token-exchange grant, `requestedScope` must be a subset of what was granted. Requesting more than granted returns `invalid_scope`.
-
-See [Connector app-to-app](/guides/connector-app-to-app) for details.
+Authorization-code responses include `user.id` for the selected identity. Other `user` fields follow the scopes above; account-owner fields such as `isPrimary` are never shared with apps. Refresh responses do not include a `user` object.
 
 ## Requesting scopes safely
 

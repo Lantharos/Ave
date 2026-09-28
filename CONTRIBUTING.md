@@ -7,7 +7,7 @@ Ave uses a Bun workspace. Install dependencies at the repository root, then work
 ## Repository layout
 
 - `ave-web` contains the unified SvelteKit frontend Worker for the product and developer portal
-- `ave-server` contains the OAuth/OIDC API, auth flows, signing, encryption, uploads, and developer portal backend routes
+- `ave-server` contains the OAuth/OIDC API, auth flows, encryption, uploads, and developer portal backend routes
 - `ave-docs` contains the public documentation
 - `sdks/ave-sdk` contains the typed SDK
 - `sdks/ave-embed` contains the browser embed package
@@ -88,7 +88,7 @@ If you touch any of the following, check whether `ave-docs` should be updated to
 - OAuth or OIDC flow behavior
 - SDK APIs or examples
 - Developer portal behavior
-- Security, signing, connector, or encryption flows
+- Security or encryption flows
 - Local setup, env vars, or deployment-facing behavior
 
 ## Questions

@@ -6,13 +6,14 @@ description: "The key concepts you need before integrating: domain split, identi
 ## Hosts and purposes
 
 <Warning>
-  Ave separates user-facing pages, API calls, and organization administration. Mixing the sign-in host and API host is the #1 integration mistake.
+  Ave separates user-facing pages from API calls. Sending API requests to the sign-in host is the most common integration mistake.
 </Warning>
 
 | Host | Used for |
 |---|---|
-| `aveid.net` | User-facing pages (sign-in, Connector consent), OIDC discovery, JWKS |
-| `api.aveid.net` | API calls (token exchange, userinfo, signing) |
+| `aveid.net` | Sign-in and consent pages, OIDC discovery, JWKS |
+| `api.aveid.net` | API calls (token exchange, userinfo, public-key lookup) |
+| `devs.aveid.net` | Registering and managing apps |
 
 ```
 ✅ POST https://api.aveid.net/api/oauth/token
@@ -46,7 +47,7 @@ A successful token exchange returns up to four tokens, each with a different pur
     ```
   </Accordion>
   <Accordion title="access_token_jwt — signed JWT for Ave APIs">
-    A signed JWT with `aud: https://aveid.net`. Use this when calling Ave API endpoints that accept JWTs, or as the subject token for Connector token exchange. Do not use it as the login token for your app API; use `id_token` or your own app session for that.
+    A signed JWT with `aud: https://aveid.net`. Use this when calling Ave API endpoints that accept JWTs. Do not use it as the login token for your app API; use `id_token` or your own app session for that.
 
     ```
     access_token_jwt: "eyJ..."
@@ -76,7 +77,7 @@ A successful token exchange returns up to four tokens, each with a different pur
 
 ## Scopes
 
-Scopes are space-separated strings requested during authorization. They control what claims appear in tokens and what resources can be accessed.
+Scopes are space-separated strings requested during authorization. They control which claims appear in tokens and whether Ave delivers encryption keys.
 
 | Scope | What it unlocks |
 |---|---|
@@ -84,15 +85,18 @@ Scopes are space-separated strings requested during authorization. They control 
 | `profile` | Adds `name`, `preferred_username`, `picture` to userinfo |
 | `email` | Adds `email` to userinfo |
 | `offline_access` | Returns `refresh_token` for long-lived sessions |
-| `user_id` | Returns raw `userId` when requested in the authorize scope |
+| `user_id` | Returns the account-wide user ID alongside the identity ID |
+| `e2ee:symmetric` | Delivers a per-identity AES-256 app key |
+| `e2ee:asymmetric` | Delivers a per-identity P-256 keypair and enables public-key lookup |
+| `e2ee:reset` | Rotates the app's keys for this identity; combine with an encryption mode |
 
 <Note>
-  Scopes are allowlisted per app. Requesting a scope your app hasn't been granted will return an `invalid_scope` error.
+  `openid`, `profile`, `email`, and `offline_access` are allowlisted per app in the developer portal. Requesting one outside the allowlist returns `invalid_scope`. `user_id` and the encryption scopes are requested per sign-in and always require user consent. See [Scopes and claims](/guides/scopes-and-claims).
 </Note>
 
 ## Token endpoint field casing
 
-The Ave token endpoint (`POST /api/oauth/token`) accepts both OAuth-standard `snake_case` body fields and legacy `camelCase` variants.
+The Ave token endpoint (`POST /api/oauth/token`) accepts OAuth-standard `snake_case` body fields and their `camelCase` equivalents.
 
 ```ts
 {
@@ -103,4 +107,4 @@ The Ave token endpoint (`POST /api/oauth/token`) accepts both OAuth-standard `sn
 }
 ```
 
-Prefer the standard `snake_case` names in new integrations. Legacy `grantType`, `clientId`, `redirectUri`, and `codeVerifier` still work for backward compatibility.
+Either spelling works for each field. The SDK sends `grantType`, `clientId`, `redirectUri`, and `codeVerifier`. Send the body as JSON.

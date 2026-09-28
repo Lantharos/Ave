@@ -1,4 +1,4 @@
-﻿---
+---
 title: "OAuth authorization code flow"
 description: "End-to-end OAuth 2.0 + OIDC flow with full token payload reference, validation steps, and refresh token rotation."
 ---
@@ -58,8 +58,9 @@ Ave returns two different JWTs on a successful token exchange. Understanding the
     `cid` is your client ID. `uid` is the user UUID, only present when the `user_id` scope was granted.
 
     **Use `access_token_jwt` for:**
-    - Connector token-exchange grant (`subjectToken` field)
-    - Passing to Ave API endpoints that accept JWT auth
+    - Ave API endpoints that accept JWT auth, such as userinfo
+
+    Do not use it to authenticate requests to your own API. Use `id_token` or your own session for that.
   </Tab>
   <Tab title="access_token (opaque)">
     The plain `access_token` is an **opaque string**, not a JWT. You cannot decode it.
@@ -142,7 +143,7 @@ There are three ways to implement this — pick what fits your setup.
     </Note>
   </Tab>
   <Tab title="Embed">
-    Use `@ave-id/embed` to show Ave login in a sheet or popup without leaving the page. Pass `onTokens` and PKCE, state, and code exchange are all handled automatically.
+    Use `@ave-id/embed` to show Ave login in a sheet or popup without leaving the page. Pass `onTokens` and the embed handles PKCE, `state`, `nonce`, the code exchange, and any encryption keys in the callback fragment.
 
     ```ts
     import { openAveSheet } from "@ave-id/embed";
@@ -153,8 +154,8 @@ There are three ways to implement this — pick what fits your setup.
       redirectUri: "https://yourapp.com/callback",
       scope: "openid profile email offline_access",
       onTokens: (tokens) => {
-        // tokens.id_token, tokens.access_token, tokens.refresh_token, etc.
-        // Token signatures and claims are already verified — create your session.
+        // tokens.id_token, tokens.refresh_token, and any encryption keys.
+        // The embed has checked state and nonce; verify the id_token before trusting its claims.
       },
       onError: ({ error, message }) => {
         console.error(error, message);
@@ -332,7 +333,10 @@ The returned claims depend on the scopes your access token has. The response alw
       "jwks_uri": "https://aveid.net/.well-known/jwks.json",
       "scopes_supported": ["openid", "profile", "email", "offline_access", "user_id"],
       "response_types_supported": ["code"],
-      "id_token_signing_alg_values_supported": ["RS256"]
+      "grant_types_supported": ["authorization_code", "refresh_token"],
+      "subject_types_supported": ["public"],
+      "id_token_signing_alg_values_supported": ["RS256"],
+      "token_endpoint_auth_methods_supported": ["client_secret_post", "none"]
     }
     ```
   </Accordion>

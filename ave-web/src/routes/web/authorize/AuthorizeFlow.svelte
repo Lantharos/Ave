@@ -10,7 +10,7 @@ import { createAuthorizationFlow } from "./authorization-flow.svelte";
 const flow = createAuthorizationFlow();
 </script>
 
-{#if flow.embedSheet && !$isAuthenticated && !flow.resolvedAppInfo && !flow.appInfo && !flow.quickOriginHostname}
+{#if flow.embedSheet && !$isAuthenticated && !flow.resolvedAppInfo && !flow.appInfo}
     <div class="bg-[#090909] min-h-screen-fixed flex items-center justify-center p-6 md:p-[50px]">
         <div class="w-[48px] h-[48px] border-2 border-[#FFFFFF] border-t-transparent rounded-full animate-spin"></div>
     </div>
@@ -70,13 +70,7 @@ const flow = createAuthorizationFlow();
                 disabled={flow.authorizing}
                 title="Go back"
             >
-                {#if flow.isQuickAuth}
-                    <div class="w-full h-full bg-[#1a1a2e] flex items-center justify-center transition-opacity group-hover:opacity-0">
-                        <svg class="w-6 h-6 md:w-[40px] md:h-[40px]" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                            <path d="M13 2L4.5 13.5H11L10 22L19.5 10.5H13L13 2Z" fill="#6C8EFF" stroke="#6C8EFF" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-                        </svg>
-                    </div>
-                {:else if flow.appInfo?.iconUrl}
+                {#if flow.appInfo?.iconUrl}
                     <img src={flow.appInfo.iconUrl} alt="{flow.appInfo.name} Logo" class="w-full h-full object-cover transition-opacity group-hover:opacity-0"/>
                 {:else}
                     <div class="w-full h-full bg-[#171717] flex items-center justify-center transition-opacity group-hover:opacity-0">
@@ -91,15 +85,9 @@ const flow = createAuthorizationFlow();
                 </div>
             </button>
             <div class="flex flex-col gap-1 md:gap-[10px]">
-                {#if flow.isQuickAuth}
-                    <h1 class="font-poppins text-2xl md:text-[48px] text-white">
-                        {flow.quickOriginHostname || flow.appInfo?.name || "Loading..."}
-                    </h1>
-                {:else}
-                    <h1 class="font-poppins text-2xl md:text-[48px] text-white">
-                        {flow.appInfo?.name || "Loading..."}
-                    </h1>
-                {/if}
+                <h1 class="font-poppins text-2xl md:text-[48px] text-white">
+                    {flow.appInfo?.name || "Loading..."}
+                </h1>
                 {#if flow.appInfo?.websiteUrl}
                     <a href={flow.appInfo.websiteUrl} target="_blank" rel="noopener noreferrer" class="font-poppins text-base md:text-[24px] text-[#878787] hover:text-[#FFFFFF] transition-colors">
                         {new URL(flow.appInfo.websiteUrl).hostname}
@@ -113,19 +101,7 @@ const flow = createAuthorizationFlow();
                 Create your account or sign in securely.
             </h2>
 
-            {#if flow.isQuickAuth}
-                <div class="p-4 md:p-[30px] bg-[#1a1a2e]/60 flex flex-col gap-2 md:gap-[10px] border border-[#6C8EFF]/20 rounded-[20px] md:rounded-[32px]">
-                    <h3 class="font-poppins flex flex-row gap-2 md:gap-[10px] text-sm md:text-[20px] text-[#6C8EFF] items-center">
-                        <svg class="w-4 h-4 md:w-6 md:h-6 shrink-0" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                            <path d="M13 2L4.5 13.5H11L10 22L19.5 10.5H13L13 2Z" fill="#6C8EFF" stroke="#6C8EFF" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-                        </svg>
-                        Quick Ave
-                    </h3>
-                    <p class="font-poppins text-xs md:text-[18px] text-[#666666]">
-                        Create your account for <span class="text-[#878787]">{flow.quickOriginHostname}</span> without leaving the flow. Secure sign-in is powered by Ave and only shares what you approve.
-                    </p>
-                </div>
-            {:else if flow.appInfo?.description}
+            {#if flow.appInfo?.description}
                 <p class="font-poppins text-xs md:text-[20px] text-[#666666]">
                     {flow.appInfo.description} Secure sign-in is powered by Ave.
                 </p>
@@ -265,8 +241,6 @@ const flow = createAuthorizationFlow();
 
                 <IdentityCard
                     avatar={flow.selectedIdentity.avatarUrl || "/placeholder.png"}
-                    banner={flow.selectedIdentity.bannerUrl?.startsWith("#") ? undefined : flow.selectedIdentity.bannerUrl || undefined}
-                    bannerColor={flow.selectedIdentity.bannerUrl?.startsWith("#") ? flow.selectedIdentity.bannerUrl : "#B9BBBE"}
                     editable={false}
                     compact
                 >

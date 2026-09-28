@@ -18,15 +18,6 @@ export const oauthTokenRequestSchema = z.preprocess(
       clientId: z.string(),
       clientSecret: z.string().optional(),
     }),
-    z.object({
-      grantType: z.literal("urn:ietf:params:oauth:grant-type:token-exchange"),
-      subjectToken: z.string(),
-      requestedResource: z.string(),
-      requestedScope: z.string(),
-      clientId: z.string(),
-      clientSecret: z.string().optional(),
-      actor: z.record(z.string(), z.unknown()).optional(),
-    }),
   ]),
 );
 
@@ -34,7 +25,3 @@ type OAuthTokenRequest = z.infer<typeof oauthTokenRequestSchema>;
 
 export type AuthorizationCodeRequest = Extract<OAuthTokenRequest, { grantType: "authorization_code" }>;
 export type RefreshTokenRequest = Extract<OAuthTokenRequest, { grantType: "refresh_token" }>;
-export type TokenExchangeRequest = Extract<
-  OAuthTokenRequest,
-  { grantType: "urn:ietf:params:oauth:grant-type:token-exchange" }
->;
