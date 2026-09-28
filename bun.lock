@@ -56,7 +56,7 @@
     },
     "sdks/ave-sdk": {
       "name": "@ave-id/sdk",
-      "version": "0.11.0",
+      "version": "0.12.0",
       "devDependencies": {
         "typescript": "^7.0.2",
       },
