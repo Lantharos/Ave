@@ -57,13 +57,10 @@ export function createAuthorizationFlow() {
         description?: string;
         iconUrl?: string;
         websiteUrl?: string;
-        supportsE2ee: boolean;
         allowedScopes?: string[];
     } | null>(null);
 
-    const authorizeShowsE2ee = $derived.by(() =>
-        appInfo ? authorizeFlowShowsE2ee(appInfo, authorizeRequestedScopes) : false,
-    );
+    const authorizeShowsE2ee = $derived(authorizeFlowShowsE2ee(authorizeRequestedScopes));
 
     let appAuthorizations = $state.raw<OAuthAuthorization[]>([]);
     let existingAuth = $state.raw<OAuthAuthorization | null>(null);
@@ -161,7 +158,7 @@ export function createAuthorizationFlow() {
             launchedExternalApp = false;
 
             let hasLocalMasterKey = true;
-            if (authorizeFlowShowsE2ee(bootstrap.app, authorizeRequestedScopes)) {
+            if (authorizeShowsE2ee) {
                 hasLocalMasterKey = !!(await resolveActiveMasterKey(get(auth).masterKey));
                 masterKeyRecovery.needsMasterKey = !hasLocalMasterKey;
                 masterKeyRecovery.masterKeyMismatch = false;
@@ -194,7 +191,7 @@ export function createAuthorizationFlow() {
                 && !!existingAuth
                 && authorizeRequestedScopes.every((scope) => grantedScopes.has(scope))
                 && !!existingIdentity
-                && (!authorizeFlowShowsE2ee(bootstrap.app, authorizeRequestedScopes) || hasLocalMasterKey);
+                && (!authorizeShowsE2ee || hasLocalMasterKey);
 
             if (shouldAutoAuthorize && !(requiresEmailScope && !selectedIdentity?.email)) {
 
@@ -244,7 +241,6 @@ export function createAuthorizationFlow() {
 
             const encryption = await prepareAuthorizationEncryption({
                 requestedScopes: authorizeRequestedScopes,
-                app: appInfo,
                 existingAuthorization: existingAuth,
                 identityId: selectedIdentity.id,
                 sessionMasterKey: get(auth).masterKey,

@@ -13,7 +13,6 @@ export const identitiesApi = {
       handle: string;
       email?: string;
       birthday?: string;
-      avatarUrl?: string;
       encryptionKey?: IdentityEncryptionKey;
     }) =>
       request<{ identity: Identity }>("/api/identities", {
@@ -25,7 +24,6 @@ export const identitiesApi = {
       displayName: string;
       handle: string;
       birthday: string | null;
-      avatarUrl: string | null;
     }>) =>
       request<{ identity: Identity }>(`/api/identities/${identityId}`, {
         method: "PATCH",

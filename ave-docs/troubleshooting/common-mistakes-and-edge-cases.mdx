@@ -17,14 +17,15 @@ description: "Frequent integration bugs, protocol mismatches, and how to fix the
   </Accordion>
 
   <Accordion title="Token request rejected as invalid" icon="circle-info">
-    **Symptom:** Token endpoint returns `400` even though you're sending the right values.
+    **Symptom:** Token endpoint returns `400 invalid_request` even though you're sending the right values.
 
-    **Cause:** The body is form-encoded instead of JSON, or a field name is misspelled. Ave accepts OAuth `snake_case` names and their `camelCase` equivalents in a JSON body.
+    **Cause:** A required field is missing or misspelled. The `error_description` names the fields Ave couldn't read. Ave accepts OAuth `snake_case` names and their `camelCase` equivalents, in a form-encoded or JSON body.
 
     **Fix:**
     ```ts
     {
       "grant_type": "authorization_code",
+      "code": "CODE_FROM_CALLBACK",
       "client_id": "YOUR_CLIENT_ID",
       "redirect_uri": "...",
       "code_verifier": "..."

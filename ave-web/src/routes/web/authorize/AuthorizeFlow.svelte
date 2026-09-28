@@ -108,7 +108,7 @@ const flow = createAuthorizationFlow();
             {/if}
 
             {#if flow.appInfo && flow.authorizeShowsE2ee}
-                {@const activeE2eeMode = resolveRequestedE2eeMode(flow.authorizeRequestedScopes, flow.appInfo, flow.existingAuth)}
+                {@const activeE2eeMode = resolveRequestedE2eeMode(flow.authorizeRequestedScopes, flow.existingAuth)}
                 {@const wantsE2eeReset = hasE2eeResetScope(flow.authorizeRequestedScopes)}
                 <div class="p-4 md:p-[30px] bg-[#0d1f12]/60 flex flex-col gap-2 md:gap-[10px] border border-[#32A94C]/20 rounded-[20px] md:rounded-[32px]">
                     <h3 class="font-poppins flex flex-row gap-2 md:gap-[10px] text-sm md:text-[20px] text-[#32A94C] items-center">

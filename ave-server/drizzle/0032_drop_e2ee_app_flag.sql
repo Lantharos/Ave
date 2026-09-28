@@ -1,0 +1,1 @@
+ALTER TABLE `oauth_apps` DROP COLUMN `supports_e2ee`;

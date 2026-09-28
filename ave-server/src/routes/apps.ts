@@ -13,7 +13,6 @@ import {
 import {
   PORTAL_APP_SCOPES,
   stripE2eeScopes,
-  syncSupportsE2eeFlag,
 } from "../lib/identity/e2ee-scopes";
 import { getAppIdentities, paginationQuerySchema } from "./apps/app-identities";
 import { requireDevUser, requireWritableDevUser } from "./apps/auth";
@@ -29,7 +28,6 @@ const baseAppSchema = z.object({
   iconUrl: z.string().url().nullable().optional(),
   redirectUris: z.array(z.string().url()).min(1),
   developmentMode: z.boolean().default(false),
-  supportsE2ee: z.boolean().default(false).optional(),
   allowedScopes: z.array(z.enum(allowedScopes)).default(["openid", "profile", "email", "offline_access"]),
   accessTokenTtlSeconds: z.number().int().min(300).max(86400).optional(),
   refreshTokenTtlSeconds: z.number().int().min(3600).max(60 * 60 * 24 * 365).optional(),
@@ -49,7 +47,6 @@ export function serializeApp(
     iconUrl: appRow.iconUrl,
     redirectUris: appRow.redirectUris as string[],
     developmentMode: !!appRow.developmentMode,
-    supportsE2ee: !!appRow.supportsE2ee,
     allowedScopes: stripE2eeScopes(appRow.allowedScopes as string[]),
     accessTokenTtlSeconds: appRow.accessTokenTtlSeconds,
     refreshTokenTtlSeconds: appRow.refreshTokenTtlSeconds,
@@ -112,7 +109,6 @@ app.post("/", requireWritableDevUser, zValidator("json", baseAppSchema), async (
       iconUrl: data.iconUrl || null,
       redirectUris: data.redirectUris,
       developmentMode: data.developmentMode,
-      supportsE2ee: syncSupportsE2eeFlag(data.supportsE2ee),
       allowedScopes: stripE2eeScopes(data.allowedScopes),
       accessTokenTtlSeconds: data.accessTokenTtlSeconds || 3600,
       refreshTokenTtlSeconds: data.refreshTokenTtlSeconds || 30 * 24 * 60 * 60,
@@ -162,9 +158,6 @@ app.patch("/:appId", requireWritableDevUser, zValidator("json", baseAppSchema.pa
   const nextAllowedScopes = stripE2eeScopes(
     data.allowedScopes ?? (accessibleApp.allowedScopes as string[]),
   );
-  const nextSupportsE2ee = syncSupportsE2eeFlag(
-    !!(data.supportsE2ee ?? accessibleApp.supportsE2ee),
-  );
 
   const [updated] = await db
     .update(oauthApps)
@@ -175,7 +168,6 @@ app.patch("/:appId", requireWritableDevUser, zValidator("json", baseAppSchema.pa
       iconUrl: data.iconUrl === undefined ? accessibleApp.iconUrl : data.iconUrl,
       redirectUris: data.redirectUris ?? (accessibleApp.redirectUris as string[]),
       developmentMode: data.developmentMode ?? accessibleApp.developmentMode,
-      supportsE2ee: nextSupportsE2ee,
       allowedScopes: nextAllowedScopes,
       accessTokenTtlSeconds: data.accessTokenTtlSeconds ?? accessibleApp.accessTokenTtlSeconds,
       refreshTokenTtlSeconds: data.refreshTokenTtlSeconds ?? accessibleApp.refreshTokenTtlSeconds,

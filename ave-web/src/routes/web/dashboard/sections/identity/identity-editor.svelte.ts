@@ -10,6 +10,7 @@ export function createIdentityEditor(getIdentity: () => IdentityType | null) {
     let verificationCode = $state("");
     let birthday = $state("");
     let avatarUrl = $state("");
+    let pendingAvatarFile: File | null = null;
 
     let editing = $state({
         displayName: false,
@@ -188,18 +189,20 @@ export function createIdentityEditor(getIdentity: () => IdentityType | null) {
                 handle: handle.trim().toLowerCase(),
                 email: email.trim() || undefined,
                 birthday: birthday || undefined,
-                avatarUrl: avatarUrl || undefined,
                 encryptionKey: masterKey ? await createStoredIdentityEncryptionKeyPair(masterKey) : undefined,
             });
 
-            auth.addIdentity(created);
+            const avatarFile = pendingAvatarFile;
+            auth.addIdentity(avatarFile
+                ? { ...created, avatarUrl: (await api.upload.avatar(created.id, avatarFile)).avatarUrl }
+                : created);
             success = "Identity created!";
 
             displayName = "";
             handle = "";
             email = "";
             birthday = "";
-            avatarUrl = "";
+            clearPendingAvatar();
         } catch (e) {
             error = e instanceof Error ? e.message : "Failed to create identity";
         } finally {
@@ -213,9 +216,17 @@ export function createIdentityEditor(getIdentity: () => IdentityType | null) {
         return date.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
     }
 
+    function clearPendingAvatar() {
+        if (avatarUrl.startsWith("blob:")) URL.revokeObjectURL(avatarUrl);
+        pendingAvatarFile = null;
+        avatarUrl = "";
+    }
+
     async function handleAvatarUpload(file: File) {
         const identity = getIdentity();
         if (!identity) {
+            clearPendingAvatar();
+            pendingAvatarFile = file;
             avatarUrl = URL.createObjectURL(file);
             return;
         }

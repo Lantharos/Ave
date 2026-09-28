@@ -82,21 +82,26 @@ app.get("/session/bootstrap", requireAuth, async (c) => {
 app.get("/authorizations", requireAuth, async (c) => {
   const user = c.get("user")!;
 
-  const authorizations = await db
+  const rows = await db
     .select({
       id: oauthAuthorizations.id,
       appId: oauthAuthorizations.appId,
       identityId: oauthAuthorizations.identityId,
       createdAt: oauthAuthorizations.createdAt,
+      lastAuthorizedAt: oauthAuthorizations.lastAuthorizedAt,
+      appEncryptionMode: oauthAuthorizations.appEncryptionMode,
       appName: oauthApps.name,
       appIcon: oauthApps.iconUrl,
       appWebsite: oauthApps.websiteUrl,
     })
     .from(oauthAuthorizations)
     .innerJoin(oauthApps, eq(oauthAuthorizations.appId, oauthApps.id))
-    .where(eq(oauthAuthorizations.userId, user.id));
+    .where(eq(oauthAuthorizations.userId, user.id))
+    .orderBy(desc(oauthAuthorizations.lastAuthorizedAt));
 
-  return c.json({ authorizations });
+  return c.json({
+    authorizations: rows.map(({ appEncryptionMode, ...row }) => ({ ...row, encrypted: appEncryptionMode !== null })),
+  });
 });
 
 // Get authorization for a specific app (includes encrypted app key for E2EE)

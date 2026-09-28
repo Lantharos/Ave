@@ -24,6 +24,8 @@ D1 enforces foreign keys during migrations and ignores `PRAGMA foreign_keys = OF
 
 `0031_slim_ave.sql` removes delegation, signing, analytics, banner and team role data. Deploy the API first and apply the migration immediately after. The previous API reads the removed columns, and the new API cannot create teams until `organizations.owner_user_id` is gone. `oauth_apps.owner_id` stays in the table with every value cleared, because rebuilding `oauth_apps` would cascade into authorizations and tokens.
 
+`0032_drop_e2ee_app_flag.sql` drops `oauth_apps.supports_e2ee`. Encryption is chosen per sign-in with an `e2ee:*` scope, so apps must request one before this is deployed. Apply it together with `0031`.
+
 Do not roll back to a Worker that selects removed columns after a cleanup migration. Use a forward fix, or restore the matching database and Worker together during a controlled recovery.
 
 ## Workers and secrets

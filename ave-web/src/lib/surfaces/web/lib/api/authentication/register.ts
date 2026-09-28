@@ -25,7 +25,6 @@ export const registerApi = {
         handle: string;
         email?: string;
         birthday?: string;
-        avatarUrl?: string;
       };
       device: {
         name: string;

@@ -62,7 +62,6 @@ app.post("/", zValidator("json", z.object({
   handle: z.string().min(3).max(32).regex(/^[a-zA-Z0-9_]+$/),
   email: z.string().email().optional(),
   birthday: z.string().optional(),
-  avatarUrl: z.string().url().optional(),
   encryptionKey: z.object({
     publicKey: z.string().min(1),
     encryptedPrivateKey: z.string().min(1),
@@ -107,7 +106,6 @@ app.post("/", zValidator("json", z.object({
       handle: data.handle.toLowerCase(),
       pendingEmail: data.email ? normalizeEmail(data.email) : null,
       birthday: data.birthday,
-      avatarUrl: data.avatarUrl,
       isPrimary: existingCount.length === 0, // First identity is primary
     })
     .returning();
@@ -143,7 +141,6 @@ app.patch("/:identityId", zValidator("json", z.object({
   displayName: z.string().min(1).max(64).optional(),
   handle: z.string().min(3).max(32).regex(/^[a-zA-Z0-9_]+$/).optional(),
   birthday: z.string().nullable().optional(),
-  avatarUrl: z.string().url().nullable().optional(),
 })), async (c) => {
   const user = c.get("user")!;
   const identityId = c.req.param("identityId");
@@ -177,7 +174,6 @@ app.patch("/:identityId", zValidator("json", z.object({
   if (data.displayName !== undefined) updateData.displayName = data.displayName;
   if (data.handle !== undefined) updateData.handle = data.handle.toLowerCase();
   if (data.birthday !== undefined) updateData.birthday = data.birthday;
-  if (data.avatarUrl !== undefined) updateData.avatarUrl = data.avatarUrl;
   
   const [updated] = await db
     .update(identities)

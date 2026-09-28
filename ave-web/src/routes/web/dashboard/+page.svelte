@@ -22,6 +22,7 @@
     const loadDevices = lazyModule(() => import("./sections/Devices.svelte"));
     const loadActivityLog = lazyModule(() => import("./sections/ActivityLog.svelte"));
     const loadLoginApproval = lazyModule(() => import("./sections/LoginApproval.svelte"));
+    const loadConnectedApps = lazyModule(() => import("./sections/ConnectedApps.svelte"));
 
     let selectedPage = $state<string>("");
     let mobileSidebarOpen = $state(false);
@@ -79,6 +80,7 @@
         if (section === "activity") return "Activity Log";
         if (section === "security") return "Security";
         if (section === "devices") return "Devices";
+        if (section === "apps") return "Connected Apps";
         return null;
     }
 
@@ -166,6 +168,7 @@
                 {/if}
                 <SidebarButton text="Security" selected={selectedPage === "Security"} onclick={() => selectPage("Security")} />
                 <SidebarButton text="Devices" selected={selectedPage === "Devices"} onclick={() => selectPage("Devices")} />
+                <SidebarButton text="Apps" selected={selectedPage === "Connected Apps"} onclick={() => selectPage("Connected Apps")} />
                 <SidebarButton text="My Data" selected={selectedPage === "My Data"} onclick={() => selectPage("My Data")} />
                 <SidebarButton text="Activity Log" selected={selectedPage === "Activity Log"} onclick={() => selectPage("Activity Log")} />
 
@@ -217,6 +220,7 @@
             {/if}
             <SidebarButton text="Security" selected={selectedPage === "Security"} onclick={() => { selectedPage = "Security"; }} />
             <SidebarButton text="Devices" selected={selectedPage === "Devices"} onclick={() => { selectedPage = "Devices"; }} />
+            <SidebarButton text="Apps" selected={selectedPage === "Connected Apps"} onclick={() => { selectedPage = "Connected Apps"; }} />
             <SidebarButton text="My Data" selected={selectedPage === "My Data"} onclick={() => { selectedPage = "My Data"; }} />
             <SidebarButton text="Activity Log" selected={selectedPage === "Activity Log"} onclick={() => { selectedPage = "Activity Log"; }} />
         </div>
@@ -250,6 +254,8 @@
             {#await loadSecurity() then { default: Security }}<Security />{/await}
         {:else if selectedPage === "Devices"}
             {#await loadDevices() then { default: Devices }}<Devices />{/await}
+        {:else if selectedPage === "Connected Apps"}
+            {#await loadConnectedApps() then { default: ConnectedApps }}<ConnectedApps />{/await}
         {:else if selectedPage === "My Data"}
             {#await loadMyData() then { default: MyData }}<MyData />{/await}
         {:else if selectedPage === "Activity Log"}

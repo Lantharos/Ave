@@ -1,5 +1,5 @@
 import { request } from "./transport";
-import type { OAuthAuthorization, SessionBootstrap } from "./types";
+import type { ConnectedApp, OAuthAuthorization, SessionBootstrap } from "./types";
 
 export const oauthApi = {
     getSessionBootstrap: (timeoutMs = 5000) =>
@@ -15,7 +15,6 @@ export const oauthApi = {
           description?: string;
           iconUrl?: string;
           websiteUrl?: string;
-          supportsE2ee: boolean;
           allowedScopes?: string[];
         };
       }>(`/api/oauth/app/${encodeURIComponent(clientId)}`, { publicRequest: true }),
@@ -29,7 +28,6 @@ export const oauthApi = {
           description?: string;
           iconUrl?: string;
           websiteUrl?: string;
-          supportsE2ee: boolean;
           allowedScopes?: string[];
         };
         authorizations: OAuthAuthorization[];
@@ -56,6 +54,14 @@ export const oauthApi = {
         method: "POST",
         body: JSON.stringify(data),
         timeoutMs: 45000,
+      }),
+
+    listConnectedApps: () =>
+      request<{ authorizations: ConnectedApp[] }>("/api/oauth/authorizations"),
+
+    revokeConnectedApp: (authorizationId: string) =>
+      request<{ success: boolean }>(`/api/oauth/authorizations/${encodeURIComponent(authorizationId)}`, {
+        method: "DELETE",
       }),
 
     recoverSymmetricAppKey: (data: {

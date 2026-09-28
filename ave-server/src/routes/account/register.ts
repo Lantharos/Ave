@@ -93,7 +93,6 @@ const completeRegistrationSchema = z.object({
     handle: handleSchema,
     email: z.string().email().optional(),
     birthday: z.string().optional(),
-    avatarUrl: z.string().url().optional(),
   }),
   // Device info
   device: z.object({
@@ -176,7 +175,6 @@ app.post("/complete", zValidator("json", completeRegistrationSchema), async (c) 
         handle: data.identity.handle.toLowerCase(),
         pendingEmail: data.identity.email ? normalizeEmail(data.identity.email) : null,
         birthday: data.identity.birthday,
-        avatarUrl: data.identity.avatarUrl,
         isPrimary: true,
       })
       .returning();

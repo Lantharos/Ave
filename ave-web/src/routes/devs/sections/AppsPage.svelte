@@ -1,6 +1,5 @@
 <script lang="ts">
   import Card from "$lib/surfaces/devs/components/Card.svelte";
-  import { Lock } from "@lucide/svelte";
   import type { DevApp } from "$lib/surfaces/devs/lib/api";
   interface Props {
     apps: DevApp[];
@@ -76,11 +75,6 @@
                       <p class="m-0 truncate text-[20px] font-semibold text-white">{app.name}</p>
                     </div>
                   </div>
-                  {#if app.supportsE2ee}
-                    <span class="flex h-10 w-10 items-center justify-center rounded-full bg-[#17311f] text-[#67d58a] shrink-0">
-                      <Lock class="h-4 w-4" stroke-width={2.2} />
-                    </span>
-                  {/if}
                 </div>
 
                 <p class="m-0 min-h-[44px] text-[14px] leading-6 text-[#8b8b8b]">

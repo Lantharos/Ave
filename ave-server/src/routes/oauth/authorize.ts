@@ -140,7 +140,7 @@ app.post("/authorize", requireAuth, zValidator("json", z.object({
     e2ee: ReturnType<typeof buildE2eeAuthUpdate>;
   } | null = null;
   const { mode: requestedE2eeMode, conflict: e2eeModeConflict, reset: e2eeReset } =
-    resolveRequestedE2eeModeConflict(requestedScopes, oauthApp, existingAuth);
+    resolveRequestedE2eeModeConflict(requestedScopes, existingAuth);
   if (e2eeModeConflict) {
     return c.json({
       error: "invalid_scope",

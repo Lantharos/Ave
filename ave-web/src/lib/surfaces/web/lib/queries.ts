@@ -1,11 +1,12 @@
 import { createInfiniteQuery, createMutation, createQuery } from "@tanstack/svelte-query";
-import { api, type ActivityLogEntry, type Device, type LoginRequest, type Passkey } from "./api";
+import { api, type ActivityLogEntry, type ConnectedApp, type Device, type LoginRequest, type Passkey } from "./api";
 import { queryClient } from "./query-client";
 
 const QUERY_KEYS = {
   devices: ["devices"] as const,
   pendingRequests: ["pendingRequests"] as const,
   security: ["security"] as const,
+  connectedApps: ["connectedApps"] as const,
   activity: (severity: "all" | "info" | "warning" | "danger") => ["activity", severity] as const,
 };
 
@@ -66,6 +67,27 @@ export function createActivityInfiniteQuery(getSeverity: () => ActivityFilter, p
       if (lastPage.length < pageSize) return undefined;
       const loaded = allPages.reduce((sum, page) => sum + page.length, 0);
       return loaded;
+    },
+  }));
+}
+
+export function createConnectedAppsQuery() {
+  return createQuery(() => ({
+    queryKey: QUERY_KEYS.connectedApps,
+    queryFn: async (): Promise<ConnectedApp[]> => (await api.oauth.listConnectedApps()).authorizations,
+  }));
+}
+
+export function createRevokeConnectedAppMutation() {
+  return createMutation(() => ({
+    mutationFn: async (authorizationId: string) => {
+      await api.oauth.revokeConnectedApp(authorizationId);
+      return authorizationId;
+    },
+    onSuccess: (_, authorizationId) => {
+      queryClient.setQueryData<ConnectedApp[]>(QUERY_KEYS.connectedApps, (previous = []) =>
+        previous.filter((app) => app.id !== authorizationId)
+      );
     },
   }));
 }

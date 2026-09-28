@@ -1,14 +1,17 @@
-import { zValidator } from "@hono/zod-validator";
 import { Hono } from "hono";
 import { enforceNativeRateLimits, getClientIp, ipRateLimit, subjectRateLimit } from "../../../lib/platform/rate-limit";
 import { handleAuthorizationCode } from "./authorization-code";
 import { handleRefreshToken } from "./refresh-token";
-import { oauthTokenRequestSchema } from "./token-schema";
+import { readTokenRequest } from "./token-request";
 
 const app = new Hono();
 
-app.post("/token", zValidator("json", oauthTokenRequestSchema), async (c) => {
-  const payload = c.req.valid("json");
+app.post("/token", async (c) => {
+  const request = await readTokenRequest(c);
+  if (!request.ok) {
+    return c.json({ error: request.error, error_description: request.description }, request.error === "invalid_client" ? 401 : 400);
+  }
+  const { payload } = request;
   const rateLimitResponse = await enforceNativeRateLimits(c, [
     {
       binding: "OAUTH_TOKEN_IP_RATE_LIMITER",

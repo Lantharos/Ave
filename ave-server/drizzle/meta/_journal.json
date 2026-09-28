@@ -225,6 +225,13 @@
       "when": 1790552879615,
       "tag": "0031_slim_ave",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "6",
+      "when": 1790555243678,
+      "tag": "0032_drop_e2ee_app_flag",
+      "breakpoints": true
     }
   ]
 }

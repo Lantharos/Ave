@@ -107,4 +107,4 @@ The Ave token endpoint (`POST /api/oauth/token`) accepts OAuth-standard `snake_c
 }
 ```
 
-Either spelling works for each field. The SDK sends `grantType`, `clientId`, `redirectUri`, and `codeVerifier`. Send the body as JSON.
+Either spelling works for each field. The SDK sends `grantType`, `clientId`, `redirectUri`, and `codeVerifier` as JSON. Form-encoded bodies, which most OAuth libraries send, work too.

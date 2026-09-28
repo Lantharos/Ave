@@ -82,6 +82,18 @@ export interface ActivityLogEntry {
   createdAt: string;
 }
 
+export interface ConnectedApp {
+  id: string;
+  appId: string;
+  identityId: string;
+  createdAt: string;
+  lastAuthorizedAt: string | null;
+  encrypted: boolean;
+  appName: string;
+  appIcon: string | null;
+  appWebsite: string | null;
+}
+
 export interface IdentityEncryptionKey {
   publicKey: string;
   encryptedPrivateKey: string;

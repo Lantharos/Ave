@@ -15,7 +15,6 @@ app.get("/app/:clientId", async (c) => {
       description: oauthApps.description,
       iconUrl: oauthApps.iconUrl,
       websiteUrl: oauthApps.websiteUrl,
-      supportsE2ee: oauthApps.supportsE2ee,
     })
     .from(oauthApps)
     .where(eq(oauthApps.clientId, clientId))

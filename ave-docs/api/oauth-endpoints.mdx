@@ -4,12 +4,12 @@ description: "Endpoint contract for app metadata, authorization, token grants, u
 ---
 
 <Tip>
-	The token endpoint accepts OAuth `snake_case` field names and their `camelCase` equivalents in a JSON body.
+	The token endpoint accepts a standard `application/x-www-form-urlencoded` body or JSON, with OAuth `snake_case` field names or their `camelCase` equivalents. Confidential clients can send their secret as `client_secret` or with HTTP Basic authentication.
 </Tip>
 
 ## `GET /api/oauth/app/:clientId`
 
-Returns public app metadata: `id`, `name`, `description`, `iconUrl`, `websiteUrl`, and `supportsE2ee`.
+Returns public app metadata: `id`, `name`, `description`, `iconUrl`, and `websiteUrl`.
 
 Errors:
 
@@ -142,7 +142,7 @@ Errors:
 
 ## `GET /.well-known/openid-configuration`
 
-Returns issuer metadata, endpoints, and supported scopes, response types, grant types (`authorization_code`, `refresh_token`), token endpoint authentication methods (`client_secret_post`, `none`), and ID token signing algorithms (`RS256`).
+Returns issuer metadata, endpoints, and supported scopes, response types, grant types (`authorization_code`, `refresh_token`), token endpoint authentication methods (`client_secret_basic`, `client_secret_post`, `none`), and ID token signing algorithms (`RS256`).
 
 ## `GET /.well-known/jwks.json`
 

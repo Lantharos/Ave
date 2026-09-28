@@ -9,7 +9,7 @@
     import RegisterEnrollment from "./components/RegisterEnrollment.svelte";
     import AuroraBackdrop from "$lib/components/AuroraBackdrop.svelte";
     import { onMount } from "svelte";
-    import { api } from "$lib/surfaces/web/lib/api";
+    import { api, type Identity } from "$lib/surfaces/web/lib/api";
     import { 
         generateMasterKey, 
         createMasterKeyBackup,
@@ -37,6 +37,7 @@
         email: "",
         birthday: "",
         avatarUrl: "",
+        avatarFile: null as File | null,
     });
 
     let tempUserId = "";
@@ -174,7 +175,6 @@
                     handle: identityData.handle,
                     email: identityData.email || undefined,
                     birthday: identityData.birthday || undefined,
-                    avatarUrl: identityData.avatarUrl || undefined,
                 },
 
                 device: deviceInfo,
@@ -187,6 +187,9 @@
                 { identities: [result.identity], device: result.device },
                 masterKey
             );
+            if (identityData.avatarFile) {
+                void uploadRegisteredAvatar(result.identity, identityData.avatarFile);
+            }
             
             setPage("enrollment");
         } catch (e: any) {
@@ -194,6 +197,15 @@
             setPage("legal");
         } finally {
             isCompletingRegistration = false;
+        }
+    }
+
+    async function uploadRegisteredAvatar(identity: Identity, file: File) {
+        try {
+            const { avatarUrl } = await api.upload.avatar(identity.id, file);
+            auth.updateIdentity({ ...identity, avatarUrl });
+        } catch (e) {
+            console.error("[Register] Avatar upload failed:", e);
         }
     }
 

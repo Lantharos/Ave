@@ -29,23 +29,8 @@ function isE2eeScope(scope: string): boolean {
   return isE2eeModeScope(scope) || isE2eeResetScope(scope);
 }
 
-function hasAnyE2eeScope(scopes: string[] | null | undefined): boolean {
-  return (scopes ?? []).some(isE2eeScope);
-}
-
 function hasE2eeResetScope(scopes: string[] | null | undefined): boolean {
   return (scopes ?? []).some(isE2eeResetScope);
-}
-
-export function syncSupportsE2eeFlag(supportsE2ee: boolean | undefined): boolean {
-  return !!supportsE2ee;
-}
-
-export function appEffectiveSupportsE2ee(app: {
-  supportsE2ee?: boolean | null;
-  allowedScopes?: string[] | null;
-}): boolean {
-  return !!app.supportsE2ee || hasAnyE2eeScope(app.allowedScopes);
 }
 
 function e2eeModeForScope(scope: E2eeScope): E2eeMode {
@@ -102,24 +87,10 @@ export function stripE2eeScopes(scopes: string[]): string[] {
     .filter((scope) => !isE2eeScope(scope) && !isUserIdScope(scope));
 }
 
-function collectRequestedE2eeModes(
-  requestedScopes: string[],
-  app: { supportsE2ee?: boolean | null; allowedScopes?: string[] | null },
-): E2eeMode[] {
-  const legacySymmetric =
-    !!app.supportsE2ee && !hasAnyE2eeScope(app.allowedScopes);
-
-  const matched: E2eeMode[] = [];
-  for (const scope of requestedScopes) {
-    if (!isE2eeModeScope(scope)) continue;
-    matched.push(e2eeModeForScope(normalizeScopeToken(scope) as E2eeScope));
-  }
-
-  if (legacySymmetric && !requestedScopes.some(isE2eeModeScope)) {
-    matched.push("symmetric");
-  }
-
-  return matched;
+function collectRequestedE2eeModes(requestedScopes: string[]): E2eeMode[] {
+  return requestedScopes
+    .filter(isE2eeModeScope)
+    .map((scope) => e2eeModeForScope(normalizeScopeToken(scope) as E2eeScope));
 }
 
 type E2eeAuthorizationResolution = {
@@ -130,11 +101,10 @@ type E2eeAuthorizationResolution = {
 
 function resolveE2eeAuthorization(
   requestedScopes: string[],
-  app: { supportsE2ee?: boolean | null; allowedScopes?: string[] | null },
   existing?: { appEncryptionMode?: string | null } | null,
 ): E2eeAuthorizationResolution {
   const reset = hasE2eeResetScope(requestedScopes);
-  const matched = collectRequestedE2eeModes(requestedScopes, app);
+  const matched = collectRequestedE2eeModes(requestedScopes);
 
   let mode: E2eeMode | null = null;
   const unique = [...new Set(matched)];
@@ -152,10 +122,9 @@ function resolveE2eeAuthorization(
 
 export function resolveRequestedE2eeModeConflict(
   requestedScopes: string[],
-  app: { supportsE2ee?: boolean | null; allowedScopes?: string[] | null },
   existing?: { appEncryptionMode?: string | null } | null,
 ): { mode: E2eeMode | null; conflict: boolean; reset: boolean } {
-  return resolveE2eeAuthorization(requestedScopes, app, existing);
+  return resolveE2eeAuthorization(requestedScopes, existing);
 }
 
 export const PORTAL_APP_SCOPES = [

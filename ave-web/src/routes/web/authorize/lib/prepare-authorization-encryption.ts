@@ -19,11 +19,6 @@ import {
   type E2eeMode,
 } from "$lib/surfaces/web/lib/oauth/e2ee-scopes";
 
-type AppEncryptionSupport = {
-  supportsE2ee: boolean;
-  allowedScopes?: string[];
-};
-
 type AuthorizationEncryption = {
   encryptedAppKey?: string;
   appPublicKey?: string;
@@ -48,12 +43,11 @@ export type PreparedAuthorizationEncryption =
 
 export async function prepareAuthorizationEncryption(input: {
   requestedScopes: string[];
-  app: AppEncryptionSupport;
   existingAuthorization: OAuthAuthorization | null;
   identityId: string;
   sessionMasterKey: CryptoKey | null;
 }): Promise<PreparedAuthorizationEncryption> {
-  const resolved = resolveE2eeAuthorization(input.requestedScopes, input.app, input.existingAuthorization);
+  const resolved = resolveE2eeAuthorization(input.requestedScopes, input.existingAuthorization);
   const emptyRedirect: RedirectEncryptionMaterial = {
     appKey: null,
     appKeyOld: null,

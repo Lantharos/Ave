@@ -1,7 +1,6 @@
 import { and, desc, eq } from "drizzle-orm";
 import { Hono } from "hono";
 import { db, oauthApps, oauthAuthorizations } from "../../db";
-import { appEffectiveSupportsE2ee } from "../../lib/identity/e2ee-scopes";
 import { requireAuth } from "../../middleware/auth";
 
 const app = new Hono();
@@ -30,7 +29,6 @@ app.get("/authorize/bootstrap/:clientId", requireAuth, async (c) => {
       appDescription: oauthApps.description,
       appIconUrl: oauthApps.iconUrl,
       appWebsiteUrl: oauthApps.websiteUrl,
-      appSupportsE2ee: oauthApps.supportsE2ee,
       appAllowedScopes: oauthApps.allowedScopes,
       authorizationId: oauthAuthorizations.id,
       authorizationScope: oauthAuthorizations.scope,
@@ -61,7 +59,6 @@ app.get("/authorize/bootstrap/:clientId", requireAuth, async (c) => {
     description: appRow.appDescription,
     iconUrl: appRow.appIconUrl,
     websiteUrl: appRow.appWebsiteUrl,
-    supportsE2ee: appRow.appSupportsE2ee,
     allowedScopes: appRow.appAllowedScopes,
   };
   const authorizations = appAuthorizationRows.flatMap((row) => {
@@ -114,10 +111,7 @@ app.get("/authorize/bootstrap/:clientId", requireAuth, async (c) => {
   c.header("Cache-Control", "no-store");
 
   return c.json({
-    app: {
-      ...oauthApp,
-      supportsE2ee: appEffectiveSupportsE2ee(oauthApp),
-    },
+    app: oauthApp,
     authorizations,
   });
 });

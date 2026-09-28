@@ -14,7 +14,6 @@ export interface DevApp {
   iconUrl?: string;
   redirectUris: string[];
   developmentMode: boolean;
-  supportsE2ee: boolean;
   allowedScopes: string[];
   accessTokenTtlSeconds: number;
   refreshTokenTtlSeconds: number;
@@ -60,7 +59,6 @@ export interface CreateAppPayload {
   iconUrl?: string;
   redirectUris: string[];
   developmentMode?: boolean;
-  supportsE2ee?: boolean;
   allowedScopes: string[];
   accessTokenTtlSeconds?: number;
   refreshTokenTtlSeconds?: number;

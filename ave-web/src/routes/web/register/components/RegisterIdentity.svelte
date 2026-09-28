@@ -11,6 +11,7 @@
         email: string;
         birthday: string;
         avatarUrl: string;
+        avatarFile: File | null;
     }
 
     let { onNext, initialData } = $props<{ 
@@ -23,6 +24,7 @@
     let email = $state("");
     let birthday = $state("");
     let avatarUrl = $state("");
+    let avatarFile: File | null = null;
 
     $effect(() => {
         if (!initialData) return;
@@ -31,6 +33,7 @@
         email = initialData.email || "";
         birthday = initialData.birthday || "";
         avatarUrl = initialData.avatarUrl || "";
+        avatarFile = initialData.avatarFile;
     });
 
     let handleError = $state("");
@@ -92,10 +95,13 @@
             email: email.trim(),
             birthday,
             avatarUrl,
+            avatarFile,
         });
     }
 
     function handleAvatarUpload(file: File) {
+        if (avatarUrl) URL.revokeObjectURL(avatarUrl);
+        avatarFile = file;
         avatarUrl = URL.createObjectURL(file);
     }
 

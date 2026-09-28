@@ -40,7 +40,6 @@ export const oauthApps = sqliteTable("oauth_apps", {
     .$defaultFn(() => ["openid", "profile", "email", "offline_access"]),
   accessTokenTtlSeconds: integer("access_token_ttl_seconds").default(3600).notNull(),
   refreshTokenTtlSeconds: integer("refresh_token_ttl_seconds").default(30 * 24 * 60 * 60).notNull(),
-  supportsE2ee: integer("supports_e2ee", { mode: "boolean" }).default(false),
   organizationId: text("organization_id").references(() => organizations.id, { onDelete: "cascade" }),
 }, (table) => [
   index("oauth_apps_organization_id_idx").on(table.organizationId),
